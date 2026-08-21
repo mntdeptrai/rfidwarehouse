@@ -257,18 +257,6 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
-
-                    // GPO Pin summary
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        _buildPinTag('ĐỎ: GPO ${_service.config.redPin}', const Color(0xFFEF4444), status.isRed),
-                        _buildPinTag('VÀNG: GPO ${_service.config.yellowPin}', const Color(0xFFF59E0B), status.isYellow),
-                        _buildPinTag('XANH: GPO ${_service.config.greenPin}', const Color(0xFF10B981), status.isGreen),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -328,25 +316,6 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildPinTag(String text, Color color, bool isActive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: isActive ? color.withValues(alpha: 0.2) : const Color(0xFF0F172A),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: isActive ? color : const Color(0xFF334155)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isActive ? color : Colors.white38,
-          fontSize: 9.5,
-          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-        ),
       ),
     );
   }
