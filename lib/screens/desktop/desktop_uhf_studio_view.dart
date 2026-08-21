@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
+import '../../theme/eye_care_theme.dart';
 import '../../widgets/tower_light_widget.dart';
 
 class DesktopUhfStudioView extends StatefulWidget {
@@ -13,6 +14,7 @@ class DesktopUhfStudioView extends StatefulWidget {
 
 class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with SingleTickerProviderStateMixin {
   final DesktopUhfTcpService _uhfService = DesktopUhfTcpService();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   late TabController _tabController;
 
@@ -72,6 +74,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
     _tabController = TabController(length: 6, vsync: this);
 
     _uhfService.addListener(_onServiceUpdate);
+    _eyeCare.addListener(_onServiceUpdate);
     _uhfService.onLog.listen((line) {
       if (mounted) {
         setState(() {
@@ -88,6 +91,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   @override
   void dispose() {
     _uhfService.removeListener(_onServiceUpdate);
+    _eyeCare.removeListener(_onServiceUpdate);
     _tabController.dispose();
     _ipController.dispose();
     _portController.dispose();
@@ -117,41 +121,43 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
 
   @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1120),
+      backgroundColor: c.bgDeep,
       body: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
             // 1. Connection Toolbar
-            _buildConnectionToolbar(),
+            _buildConnectionToolbar(c),
             const SizedBox(height: 8),
 
             // 2. KPI Metrics Bar
-            _buildKpiMetrics(),
+            _buildKpiMetrics(c),
             const SizedBox(height: 8),
 
             // 3. Tab System (6 Tabs)
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: c.bgCard,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: c.border),
                 ),
                 child: Column(
                   children: [
-                    _buildTabBar(),
+                    _buildTabBar(c),
                     Expanded(
                       child: TabBarView(
                         controller: _tabController,
                         children: [
-                          _buildTabLiveInventory(),
-                          _buildTabMemoryRw(),
-                          _buildTabSecurity(),
-                          _buildTabRfPower(),
-                          _buildTabGpio(),
-                          _buildTabLanManager(),
+                          _buildTabLiveInventory(c),
+                          _buildTabMemoryRw(c),
+                          _buildTabSecurity(c),
+                          _buildTabRfPower(c),
+                          _buildTabGpio(c),
+                          _buildTabLanManager(c),
                         ],
                       ),
                     ),
@@ -162,7 +168,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
             const SizedBox(height: 8),
 
             // 4. Console Log
-            _buildConsoleLog(),
+            _buildConsoleLog(c),
           ],
         ),
       ),
@@ -170,13 +176,13 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== 1. CONNECTION TOOLBAR (CONNECT READER) ====================
-  Widget _buildConnectionToolbar() {
+  Widget _buildConnectionToolbar(EyeCareColors c) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: c.border),
       ),
       child: Row(
         children: [
@@ -187,15 +193,15 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 width: 3.5,
                 height: 16,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7),
+                  color: c.rfidCyan,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(width: 6),
-              const Text(
+              Text(
                 'Connect Reader',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: c.textPrimary,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                 ),
@@ -205,21 +211,21 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           const SizedBox(width: 18),
 
           // Conn Type
-          const Text('Conn Type', style: TextStyle(color: Colors.white70, fontSize: 11)),
+          Text('Conn Type', style: TextStyle(color: c.textSecondary, fontSize: 11)),
           const SizedBox(width: 6),
           Container(
             height: 30,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: c.bgCardElevated,
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: c.border),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _selectedConnType,
-                dropdownColor: const Color(0xFF1E293B),
-                style: const TextStyle(color: Colors.white, fontSize: 11),
+                dropdownColor: c.bgCard,
+                style: TextStyle(color: c.textPrimary, fontSize: 11),
                 items: const [
                   DropdownMenuItem(value: 'RS232', child: Text('RS232')),
                   DropdownMenuItem(value: 'TCP Client', child: Text('TCP Client')),
@@ -236,7 +242,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           const SizedBox(width: 14),
 
           // Param Label
-          const Text('Param', style: TextStyle(color: Colors.white70, fontSize: 11)),
+          Text('Param', style: TextStyle(color: c.textSecondary, fontSize: 11)),
           const SizedBox(width: 6),
 
           // Dynamic Param Controls based on Conn Type
@@ -246,15 +252,15 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedComPort,
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                  dropdownColor: c.bgCard,
+                  style: TextStyle(color: c.textPrimary, fontSize: 11),
                   items: _comPorts.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedComPort = val);
@@ -269,15 +275,15 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
                   value: _selectedBaudRate,
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                  dropdownColor: c.bgCard,
+                  style: TextStyle(color: c.textPrimary, fontSize: 11),
                   items: _baudRates.map((b) => DropdownMenuItem(value: b, child: Text('$b'))).toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedBaudRate = val);
@@ -292,14 +298,15 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               child: TextField(
                 controller: _rs485AddressController,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
+                style: TextStyle(color: c.textPrimary, fontSize: 11),
                 decoration: InputDecoration(
                   hintText: 'Addr',
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 10),
+                  hintStyle: TextStyle(color: c.textMuted, fontSize: 10),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 6),
                   filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF334155))),
+                  fillColor: c.bgCardElevated,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
                 ),
               ),
             ),
@@ -310,15 +317,15 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedComPort,
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                  dropdownColor: c.bgCard,
+                  style: TextStyle(color: c.textPrimary, fontSize: 11),
                   items: _comPorts.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedComPort = val);
@@ -333,15 +340,15 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<int>(
                   value: _selectedBaudRate,
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                  dropdownColor: c.bgCard,
+                  style: TextStyle(color: c.textPrimary, fontSize: 11),
                   items: _baudRates.map((b) => DropdownMenuItem(value: b, child: Text('$b'))).toList(),
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedBaudRate = val);
@@ -356,12 +363,13 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               child: TextField(
                 controller: _ipController,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
+                style: TextStyle(color: c.textPrimary, fontSize: 11),
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                   filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF334155))),
+                  fillColor: c.bgCardElevated,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
                 ),
               ),
             ),
@@ -373,12 +381,13 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               child: TextField(
                 controller: _portController,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
+                style: TextStyle(color: c.textPrimary, fontSize: 11),
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                   filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF334155))),
+                  fillColor: c.bgCardElevated,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
                 ),
               ),
             ),
@@ -389,12 +398,13 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               child: TextField(
                 controller: _portController,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
+                style: TextStyle(color: c.textPrimary, fontSize: 11),
                 decoration: InputDecoration(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                   filled: true,
-                  fillColor: const Color(0xFF0F172A),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF334155))),
+                  fillColor: c.bgCardElevated,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: c.border)),
                 ),
               ),
             ),
@@ -403,11 +413,11 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
-              child: const Text('USB HID Reader (CL7206)', style: TextStyle(color: Colors.white70, fontSize: 11)),
+              child: Text('USB HID Reader (CL7206)', style: TextStyle(color: c.textSecondary, fontSize: 11)),
             ),
           ],
 
@@ -433,11 +443,11 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
+                backgroundColor: c.rfidCyan,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                elevation: 2,
+                elevation: 1,
               ),
               child: const Text('Connect', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             )
@@ -445,11 +455,11 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
             ElevatedButton(
               onPressed: () => _uhfService.disconnect(),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFEF4444),
+                backgroundColor: c.errorCoral,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                elevation: 2,
+                elevation: 1,
               ),
               child: const Text('Disconnect', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
             ),
@@ -460,16 +470,16 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: c.bgCardElevated,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: c.border),
             ),
             child: Row(
               children: [
                 const Text('🌡️ ', style: TextStyle(fontSize: 11)),
                 Text(
                   '${_uhfService.readerTemp.toStringAsFixed(1)} °C',
-                  style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: c.warningAmber, fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -481,10 +491,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               _tabController.animateTo(5); // Go to Tab 6
               _uhfService.searchLanReaders();
             },
-            icon: const Icon(Icons.search, size: 14, color: Color(0xFF38BDF8)),
-            label: const Text('TÌM LAN', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11)),
+            icon: Icon(Icons.search, size: 14, color: c.rfidCyan),
+            label: Text('TÌM LAN', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFF0284C7)),
+              side: BorderSide(color: c.rfidCyan),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
@@ -494,36 +504,35 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
     );
   }
 
-
-
   // ==================== 2. KPI METRICS ====================
-  Widget _buildKpiMetrics() {
+  Widget _buildKpiMetrics(EyeCareColors c) {
     return Row(
       children: [
-        _buildKpiCard('THẺ DUY NHẤT', '${_uhfService.uniqueCount}', '🏷️', const Color(0xFF38BDF8)),
+        _buildKpiCard('THẺ DUY NHẤT', '${_uhfService.uniqueCount}', '🏷️', c.rfidCyan, c),
         const SizedBox(width: 8),
-        _buildKpiCard('TỔNG LƯỢT ĐỌC', '${_uhfService.totalReads}', '📊', const Color(0xFFA855F7)),
+        _buildKpiCard('TỔNG LƯỢT ĐỌC', '${_uhfService.totalReads}', '📊', const Color(0xFF7C3AED), c),
         const SizedBox(width: 8),
-        _buildKpiCard('TỐC ĐỘ QUÉT', '${_uhfService.readRate.toInt()} Tags/s', '⚡', const Color(0xFF10B981)),
+        _buildKpiCard('TỐC ĐỘ QUÉT', '${_uhfService.readRate.toInt()} Tags/s', '⚡', c.successEmerald, c),
         const SizedBox(width: 8),
         _buildKpiCard(
           'TRẠNG THÁI',
           _uhfService.isConnected ? (_uhfService.isScanning ? 'ĐANG QUÉT' : 'SẴN SÀNG') : 'CHƯA KẾT NỐI',
           _uhfService.isConnected ? '🟢' : '🔴',
-          _uhfService.isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+          _uhfService.isConnected ? c.successEmerald : c.errorCoral,
+          c,
         ),
       ],
     );
   }
 
-  Widget _buildKpiCard(String title, String value, String icon, Color accentColor) {
+  Widget _buildKpiCard(String title, String value, String icon, Color accentColor, EyeCareColors c) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: c.bgCard,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF334155)),
+          border: Border.all(color: c.border),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -531,7 +540,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                Text(title, style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 2),
                 Text(value, style: TextStyle(color: accentColor, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Consolas')),
               ],
@@ -544,19 +553,19 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== 3. TAB BAR ====================
-  Widget _buildTabBar() {
+  Widget _buildTabBar(EyeCareColors c) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F172A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
-        border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+      decoration: BoxDecoration(
+        color: c.bgCardElevated,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+        border: Border(bottom: BorderSide(color: c.border)),
       ),
       child: TabBar(
         controller: _tabController,
         isScrollable: true,
-        indicatorColor: const Color(0xFF38BDF8),
-        labelColor: const Color(0xFF38BDF8),
-        unselectedLabelColor: Colors.white54,
+        indicatorColor: c.rfidCyan,
+        labelColor: c.rfidCyan,
+        unselectedLabelColor: c.textMuted,
         tabs: const [
           Tab(icon: Icon(Icons.radar, size: 15), text: 'Quét Thẻ (Live Inventory)'),
           Tab(icon: Icon(Icons.edit_note, size: 15), text: 'Đọc & Ghi Thẻ (Memory R/W)'),
@@ -570,7 +579,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== TAB 1: LIVE INVENTORY ====================
-  Widget _buildTabLiveInventory() {
+  Widget _buildTabLiveInventory(EyeCareColors c) {
     final query = _searchFilterController.text.trim().toLowerCase();
     final filteredTags = _uhfService.tags.where((t) {
       if (query.isEmpty) return true;
@@ -585,13 +594,13 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: c.bgCardElevated,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: c.border),
             ),
             child: Row(
               children: [
-                const Text('Anten: ', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
+                Text('Anten: ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
                 ...List.generate(4, (i) {
                   final antNum = i + 1;
                   final isChecked = _uhfService.activeAntennas.contains(antNum);
@@ -602,29 +611,29 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       children: [
                         Checkbox(
                           value: isChecked,
-                          activeColor: const Color(0xFF0284C7),
+                          activeColor: c.rfidCyan,
                           visualDensity: VisualDensity.compact,
                           onChanged: (val) => _uhfService.setAntenna(antNum, val ?? false),
                         ),
-                        Text('ANT $antNum', style: TextStyle(color: isChecked ? const Color(0xFF38BDF8) : Colors.white, fontWeight: isChecked ? FontWeight.bold : FontWeight.normal, fontSize: 11)),
+                        Text('ANT $antNum', style: TextStyle(color: isChecked ? c.rfidCyan : c.textPrimary, fontWeight: isChecked ? FontWeight.bold : FontWeight.normal, fontSize: 11)),
                       ],
                     ),
                   );
                 }),
                 const Spacer(),
-                const Text('Chế độ: ', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                Text('Chế độ: ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: c.bgCard,
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: c.border),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<int>(
                       value: _scanMode,
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      dropdownColor: c.bgCard,
+                      style: TextStyle(color: c.textPrimary, fontSize: 11),
                       items: const [
                         DropdownMenuItem(value: 0, child: Text('Chỉ mã EPC')),
                         DropdownMenuItem(value: 1, child: Text('EPC + TID')),
@@ -637,19 +646,19 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 const SizedBox(width: 8),
                 Checkbox(
                   value: _soundEnabled,
-                  activeColor: const Color(0xFF0284C7),
+                  activeColor: c.rfidCyan,
                   visualDensity: VisualDensity.compact,
                   onChanged: (val) => setState(() => _soundEnabled = val ?? true),
                 ),
-                const Text('🔔 Bíp', style: TextStyle(color: Colors.white, fontSize: 11)),
+                Text('🔔 Bíp', style: TextStyle(color: c.textPrimary, fontSize: 11)),
                 const SizedBox(width: 12),
                 Checkbox(
                   value: _uhfService.ignoreAlreadyScanned,
-                  activeColor: const Color(0xFF10B981),
+                  activeColor: c.successEmerald,
                   visualDensity: VisualDensity.compact,
                   onChanged: (val) => setState(() => _uhfService.ignoreAlreadyScanned = val ?? true),
                 ),
-                const Text('🚫 Bỏ qua thẻ đã quét', style: TextStyle(color: Color(0xFF34D399), fontSize: 11, fontWeight: FontWeight.bold)),
+                Text('🚫 Bỏ qua thẻ đã quét', style: TextStyle(color: c.successEmerald, fontSize: 11, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -665,9 +674,9 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                         _uhfService.startInventory(antennas: _uhfService.activeAntennas.toList(), scanMode: _scanMode);
                       },
                 icon: const Icon(Icons.play_arrow, size: 14),
-                label: const Text('BẮT ĐẦU QUÉT', style: TextStyle(fontSize: 11)),
+                label: const Text('BẮT ĐẦU QUÉT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
+                  backgroundColor: c.successEmerald,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
@@ -677,9 +686,9 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               ElevatedButton.icon(
                 onPressed: !_uhfService.isScanning ? null : () => _uhfService.stopInventory(),
                 icon: const Icon(Icons.stop, size: 14),
-                label: const Text('DỪNG QUÉT', style: TextStyle(fontSize: 11)),
+                label: const Text('DỪNG QUÉT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444),
+                  backgroundColor: c.errorCoral,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
@@ -691,8 +700,8 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 icon: const Icon(Icons.clear_all, size: 14),
                 label: const Text('Xóa danh sách', style: TextStyle(fontSize: 11)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white70,
-                  side: const BorderSide(color: Color(0xFF334155)),
+                  foregroundColor: c.textSecondary,
+                  side: BorderSide(color: c.border),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
@@ -705,15 +714,16 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 child: TextField(
                   controller: _searchFilterController,
                   onChanged: (_) => setState(() {}),
-                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                  style: TextStyle(color: c.textPrimary, fontSize: 11),
                   decoration: InputDecoration(
                     hintText: 'Tìm EPC / TID...',
-                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 11),
-                    prefixIcon: const Icon(Icons.search, size: 14, color: Colors.white38),
+                    hintStyle: TextStyle(color: c.textMuted, fontSize: 11),
+                    prefixIcon: Icon(Icons.search, size: 14, color: c.textMuted),
                     contentPadding: EdgeInsets.zero,
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                    fillColor: c.bgCardElevated,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                   ),
                 ),
               ),
@@ -725,37 +735,37 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: filteredTags.isEmpty
-                  ? const Center(child: Text('Chưa có thẻ nào được quét. Bấm "BẮT ĐẦU QUÉT" để đọc thẻ.', style: TextStyle(color: Colors.white38, fontSize: 11)))
+                  ? Center(child: Text('Chưa có thẻ nào được quét. Bấm "BẮT ĐẦU QUÉT" để đọc thẻ.', style: TextStyle(color: c.textMuted, fontSize: 11)))
                   : ListView.builder(
                       itemCount: filteredTags.length,
                       itemBuilder: (context, index) {
                         final tag = filteredTags[index];
                         return Container(
                           decoration: BoxDecoration(
-                            color: index.isEven ? const Color(0xFF1E293B) : const Color(0xFF162032),
-                            border: const Border(bottom: BorderSide(color: Color(0xFF334155), width: 0.5)),
+                            color: index.isEven ? c.bgCard : c.bgCardElevated,
+                            border: Border(bottom: BorderSide(color: c.border, width: 0.5)),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           child: Row(
                             children: [
-                              SizedBox(width: 30, child: Text('${index + 1}', style: const TextStyle(color: Colors.white54, fontSize: 10))),
+                              SizedBox(width: 30, child: Text('${index + 1}', style: TextStyle(color: c.textMuted, fontSize: 10))),
                               Expanded(
                                 flex: 3,
                                 child: Text(
                                   tag.epc,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'Consolas'),
+                                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'Consolas'),
                                 ),
                               ),
                               Expanded(
                                 flex: 2,
                                 child: Text(
                                   tag.tid.isNotEmpty ? tag.tid : '-',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 10, fontFamily: 'Consolas'),
+                                  style: TextStyle(color: c.textSecondary, fontSize: 10, fontFamily: 'Consolas'),
                                 ),
                               ),
                               SizedBox(
@@ -766,27 +776,27 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                                       width: 6,
                                       height: 6,
                                       decoration: BoxDecoration(
-                                        color: tag.rssiValue >= -60 ? const Color(0xFF10B981) : (tag.rssiValue >= -75 ? const Color(0xFFF59E0B) : const Color(0xFFEF4444)),
+                                        color: tag.rssiValue >= -60 ? c.successEmerald : (tag.rssiValue >= -75 ? c.warningAmber : c.errorCoral),
                                         shape: BoxShape.circle,
                                       ),
                                     ),
                                     const SizedBox(width: 4),
-                                    Text('${tag.rssi} dBm', style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                                    Text('${tag.rssi} dBm', style: TextStyle(color: c.textSecondary, fontSize: 10)),
                                   ],
                                 ),
                               ),
-                              SizedBox(width: 45, child: Text('ANT ${tag.ant}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10))),
-                              SizedBox(width: 50, child: Text('${tag.count} lần', style: const TextStyle(color: Color(0xFFA855F7), fontWeight: FontWeight.bold, fontSize: 10))),
+                              SizedBox(width: 45, child: Text('ANT ${tag.ant}', style: TextStyle(color: c.rfidCyan, fontSize: 10, fontWeight: FontWeight.bold))),
+                              SizedBox(width: 50, child: Text('${tag.count} lần', style: const TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold, fontSize: 10))),
                               SizedBox(
                                 width: 75,
                                 child: Text(
                                   '${tag.lastSeen.hour.toString().padLeft(2, "0")}:${tag.lastSeen.minute.toString().padLeft(2, "0")}:${tag.lastSeen.second.toString().padLeft(2, "0")}',
-                                  style: const TextStyle(color: Colors.white54, fontSize: 9),
+                                  style: TextStyle(color: c.textMuted, fontSize: 9),
                                 ),
                               ),
                               PopupMenuButton<String>(
-                                icon: const Icon(Icons.more_vert, size: 14, color: Colors.white54),
-                                color: const Color(0xFF1E293B),
+                                icon: Icon(Icons.more_vert, size: 14, color: c.textMuted),
+                                color: c.bgCard,
                                 onSelected: (val) {
                                   if (val == 'copy') {
                                     Clipboard.setData(ClipboardData(text: tag.epc));
@@ -801,10 +811,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                                     _tabController.animateTo(2);
                                   }
                                 },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem(value: 'copy', child: Text('📋 Sao chép EPC', style: TextStyle(color: Colors.white, fontSize: 11))),
-                                  PopupMenuItem(value: 'rw', child: Text('✍️ Đọc / Ghi thẻ này', style: TextStyle(color: Colors.white, fontSize: 11))),
-                                  PopupMenuItem(value: 'lock', child: Text('🔒 Khóa / Hủy thẻ này', style: TextStyle(color: Colors.white, fontSize: 11))),
+                                itemBuilder: (context) => [
+                                  PopupMenuItem(value: 'copy', child: Text('📋 Sao chép EPC', style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                                  PopupMenuItem(value: 'rw', child: Text('✍️ Đọc / Ghi thẻ này', style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                                  PopupMenuItem(value: 'lock', child: Text('🔒 Khóa / Hủy thẻ này', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                                 ],
                               ),
                             ],
@@ -820,7 +830,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== TAB 2: MEMORY R/W ====================
-  Widget _buildTabMemoryRw() {
+  Widget _buildTabMemoryRw(EyeCareColors c) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12.0),
       child: Row(
@@ -831,26 +841,26 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('ĐỌC & GHI VÙNG NHỚ CHI TIẾT (GEN2)', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text('ĐỌC & GHI VÙNG NHỚ CHI TIẾT (GEN2)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 8),
-                  const Text('Chọn Vùng nhớ (Memory Bank):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Chọn Vùng nhớ (Memory Bank):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF334155))),
+                    decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: _rwBank,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        dropdownColor: c.bgCard,
+                        style: TextStyle(color: c.textPrimary, fontSize: 11),
                         items: const [
                           DropdownMenuItem(value: 1, child: Text('1: EPC (Electronic Product Code)')),
                           DropdownMenuItem(value: 2, child: Text('2: TID (Tag Identifier - Read Only)')),
@@ -868,18 +878,19 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Word Offset (ptr):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                            Text('Word Offset (ptr):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             const SizedBox(height: 4),
                             SizedBox(
                               height: 34,
                               child: TextField(
                                 controller: _rwOffsetController,
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                style: TextStyle(color: c.textPrimary, fontSize: 12),
                                 decoration: InputDecoration(
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                                   filled: true,
-                                  fillColor: const Color(0xFF1E293B),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  fillColor: c.bgCard,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                                 ),
                               ),
                             ),
@@ -891,18 +902,19 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Word Count (cnt):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                            Text('Word Count (cnt):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             const SizedBox(height: 4),
                             SizedBox(
                               height: 34,
                               child: TextField(
                                 controller: _rwCountController,
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                style: TextStyle(color: c.textPrimary, fontSize: 12),
                                 decoration: InputDecoration(
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                                   filled: true,
-                                  fillColor: const Color(0xFF1E293B),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                                  fillColor: c.bgCard,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                                 ),
                               ),
                             ),
@@ -912,17 +924,18 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text('Dữ liệu Hex (Kết quả đọc / Dữ liệu ghi):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Dữ liệu Hex (Kết quả đọc / Dữ liệu ghi):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   TextField(
                     controller: _rwDataController,
                     maxLines: 2,
-                    style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontFamily: 'Consolas'),
+                    style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'Consolas'),
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.all(8),
                       filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                      fillColor: c.bgCard,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -936,9 +949,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                           _rwDataController.text = res;
                         },
                         icon: const Icon(Icons.download, size: 15),
-                        label: const Text('ĐỌC DỮ LIỆU', style: TextStyle(fontSize: 11)),
+                        label: const Text('ĐỌC DỮ LIỆU', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
+                          backgroundColor: c.rfidCyan,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                       ),
@@ -950,9 +964,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã gửi lệnh ghi thẻ thành công!')));
                         },
                         icon: const Icon(Icons.upload, size: 15),
-                        label: const Text('GHI DỮ LIỆU', style: TextStyle(fontSize: 11)),
+                        label: const Text('GHI DỮ LIỆU', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
+                          backgroundColor: c.successEmerald,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                       ),
@@ -969,43 +984,45 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('GHI ĐÈ MÃ EPC SIÊU TỐC (FAST COMMISSIONING)', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text('GHI ĐÈ MÃ EPC SIÊU TỐC (FAST COMMISSIONING)', style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 8),
-                  const Text('Mã EPC thẻ cần đổi (Chọn từ bảng quét hoặc nhập):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Mã EPC thẻ cần đổi (Chọn từ bảng quét hoặc nhập):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   SizedBox(
                     height: 34,
                     child: TextField(
                       controller: _fastTargetEpcController,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Consolas'),
+                      style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'Consolas'),
                       decoration: InputDecoration(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                         filled: true,
-                        fillColor: const Color(0xFF1E293B),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        fillColor: c.bgCard,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Mã EPC MỚI cần ghi (24 ký tự Hex = 96 bit):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Mã EPC MỚI cần ghi (24 ký tự Hex = 96 bit):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   SizedBox(
                     height: 34,
                     child: TextField(
                       controller: _fastNewEpcController,
-                      style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'Consolas'),
+                      style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'Consolas'),
                       decoration: InputDecoration(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                         filled: true,
-                        fillColor: const Color(0xFF1E293B),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        fillColor: c.bgCard,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                       ),
                     ),
                   ),
@@ -1019,7 +1036,8 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                     icon: const Icon(Icons.casino, size: 14),
                     label: const Text('Tạo mã EPC ngẫu nhiên', style: TextStyle(fontSize: 11)),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
+                      foregroundColor: c.textSecondary,
+                      side: BorderSide(color: c.border),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     ),
                   ),
@@ -1035,7 +1053,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       icon: const Icon(Icons.bolt, size: 16),
                       label: const Text('GHI ĐÈ EPC MỚI NGAY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
+                        backgroundColor: c.successEmerald,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
@@ -1051,7 +1069,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== TAB 3: SECURITY ====================
-  Widget _buildTabSecurity() {
+  Widget _buildTabSecurity(EyeCareColors c) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12.0),
       child: Row(
@@ -1061,39 +1079,40 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
+              decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('KHÓA VÙNG NHỚ THẺ (TAG MEMORY LOCK)', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text('KHÓA VÙNG NHỚ THẺ (TAG MEMORY LOCK)', style: TextStyle(color: c.warningAmber, fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 8),
-                  const Text('Mã EPC thẻ cần khóa:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Mã EPC thẻ cần khóa:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   SizedBox(
                     height: 34,
                     child: TextField(
                       controller: _lockTargetEpcController,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Consolas'),
+                      style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'Consolas'),
                       decoration: InputDecoration(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                         filled: true,
-                        fillColor: const Color(0xFF1E293B),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        fillColor: c.bgCard,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Vùng nhớ áp dụng:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Vùng nhớ áp dụng:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF334155))),
+                    decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: _lockArea,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        dropdownColor: c.bgCard,
+                        style: TextStyle(color: c.textPrimary, fontSize: 11),
                         items: const [
                           DropdownMenuItem(value: 0, child: Text('User Memory')),
                           DropdownMenuItem(value: 1, child: Text('TID Memory')),
@@ -1106,17 +1125,17 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Thao tác khóa:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Thao tác khóa:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF334155))),
+                    decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: _lockType,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        dropdownColor: c.bgCard,
+                        style: TextStyle(color: c.textPrimary, fontSize: 11),
                         items: const [
                           DropdownMenuItem(value: 0, child: Text('0: Mở khóa (Unlock)')),
                           DropdownMenuItem(value: 1, child: Text('1: Khóa tạm (Lock)')),
@@ -1134,10 +1153,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã thiết lập khóa thẻ thành công!')));
                     },
                     icon: const Icon(Icons.lock, size: 15),
-                    label: const Text('THIẾT LẬP KHÓA THẺ', style: TextStyle(fontSize: 11)),
+                    label: const Text('THIẾT LẬP KHÓA THẺ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF59E0B),
-                      foregroundColor: Colors.black,
+                      backgroundColor: c.warningAmber,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
@@ -1151,46 +1170,48 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
+              decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('HỦY THẺ VĨNH VIỄN (TAG DESTROY / KILL)', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text('HỦY THẺ VĨNH VIỄN (TAG DESTROY / KILL)', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: const Color(0xFF450A0A), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF991B1B))),
-                    child: const Text('⚠️ CẢNH BÁO: Lệnh Kill sẽ vô hiệu hóa chip RFID vĩnh viễn! Chỉ dùng khi thanh lý tài sản.', style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 10)),
+                    decoration: BoxDecoration(color: c.errorCoral.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: c.errorCoral.withValues(alpha: 0.5))),
+                    child: Text('⚠️ CẢNH BÁO: Lệnh Kill sẽ vô hiệu hóa chip RFID vĩnh viễn! Chỉ dùng khi thanh lý tài sản.', style: TextStyle(color: c.errorCoral, fontSize: 10)),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Mã EPC thẻ cần hủy:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Mã EPC thẻ cần hủy:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   SizedBox(
                     height: 34,
                     child: TextField(
                       controller: _killTargetEpcController,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Consolas'),
+                      style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'Consolas'),
                       decoration: InputDecoration(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                         filled: true,
-                        fillColor: const Color(0xFF1E293B),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        fillColor: c.bgCard,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text('Mật khẩu hủy (Kill Password - 8 Hex chars):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Mật khẩu hủy (Kill Password - 8 Hex chars):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   SizedBox(
                     height: 34,
                     child: TextField(
                       controller: _killPasswordController,
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Consolas'),
+                      style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'Consolas'),
                       decoration: InputDecoration(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                         filled: true,
-                        fillColor: const Color(0xFF1E293B),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        fillColor: c.bgCard,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: c.border)),
                       ),
                     ),
                   ),
@@ -1200,12 +1221,12 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       final ok = await showDialog<bool>(
                         context: context,
                         builder: (ctx) => AlertDialog(
-                          backgroundColor: const Color(0xFF1E293B),
-                          title: const Text('XÁC NHẬN HỦY THẺ', style: TextStyle(color: Color(0xFFEF4444))),
-                          content: const Text('Bạn có chắc chắn muốn hủy vĩnh viễn thẻ này không?', style: TextStyle(color: Colors.white)),
+                          backgroundColor: c.bgCard,
+                          title: Text('XÁC NHẬN HỦY THẺ', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold)),
+                          content: Text('Bạn có chắc chắn muốn hủy vĩnh viễn thẻ này không?', style: TextStyle(color: c.textPrimary)),
                           actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('HỦY')),
-                            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)), child: const Text('HỦY THẺ')),
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
+                            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral), child: const Text('HỦY THẺ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                           ],
                         ),
                       );
@@ -1215,9 +1236,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       }
                     },
                     icon: const Icon(Icons.delete_forever, size: 15),
-                    label: const Text('💥 HỦY THẺ VĨNH VIỄN (KILL)', style: TextStyle(fontSize: 11)),
+                    label: const Text('💥 HỦY THẺ VĨNH VIỄN (KILL)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
+                      backgroundColor: c.errorCoral,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                     ),
                   ),
@@ -1231,7 +1253,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== TAB 4: RF POWER ====================
-  Widget _buildTabRfPower() {
+  Widget _buildTabRfPower(EyeCareColors c) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12.0),
       child: Row(
@@ -1241,11 +1263,11 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
+              decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('CÔNG SUẤT PHÁT SÓNG ĐỘC LẬP TỪNG ANTEN (dBm)', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text('CÔNG SUẤT PHÁT SÓNG ĐỘC LẬP TỪNG ANTEN (dBm)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 8),
                   ...List.generate(4, (i) {
                     final ant = i + 1;
@@ -1254,18 +1276,19 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Row(
                         children: [
-                          SizedBox(width: 50, child: Text('ANT $ant:', style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                          SizedBox(width: 50, child: Text('ANT $ant:', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                           Expanded(
                             child: Slider(
                               value: power,
                               min: 1,
                               max: 33,
                               divisions: 32,
-                              activeColor: const Color(0xFFF59E0B),
+                              activeColor: c.warningAmber,
+                              inactiveColor: c.border,
                               onChanged: (val) => setState(() => _antennaPowers[ant] = val),
                             ),
                           ),
-                          SizedBox(width: 50, child: Text('${power.toInt()} dBm', style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 11))),
+                          SizedBox(width: 50, child: Text('${power.toInt()} dBm', style: TextStyle(color: c.warningAmber, fontWeight: FontWeight.bold, fontSize: 11))),
                         ],
                       ),
                     );
@@ -1278,10 +1301,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã áp dụng công suất Anten!')));
                     },
                     icon: const Icon(Icons.bolt, size: 15),
-                    label: const Text('ÁP DỤNG CÔNG SUẤT TẤT CẢ ANTEN', style: TextStyle(fontSize: 11)),
+                    label: const Text('ÁP DỤNG CÔNG SUẤT TẤT CẢ ANTEN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF59E0B),
-                      foregroundColor: Colors.black,
+                      backgroundColor: c.warningAmber,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
@@ -1295,23 +1318,23 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
+              decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('BĂNG TẦN & THÔNG SỐ GEN2 BASEBAND', style: TextStyle(color: Color(0xFFA855F7), fontWeight: FontWeight.bold, fontSize: 12)),
+                  const Text('BĂNG TẦN & THÔNG SỐ GEN2 BASEBAND', style: TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold, fontSize: 12)),
                   const SizedBox(height: 8),
-                  const Text('Băng tần chuẩn (Frequency Standard):', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Băng tần chuẩn (Frequency Standard):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF334155))),
+                    decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: _freqBand,
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        dropdownColor: c.bgCard,
+                        style: TextStyle(color: c.textPrimary, fontSize: 11),
                         items: const [
                           DropdownMenuItem(value: 0, child: Text('Mỹ / Quốc tế: US FCC (902.75 - 927.25 MHz)')),
                           DropdownMenuItem(value: 1, child: Text('Châu Âu: EU ETSI (865.7 - 868.1 MHz)')),
@@ -1329,17 +1352,17 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Gen2 Session:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                            Text('Gen2 Session:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8),
-                              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF334155))),
+                              decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<int>(
                                   value: _gen2Session,
                                   isExpanded: true,
-                                  dropdownColor: const Color(0xFF1E293B),
-                                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                                  dropdownColor: c.bgCard,
+                                  style: TextStyle(color: c.textPrimary, fontSize: 11),
                                   items: const [
                                     DropdownMenuItem(value: 0, child: Text('S0 (Nhanh)')),
                                     DropdownMenuItem(value: 1, child: Text('S1 (Chống lặp)')),
@@ -1358,17 +1381,17 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Target Flag:', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                            Text('Target Flag:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             const SizedBox(height: 4),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8),
-                              decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6), border: Border.all(color: const Color(0xFF334155))),
+                              decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<int>(
                                   value: _gen2Target,
                                   isExpanded: true,
-                                  dropdownColor: const Color(0xFF1E293B),
-                                  style: const TextStyle(color: Colors.white, fontSize: 11),
+                                  dropdownColor: c.bgCard,
+                                  style: TextStyle(color: c.textPrimary, fontSize: 11),
                                   items: const [
                                     DropdownMenuItem(value: 0, child: Text('Target A')),
                                     DropdownMenuItem(value: 1, child: Text('Target B')),
@@ -1389,9 +1412,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã cập nhật cấu hình Gen2 Baseband!')));
                     },
                     icon: const Icon(Icons.settings, size: 15),
-                    label: const Text('ÁP DỤNG CẤU HÌNH GEN2', style: TextStyle(fontSize: 11)),
+                    label: const Text('ÁP DỤNG CẤU HÌNH GEN2', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFA855F7),
+                      backgroundColor: const Color(0xFF7C3AED),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                   ),
@@ -1405,7 +1429,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== TAB 5: GPIO ====================
-  Widget _buildTabGpio() {
+  Widget _buildTabGpio(EyeCareColors c) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12.0),
       child: Column(
@@ -1422,99 +1446,107 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
+                  decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('GIÁM SÁT TÍN HIỆU ĐẦU VÀO GPI (CẢM BIẾN QUANG)', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12)),
-                  const SizedBox(height: 8),
-                  ...List.generate(4, (i) {
-                    final active = _uhfService.gpiStates[i];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 6),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6)),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: active ? const Color(0xFF10B981) : Colors.white24,
-                              shape: BoxShape.circle,
-                            ),
+                      Text('GIÁM SÁT TÍN HIỆU ĐẦU VÀO GPI (CẢM BIẾN QUANG)', style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(height: 8),
+                      ...List.generate(4, (i) {
+                        final active = _uhfService.gpiStates[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: active ? c.successEmerald : c.textMuted.withValues(alpha: 0.3),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Cổng GPI ${i + 1}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11)),
+                                    Text(active ? 'HIGH (Đang kích hoạt)' : 'LOW (Bình thường)', style: TextStyle(color: active ? c.successEmerald : c.textMuted, fontSize: 10)),
+                                  ],
+                                ),
+                              ),
+                              OutlinedButton(
+                                onPressed: () => _uhfService.toggleGpi(i),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: c.rfidCyan,
+                                  side: BorderSide(color: c.border),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                ),
+                                child: const Text('Test Trigger', style: TextStyle(fontSize: 10)),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Cổng GPI ${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
-                                Text(active ? 'HIGH (Đang kích hoạt)' : 'LOW (Bình thường)', style: TextStyle(color: active ? const Color(0xFF10B981) : Colors.white54, fontSize: 10)),
-                              ],
-                            ),
-                          ),
-                          OutlinedButton(
-                            onPressed: () => _uhfService.toggleGpi(i),
-                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2)),
-                            child: const Text('Test Trigger', style: TextStyle(fontSize: 10)),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
+                        );
+                      }),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
+              const SizedBox(width: 12),
 
-          // GPO Outputs
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('ĐIỀU KHIỂN ĐẦU RA GPO (RƠ-LE / ĐÈN BÁO / CÒI)', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
-                  const SizedBox(height: 8),
-                  _buildGpoItem(1, 'GPO 1 (Rơ-le 1 / Dự phòng)', const Color(0xFF38BDF8)),
-                  _buildGpoItem(2, 'GPO 2 (L4 - Đèn VÀNG)', const Color(0xFFF59E0B)),
-                  _buildGpoItem(3, 'GPO 3 (L3 - Đèn XANH)', const Color(0xFF10B981)),
-                  _buildGpoItem(4, 'GPO 4 (L2 - Đèn ĐỎ)', const Color(0xFFEF4444)),
-                ],
+              // GPO Outputs
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ĐIỀU KHIỂN ĐẦU RA GPO (RƠ-LE / ĐÈN BÁO / CÒI)', style: TextStyle(color: c.warningAmber, fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(height: 8),
+                      _buildGpoItem(1, 'GPO 1 (Rơ-le 1 / Dự phòng)', c.rfidCyan, c),
+                      _buildGpoItem(2, 'GPO 2 (L4 - Đèn VÀNG)', c.warningAmber, c),
+                      _buildGpoItem(3, 'GPO 3 (L3 - Đèn XANH)', c.successEmerald, c),
+                      _buildGpoItem(4, 'GPO 4 (L2 - Đèn ĐỎ)', c.errorCoral, c),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ],
       ),
-    ],
-  ),
-);
+    );
   }
 
-  Widget _buildGpoItem(int index, String label, Color color) {
+  Widget _buildGpoItem(int index, String label, Color color, EyeCareColors c) {
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 11)),
+          Text(label, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w500, fontSize: 11)),
           Row(
             children: [
               ElevatedButton(
                 onPressed: () => _uhfService.setGpo(index, true),
-                style: ElevatedButton.styleFrom(backgroundColor: color, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2)),
-                child: const Text('BẬT', style: TextStyle(fontSize: 10)),
+                style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2)),
+                child: const Text('BẬT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(width: 4),
               OutlinedButton(
                 onPressed: () => _uhfService.setGpo(index, false),
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2)),
-                child: const Text('TẮT', style: TextStyle(fontSize: 10, color: Colors.white70)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.textSecondary,
+                  side: BorderSide(color: c.border),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                ),
+                child: const Text('TẮT', style: TextStyle(fontSize: 10)),
               ),
             ],
           ),
@@ -1524,7 +1556,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== TAB 6: LAN MANAGER ====================
-  Widget _buildTabLanManager() {
+  Widget _buildTabLanManager(EyeCareColors c) {
     final readers = _uhfService.discoveredReaders;
 
     return Padding(
@@ -1537,9 +1569,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               ElevatedButton.icon(
                 onPressed: () => _uhfService.searchLanReaders(),
                 icon: const Icon(Icons.search, size: 15),
-                label: const Text('TÌM ĐẦU ĐỌC TRONG MẠNG LAN', style: TextStyle(fontSize: 11)),
+                label: const Text('TÌM ĐẦU ĐỌC TRONG MẠNG LAN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0284C7),
+                  backgroundColor: c.rfidCyan,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               ),
@@ -1547,9 +1580,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               ElevatedButton.icon(
                 onPressed: () => _uhfService.resetReader(),
                 icon: const Icon(Icons.restart_alt, size: 15),
-                label: const Text('KHỞI ĐỘNG LẠI TỪ XA', style: TextStyle(fontSize: 11)),
+                label: const Text('KHỞI ĐỘNG LẠI TỪ XA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFEF4444),
+                  backgroundColor: c.errorCoral,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               ),
@@ -1560,31 +1594,31 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           // Discovered Readers List
           Expanded(
             child: Container(
-              decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF334155))),
+              decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
               child: readers.isEmpty
-                  ? const Center(child: Text('Chưa tìm thấy thiết bị. Nhấn "TÌM ĐẦU ĐỌC TRONG MẠNG LAN".', style: TextStyle(color: Colors.white38, fontSize: 12)))
+                  ? Center(child: Text('Chưa tìm thấy thiết bị. Nhấn "TÌM ĐẦU ĐỌC TRONG MẠNG LAN".', style: TextStyle(color: c.textMuted, fontSize: 12)))
                   : ListView.builder(
                       itemCount: readers.length,
                       itemBuilder: (context, idx) {
                         final r = readers[idx];
                         return Container(
                           padding: const EdgeInsets.all(10),
-                          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFF334155)))),
+                          decoration: BoxDecoration(color: c.bgCard, border: Border(bottom: BorderSide(color: c.border))),
                           child: Row(
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(color: const Color(0xFF0284C7).withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                                child: const Icon(Icons.router, color: Color(0xFF38BDF8), size: 20),
+                                decoration: BoxDecoration(color: c.rfidCyan.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                                child: Icon(Icons.router, color: c.rfidCyan, size: 20),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(r.deviceType, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                                    Text(r.deviceType, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
                                     const SizedBox(height: 2),
-                                    Text('IP: ${r.ip}  |  MAC: ${r.mac}  |  Port: ${r.port}  |  Mode: ${r.workMode}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                                    Text('IP: ${r.ip}  |  MAC: ${r.mac}  |  Port: ${r.port}  |  Mode: ${r.workMode}', style: TextStyle(color: c.textSecondary, fontSize: 10)),
                                   ],
                                 ),
                               ),
@@ -1597,10 +1631,11 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                                   _tabController.animateTo(0); // Go back to Live Inventory
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF10B981),
+                                  backgroundColor: c.successEmerald,
+                                  foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 ),
-                                child: const Text('KẾT NỐI NGAY', style: TextStyle(fontSize: 10)),
+                                child: const Text('KẾT NỐI NGAY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ),
@@ -1615,14 +1650,14 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   }
 
   // ==================== 4. CONSOLE LOG ====================
-  Widget _buildConsoleLog() {
+  Widget _buildConsoleLog(EyeCareColors c) {
     return Container(
       height: 105,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFF060A12),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1630,23 +1665,23 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('📋 NHẬT KÝ HOẠT ĐỘNG (SYSTEM LOG):', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+              Text('📋 NHẬT KÝ HOẠT ĐỘNG (SYSTEM LOG):', style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
               Row(
                 children: [
                   InkWell(
                     onTap: () => setState(() => _autoScrollLog = !_autoScrollLog),
                     child: Row(
                       children: [
-                        Icon(_autoScrollLog ? Icons.check_box : Icons.check_box_outline_blank, size: 14, color: const Color(0xFF38BDF8)),
+                        Icon(_autoScrollLog ? Icons.check_box : Icons.check_box_outline_blank, size: 14, color: c.rfidCyan),
                         const SizedBox(width: 4),
-                        const Text('Tự cuộn', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                        Text('Tự cuộn', style: TextStyle(color: c.textSecondary, fontSize: 10)),
                       ],
                     ),
                   ),
                   const SizedBox(width: 10),
                   InkWell(
                     onTap: () => setState(() => _logLines.clear()),
-                    child: const Text('Xóa Log', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                    child: Text('Xóa Log', style: TextStyle(color: c.textSecondary, fontSize: 10)),
                   ),
                 ],
               ),
@@ -1654,19 +1689,27 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           ),
           const SizedBox(height: 4),
           Expanded(
-            child: ListView.builder(
-              controller: _logScrollController,
-              itemCount: _logLines.length,
-              itemBuilder: (context, idx) {
-                final line = _logLines[idx];
-                Color color = const Color(0xFF38BDF8);
-                if (line.contains('Lỗi') || line.contains('Failed') || line.contains('Error')) {
-                  color = const Color(0xFFEF4444);
-                } else if (line.contains('thành công') || line.contains('Success') || line.contains('BẮT ĐẦU')) {
-                  color = const Color(0xFF10B981);
-                }
-                return Text(line, style: TextStyle(color: color, fontSize: 10, fontFamily: 'Consolas'));
-              },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: c.bgCardElevated,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: c.border.withValues(alpha: 0.5)),
+              ),
+              child: ListView.builder(
+                controller: _logScrollController,
+                itemCount: _logLines.length,
+                itemBuilder: (context, idx) {
+                  final line = _logLines[idx];
+                  Color color = c.rfidCyan;
+                  if (line.contains('Lỗi') || line.contains('Failed') || line.contains('Error')) {
+                    color = c.errorCoral;
+                  } else if (line.contains('thành công') || line.contains('Success') || line.contains('BẮT ĐẦU')) {
+                    color = c.successEmerald;
+                  }
+                  return Text(line, style: TextStyle(color: color, fontSize: 10, fontFamily: 'Consolas'));
+                },
+              ),
             ),
           ),
         ],

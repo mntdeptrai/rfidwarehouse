@@ -14,12 +14,14 @@ enum TowerLightColor {
 class TowerLightStatus {
   final TowerLightColor color;
   final bool isBuzzerOn;
+  final bool isBlinking;
   final String reason;
   final DateTime timestamp;
 
   const TowerLightStatus({
     this.color = TowerLightColor.off,
     this.isBuzzerOn = false,
+    this.isBlinking = false,
     this.reason = 'Sẵn sàng (Standby)',
     required this.timestamp,
   });
@@ -28,6 +30,10 @@ class TowerLightStatus {
   bool get isYellow => color == TowerLightColor.yellow;
   bool get isGreen => color == TowerLightColor.green;
   bool get isOff => color == TowerLightColor.off;
+
+  bool get isRedBlinking => isRed && isBlinking;
+  bool get isYellowBlinking => isYellow && isBlinking;
+  bool get isGreenBlinking => isGreen && isBlinking;
 }
 
 /// Cấu hình chân GPO / Relay của Tháp đèn CTP50-3T-D-J

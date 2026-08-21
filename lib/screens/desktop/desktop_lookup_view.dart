@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/warehouse_repository.dart';
+import '../../theme/eye_care_theme.dart';
 
 class DesktopLookupView extends StatefulWidget {
   const DesktopLookupView({super.key});
@@ -10,11 +11,30 @@ class DesktopLookupView extends StatefulWidget {
 
 class _DesktopLookupViewState extends State<DesktopLookupView> {
   final WarehouseRepository _repo = WarehouseRepository();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
   final TextEditingController _queryController = TextEditingController();
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    _eyeCare.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    _eyeCare.removeListener(_onThemeChanged);
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
     final filteredItems = _repo.items.where((i) {
       if (_searchQuery.isEmpty) return true;
       final q = _searchQuery.toLowerCase();
@@ -25,20 +45,20 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
     }).toList();
 
     return Container(
-      color: const Color(0xFF0F172A),
+      color: c.bgDeep,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          const Text(
+          Text(
             'LOOKUP & SERIAL MANAGEMENT',
-            style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+            style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Tra Cứu Mã Serial, Thùng Carton & Thẻ RFID',
-            style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+            style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
 
@@ -46,21 +66,21 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: c.bgCard,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF38BDF8)),
+              border: Border.all(color: c.rfidCyan),
             ),
             child: TextField(
               controller: _queryController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: c.textPrimary),
               decoration: InputDecoration(
-                icon: const Icon(Icons.search, color: Color(0xFF38BDF8)),
+                icon: Icon(Icons.search, color: c.rfidCyan),
                 hintText: 'Nhập mã Serial, EPC tag, Barcode hoặc tên sản phẩm...',
-                hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
                 border: InputBorder.none,
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                        icon: Icon(Icons.clear, color: c.textSecondary, size: 18),
                         onPressed: () {
                           _queryController.clear();
                           setState(() => _searchQuery = '');
@@ -77,20 +97,20 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: c.bgCard,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: filteredItems.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.search_off, size: 56, color: Colors.white24),
+                          Icon(Icons.search_off, size: 56, color: c.textMuted),
                           const SizedBox(height: 12),
                           Text(
-                            _searchQuery.isEmpty ? 'Chưa có mặt hàng nào trong SQLite.' : 'Không tìm thấy kết quả cho "$_searchQuery"',
-                            style: const TextStyle(color: Colors.white70, fontSize: 14),
+                            _searchQuery.isEmpty ? 'Chưa có mặt hàng nào trong cơ sở dữ liệu.' : 'Không tìm thấy kết quả cho "$_searchQuery"',
+                            style: TextStyle(color: c.textSecondary, fontSize: 14),
                           ),
                         ],
                       ),
@@ -98,7 +118,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                   : ListView.separated(
                       padding: const EdgeInsets.all(16),
                       itemCount: filteredItems.length,
-                      separatorBuilder: (_, index) => const Divider(color: Color(0xFF334155), height: 1),
+                      separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
                       itemBuilder: (context, index) {
                         final item = filteredItems[index];
                         final pallet = _repo.pallets.where((p) => p.palletId == item.palletId).firstOrNull;
@@ -111,10 +131,10 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                                  color: c.rfidCyan.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.qr_code, color: Color(0xFF38BDF8), size: 20),
+                                child: Icon(Icons.qr_code, color: c.rfidCyan, size: 20),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
@@ -122,9 +142,9 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item.productName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    Text(item.productName, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                                     const SizedBox(height: 2),
-                                    Text('Serial: ${item.serialNumber} • SKU: ${item.sku}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                    Text('Serial: ${item.serialNumber} • SKU: ${item.sku}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                                   ],
                                 ),
                               ),
@@ -133,9 +153,9 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('EPC: ${item.epc}', style: const TextStyle(color: Color(0xFF38BDF8), fontFamily: 'Courier', fontSize: 11)),
+                                    Text('EPC: ${item.epc}', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11)),
                                     const SizedBox(height: 2),
-                                    Text('Thùng: ${pallet?.palletCode ?? "N/A"} • Vị trí: ${loc?.locationCode ?? "N/A"}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                    Text('Thùng: ${pallet?.palletCode ?? "N/A"} • Vị trí: ${loc?.locationCode ?? "N/A"}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                                   ],
                                 ),
                               ),

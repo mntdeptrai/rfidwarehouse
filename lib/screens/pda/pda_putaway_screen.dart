@@ -411,7 +411,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'BƯỚC 2: BÓP CÒ QUÉT BARCODE TRÊN THÙNG HÀNG',
+                  'BƯỚC 2: QUÉT MÃ BARCODE NGOÀI THÙNG HÀNG',
                   style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -440,7 +440,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                         style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       Text(
-                        'Hướng tia laser/camera vào mã vạch dán trên kiện hàng để cất',
+                        'Hướng tia laser/camera vào mã Barcode dán ngoài thùng để lưu vị trí',
                         style: TextStyle(color: c.textSecondary, fontSize: 10.5),
                       ),
                     ],
@@ -467,7 +467,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             focusNode: _cartonFocusNode,
             style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
-              hintText: 'Nhập hoặc quét mã vạch thùng...',
+              hintText: 'Quét hoặc nhập mã Barcode ngoài thùng...',
               hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
               filled: true,
               fillColor: c.bgCardElevated,

@@ -16,20 +16,28 @@ class StorageScreen extends StatefulWidget {
 class _StorageScreenState extends State<StorageScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final WarehouseRepository _repo = WarehouseRepository();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _eyeCare.addListener(_onThemeChanged);
   }
 
   @override
   void dispose() {
+    _eyeCare.removeListener(_onThemeChanged);
     _tabController.dispose();
     super.dispose();
   }
 
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _showAddProductDialog() {
+    final c = _eyeCare.colors;
     final skuController = TextEditingController();
     final nameController = TextEditingController();
     final unitController = TextEditingController();
@@ -38,34 +46,34 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Thêm Sản Phẩm Mới', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: c.bgCard,
+        title: Text('Thêm Sản Phẩm Mới', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: skuController,
-                decoration: const InputDecoration(labelText: 'Mã SKU', hintText: 'Ví dụ: SKU-001', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Mã SKU', hintText: 'Ví dụ: SKU-001', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(labelText: 'Tên sản phẩm', hintText: 'Tên sản phẩm...', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Tên sản phẩm', hintText: 'Tên sản phẩm...', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: categoryController,
-                decoration: const InputDecoration(labelText: 'Danh mục', hintText: 'Điện tử, May mặc...', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Danh mục', hintText: 'Điện tử, May mặc...', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: unitController,
-                decoration: const InputDecoration(labelText: 'Đơn vị tính', hintText: 'Cái, Thùng, Hộp...', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Đơn vị tính', hintText: 'Cái, Thùng, Hộp...', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
             ],
           ),
@@ -73,10 +81,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Colors.white54)),
+            child: Text('HỦY', style: TextStyle(color: c.textMuted)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
             onPressed: () async {
               final sku = skuController.text.trim();
               final name = nameController.text.trim();
@@ -101,6 +109,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   }
 
   void _showAddLocationDialog() {
+    final c = _eyeCare.colors;
     final codeController = TextEditingController();
     final zoneController = TextEditingController();
     final shelfController = TextEditingController();
@@ -109,34 +118,34 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Thêm Vị Trí Lưu Kho', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: c.bgCard,
+        title: Text('Thêm Vị Trí Lưu Kho', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: codeController,
-                decoration: const InputDecoration(labelText: 'Mã Vị trí (Location Code)', hintText: 'Ví dụ: LOC-A01-01', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Mã Vị trí (Location Code)', hintText: 'Ví dụ: LOC-A01-01', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: zoneController,
-                decoration: const InputDecoration(labelText: 'Khu vực (Zone)', hintText: 'Ví dụ: Zone A', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Khu vực (Zone)', hintText: 'Ví dụ: Zone A', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: shelfController,
-                decoration: const InputDecoration(labelText: 'Kệ (Shelf)', hintText: 'Ví dụ: Kệ 01', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Kệ (Shelf)', hintText: 'Ví dụ: Kệ 01', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: levelController,
-                decoration: const InputDecoration(labelText: 'Tầng (Level)', hintText: 'Ví dụ: Tầng 1', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(labelText: 'Tầng (Level)', hintText: 'Ví dụ: Tầng 1', labelStyle: TextStyle(color: c.textSecondary)),
+                style: TextStyle(color: c.textPrimary),
               ),
             ],
           ),
@@ -144,10 +153,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Colors.white54)),
+            child: Text('HỦY', style: TextStyle(color: c.textMuted)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
             onPressed: () async {
               final code = codeController.text.trim();
               if (code.isEmpty) return;
@@ -171,27 +180,28 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   }
 
   void _showAddPalletDialog() {
+    final c = _eyeCare.colors;
     final codeController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Tạo Pallet Mới', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: c.bgCard,
+        title: Text('Tạo Pallet Mới', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: codeController,
-              decoration: const InputDecoration(labelText: 'Mã Pallet (Pallet Code)', hintText: 'Ví dụ: PL-01', labelStyle: TextStyle(color: Colors.white70)),
-              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(labelText: 'Mã Pallet (Pallet Code)', hintText: 'Ví dụ: PL-01', labelStyle: TextStyle(color: c.textSecondary)),
+              style: TextStyle(color: c.textPrimary),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Colors.white54)),
+            child: Text('HỦY', style: TextStyle(color: c.textMuted)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
@@ -215,7 +225,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   }
 
   void _confirmClearAllData() {
-    final c = EyeCareThemeService().colors;
+    final c = _eyeCare.colors;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -255,6 +265,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   void _showMovePalletDialog(Pallet pallet) {
     if (_repo.locations.isEmpty) return;
     String selectedLocId = _repo.locations.first.locationId;
+    final c = _eyeCare.colors;
 
     showDialog(
       context: context,
@@ -262,10 +273,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1E293B),
+              backgroundColor: c.bgCard,
               title: Text(
                 'Di chuyển Pallet ${pallet.palletCode}',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold),
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -273,7 +284,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 children: [
                   Text(
                     'Số lượng hàng trên Pallet: ${pallet.itemIds.length} Items',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: TextStyle(color: c.textSecondary, fontSize: 13),
                   ),
                   const SizedBox(height: 14),
                   PdaLocationBarcodeCard(
@@ -287,7 +298,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Hủy', style: TextStyle(color: Colors.white54)),
+                  child: Text('Hủy', style: TextStyle(color: c.textMuted)),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -320,13 +331,15 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: c.bgDeep,
       appBar: HardwareStatusAppBar(
         title: '🏢 Quản Lý Lưu Kho',
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white70),
+            icon: Icon(Icons.refresh, color: c.textSecondary),
             tooltip: 'Làm mới',
             onPressed: () => _repo.refreshFromDatabase(),
           ),
@@ -341,13 +354,13 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
         children: [
           // Tab bar
           Container(
-            color: const Color(0xFF1E293B),
+            color: c.bgCard,
             child: TabBar(
               controller: _tabController,
-              indicatorColor: const Color(0xFF38BDF8),
+              indicatorColor: c.rfidCyan,
               indicatorWeight: 3,
-              labelColor: const Color(0xFF38BDF8),
-              unselectedLabelColor: Colors.white54,
+              labelColor: c.rfidCyan,
+              unselectedLabelColor: c.textSecondary,
               tabs: const [
                 Tab(icon: Icon(Icons.inventory_2, size: 18), text: 'Tồn Kho SKU'),
                 Tab(icon: Icon(Icons.pallet, size: 18), text: 'Quản Lý Pallet'),
@@ -364,9 +377,9 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 return TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildSkuStockTab(),
-                    _buildPalletManagementTab(),
-                    _buildLocationGridTab(),
+                    _buildSkuStockTab(c),
+                    _buildPalletManagementTab(c),
+                    _buildLocationGridTab(c),
                   ],
                 );
               },
@@ -377,7 +390,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildSkuStockTab() {
+  Widget _buildSkuStockTab(EyeCareColors c) {
     final summary = _repo.getStockSummary();
 
     if (summary.isEmpty) {
@@ -387,16 +400,16 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.inventory_2_outlined, size: 56, color: Colors.white24),
+              Icon(Icons.inventory_2_outlined, size: 56, color: c.textMuted),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 'Chưa có tồn kho sản phẩm nào trong SQLite.',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                 onPressed: _showAddProductDialog,
                 child: const Text('+ THÊM SẢN PHẨM MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
@@ -421,9 +434,9 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: c.bgCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF334155)),
+            border: Border.all(color: c.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -437,8 +450,8 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       children: [
                         Text(
                           prod.sku,
-                          style: const TextStyle(
-                            color: Color(0xFF38BDF8),
+                          style: TextStyle(
+                            color: c.rfidCyan,
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                             letterSpacing: 0.5,
@@ -447,7 +460,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                         const SizedBox(height: 2),
                         Text(
                           prod.productName,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ],
                     ),
@@ -455,12 +468,12 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
+                      color: c.bgCardElevated,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       prod.category,
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      style: TextStyle(color: c.textSecondary, fontSize: 11),
                     ),
                   ),
                 ],
@@ -469,16 +482,16 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               Row(
                 children: [
                   Expanded(
-                    child: _buildStockStatBox('Khả Dụng', inStock.toString(), const Color(0xFF10B981)),
+                    child: _buildStockStatBox('Khả Dụng', inStock.toString(), const Color(0xFF10B981), c),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _buildStockStatBox('Đã Giữ', allocated.toString(), const Color(0xFFF59E0B)),
+                    child: _buildStockStatBox('Đã Giữ', allocated.toString(), const Color(0xFFF59E0B), c),
                   ),
 
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _buildStockStatBox('Tổng Tồn', total.toString(), const Color(0xFF38BDF8)),
+                    child: _buildStockStatBox('Tổng Tồn', total.toString(), c.rfidCyan, c),
                   ),
                 ],
               ),
@@ -489,17 +502,17 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildStockStatBox(String label, String value, Color color) {
+  Widget _buildStockStatBox(String label, String value, Color color, EyeCareColors c) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: c.bgCardElevated,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.3), width: 0.8),
       ),
       child: Column(
         children: [
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10)),
+          Text(label, style: TextStyle(color: c.textSecondary, fontSize: 10)),
           const SizedBox(height: 2),
           Text(
             value,
@@ -510,7 +523,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildPalletManagementTab() {
+  Widget _buildPalletManagementTab(EyeCareColors c) {
     if (_repo.pallets.isEmpty) {
       return Center(
         child: Padding(
@@ -518,11 +531,11 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.pallet, size: 56, color: Colors.white24),
+              Icon(Icons.pallet, size: 56, color: c.textMuted),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 'Chưa có Pallet nào trong kho SQLite.',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -550,9 +563,9 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: c.bgCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF334155)),
+            border: Border.all(color: c.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,10 +578,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                          color: c.rfidCyan.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.pallet, color: Color(0xFF38BDF8), size: 22),
+                        child: Icon(Icons.pallet, color: c.rfidCyan, size: 22),
                       ),
                       const SizedBox(width: 10),
                       Column(
@@ -576,7 +589,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                         children: [
                           Text(
                             pallet.palletCode,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           Text(
                             pallet.isMultiSku ? 'Pallet Đa SKU' : 'Pallet Đơn SKU',
@@ -591,7 +604,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.drive_file_move_outlined, color: Color(0xFF38BDF8)),
+                    icon: Icon(Icons.drive_file_move_outlined, color: c.rfidCyan),
                     tooltip: 'Di chuyển Pallet',
                     onPressed: () => _showMovePalletDialog(pallet),
                   ),
@@ -601,7 +614,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: c.bgCardElevated,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -613,13 +626,13 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                         const SizedBox(width: 4),
                         Text(
                           'Vị trí: ${loc.locationCode} (${loc.zone})',
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
                     Text(
                       '${pallet.itemIds.length} Items',
-                      style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ],
                 ),
@@ -628,7 +641,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 const SizedBox(height: 10),
                 Text(
                   'Mẫu EPC: ${palletItems.first.epc}',
-                  style: const TextStyle(color: Colors.white54, fontFamily: 'Courier', fontSize: 10.5),
+                  style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 10.5),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -639,7 +652,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildLocationGridTab() {
+  Widget _buildLocationGridTab(EyeCareColors c) {
     if (_repo.locations.isEmpty) {
       return Center(
         child: Padding(
@@ -647,16 +660,16 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.grid_view_outlined, size: 56, color: Colors.white24),
+              Icon(Icons.grid_view_outlined, size: 56, color: c.textMuted),
               const SizedBox(height: 14),
-              const Text(
+              Text(
                 'Chưa có Vị trí kho nào trong SQLite.',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                 onPressed: _showAddLocationDialog,
                 child: const Text('+ THÊM VỊ TRÍ MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
@@ -683,10 +696,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
         return Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: c.bgCard,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: hasPallet ? const Color(0xFF38BDF8).withValues(alpha: 0.5) : const Color(0xFF334155),
+              color: hasPallet ? c.rfidCyan.withValues(alpha: 0.5) : c.border,
               width: hasPallet ? 1.5 : 1.0,
             ),
           ),
@@ -699,13 +712,13 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 children: [
                   Text(
                     loc.locationCode,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   Container(
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: hasPallet ? const Color(0xFF10B981) : Colors.white24,
+                      color: hasPallet ? const Color(0xFF10B981) : c.textMuted,
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -713,18 +726,18 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               ),
               Text(
                 '${loc.zone} • ${loc.shelf}',
-                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                style: TextStyle(color: c.textSecondary, fontSize: 11),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: c.bgCardElevated,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   hasPallet ? palletsAtLoc.map((e) => e.palletCode).join(', ') : 'Vị trí trống',
                   style: TextStyle(
-                    color: hasPallet ? const Color(0xFF38BDF8) : Colors.white38,
+                    color: hasPallet ? c.rfidCyan : c.textMuted,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -738,3 +751,4 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     );
   }
 }
+

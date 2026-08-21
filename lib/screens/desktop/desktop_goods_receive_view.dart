@@ -10,6 +10,7 @@ import '../../services/mysql_sync_service.dart';
 import '../../widgets/tower_light_widget.dart';
 import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
+import '../../theme/eye_care_theme.dart';
 
 class DesktopGoodsReceiveView extends StatefulWidget {
   const DesktopGoodsReceiveView({super.key});
@@ -25,9 +26,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final ExcelImportService _excelService = ExcelImportService();
   final TowerLightService _towerLight = TowerLightService();
   final MySqlSyncService _mysqlSync = MySqlSyncService();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   int _currentMode = 0; // 0: Live RFID Station, 1: Orders List & Excel
   bool _isCreating = false;
+
 
   final TextEditingController _receiveNoController = TextEditingController();
   final TextEditingController _dateController = TextEditingController();
@@ -81,9 +84,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
     }
     _desktopUhf.addListener(_onDesktopUhfUpdate);
+    _eyeCare.addListener(_onThemeUpdate);
 
     _initTagListener();
   }
+
+  void _onThemeUpdate() {
+    if (mounted) setState(() {});
+  }
+
 
   /// Tự động tìm kiếm Đơn nhập / Thùng tương ứng với mã EPC được quét
   InboundOrder? _findOrderForEpc(String epc) {
@@ -317,6 +326,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   @override
   void dispose() {
     _desktopUhf.removeListener(_onDesktopUhfUpdate);
+    _eyeCare.removeListener(_onThemeUpdate);
     _uiRefreshTimer?.cancel();
     _countdownTimer?.cancel();
     _autoResetTimer?.cancel();
@@ -520,17 +530,17 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
   }
 
-  void _showTemplateDialog() {
+  void _showTemplateDialog(EyeCareColors c) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: c.bgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.table_chart, color: Color(0xFF10B981), size: 24),
-            SizedBox(width: 10),
-            Text('Cấu Trúc Tệp Mẫu Nhập Hàng (Template-Goods-Receive.xlsx)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 24),
+            const SizedBox(width: 10),
+            Text('Cấu Trúc Tệp Mẫu Nhập Hàng', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: SizedBox(
@@ -543,18 +553,18 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
+                    color: c.bgCardElevated,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: c.border),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: Color(0xFF38BDF8), size: 18),
-                      SizedBox(width: 8),
+                      Icon(Icons.info_outline, color: c.rfidCyan, size: 18),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Cấu trúc tệp Excel chuẩn gồm 4 cột: CARTON CODE, EPC, BARCODE, NAME. Khi nạp file, hệ thống sẽ lưu đúng mã EPC của từng sản phẩm ở trạng thái CHƯA NHẬP KHO.',
-                          style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                          'Cấu trúc tệp Excel gồm 4 cột: CARTON CODE (Mã thùng), EPC (Mã chip RFID sản phẩm), BARCODE (Mã vạch ngoài thùng để quét cất vị trí kho khi Putaway), NAME (Tên sản phẩm). Khi nạp file, hệ thống sẽ lưu đúng mã EPC của từng sản phẩm ở trạng thái CHƯA NHẬP KHO.',
+                          style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                         ),
                       ),
                     ],
@@ -562,53 +572,53 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 ),
                 const SizedBox(height: 14),
                 Table(
-                  border: TableBorder.all(color: const Color(0xFF334155)),
+                  border: TableBorder.all(color: c.border),
                   columnWidths: const {
                     0: FlexColumnWidth(2),
                     1: FlexColumnWidth(3.2),
                     2: FlexColumnWidth(2),
                     3: FlexColumnWidth(2.2),
                   },
-                  children: const [
+                  children: [
                     TableRow(
-                      decoration: BoxDecoration(color: Color(0xFF0F172A)),
+                      decoration: BoxDecoration(color: c.bgCardElevated),
                       children: [
-                        Padding(padding: EdgeInsets.all(8), child: Text('CARTON CODE', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('EPC', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('BARCODE', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('NAME', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('CARTON CODE', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('BARCODE (NGOÀI THÙNG)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('NAME', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                       ],
                     ),
                     TableRow(
                       children: [
-                        Padding(padding: EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: Colors.white, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('ABCDEF000000000000000001', style: TextStyle(color: Color(0xFF38BDF8), fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: Colors.white70, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('Product Test 01', style: TextStyle(color: Colors.white70, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000001', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('Product Test 01', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                     TableRow(
                       children: [
-                        Padding(padding: EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: Colors.white, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('ABCDEF000000000000000002', style: TextStyle(color: Color(0xFF38BDF8), fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: Colors.white70, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('Product Test 02', style: TextStyle(color: Colors.white70, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000002', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('Product Test 02', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                     TableRow(
                       children: [
-                        Padding(padding: EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: Colors.white, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('...', style: TextStyle(color: Colors.white38, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: Colors.white70, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('...', style: TextStyle(color: Colors.white38, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('...', style: TextStyle(color: c.textMuted, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('...', style: TextStyle(color: c.textMuted, fontSize: 11))),
                       ],
                     ),
                     TableRow(
                       children: [
-                        Padding(padding: EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: Colors.white, fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('ABCDEF000000000000000010', style: TextStyle(color: Color(0xFF38BDF8), fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: Colors.white70, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: EdgeInsets.all(8), child: Text('Product Test 10', style: TextStyle(color: Colors.white70, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000010', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('Product Test 10', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                   ],
@@ -631,7 +641,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             },
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
             onPressed: () => Navigator.pop(ctx),
             child: const Text('ĐÃ HIỂU', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -640,22 +650,22 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     );
   }
 
-  void _showSerialListDialog(String carton, String prodName, List<dynamic> serials) {
+  void _showSerialListDialog(String carton, String prodName, List<dynamic> serials, EyeCareColors c) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: c.bgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Row(
           children: [
-            const Icon(Icons.qr_code, color: Color(0xFF38BDF8), size: 24),
+            Icon(Icons.qr_code, color: c.rfidCyan, size: 24),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Danh sách Mã EPC RFID: $carton', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                  Text('$prodName (${serials.length} chip)', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Danh sách Mã EPC RFID: $carton', style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text('$prodName · ${serials.length} chip', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 ],
               ),
             ),
@@ -670,15 +680,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               margin: const EdgeInsets.only(bottom: 6),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: c.bgCardElevated,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: Row(
                 children: [
-                  Text('#${idx + 1}', style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text('#${idx + 1}', style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                   const SizedBox(width: 10),
-                  Text(serials[idx].toString(), style: const TextStyle(color: Color(0xFF38BDF8), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text(serials[idx].toString(), style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 12)),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -694,11 +704,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ĐÓNG', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('ĐÓNG', style: TextStyle(color: c.textSecondary))),
         ],
       ),
     );
   }
+
 
 
 
@@ -722,6 +733,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   void _showBatchImportOrdersDialog() {
     List<Map<String, dynamic>> previewRows = [];
+    final c = _eyeCare.colors;
 
     showDialog(
       context: context,
@@ -732,7 +744,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           final bool hasExplicitEpcs = previewRows.any((r) => (r['epc'] as String?)?.isNotEmpty ?? false);
 
           return AlertDialog(
-            backgroundColor: const Color(0xFF1E293B),
+            backgroundColor: c.bgCard,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Row(
               children: [
@@ -742,12 +754,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Import Danh Sách Nhiều Đơn Hàng (Excel)', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text('Import Danh Sách Nhiều Đơn Hàng', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                       Text(
                         hasExplicitEpcs
-                            ? 'Tự động tạo đơn & dùng trực tiếp mã EPC từ file Excel (CHƯA NHẬP KHO)'
+                            ? 'Tự động tạo đơn & dùng trực tiếp mã EPC từ file Excel'
                             : 'Tự động tạo đơn & sinh toàn bộ mã EPC ở trạng thái CHƯA NHẬP KHO',
-                        style: TextStyle(color: hasExplicitEpcs ? const Color(0xFF10B981) : const Color(0xFF38BDF8), fontSize: 12),
+                        style: TextStyle(color: hasExplicitEpcs ? const Color(0xFF10B981) : c.rfidCyan, fontSize: 12),
                       ),
                     ],
                   ),
@@ -763,7 +775,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   Row(
                     children: [
                       ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                        style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                         icon: const Icon(Icons.file_open, size: 16, color: Colors.white),
                         label: const Text('Chọn File Excel Từ Máy', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                         onPressed: () async {
@@ -792,46 +804,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           }
                         },
                       ),
-                      const SizedBox(width: 10),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF10B981),
-                          side: const BorderSide(color: Color(0xFF10B981)),
-                        ),
-                        icon: const Icon(Icons.download, size: 16),
-                        label: const Text('Tải File Mẫu PO (.xlsx)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                        onPressed: () async {
-                          try {
-                            final path = await _excelService.exportBatchOrdersTemplate();
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: const Color(0xFF10B981),
-                                duration: const Duration(seconds: 5),
-                                content: Text('Đã xuất file mẫu đơn hàng: $path'),
-                                action: SnackBarAction(
-                                  label: 'SAO CHÉP',
-                                  textColor: Colors.white,
-                                  onPressed: () {
-                                    Clipboard.setData(ClipboardData(text: path));
-                                  },
-                                ),
-                              ),
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi xuất file mẫu: $e')),
-                            );
-                          }
-                        },
-                      ),
                       if (previewRows.isNotEmpty) ...[
                         const SizedBox(width: 10),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.redAccent,
-                            side: const BorderSide(color: Color(0xFF334155)),
+                            side: BorderSide(color: c.border),
                           ),
                           icon: const Icon(Icons.clear, size: 16),
                           label: const Text('Xóa Bảng', style: TextStyle(fontSize: 12)),
@@ -842,16 +820,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: c.bgCardElevated,
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF334155)),
+                          border: Border.all(color: c.border),
                         ),
                         child: Text(
                           hasExplicitEpcs
                               ? 'Tổng: $totalOrders đơn/thùng | $totalItems mã EPC'
                               : 'Tổng: $totalOrders đơn | $totalItems sản phẩm',
                           style: TextStyle(
-                            color: previewRows.isNotEmpty ? const Color(0xFF10B981) : Colors.white38,
+                            color: previewRows.isNotEmpty ? const Color(0xFF10B981) : c.textMuted,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -866,23 +844,23 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.upload_file_outlined, size: 56, color: Colors.white24),
+                                Icon(Icons.upload_file_outlined, size: 56, color: c.textMuted),
                                 const SizedBox(height: 12),
-                                const Text(
+                                Text(
                                   'Chưa có dữ liệu đơn hàng nào được nạp.',
-                                  style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 6),
-                                const Text(
-                                  'Bấm "Chọn File Excel Từ Máy" để nạp file của bạn hoặc "Tải File Mẫu PO (.xlsx)" để tạo file mẫu.',
-                                  style: TextStyle(color: Colors.white38, fontSize: 11.5),
+                                Text(
+                                  'Bấm "Chọn File Excel Từ Máy" để nạp file của bạn.',
+                                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                                 ),
                               ],
                             ),
                           )
                         : SingleChildScrollView(
                             child: Table(
-                              border: TableBorder.all(color: const Color(0xFF334155)),
+                              border: TableBorder.all(color: c.border),
                               columnWidths: const {
                                 0: FlexColumnWidth(2),
                                 1: FlexColumnWidth(3),
@@ -893,28 +871,28 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               },
                               children: [
                                 TableRow(
-                                  decoration: const BoxDecoration(color: Color(0xFF0F172A)),
+                                  decoration: BoxDecoration(color: c.bgCardElevated),
                                   children: [
-                                    const Padding(padding: EdgeInsets.all(8), child: Text('Mã Đơn / Thùng', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                    Padding(padding: const EdgeInsets.all(8), child: Text(hasExplicitEpcs ? 'Mã EPC (Từ File)' : 'Nhà Cung Cấp', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                    const Padding(padding: EdgeInsets.all(8), child: Text('Mã SKU', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                    const Padding(padding: EdgeInsets.all(8), child: Text('Tên Sản Phẩm', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                    const Padding(padding: EdgeInsets.all(8), child: Text('Số Lượng', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
-                                    Padding(padding: const EdgeInsets.all(8), child: Text(hasExplicitEpcs ? 'Trạng Thái EPC' : 'EPC Sẽ Sinh', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11))),
+                                    Padding(padding: const EdgeInsets.all(8), child: Text('Mã Đơn / Thùng', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    Padding(padding: const EdgeInsets.all(8), child: Text(hasExplicitEpcs ? 'Mã EPC' : 'Nhà Cung Cấp', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    Padding(padding: const EdgeInsets.all(8), child: Text(hasExplicitEpcs ? 'Barcode Ngoài Thùng' : 'Mã SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    Padding(padding: const EdgeInsets.all(8), child: Text('Tên Sản Phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    Padding(padding: const EdgeInsets.all(8), child: Text('Số Lượng', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    Padding(padding: const EdgeInsets.all(8), child: Text(hasExplicitEpcs ? 'Trạng Thái EPC' : 'EPC Sẽ Sinh', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                                   ],
                                 ),
                                 for (var row in previewRows)
                                   TableRow(
                                     children: [
-                                      Padding(padding: const EdgeInsets.all(8), child: Text(row['orderNo'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11))),
+                                      Padding(padding: const EdgeInsets.all(8), child: Text(row['orderNo'], style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
                                       Padding(
                                         padding: const EdgeInsets.all(8),
                                         child: (row['epc'] != null && (row['epc'] as String).isNotEmpty)
-                                            ? Text(row['epc'], style: const TextStyle(color: Color(0xFF38BDF8), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11))
-                                            : Text(row['supplier'], style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                                            ? Text(row['epc'], style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11))
+                                            : Text(row['supplier'], style: TextStyle(color: c.textSecondary, fontSize: 11)),
                                       ),
-                                      Padding(padding: const EdgeInsets.all(8), child: Text(row['sku'], style: const TextStyle(color: Colors.white, fontFamily: 'Courier', fontSize: 11))),
-                                      Padding(padding: const EdgeInsets.all(8), child: Text(row['productName'], style: const TextStyle(color: Colors.white70, fontSize: 11))),
+                                      Padding(padding: const EdgeInsets.all(8), child: Text(row['sku'], style: TextStyle(color: c.textPrimary, fontFamily: 'Courier', fontSize: 11))),
+                                      Padding(padding: const EdgeInsets.all(8), child: Text(row['productName'], style: TextStyle(color: c.textSecondary, fontSize: 11))),
                                       Padding(padding: const EdgeInsets.all(8), child: Text('${row['quantity']}', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12))),
                                       Padding(
                                         padding: const EdgeInsets.all(4),
@@ -955,11 +933,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('HỦY', style: TextStyle(color: Colors.white54)),
+                child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: previewRows.isNotEmpty ? const Color(0xFF10B981) : Colors.grey.shade800,
+                  backgroundColor: previewRows.isNotEmpty ? const Color(0xFF10B981) : Colors.grey.shade600,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
                 icon: Icon(hasExplicitEpcs ? Icons.verified : Icons.check_circle, color: Colors.white, size: 18),
@@ -1021,7 +999,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                   sku: sku,
                                   productName: name,
                                   serialNumber: epcVal,
-                                  epc: epcVal, // DÙNG CHÍNH XÁC MÃ EPC TỪ CỘT 2 CỦA EXCEL!
+                                  epc: epcVal,
                                   status: ItemStatus.pendingInbound,
                                   orderNo: orderNo,
                                 ));
@@ -1101,11 +1079,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   }
 
   void _showGeneratedEpcsDialog(InboundOrder order, List<Item> items, {bool fromExcel = false}) {
+    final c = _eyeCare.colors;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: c.bgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Row(
           children: [
@@ -1117,9 +1096,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 children: [
                   Text(
                     fromExcel ? 'Đã lưu ${items.length} mã EPC từ cột EPC Excel' : 'Đã sinh ${items.length} mã EPC duy nhất',
-                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  Text('Mã đơn / Thùng: ${order.orderNo} | Trạng thái: CHƯA NHẬP KHO (PENDING)', style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 12)),
+                  Text('Mã đơn / Thùng: ${order.orderNo} | Trạng thái: CHƯA NHẬP KHO', style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 12)),
                 ],
               ),
             ),
@@ -1134,20 +1113,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: c.bgCardElevated,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: c.border),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, color: Color(0xFF38BDF8), size: 18),
+                    Icon(Icons.info_outline, color: c.rfidCyan, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         fromExcel
                             ? 'Toàn bộ ${items.length} mã EPC từ file Excel đã được dùng trực tiếp làm mã chip RFID EPC (không sinh mã ngẫu nhiên mới). Vui lòng chuyển sang "Trạm Quét RFID Live" để quét đối soát khi hàng về.'
                             : 'Các mã EPC này đã được tạo trong CSDL ở trạng thái CHƯA NHẬP KHO. Hãy in/ghi nhãn lên hàng hóa và đưa qua Trạm quét RFID để hoàn tất nhập kho.',
-                        style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                       ),
                     ),
                   ],
@@ -1163,20 +1142,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       margin: const EdgeInsets.only(bottom: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: c.bgCardElevated,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: c.border),
                       ),
                       child: Row(
                         children: [
-                          Text('#${index + 1}', style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text('#${index + 1}', style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.epc, style: const TextStyle(color: Color(0xFF38BDF8), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('${item.productName} (${item.sku}) | ${item.serialNumber}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                                Text(item.epc, style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text('${item.productName} (${item.sku}) | ${item.serialNumber}', style: TextStyle(color: c.textSecondary, fontSize: 10)),
                               ],
                             ),
                           ),
@@ -1201,8 +1180,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         actions: [
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white70,
-              side: const BorderSide(color: Color(0xFF334155)),
+              foregroundColor: c.textSecondary,
+              side: BorderSide(color: c.border),
             ),
             icon: const Icon(Icons.copy, size: 16),
             label: const Text('Sao chép tất cả EPC'),
@@ -1234,21 +1213,22 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   void _showOrderEpcsDetailDialog(InboundOrder order) {
     final items = _repo.getItemsByOrderNo(order.orderNo);
+    final c = _eyeCare.colors;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: c.bgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Row(
           children: [
-            const Icon(Icons.list_alt, color: Color(0xFF38BDF8), size: 24),
+            Icon(Icons.list_alt, color: c.rfidCyan, size: 24),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Chi tiết mã EPC - ${order.orderNo}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  Text('Tổng số: ${items.length} chip | Đã nhập: ${items.where((i) => i.status == ItemStatus.inStock).length} | Chưa nhập: ${items.where((i) => i.status != ItemStatus.inStock).length}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                  Text('Chi tiết mã EPC - ${order.orderNo}', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('Tổng số: ${items.length} chip | Đã nhập: ${items.where((i) => i.status == ItemStatus.inStock).length} | Chưa nhập: ${items.where((i) => i.status != ItemStatus.inStock).length}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 ],
               ),
             ),
@@ -1258,8 +1238,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           width: 700,
           height: 450,
           child: items.isEmpty
-              ? const Center(
-                  child: Text('Chưa có mã EPC nào được gắn cho đơn này.', style: TextStyle(color: Colors.white54)),
+              ? Center(
+                  child: Text('Chưa có mã EPC nào được gắn cho đơn này.', style: TextStyle(color: c.textSecondary)),
                 )
               : ListView.builder(
                   itemCount: items.length,
@@ -1270,20 +1250,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       margin: const EdgeInsets.only(bottom: 6),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: c.bgCardElevated,
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: isInStock ? const Color(0xFF10B981).withValues(alpha: 0.4) : const Color(0xFF334155)),
+                        border: Border.all(color: isInStock ? const Color(0xFF10B981).withValues(alpha: 0.4) : c.border),
                       ),
                       child: Row(
                         children: [
-                          Text('#${index + 1}', style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text('#${index + 1}', style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.epc, style: TextStyle(color: isInStock ? const Color(0xFF34D399) : const Color(0xFF38BDF8), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 12)),
-                                Text('${item.productName} (${item.sku}) | ${item.serialNumber} ${item.locationId != null ? "| Vị trí: ${item.locationId}" : ""}', style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                                Text(item.epc, style: TextStyle(color: isInStock ? const Color(0xFF34D399) : c.rfidCyan, fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text('${item.productName} (${item.sku}) | ${item.serialNumber} ${item.locationId != null ? "| Vị trí: ${item.locationId}" : ""}', style: TextStyle(color: c.textSecondary, fontSize: 10)),
                               ],
                             ),
                           ),
@@ -1306,13 +1286,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ĐÓNG', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('ĐÓNG', style: TextStyle(color: c.textSecondary))),
         ],
       ),
     );
   }
 
-  void _showAddProductRowDialog() {
+  void _showAddProductRowDialog(EyeCareColors c) {
     final skuCtrl = TextEditingController(text: 'SKU-001');
     final nameCtrl = TextEditingController(text: 'Sản phẩm A');
     final qtyCtrl = TextEditingController(text: '10');
@@ -1320,36 +1300,36 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: c.bgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: const Text('Thêm Sản Phẩm Vào Đơn Nhập', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        title: Text('Thêm Sản Phẩm Vào Đơn Nhập', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: skuCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: const InputDecoration(labelText: 'Mã SKU', labelStyle: TextStyle(color: Colors.white70)),
+              style: TextStyle(color: c.textPrimary, fontSize: 13),
+              decoration: InputDecoration(labelText: 'Mã SKU', labelStyle: TextStyle(color: c.textSecondary)),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: nameCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: const InputDecoration(labelText: 'Tên sản phẩm', labelStyle: TextStyle(color: Colors.white70)),
+              style: TextStyle(color: c.textPrimary, fontSize: 13),
+              decoration: InputDecoration(labelText: 'Tên sản phẩm', labelStyle: TextStyle(color: c.textSecondary)),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: qtyCtrl,
               keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: const InputDecoration(labelText: 'Số lượng cần nhập', labelStyle: TextStyle(color: Colors.white70)),
+              style: TextStyle(color: c.textPrimary, fontSize: 13),
+              decoration: InputDecoration(labelText: 'Số lượng cần nhập', labelStyle: TextStyle(color: c.textSecondary)),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('HỦY', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
             onPressed: () {
               final sku = skuCtrl.text.trim();
               final name = nameCtrl.text.trim();
@@ -1468,12 +1448,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
+
     if (_isCreating) {
-      return _buildCreateReceiptForm();
+      return _buildCreateReceiptForm(c);
     }
 
     return Container(
-      color: const Color(0xFF0B1120),
+      color: c.bgDeep,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1488,9 +1470,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'GOODS RECEIVE & RFID INBOUND STATION',
-                    style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
                   const SizedBox(height: 4),
                   Wrap(
@@ -1498,21 +1480,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         'Quản Lý Nhập Kho',
-                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
+                          color: c.bgCard,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
+                          border: Border.all(color: c.border),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _buildModeTab(0, 'Trạm Quét RFID Live', Icons.sensors),
-                            _buildModeTab(1, 'Danh Sách Phiếu Nhập', Icons.list_alt),
+                            _buildModeTab(0, 'Trạm Quét RFID Live', Icons.sensors, c),
+                            _buildModeTab(1, 'Danh Sách Phiếu Nhập', Icons.list_alt, c),
                           ],
                         ),
                       ),
@@ -1526,13 +1508,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 children: [
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF334155)),
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('LÀM MỚI'),
+                    icon: Icon(Icons.refresh, size: 18, color: c.textPrimary),
+                    label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.of(context);
                       await _mysqlSync.syncNow();
@@ -1551,7 +1533,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
+                      backgroundColor: c.rfidCyan,
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -1570,14 +1552,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
           // Main View Body
           Expanded(
-            child: _currentMode == 0 ? _buildLiveRfidStationView() : _buildReceiptsList(),
+            child: _currentMode == 0 ? _buildLiveRfidStationView(c) : _buildReceiptsList(c),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModeTab(int mode, String title, IconData icon) {
+  Widget _buildModeTab(int mode, String title, IconData icon, EyeCareColors c) {
     final isSelected = _currentMode == mode;
     return InkWell(
       onTap: () => setState(() => _currentMode = mode),
@@ -1585,17 +1567,17 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0284C7) : Colors.transparent,
+          color: isSelected ? c.rfidCyan : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.white60),
+            Icon(icon, size: 16, color: isSelected ? Colors.white : c.textSecondary),
             const SizedBox(width: 6),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
+                color: isSelected ? Colors.white : c.textSecondary,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 12,
               ),
@@ -1606,9 +1588,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     );
   }
 
+
   // ==================== TRẠM QUÉT RFID LIVE TRÊN DESKTOP ====================
 
-  Widget _buildLiveRfidStationView() {
+  Widget _buildLiveRfidStationView(EyeCareColors c) {
     final scannedCount = _scannedTags.length;
     final locations = _repo.locations;
     final expectedOrderItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
@@ -1637,14 +1620,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: c.bgCard,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: c.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('📍 VỊ TRÍ & ĐỐI SOÁT TỰ ĐỘNG', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text('📍 VỊ TRÍ & ĐỐI SOÁT TỰ ĐỘNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(height: 10),
 
                     // Card Tự Động Nhận Diện Đơn Hàng / Thùng
@@ -1652,21 +1635,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: c.bgCardElevated,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.4)),
+                          border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.bolt, color: Color(0xFF38BDF8), size: 20),
-                            SizedBox(width: 10),
+                            Icon(Icons.bolt, color: c.rfidCyan, size: 20),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('TỰ ĐỘNG KHỚP THEO MÃ CHIP', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5)),
-                                  SizedBox(height: 2),
-                                  Text('Quét chip bất kỳ, hệ thống sẽ tự động nhận diện đúng đơn và đếm số lượng.', style: TextStyle(color: Colors.white60, fontSize: 10.5, height: 1.2)),
+                                  Text('TỰ ĐỘNG KHỚP THEO MÃ CHIP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5)),
+                                  const SizedBox(height: 2),
+                                  Text('Quét chip bất kỳ, hệ thống sẽ tự động nhận diện đúng đơn và đếm số lượng.', style: TextStyle(color: c.textSecondary, fontSize: 10.5, height: 1.2)),
                                 ],
                               ),
                             ),
@@ -1677,7 +1660,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: c.bgCardElevated,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6)),
                         ),
@@ -1701,7 +1684,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                     const SizedBox(width: 8),
                                     Text(
                                       _selectedLiveOrder!.orderNo,
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                                     ),
                                   ],
                                 ),
@@ -1721,8 +1704,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             if (_selectedLiveOrder!.details.isNotEmpty) ...[
                               const SizedBox(height: 4),
                               Text(
-                                '${_selectedLiveOrder!.details.first.productName} (SKU: ${_selectedLiveOrder!.details.first.sku})',
-                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
+                                '${_selectedLiveOrder!.details.first.productName} · SKU: ${_selectedLiveOrder!.details.first.sku}',
+                                style: TextStyle(color: c.rfidCyan, fontSize: 11),
                               ),
                             ],
                           ],
@@ -1736,16 +1719,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Vị trí kệ:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text('Vị trí kệ:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                               const SizedBox(height: 4),
                               DropdownButtonFormField<String>(
                                 initialValue: locations.any((l) => l.locationId == _selectedLiveLocation) ? _selectedLiveLocation : (locations.isNotEmpty ? locations.first.locationId : null),
                                 isExpanded: true,
-                                dropdownColor: const Color(0xFF1E293B),
-                                style: const TextStyle(color: Colors.white, fontSize: 12),
+                                dropdownColor: c.bgCardElevated,
+                                style: TextStyle(color: c.textPrimary, fontSize: 12),
                                 decoration: InputDecoration(
                                   filled: true,
-                                  fillColor: const Color(0xFF0F172A),
+                                  fillColor: c.bgCardElevated,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
@@ -1761,14 +1744,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Mã Pallet:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text('Mã Pallet:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                               const SizedBox(height: 4),
                               TextField(
                                 controller: _palletController,
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
                                 decoration: InputDecoration(
                                   filled: true,
-                                  fillColor: const Color(0xFF0F172A),
+                                  fillColor: c.bgCardElevated,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                 ),
@@ -1787,9 +1770,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: _isScanning ? const Color(0xFF0F2B48) : const Color(0xFF1E293B),
+                  color: _isScanning ? c.rfidCyan.withValues(alpha: 0.15) : c.bgCard,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _isScanning ? const Color(0xFF38BDF8) : const Color(0xFF334155), width: _isScanning ? 2 : 1),
+                  border: Border.all(color: _isScanning ? c.rfidCyan : c.border, width: _isScanning ? 2 : 1),
                 ),
                 child: Column(
                   children: [
@@ -1799,7 +1782,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       alignment: WrapAlignment.spaceBetween,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(_isScanning ? 'ĐẦU ĐỌC RFID ĐANG BẬT' : 'ĐẦU ĐỌC SẴN SÀNG', style: TextStyle(color: _isScanning ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text(_isScanning ? 'ĐẦU ĐỌC RFID ĐANG BẬT' : 'ĐẦU ĐỌC SẴN SÀNG', style: TextStyle(color: _isScanning ? c.rfidCyan : c.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
                         Wrap(
                           spacing: 6,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -1813,13 +1796,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: _filterOnlyOrderEpcs ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFF0F172A),
+                                  color: _filterOnlyOrderEpcs ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : const Color(0xFF334155)),
+                                  border: Border.all(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : c.border),
                                 ),
                                 child: Text(
                                   _filterOnlyOrderEpcs ? 'Lọc theo file: BẬT' : 'Lọc theo file: TẮT',
-                                  style: TextStyle(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ),
@@ -1833,13 +1816,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFF0F172A),
+                                  color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF334155)),
+                                  border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.border),
                                 ),
                                 child: Text(
                                   _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
-                                  style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ),
@@ -1853,16 +1836,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: c.bgCardElevated,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: c.border),
                       ),
                       child: Wrap(
                         spacing: 4,
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          const Text('Anten Cổng:', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text('Anten Cổng:', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
                           const SizedBox(width: 4),
                           for (int ant = 1; ant <= 4; ant++) ...[
                             Builder(builder: (context) {
@@ -1873,21 +1856,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? const Color(0xFF0284C7).withValues(alpha: 0.25)
+                                        ? c.rfidCyan.withValues(alpha: 0.25)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(
                                       color: isSelected
-                                          ? const Color(0xFF38BDF8)
-                                          : const Color(0xFF334155),
+                                          ? c.rfidCyan
+                                          : c.border,
                                     ),
                                   ),
                                   child: Text(
                                     'ANT $ant',
                                     style: TextStyle(
                                       color: isSelected
-                                          ? const Color(0xFF38BDF8)
-                                          : Colors.white38,
+                                          ? c.rfidCyan
+                                          : c.textMuted,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -1901,10 +1884,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     ),
                     const SizedBox(height: 10),
 
-                    Text('$scannedCount', style: const TextStyle(color: Colors.white, fontSize: 46, fontWeight: FontWeight.w900)),
+                    Text('$scannedCount', style: TextStyle(color: c.textPrimary, fontSize: 46, fontWeight: FontWeight.w900)),
                     Text(
                       _selectedLiveOrder != null ? 'Thẻ hợp lệ theo đơn ${_selectedLiveOrder!.orderNo}' : 'Thẻ RFID đã quét vào lô',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
                     ),
 
                     if (_selectedLiveOrder != null && expectedCount > 0) ...[
@@ -1912,9 +1895,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: c.bgCardElevated,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
+                          border: Border.all(color: c.border),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1922,7 +1905,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('TIẾN ĐỘ ĐỐI SOÁT FILE', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                Text('TIẾN ĐỘ ĐỐI SOÁT FILE', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
                                 Text(
                                   '$matchedCount / $expectedCount chip (${(progress * 100).toStringAsFixed(0)}%)',
                                   style: TextStyle(
@@ -1938,9 +1921,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               borderRadius: BorderRadius.circular(4),
                               child: LinearProgressIndicator(
                                 value: progress,
-                                backgroundColor: const Color(0xFF1E293B),
+                                backgroundColor: c.bgCard,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  matchedCount == expectedCount && expectedCount > 0 ? const Color(0xFF10B981) : const Color(0xFF0284C7),
+                                  matchedCount == expectedCount && expectedCount > 0 ? const Color(0xFF10B981) : c.rfidCyan,
                                 ),
                                 minHeight: 6,
                               ),
@@ -1954,9 +1937,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: c.bgCardElevated,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: c.border),
                       ),
                       child: Wrap(
                         alignment: WrapAlignment.spaceBetween,
@@ -1964,23 +1947,23 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         spacing: 8,
                         runSpacing: 4,
                         children: [
-                          const Row(
+                          Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.timer_outlined, size: 14, color: Color(0xFF38BDF8)),
-                              SizedBox(width: 6),
-                              Text('Thời gian quét:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Icon(Icons.timer_outlined, size: 14, color: c.rfidCyan),
+                              const SizedBox(width: 6),
+                              Text('Thời gian quét:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             ],
                           ),
                           DropdownButton<int>(
                             value: _scanDurationSeconds,
-                            dropdownColor: const Color(0xFF1E293B),
+                            dropdownColor: c.bgCardElevated,
                             underline: const SizedBox(),
                             isDense: true,
-                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
                             items: const [
                               DropdownMenuItem(value: 3, child: Text('⚡ 3 Giây')),
-                              DropdownMenuItem(value: 5, child: Text('⏱️ 5 Giây (Chuẩn)')),
+                              DropdownMenuItem(value: 5, child: Text('⏱️ 5 Giây - Chuẩn')),
                               DropdownMenuItem(value: 10, child: Text('⏱️ 10 Giây')),
                               DropdownMenuItem(value: 0, child: Text('♾️ Quét liên tục')),
                             ],
@@ -2005,15 +1988,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
+                              backgroundColor: _isScanning ? const Color(0xFFEF4444) : c.rfidCyan,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             icon: Icon(_isScanning ? Icons.stop_circle_outlined : Icons.sensors, color: Colors.white, size: 18),
                             label: Text(
                               _isScanning
-                                  ? (_scanDurationSeconds > 0 ? 'ĐANG QUÉT (${_scanCountdown}s) - DỪNG' : 'ĐANG QUÉT - BẤM DỪNG')
-                                  : (_scanDurationSeconds > 0 ? 'BẮT ĐẦU QUÉT (${_scanDurationSeconds}s)' : 'BẮT ĐẦU QUÉT RFID'),
+                                  ? (_scanDurationSeconds > 0 ? 'ĐANG QUÉT · ${_scanCountdown}s - DỪNG' : 'ĐANG QUÉT - BẤM DỪNG')
+                                  : (_scanDurationSeconds > 0 ? 'BẮT ĐẦU QUÉT · ${_scanDurationSeconds}s' : 'BẮT ĐẦU QUÉT RFID'),
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                             onPressed: _toggleLiveScan,
@@ -2023,7 +2006,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.redAccent,
-                            side: const BorderSide(color: Color(0xFF334155)),
+                            side: BorderSide(color: c.border),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () {
@@ -2048,7 +2031,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 height: 48,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: scannedCount > 0 ? const Color(0xFF10B981) : Colors.grey.shade800,
+                    backgroundColor: scannedCount > 0 ? const Color(0xFF10B981) : c.border,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: const Icon(Icons.check_circle, color: Colors.white),
@@ -2056,8 +2039,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     _isSaving
                         ? 'Đang lưu...'
                         : (_selectedLiveOrder != null
-                            ? 'XÁC NHẬN NHẬP ĐƠN (${_selectedLiveOrder!.orderNo}: $scannedCount CHIP)'
-                            : 'XÁC NHẬN NHẬP KHO ($scannedCount CHIP)'),
+                            ? 'XÁC NHẬN NHẬP ĐƠN · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP'
+                            : 'XÁC NHẬN NHẬP KHO · $scannedCount CHIP'),
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
                   ),
                   onPressed: (_isSaving || scannedCount == 0) ? null : _saveLiveInbound,
@@ -2074,9 +2057,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           child: Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
+              color: c.bgCard,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: c.border),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2097,14 +2080,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: _stationTab == 0 ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                              color: _stationTab == 0 ? c.rfidCyan : c.bgCardElevated,
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: _stationTab == 0 ? const Color(0xFF38BDF8) : const Color(0xFF334155)),
+                              border: Border.all(color: _stationTab == 0 ? c.rfidCyan : c.border),
                             ),
                             child: Text(
-                              'Đã quét khớp ($matchedCount)',
+                              'Đã quét khớp · $matchedCount',
                               style: TextStyle(
-                                color: _stationTab == 0 ? Colors.white : Colors.white60,
+                                color: _stationTab == 0 ? Colors.white : c.textSecondary,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11.5,
                               ),
@@ -2117,14 +2100,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: _stationTab == 1 ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : const Color(0xFF0F172A),
+                                color: _stationTab == 1 ? const Color(0xFFF59E0B).withValues(alpha: 0.3) : c.bgCardElevated,
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: _stationTab == 1 ? const Color(0xFFF59E0B) : const Color(0xFF334155)),
+                                border: Border.all(color: _stationTab == 1 ? const Color(0xFFF59E0B) : c.border),
                               ),
                               child: Text(
-                                'Chưa quét (${unscannedItems.length})',
+                                'Chưa quét · ${unscannedItems.length}',
                                 style: TextStyle(
-                                  color: _stationTab == 1 ? const Color(0xFFF59E0B) : Colors.white60,
+                                  color: _stationTab == 1 ? const Color(0xFFF59E0B) : c.textSecondary,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 11.5,
                                 ),
@@ -2156,21 +2139,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(Icons.nfc, size: 48, color: Colors.white24),
+                                  Icon(Icons.nfc, size: 48, color: c.textMuted),
                                   const SizedBox(height: 10),
                                   Text(
                                     _selectedLiveOrder != null
                                         ? 'Chưa có thẻ RFID nào được đọc.\nBấm "QUÉT" để bắt đầu đối soát các chip trong file đơn hàng.'
                                         : 'Chưa có thẻ RFID nào được đọc.',
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                                    style: TextStyle(color: c.textSecondary, fontSize: 13),
                                   ),
                                 ],
                               ),
                             )
                           : ListView.separated(
                               itemCount: _scannedTags.length,
-                              separatorBuilder: (_, _) => const Divider(color: Color(0xFF334155), height: 1),
+                              separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
                               itemBuilder: (context, index) {
                                 final tag = _scannedTags.values.toList().reversed.toList()[index];
                                 final antLabel = tag.ant.isNotEmpty ? tag.ant : '1';
@@ -2181,7 +2164,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                   padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                                   child: Row(
                                     children: [
-                                      Text('#${index + 1}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                      Text('#${index + 1}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
@@ -2189,13 +2172,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                           children: [
                                             Text(
                                               tag.epc,
-                                              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
+                                              style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
                                             ),
                                             if (matchedItem != null) ...[
                                               const SizedBox(height: 2),
                                               Text(
                                                 '${matchedItem.productName} | SKU: ${matchedItem.sku} ${matchedItem.serialNumber.isNotEmpty ? "| SN: ${matchedItem.serialNumber}" : ""}',
-                                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
+                                                style: TextStyle(color: c.rfidCyan, fontSize: 11),
                                               ),
                                             ],
                                           ],
@@ -2217,14 +2200,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: (isAnt2 ? const Color(0xFF8B5CF6) : const Color(0xFF0284C7)).withValues(alpha: 0.2),
+                                          color: (isAnt2 ? const Color(0xFF8B5CF6) : c.rfidCyan).withValues(alpha: 0.2),
                                           borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: isAnt2 ? const Color(0xFFA78BFA) : const Color(0xFF38BDF8)),
+                                          border: Border.all(color: isAnt2 ? const Color(0xFFA78BFA) : c.rfidCyan),
                                         ),
                                         child: Text(
                                           'ANT $antLabel',
                                           style: TextStyle(
-                                            color: isAnt2 ? const Color(0xFFA78BFA) : const Color(0xFF38BDF8),
+                                            color: isAnt2 ? const Color(0xFFA78BFA) : c.rfidCyan,
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -2240,7 +2223,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                         child: Text('${tag.rssi} dBm', style: const TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
                                       ),
                                       const SizedBox(width: 8),
-                                      Text('${tag.count} lần', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                      Text('${tag.count} lần', style: TextStyle(color: c.textMuted, fontSize: 10)),
                                     ],
                                   ),
                                 );
@@ -2262,14 +2245,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             )
                           : ListView.separated(
                               itemCount: unscannedItems.length,
-                              separatorBuilder: (_, _) => const Divider(color: Color(0xFF334155), height: 1),
+                              separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
                               itemBuilder: (context, index) {
                                 final item = unscannedItems[index];
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                                   child: Row(
                                     children: [
-                                      Text('#${index + 1}', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                      Text('#${index + 1}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
@@ -2277,12 +2260,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                           children: [
                                             Text(
                                               item.epc,
-                                              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
+                                              style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
                                               '${item.productName} | SKU: ${item.sku} ${item.serialNumber.isNotEmpty ? "| SN: ${item.serialNumber}" : ""}',
-                                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                              style: TextStyle(color: c.textSecondary, fontSize: 11),
                                             ),
                                           ],
                                         ),
@@ -2311,23 +2294,23 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     );
   }
 
-  Widget _buildReceiptsList() {
+  Widget _buildReceiptsList(EyeCareColors c) {
     final inboundOrders = _repo.inboundOrders;
     final pendingCount = _repo.items.where((i) => i.status == ItemStatus.pendingInbound).length;
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: c.border),
       ),
       child: Column(
         children: [
           // Top Action Toolbar (Responsive Wrap to prevent overflow)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: c.border)),
             ),
             child: Wrap(
               spacing: 12,
@@ -2340,10 +2323,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const Icon(Icons.list_alt, color: Color(0xFF38BDF8), size: 20),
+                    Icon(Icons.list_alt, color: c.rfidCyan, size: 20),
                     Text(
-                      'Danh Sách Đơn Nhập Kho (${inboundOrders.length} đơn)',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      'Danh Sách Đơn Nhập Kho · ${inboundOrders.length} đơn',
+                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     if (pendingCount > 0)
                       Container(
@@ -2373,13 +2356,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         ),
                         icon: const Icon(Icons.copy, size: 15),
-                        label: const Text('Sao Chép Tất Cả EPC (Chờ Nhập)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        label: const Text('Sao Chép Tất Cả EPC Chưa Nhập', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         onPressed: _exportAllPendingEpcs,
                       ),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF38BDF8),
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
+                        foregroundColor: c.rfidCyan,
+                        side: BorderSide(color: c.rfidCyan),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
                       icon: const Icon(Icons.file_upload, size: 15),
@@ -2409,23 +2392,23 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.assignment_outlined, size: 64, color: Colors.white24),
+                        Icon(Icons.assignment_outlined, size: 64, color: c.textMuted),
                         const SizedBox(height: 14),
-                        const Text(
+                        Text(
                           'Chưa có đơn nhập kho nào trong cơ sở dữ liệu.',
-                          style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
-                        const Text(
+                        Text(
                           'Bạn có thể tạo mới phiếu nhập hoặc Import danh sách nhiều đơn hàng từ Excel.',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                          style: TextStyle(color: c.textSecondary, fontSize: 12),
                         ),
                         const SizedBox(height: 20),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                               icon: const Icon(Icons.file_upload, color: Colors.white),
                               label: const Text('Import Danh Sách Đơn (Excel)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               onPressed: _showBatchImportOrdersDialog,
@@ -2448,7 +2431,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: inboundOrders.length,
-                    separatorBuilder: (_, index) => const Divider(color: Color(0xFF334155), height: 1),
+                    separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
                     itemBuilder: (context, index) {
                       final order = inboundOrders[index];
                       final isCompleted = order.status == InboundOrderStatus.completed;
@@ -2460,10 +2443,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                          color: c.rfidCyan.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.article, color: Color(0xFF38BDF8), size: 20),
+                        child: Icon(Icons.article, color: c.rfidCyan, size: 20),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -2471,9 +2454,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(order.orderNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text(order.orderNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                             const SizedBox(height: 2),
-                            Text('Ngày tạo: ${order.createdAt.toString().substring(0, 10)} | NCC: ${order.sourceSupplier}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                            Text('Ngày tạo: ${order.createdAt.toString().substring(0, 10)} | NCC: ${order.sourceSupplier}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                           ],
                         ),
                       ),
@@ -2482,8 +2465,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         children: [
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF38BDF8),
-                              side: const BorderSide(color: Color(0xFF334155)),
+                              foregroundColor: c.rfidCyan,
+                              side: BorderSide(color: c.border),
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             ),
                             icon: const Icon(Icons.qr_code_2, size: 16),
@@ -2493,7 +2476,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           const SizedBox(width: 8),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0284C7),
+                              backgroundColor: c.rfidCyan,
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             ),
                             icon: const Icon(Icons.play_arrow, size: 16, color: Colors.white),
@@ -2534,12 +2517,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     );
   }
 
-  Widget _buildCreateReceiptForm() {
-    final totalExcelSerials = _receiptCartons.fold<int>(0, (sum, c) => sum + ((c['serials'] as List<dynamic>?)?.length ?? 0));
+
+  Widget _buildCreateReceiptForm(EyeCareColors c) {
+    final totalExcelSerials = _receiptCartons.fold<int>(0, (sum, ct) => sum + ((ct['serials'] as List<dynamic>?)?.length ?? 0));
     final hasExcelSerials = totalExcelSerials > 0;
 
     return Container(
-      color: const Color(0xFF0B1120),
+      color: c.bgDeep,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2550,13 +2534,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: Icon(Icons.arrow_back, color: c.textPrimary),
                     onPressed: () => setState(() => _isCreating = false),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    hasExcelSerials ? 'Tạo Phiếu Nhập Hàng (Theo File Excel)' : 'Tạo Phiếu Nhập & Sinh Mã EPC RFID',
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    hasExcelSerials ? 'Tạo Phiếu Nhập Hàng Theo File Excel' : 'Tạo Phiếu Nhập & Sinh Mã EPC RFID',
+                    style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -2571,7 +2555,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     icon: Icon(hasExcelSerials ? Icons.verified : Icons.qr_code_2, color: Colors.white),
                     label: Text(
                       hasExcelSerials
-                          ? 'LƯU PHIẾU DÙNG MÃ EPC EXCEL ($totalExcelSerials CHIP)'
+                          ? 'LƯU PHIẾU DÙNG MÃ EPC EXCEL · $totalExcelSerials CHIP'
                           : 'LƯU & SINH MÃ EPC DUY NHẤT',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
@@ -2591,30 +2575,30 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         TextField(
                           controller: _receiveNoController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Mã phiếu nhập', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Mã phiếu nhập', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _dateController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Ngày nhập', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Ngày nhập', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           initialValue: _selectedWarehouse,
-                          dropdownColor: const Color(0xFF1E293B),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Kho lưu trữ', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          dropdownColor: c.bgCardElevated,
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Kho lưu trữ', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                           items: const [
                             DropdownMenuItem(value: 'Kho 01', child: Text('Kho 01')),
                             DropdownMenuItem(value: 'Kho 02', child: Text('Kho 02')),
@@ -2627,8 +2611,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         const SizedBox(height: 12),
                         TextField(
                           controller: _noteController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Ghi chú', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Ghi chú', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                       ],
                     ),
@@ -2639,9 +2623,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2652,16 +2636,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
                               icon: const Icon(Icons.add, size: 16, color: Colors.white),
                               label: const Text('Thêm mặt hàng', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                              onPressed: _showAddProductRowDialog,
+                              onPressed: () => _showAddProductRowDialog(c),
                             ),
                             const SizedBox(width: 10),
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF0284C7),
+                                backgroundColor: c.rfidCyan,
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               ),
                               icon: const Icon(Icons.file_open, size: 16, color: Colors.white),
-                              label: const Text('Nạp từ File Excel (.xlsx / .csv)', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              label: const Text('Nạp từ File Excel', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                               onPressed: _importGoodsReceiveExcel,
                             ),
                             const SizedBox(width: 10),
@@ -2678,13 +2662,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             const SizedBox(width: 10),
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white70,
-                                side: const BorderSide(color: Color(0xFF334155)),
+                                foregroundColor: c.textSecondary,
+                                side: BorderSide(color: c.border),
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               ),
                               icon: const Icon(Icons.info_outline, size: 16),
-                              label: const Text('Cấu Trúc File Mẫu (4 Cột)', style: TextStyle(fontSize: 12)),
-                              onPressed: _showTemplateDialog,
+                              label: const Text('Cấu Trúc File Mẫu 4 Cột', style: TextStyle(fontSize: 12)),
+                              onPressed: () => _showTemplateDialog(c),
                             ),
                           ],
                         ),
@@ -2695,23 +2679,23 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      const Icon(Icons.inventory_2_outlined, size: 54, color: Colors.white24),
+                                      Icon(Icons.inventory_2_outlined, size: 54, color: c.textMuted),
                                       const SizedBox(height: 12),
-                                      const Text(
+                                      Text(
                                         'Chưa có mặt hàng nào trong phiếu nhập.',
-                                        style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold),
+                                        style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                                       ),
                                       const SizedBox(height: 6),
-                                      const Text(
-                                        'Bấm "+ Thêm mặt hàng" để nhập thủ công hoặc "Nạp từ File Excel (.xlsx / .csv)" để import.',
-                                        style: TextStyle(color: Colors.white38, fontSize: 11.5),
+                                      Text(
+                                        'Bấm "+ Thêm mặt hàng" để nhập thủ công hoặc "Nạp từ File Excel" để import.',
+                                        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                                       ),
                                     ],
                                   ),
                                 )
                               : SingleChildScrollView(
                                   child: Table(
-                                    border: TableBorder.all(color: const Color(0xFF334155)),
+                                    border: TableBorder.all(color: c.border),
                                     columnWidths: const {
                                       0: FlexColumnWidth(2),
                                       1: FlexColumnWidth(1.8),
@@ -2721,31 +2705,31 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                       5: FlexColumnWidth(0.8),
                                     },
                                     children: [
-                                      const TableRow(
-                                        decoration: BoxDecoration(color: Color(0xFF0F172A)),
+                                      TableRow(
+                                        decoration: BoxDecoration(color: c.bgCardElevated),
                                         children: [
-                                          Padding(padding: EdgeInsets.all(10), child: Text('CARTON CODE', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5))),
-                                          Padding(padding: EdgeInsets.all(10), child: Text('BARCODE', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5))),
-                                          Padding(padding: EdgeInsets.all(10), child: Text('NAME', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5))),
-                                          Padding(padding: EdgeInsets.all(10), child: Text('SỐ LƯỢNG', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5))),
-                                          Padding(padding: EdgeInsets.all(10), child: Text('MÃ EPC', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5))),
-                                          Padding(padding: EdgeInsets.all(10), child: Text('XÓA', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5))),
+                                          Padding(padding: const EdgeInsets.all(10), child: Text('CARTON CODE', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5))),
+                                          Padding(padding: const EdgeInsets.all(10), child: Text('BARCODE', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5))),
+                                          Padding(padding: const EdgeInsets.all(10), child: Text('NAME', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5))),
+                                          Padding(padding: const EdgeInsets.all(10), child: Text('SỐ LƯỢNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5))),
+                                          Padding(padding: const EdgeInsets.all(10), child: Text('MÃ EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5))),
+                                          Padding(padding: const EdgeInsets.all(10), child: Text('XÓA', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5))),
                                         ],
                                       ),
                                       for (int i = 0; i < _receiptCartons.length; i++)
                                         TableRow(
                                           children: [
-                                            Padding(padding: const EdgeInsets.all(10), child: Text(_receiptCartons[i]['cartonBox'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
-                                            Padding(padding: const EdgeInsets.all(10), child: Text(_receiptCartons[i]['productCode'], style: const TextStyle(color: Colors.white70, fontFamily: 'Courier', fontSize: 11))),
-                                            Padding(padding: const EdgeInsets.all(10), child: Text(_receiptCartons[i]['productName'], style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                            Padding(padding: const EdgeInsets.all(10), child: Text(_receiptCartons[i]['cartonBox'], style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12))),
+                                            Padding(padding: const EdgeInsets.all(10), child: Text(_receiptCartons[i]['productCode'], style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
+                                            Padding(padding: const EdgeInsets.all(10), child: Text(_receiptCartons[i]['productName'], style: TextStyle(color: c.textPrimary, fontSize: 12))),
                                             Padding(padding: const EdgeInsets.all(10), child: Text('${_receiptCartons[i]['quantity']}', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13))),
                                             Padding(
                                               padding: const EdgeInsets.all(6),
                                               child: (_receiptCartons[i]['serials'] as List<dynamic>?)?.isNotEmpty ?? false
                                                   ? OutlinedButton.icon(
                                                       style: OutlinedButton.styleFrom(
-                                                        foregroundColor: const Color(0xFF38BDF8),
-                                                        side: const BorderSide(color: Color(0xFF334155)),
+                                                        foregroundColor: c.rfidCyan,
+                                                        side: BorderSide(color: c.border),
                                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                       ),
                                                       icon: const Icon(Icons.remove_red_eye, size: 14),
@@ -2757,18 +2741,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                                         _receiptCartons[i]['cartonBox'],
                                                         _receiptCartons[i]['productName'],
                                                         _receiptCartons[i]['serials'],
+                                                        c,
                                                       ),
                                                     )
                                                   : Container(
                                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                       decoration: BoxDecoration(
-                                                        color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                                                        color: c.rfidCyan.withValues(alpha: 0.15),
                                                         borderRadius: BorderRadius.circular(4),
-                                                        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                                                        border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
                                                       ),
                                                       child: Text(
-                                                        '⚡ Tự động sinh ${_receiptCartons[i]['quantity']} mã EPC (Chưa nhập)',
-                                                        style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold),
+                                                        '⚡ Tự động sinh ${_receiptCartons[i]['quantity']} mã EPC',
+                                                        style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold),
                                                       ),
                                                     ),
                                             ),
@@ -2800,4 +2785,5 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       ),
     );
   }
+
 }

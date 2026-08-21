@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/warehouse_repository.dart';
+import '../../theme/eye_care_theme.dart';
 import '../../models/wms_models.dart';
 
 class DesktopInventoryView extends StatefulWidget {
@@ -11,21 +12,39 @@ class DesktopInventoryView extends StatefulWidget {
 
 class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   final WarehouseRepository _repo = WarehouseRepository();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
   InventorySession? _selectedSession;
 
   @override
-  Widget build(BuildContext context) {
-    if (_selectedSession != null) {
-      return _buildSessionDetailView(_selectedSession!);
-    }
-    return _buildSessionListView();
+  void initState() {
+    super.initState();
+    _eyeCare.addListener(_onThemeChanged);
   }
 
-  Widget _buildSessionListView() {
+  @override
+  void dispose() {
+    _eyeCare.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
+    if (_selectedSession != null) {
+      return _buildSessionDetailView(_selectedSession!, c);
+    }
+    return _buildSessionListView(c);
+  }
+
+  Widget _buildSessionListView(EyeCareColors c) {
     final sessions = _repo.inventorySessions;
 
     return Container(
-      color: const Color(0xFF0F172A),
+      color: c.bgDeep,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,19 +53,19 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'INVENTORY MANAGEMENT',
-                      style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
                       overflow: TextOverflow.ellipsis,
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      'List of inventory sessions',
-                      style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                      'Danh Sách Phiên Kiểm Kê Kho',
+                      style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -56,12 +75,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 children: [
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF334155)),
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                     icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('RELOAD'),
+                    label: const Text('LÀM MỚI'),
                     onPressed: () => _repo.refreshFromDatabase(),
                   ),
                   const SizedBox(width: 12),
@@ -71,7 +90,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     ),
                     icon: const Icon(Icons.file_download, color: Colors.white, size: 18),
-                    label: const Text('EXCEL REPORT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    label: const Text('BÁO CÁO EXCEL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xuất báo cáo kiểm kê ra file Excel')),
@@ -88,27 +107,27 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: c.bgCard,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: sessions.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.fact_check_outlined, size: 64, color: Colors.white24),
+                          Icon(Icons.fact_check_outlined, size: 64, color: c.textMuted),
                           const SizedBox(height: 14),
-                          const Text('Chưa có phiên kiểm kê nào trong CSDL.', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          Text('Chưa có phiên kiểm kê nào trong CSDL.', style: TextStyle(color: c.textSecondary, fontSize: 14)),
                           const SizedBox(height: 8),
-                          const Text('Hãy mở máy cầm tay PDA và bấm "Inventory" để tiến hành quét kiểm kê kho.', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                          Text('Hãy mở máy cầm tay PDA và bấm "Inventory" để tiến hành quét kiểm kê kho.', style: TextStyle(color: c.textMuted, fontSize: 12)),
                         ],
                       ),
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.all(16),
                       itemCount: sessions.length,
-                      separatorBuilder: (_, index) => const Divider(color: Color(0xFF334155), height: 1),
+                      separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
                       itemBuilder: (context, index) {
                         final s = sessions[index];
                         final isCompleted = s.isCompleted;
@@ -120,10 +139,10 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                                  color: c.rfidCyan.withValues(alpha: 0.2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.checklist, color: Color(0xFF38BDF8), size: 20),
+                                child: Icon(Icons.checklist, color: c.rfidCyan, size: 20),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
@@ -131,15 +150,15 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(s.sessionCode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                    Text(s.sessionCode, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                                     const SizedBox(height: 2),
-                                    Text('Time: ${s.startedAt.toString().substring(0, 16)}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                    Text('Time: ${s.startedAt.toString().substring(0, 16)}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                                   ],
                                 ),
                               ),
                               Expanded(
                                 flex: 2,
-                                child: Text('Khu vực: ${s.zone}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                                child: Text('Khu vực: ${s.zone}', style: TextStyle(color: c.textSecondary, fontSize: 13)),
                               ),
                               Expanded(
                                 flex: 2,
@@ -162,7 +181,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                               ),
                               const SizedBox(width: 20),
                               IconButton(
-                                icon: const Icon(Icons.visibility, color: Color(0xFF38BDF8), size: 20),
+                                icon: Icon(Icons.visibility, color: c.rfidCyan, size: 20),
                                 onPressed: () => setState(() => _selectedSession = s),
                               ),
                             ],
@@ -177,34 +196,33 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     );
   }
 
-  Widget _buildSessionDetailView(InventorySession s) {
+  Widget _buildSessionDetailView(InventorySession s, EyeCareColors c) {
     return Container(
-      color: const Color(0xFF0F172A),
+      color: c.bgDeep,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header matching PDF Page 13
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: Icon(Icons.arrow_back, color: c.textPrimary),
                     onPressed: () => setState(() => _selectedSession = null),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Inventories View only: ${s.sessionCode}',
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    'Chi tiết kiểm kê: ${s.sessionCode}',
+                    style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                 icon: const Icon(Icons.file_download, color: Colors.white, size: 18),
-                label: const Text('EXCEL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                label: const Text('XUẤT EXCEL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xuất dữ liệu chi tiết kiểm kê ra Excel')),
@@ -215,7 +233,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
           ),
           const SizedBox(height: 20),
 
-          // 2-Column layout matching PDF Page 13
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,22 +243,22 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildDetailItem('Inventory no.', s.sessionCode),
+                        _buildDetailItem('Mã kiểm kê', s.sessionCode, c),
                         const SizedBox(height: 12),
-                        _buildDetailItem('Inventory date', '${s.startedAt.year}-${s.startedAt.month.toString().padLeft(2, '0')}-${s.startedAt.day.toString().padLeft(2, '0')}'),
+                        _buildDetailItem('Ngày kiểm kê', '${s.startedAt.year}-${s.startedAt.month.toString().padLeft(2, '0')}-${s.startedAt.day.toString().padLeft(2, '0')}', c),
                         const SizedBox(height: 12),
-                        _buildDetailItem('Inventory type', 'All products'),
+                        _buildDetailItem('Loại kiểm kê', 'Toàn bộ sản phẩm', c),
                         const SizedBox(height: 12),
-                        _buildDetailItem('Warehouse', s.zone),
+                        _buildDetailItem('Kho / Khu vực', s.zone, c),
                         const SizedBox(height: 12),
-                        _buildDetailItem('Status', s.isCompleted ? 'Completed' : 'Scanning'),
+                        _buildDetailItem('Trạng thái', s.isCompleted ? 'Completed' : 'Scanning', c),
                       ],
                     ),
                   ),
@@ -253,12 +270,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Table(
-                      border: TableBorder.all(color: const Color(0xFF334155)),
+                      border: TableBorder.all(color: c.border),
                       columnWidths: const {
                         0: FlexColumnWidth(1),
                         1: FlexColumnWidth(3),
@@ -267,24 +284,24 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                         4: FlexColumnWidth(1.5),
                       },
                       children: [
-                        const TableRow(
-                          decoration: BoxDecoration(color: Color(0xFF0F172A)),
+                        TableRow(
+                          decoration: BoxDecoration(color: c.bgCardElevated),
                           children: [
-                            Padding(padding: EdgeInsets.all(10), child: Text('#', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                            Padding(padding: EdgeInsets.all(10), child: Text('Mã EPC', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                            Padding(padding: EdgeInsets.all(10), child: Text('Tên sản phẩm', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                            Padding(padding: EdgeInsets.all(10), child: Text('Trạng thái', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                            Padding(padding: EdgeInsets.all(10), child: Text('Thời gian', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('Mã EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('Tên sản phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('Trạng thái', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('Thời gian', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
                           ],
                         ),
                         if (s.results.isEmpty)
-                          const TableRow(
+                          TableRow(
                             children: [
-                              Padding(padding: EdgeInsets.all(12), child: Text('-', style: TextStyle(color: Colors.white54, fontSize: 12))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('Chưa có dữ liệu quét', style: TextStyle(color: Colors.white54, fontSize: 12))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('-', style: TextStyle(color: Colors.white54, fontSize: 12))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('-', style: TextStyle(color: Colors.white54, fontSize: 12))),
-                              Padding(padding: EdgeInsets.all(12), child: Text('-', style: TextStyle(color: Colors.white54, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('Chưa có dữ liệu quét', style: TextStyle(color: c.textSecondary, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
                             ],
                           )
                         else
@@ -297,9 +314,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
                             return TableRow(
                               children: [
-                                Padding(padding: const EdgeInsets.all(10), child: Text('$idx', style: const TextStyle(color: Colors.white70, fontSize: 12))),
-                                Padding(padding: const EdgeInsets.all(10), child: Text(r.epc, style: const TextStyle(color: Colors.white70, fontFamily: 'Courier', fontSize: 11))),
-                                Padding(padding: const EdgeInsets.all(10), child: Text(prodTitle, style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                Padding(padding: const EdgeInsets.all(10), child: Text('$idx', style: TextStyle(color: c.textSecondary, fontSize: 12))),
+                                Padding(padding: const EdgeInsets.all(10), child: Text(r.epc, style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
+                                Padding(padding: const EdgeInsets.all(10), child: Text(prodTitle, style: TextStyle(color: c.textPrimary, fontSize: 12))),
                                 Padding(
                                   padding: const EdgeInsets.all(10),
                                   child: Text(
@@ -315,7 +332,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                   padding: const EdgeInsets.all(10),
                                   child: Text(
                                     '${r.readAt.hour.toString().padLeft(2, '0')}:${r.readAt.minute.toString().padLeft(2, '0')}:${r.readAt.second.toString().padLeft(2, '0')}',
-                                    style: const TextStyle(color: Colors.white60, fontSize: 11),
+                                    style: TextStyle(color: c.textSecondary, fontSize: 11),
                                   ),
                                 ),
                               ],
@@ -333,14 +350,15 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     );
   }
 
-  Widget _buildDetailItem(String label, String value) {
+  Widget _buildDetailItem(String label, String value, EyeCareColors c) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 11)),
         const SizedBox(height: 2),
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+        Text(value, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
       ],
     );
   }
 }
+

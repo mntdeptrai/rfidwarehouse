@@ -4,6 +4,7 @@ import '../../services/warehouse_repository.dart';
 import '../../services/uhf_service.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/tower_light_service.dart';
+import '../../theme/eye_care_theme.dart';
 import '../../widgets/tower_light_widget.dart';
 import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
@@ -20,6 +21,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   final UhfService _uhf = UhfService();
   final DesktopUhfTcpService _desktopUhf = DesktopUhfTcpService();
   final TowerLightService _towerLight = TowerLightService();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   int _currentMode = 0; // 0: Live Outbound RFID Station, 1: Orders List
   bool _isCreating = false;
@@ -47,6 +49,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     super.initState();
     _resetForm();
 
+    _eyeCare.addListener(_onThemeChanged);
+
     if (_repo.outboundOrders.isNotEmpty) {
       _selectedLiveOrder = _repo.outboundOrders.firstWhere(
         (o) => o.status == OutboundOrderStatus.newOrder || o.status == OutboundOrderStatus.processing,
@@ -63,6 +67,11 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
     _initTagListener();
   }
+
+  void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
 
   void _onDesktopUhfUpdate() {
     if (!mounted) return;
@@ -128,6 +137,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   @override
   void dispose() {
+    _eyeCare.removeListener(_onThemeChanged);
     _desktopUhf.removeListener(_onDesktopUhfUpdate);
     _uiRefreshTimer?.cancel();
     _countdownTimer?.cancel();
@@ -330,12 +340,14 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
+
     if (_isCreating) {
-      return _buildCreateDeliveryForm();
+      return _buildCreateDeliveryForm(c);
     }
 
     return Container(
-      color: const Color(0xFF0B1120),
+      color: c.bgDeep,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,9 +362,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'GOODS DELIVERY & DISPATCH RFID STATION',
-                    style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
                   ),
                   const SizedBox(height: 4),
                   Wrap(
@@ -360,21 +372,21 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     runSpacing: 8,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      const Text(
+                      Text(
                         'Quản Lý Xuất Kho',
-                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E293B),
+                          color: c.bgCard,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
+                          border: Border.all(color: c.border),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            _buildModeTab(0, 'Trạm Quét Xuất RFID Live', Icons.qr_code_scanner),
-                            _buildModeTab(1, 'Danh Sách Phiếu Xuất', Icons.list_alt),
+                            _buildModeTab(0, 'Trạm Quét Xuất RFID Live', Icons.qr_code_scanner, c),
+                            _buildModeTab(1, 'Danh Sách Phiếu Xuất', Icons.list_alt, c),
                           ],
                         ),
                       ),
@@ -388,8 +400,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 children: [
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF334155)),
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -399,7 +411,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
+                      backgroundColor: c.rfidCyan,
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -418,14 +430,14 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
           // Body View
           Expanded(
-            child: _currentMode == 0 ? _buildLiveOutboundStationView() : _buildDeliveryList(),
+            child: _currentMode == 0 ? _buildLiveOutboundStationView(c) : _buildDeliveryList(c),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildModeTab(int mode, String title, IconData icon) {
+  Widget _buildModeTab(int mode, String title, IconData icon, EyeCareColors c) {
     final isSelected = _currentMode == mode;
     return InkWell(
       onTap: () => setState(() => _currentMode = mode),
@@ -433,17 +445,17 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0284C7) : Colors.transparent,
+          color: isSelected ? c.rfidCyan : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.white : Colors.white60),
+            Icon(icon, size: 16, color: isSelected ? Colors.white : c.textSecondary),
             const SizedBox(width: 6),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
+                color: isSelected ? Colors.white : c.textSecondary,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 12,
               ),
@@ -456,7 +468,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   // ==================== TRẠM QUÉT XUẤT KHO RFID LIVE ====================
 
-  Widget _buildLiveOutboundStationView() {
+  Widget _buildLiveOutboundStationView(EyeCareColors c) {
     final orders = _repo.outboundOrders;
     final scannedEpcs = _scannedTags.keys.toList();
     final itemsInDb = _repo.items;
@@ -500,9 +512,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: c.bgCard,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: c.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,7 +522,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('📋 ĐƠN XUẤT KHO (PO OUT)', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('📋 ĐƠN XUẤT KHO', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                         InkWell(
                           onTap: _generateFifo,
                           child: const Text('Tính FIFO', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11)),
@@ -522,18 +534,18 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       DropdownButtonFormField<String?>(
                         initialValue: _selectedLiveOrder == null ? null : (orders.any((o) => o.poNo == _selectedLiveOrder?.poNo) ? _selectedLiveOrder?.poNo : null),
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                        dropdownColor: c.bgCardElevated,
+                        style: TextStyle(color: c.textPrimary, fontSize: 12),
                         decoration: InputDecoration(
                           filled: true,
-                          fillColor: const Color(0xFF0F172A),
+                          fillColor: c.bgCardElevated,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
                         ),
                         items: [
-                          const DropdownMenuItem<String?>(
+                          DropdownMenuItem<String?>(
                             value: null,
-                            child: Text('-- Xuất trực tiếp (Không theo PO) --', style: TextStyle(color: Color(0xFF38BDF8))),
+                            child: Text('-- Xuất trực tiếp (Không theo PO) --', style: TextStyle(color: c.rfidCyan)),
                           ),
                           ...orders.map((o) => DropdownMenuItem<String?>(
                             value: o.poNo,
@@ -552,18 +564,18 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: c.bgCardElevated,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF334155)),
+                          border: Border.all(color: c.border),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.info_outline, color: Color(0xFF38BDF8), size: 16),
-                            SizedBox(width: 8),
+                            Icon(Icons.info_outline, color: c.rfidCyan, size: 16),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Chế độ Xuất Trực Tiếp (Bấm "+ TẠO PHIẾU XUẤT" nếu cần đối soát theo đơn PO)',
-                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                                style: TextStyle(color: c.textSecondary, fontSize: 11),
                               ),
                             ),
                           ],
@@ -575,7 +587,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: c.bgCardElevated,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
                         ),
@@ -586,7 +598,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                             const SizedBox(height: 4),
                             ..._activeFifoPlan!.lines.map((l) => Text(
                               '• ${l.productName} (${l.sku}): Lấy ${l.quantityToPick} cái tại Pallet ${l.palletCode} (Vị trí: ${l.locationCode})',
-                              style: const TextStyle(color: Colors.white70, fontSize: 10),
+                              style: TextStyle(color: c.textSecondary, fontSize: 10),
                             )),
                           ],
                         ),
@@ -601,10 +613,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _isScanning ? const Color(0xFF0F2B48) : const Color(0xFF1E293B),
+                  color: c.bgCard,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: _isScanning ? const Color(0xFF38BDF8) : (unexpectedEpcs.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF334155)),
+                    color: _isScanning ? c.rfidCyan : (unexpectedEpcs.isNotEmpty ? const Color(0xFFEF4444) : c.border),
                     width: _isScanning || unexpectedEpcs.isNotEmpty ? 2 : 1,
                   ),
                 ),
@@ -616,7 +628,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       alignment: WrapAlignment.spaceBetween,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(_isScanning ? 'ĐANG QUÉT ĐỐI SOÁT' : 'TRẠM XUẤT SẴN SÀNG', style: TextStyle(color: _isScanning ? const Color(0xFF38BDF8) : Colors.white70, fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text(_isScanning ? 'ĐANG QUÉT ĐỐI SOÁT' : 'TRẠM XUẤT SẴN SÀNG', style: TextStyle(color: _isScanning ? c.rfidCyan : c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
                         Wrap(
                           spacing: 6,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -631,13 +643,13 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFF0F172A),
+                                  color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF334155)),
+                                  border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.border),
                                 ),
                                 child: Text(
                                   _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
-                                  style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ),
@@ -652,16 +664,16 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: c.bgCardElevated,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: c.border),
                       ),
                       child: Wrap(
                         spacing: 4,
                         runSpacing: 4,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          const Text('Anten Cổng:', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text('Anten Cổng:', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
                           const SizedBox(width: 4),
                           for (int ant = 1; ant <= 4; ant++) ...[
                             Builder(builder: (context) {
@@ -672,21 +684,21 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? const Color(0xFF0284C7).withValues(alpha: 0.25)
+                                        ? c.rfidCyan.withValues(alpha: 0.25)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(
                                       color: isSelected
-                                          ? const Color(0xFF38BDF8)
-                                          : const Color(0xFF334155),
+                                          ? c.rfidCyan
+                                          : c.border,
                                     ),
                                   ),
                                   child: Text(
                                     'ANT $ant',
                                     style: TextStyle(
                                       color: isSelected
-                                          ? const Color(0xFF38BDF8)
-                                          : Colors.white38,
+                                          ? c.rfidCyan
+                                          : c.textMuted,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -706,18 +718,18 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                           Column(
                             children: [
                               Text('$totalMatched', style: const TextStyle(color: Color(0xFF10B981), fontSize: 40, fontWeight: FontWeight.w900)),
-                              const Text('Hợp lệ', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text('Hợp lệ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             ],
                           ),
-                          Container(width: 1, height: 35, color: const Color(0xFF334155)),
+                          Container(width: 1, height: 35, color: c.border),
                           Column(
                             children: [
-                              Text('$totalRequired', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 40, fontWeight: FontWeight.w900)),
-                              const Text('Yêu cầu', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text('$totalRequired', style: TextStyle(color: c.rfidCyan, fontSize: 40, fontWeight: FontWeight.w900)),
+                              Text('Yêu cầu', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             ],
                           ),
                           if (unexpectedEpcs.isNotEmpty) ...[
-                            Container(width: 1, height: 35, color: const Color(0xFF334155)),
+                            Container(width: 1, height: 35, color: c.border),
                             Column(
                               children: [
                                 Text('${unexpectedEpcs.length}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 40, fontWeight: FontWeight.w900)),
@@ -730,8 +742,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     ] else ...[
                       Column(
                         children: [
-                          Text('${_scannedTags.length}', style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900)),
-                          const Text('Thẻ RFID đã quét để xuất kho', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                          Text('${_scannedTags.length}', style: TextStyle(color: c.textPrimary, fontSize: 44, fontWeight: FontWeight.w900)),
+                          Text('Thẻ RFID đã quét để xuất kho', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                         ],
                       ),
                     ],
@@ -739,9 +751,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F172A),
+                        color: c.bgCardElevated,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF334155)),
+                        border: Border.all(color: c.border),
                       ),
                       child: Wrap(
                         alignment: WrapAlignment.spaceBetween,
@@ -749,20 +761,20 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         spacing: 8,
                         runSpacing: 4,
                         children: [
-                          const Row(
+                          Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.timer_outlined, size: 14, color: Color(0xFF38BDF8)),
-                              SizedBox(width: 6),
-                              Text('Thời gian quét:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Icon(Icons.timer_outlined, size: 14, color: c.rfidCyan),
+                              const SizedBox(width: 6),
+                              Text('Thời gian quét:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             ],
                           ),
                           DropdownButton<int>(
                             value: _scanDurationSeconds,
-                            dropdownColor: const Color(0xFF1E293B),
+                            dropdownColor: c.bgCardElevated,
                             underline: const SizedBox(),
                             isDense: true,
-                            style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
                             items: const [
                               DropdownMenuItem(value: 3, child: Text('⚡ 3 Giây')),
                               DropdownMenuItem(value: 5, child: Text('⏱️ 5 Giây (Chuẩn)')),
@@ -790,7 +802,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
+                              backgroundColor: _isScanning ? const Color(0xFFEF4444) : c.rfidCyan,
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
@@ -808,7 +820,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.redAccent,
-                            side: const BorderSide(color: Color(0xFF334155)),
+                            side: BorderSide(color: c.border),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () {
@@ -837,7 +849,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                             ? (totalMatched > 0 && unexpectedEpcs.isEmpty)
                             : _scannedTags.isNotEmpty)
                         ? const Color(0xFF10B981)
-                        : Colors.grey.shade800,
+                        : Colors.grey.shade600,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   icon: const Icon(Icons.local_shipping, color: Colors.white),
@@ -872,14 +884,14 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: c.bgCard,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: c.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('TIẾN ĐỘ THỰC XUẤT THEO SKU TRÊN PO', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text('TIẾN ĐỘ THỰC XUẤT THEO SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                       const SizedBox(height: 8),
                       for (var d in _selectedLiveOrder!.details) ...[
                         Builder(builder: (context) {
@@ -893,7 +905,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                               children: [
                                 Expanded(
                                   flex: 3,
-                                  child: Text('${d.sku}: ${d.productName}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                  child: Text('${d.sku}: ${d.productName}', style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
                                 ),
                                 Expanded(
                                   flex: 4,
@@ -901,14 +913,14 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                     borderRadius: BorderRadius.circular(4),
                                     child: LinearProgressIndicator(
                                       value: req > 0 ? (actual / req).clamp(0.0, 1.0) : 0.0,
-                                      backgroundColor: const Color(0xFF0F172A),
-                                      valueColor: AlwaysStoppedAnimation<Color>(isDone ? const Color(0xFF10B981) : const Color(0xFF38BDF8)),
+                                      backgroundColor: c.bgCardElevated,
+                                      valueColor: AlwaysStoppedAnimation<Color>(isDone ? const Color(0xFF10B981) : c.rfidCyan),
                                       minHeight: 8,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                Text('$actual/$req', style: TextStyle(color: isDone ? const Color(0xFF10B981) : const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                                Text('$actual/$req', style: TextStyle(color: isDone ? const Color(0xFF10B981) : c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                               ],
                             ),
                           );
@@ -925,9 +937,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 child: Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: c.bgCard,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: c.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -938,7 +950,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         alignment: WrapAlignment.spaceBetween,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          Text('DANH SÁCH THẺ RFID (${_scannedTags.length})', style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text('DANH SÁCH THẺ RFID (${_scannedTags.length})', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 13)),
                           if (unexpectedEpcs.isNotEmpty)
                             Text('${unexpectedEpcs.length} THẺ LẠ BÁO ĐỎ', style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11)),
                         ],
@@ -946,19 +958,19 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       const SizedBox(height: 12),
                       Expanded(
                         child: _scannedTags.isEmpty
-                            ? const Center(
+                            ? Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.nfc, size: 48, color: Colors.white24),
-                                    SizedBox(height: 10),
-                                    Text('Chưa có thẻ RFID nào được đọc.', style: TextStyle(color: Colors.white54, fontSize: 13)),
+                                    Icon(Icons.nfc, size: 48, color: c.textMuted),
+                                    const SizedBox(height: 10),
+                                    Text('Chưa có thẻ RFID nào được đọc.', style: TextStyle(color: c.textSecondary, fontSize: 13)),
                                   ],
                                 ),
                               )
                             : ListView.separated(
                                 itemCount: _scannedTags.length,
-                                separatorBuilder: (_, _) => const Divider(color: Color(0xFF334155), height: 1),
+                                separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
                                 itemBuilder: (context, index) {
                                   final epc = _scannedTags.keys.toList().reversed.toList()[index];
                                   final tag = _scannedTags[epc]!;
@@ -980,7 +992,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                           child: Text(
                                             epc,
                                             style: TextStyle(
-                                              color: isUnexpected ? const Color(0xFFEF4444) : Colors.white,
+                                              color: isUnexpected ? const Color(0xFFEF4444) : c.textPrimary,
                                               fontFamily: 'monospace',
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.bold,
@@ -991,23 +1003,23 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: (isAnt2 ? const Color(0xFF8B5CF6) : const Color(0xFF0284C7)).withValues(alpha: 0.2),
+                                            color: (isAnt2 ? const Color(0xFF8B5CF6) : c.rfidCyan).withValues(alpha: 0.2),
                                             borderRadius: BorderRadius.circular(4),
-                                            border: Border.all(color: isAnt2 ? const Color(0xFFA78BFA) : const Color(0xFF38BDF8)),
+                                            border: Border.all(color: isAnt2 ? const Color(0xFFA78BFA) : c.rfidCyan),
                                           ),
                                           child: Text(
                                             'ANT $antLabel',
                                             style: TextStyle(
-                                              color: isAnt2 ? const Color(0xFFA78BFA) : const Color(0xFF38BDF8),
+                                              color: isAnt2 ? const Color(0xFFA78BFA) : c.rfidCyan,
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        Text('${tag.rssi} dBm', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                        Text('${tag.rssi} dBm', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                                         const SizedBox(width: 8),
-                                        Text('${tag.count} lần', style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                                        Text('${tag.count} lần', style: TextStyle(color: c.textMuted, fontSize: 10)),
                                       ],
                                     ),
                                   );
@@ -1025,26 +1037,26 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     );
   }
 
-  Widget _buildDeliveryList() {
+  Widget _buildDeliveryList(EyeCareColors c) {
     final outboundOrders = _repo.outboundOrders;
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: c.border),
       ),
       child: outboundOrders.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.outbox_outlined, size: 64, color: Colors.white24),
+                  Icon(Icons.outbox_outlined, size: 64, color: c.textMuted),
                   const SizedBox(height: 14),
-                  const Text('Chưa có phiếu xuất kho nào trong CSDL.', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                  Text('Chưa có phiếu xuất kho nào trong CSDL.', style: TextStyle(color: c.textSecondary, fontSize: 14)),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
+                    style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                     icon: const Icon(Icons.add, color: Colors.white),
                     label: const Text('Tạo Phiếu Xuất Mới', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     onPressed: () {
@@ -1058,7 +1070,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: outboundOrders.length,
-              separatorBuilder: (_, index) => const Divider(color: Color(0xFF334155), height: 1),
+              separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
               itemBuilder: (context, index) {
                 final order = outboundOrders[index];
                 final isCompleted = order.status == OutboundOrderStatus.shipped;
@@ -1071,10 +1083,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                          color: c.rfidCyan.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.local_shipping, color: Color(0xFF38BDF8), size: 20),
+                        child: Icon(Icons.local_shipping, color: c.rfidCyan, size: 20),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -1082,9 +1094,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(order.poNo, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text(order.poNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
                             const SizedBox(height: 2),
-                            Text('Khách hàng: ${order.customer} | Số lượng: $totalQty sản phẩm', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                            Text('Khách hàng: ${order.customer} | Số lượng: $totalQty sản phẩm', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                           ],
                         ),
                       ),
@@ -1111,9 +1123,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     );
   }
 
-  Widget _buildCreateDeliveryForm() {
+  Widget _buildCreateDeliveryForm(EyeCareColors c) {
     return Container(
-      color: const Color(0xFF0B1120),
+      color: c.bgDeep,
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1124,11 +1136,11 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: Icon(Icons.arrow_back, color: c.textPrimary),
                     onPressed: () => setState(() => _isCreating = false),
                   ),
                   const SizedBox(width: 8),
-                  const Text('Tạo Phiếu Xuất Hàng Mới', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('Tạo Phiếu Xuất Hàng Mới', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
               ElevatedButton(
@@ -1151,34 +1163,34 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Column(
                       children: [
                         TextField(
                           controller: _deliveryNoController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Mã phiếu xuất', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Mã phiếu xuất', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _customerController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Khách hàng', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Khách hàng', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _dateController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Ngày xuất', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Ngày xuất', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _noteController,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                          decoration: const InputDecoration(labelText: 'Ghi chú', labelStyle: TextStyle(color: Colors.white70, fontSize: 12)),
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          decoration: InputDecoration(labelText: 'Ghi chú', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                       ],
                     ),
@@ -1189,33 +1201,33 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('DANH SÁCH MẶT HÀNG CẦN XUẤT', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text('DANH SÁCH MẶT HÀNG CẦN XUẤT', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 13)),
                         const SizedBox(height: 12),
                         Expanded(
                           child: SingleChildScrollView(
                             child: Table(
-                              border: TableBorder.all(color: const Color(0xFF334155)),
+                              border: TableBorder.all(color: c.border),
                               children: [
-                                const TableRow(
-                                  decoration: BoxDecoration(color: Color(0xFF0F172A)),
+                                TableRow(
+                                  decoration: BoxDecoration(color: c.bgCardElevated),
                                   children: [
-                                    Padding(padding: EdgeInsets.all(10), child: Text('Mã Sản Phẩm', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                    Padding(padding: EdgeInsets.all(10), child: Text('Tên Sản Phẩm', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
-                                    Padding(padding: EdgeInsets.all(10), child: Text('Số Lượng Xuất', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12))),
+                                    Padding(padding: const EdgeInsets.all(10), child: Text('Mã Sản Phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    Padding(padding: const EdgeInsets.all(10), child: Text('Tên Sản Phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                                    Padding(padding: const EdgeInsets.all(10), child: Text('Số Lượng Xuất', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
                                   ],
                                 ),
                                 for (var it in _deliveryItems)
                                   TableRow(
                                     children: [
-                                      Padding(padding: const EdgeInsets.all(10), child: Text(it['productCode'], style: const TextStyle(color: Colors.white, fontSize: 12))),
-                                      Padding(padding: const EdgeInsets.all(10), child: Text(it['productName'], style: const TextStyle(color: Colors.white, fontSize: 12))),
+                                      Padding(padding: const EdgeInsets.all(10), child: Text(it['productCode'], style: TextStyle(color: c.textPrimary, fontSize: 12))),
+                                      Padding(padding: const EdgeInsets.all(10), child: Text(it['productName'], style: TextStyle(color: c.textSecondary, fontSize: 12))),
                                       Padding(padding: const EdgeInsets.all(10), child: Text('${it['quantity']}', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13))),
                                     ],
                                   ),

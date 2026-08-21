@@ -647,11 +647,12 @@ class WarehouseRepository extends ChangeNotifier {
       level: 'Tầng 1',
     );
 
-    // 2. Tìm tất cả items thuộc thùng hàng hoặc đơn hàng này
+    // 2. Tìm tất cả items thuộc thùng hàng, mã barcode ngoài thùng hoặc mã EPC này
     final matchedItems = _items.where((it) {
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) return true;
-      if (it.epc.toUpperCase() == cleanBarcode || it.serialNumber.toUpperCase() == cleanBarcode) return true;
+      if (it.sku.trim().toUpperCase() == cleanBarcode) return true;
+      if (it.epc.trim().toUpperCase() == cleanBarcode || it.serialNumber.trim().toUpperCase() == cleanBarcode) return true;
       return false;
     }).toList();
 
