@@ -257,6 +257,8 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   }
 
   Widget _buildStep1LocationCard() {
+    final locations = _repo.locations;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -283,22 +285,89 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
-                  'BƯỚC 1: XÁC NHẬN VỊ TRÍ KỆ ĐÍCH',
+                  'BƯỚC 1: CHỌN VỊ TRÍ KỆ ĐÍCH (DATABASE)',
                   style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (_selectedLocationId != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'ĐÃ CHỌN',
+                    style: TextStyle(color: Color(0xFF10B981), fontSize: 9.5, fontWeight: FontWeight.bold),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 10),
-          PdaLocationBarcodeCard(
-            selectedLocationId: _selectedLocationId,
-            onLocationChanged: (loc) {
-              setState(() {
-                _selectedLocationId = loc.locationId;
-              });
+          const SizedBox(height: 12),
+
+          // Dropdown lấy từ bảng locations trên Database
+          DropdownButtonFormField<String>(
+            value: (locations.any((l) => l.locationId == _selectedLocationId))
+                ? _selectedLocationId
+                : (locations.isNotEmpty ? locations.first.locationId : null),
+            dropdownColor: const Color(0xFF0F172A),
+            icon: const Icon(Icons.arrow_drop_down_circle, color: Color(0xFF38BDF8)),
+            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: const Color(0xFF0F172A),
+              labelText: 'Vị trí kệ kho (Từ Database)',
+              labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+              prefixIcon: const Icon(Icons.shelves, color: Color(0xFF38BDF8), size: 22),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF334155)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF334155)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
+              ),
+            ),
+            items: locations.map((loc) {
+              return DropdownMenuItem<String>(
+                value: loc.locationId,
+                child: Text(
+                  '${loc.locationCode} (${loc.zone} • ${loc.shelf} - ${loc.level})',
+                  style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedLocationId = val;
+                });
+                HapticFeedback.selectionClick();
+              }
             },
+          ),
+          const SizedBox(height: 8),
+
+          // Hoặc bóp cò PDA quét mã kệ
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Hoặc bóp cò Barcode để tự động chọn kệ',
+                style: TextStyle(color: Colors.white54, fontSize: 10.5),
+              ),
+              Text(
+                'Tổng: ${locations.length} vị trí',
+                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
         ],
       ),
