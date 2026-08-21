@@ -149,20 +149,21 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.qr_code_scanner, color: Color(0xFF38BDF8), size: 24),
-                          SizedBox(width: 8),
-                          Text(
-                            'QUÉT BARCODE VỊ TRÍ KỆ',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                        ],
+                      const Icon(Icons.qr_code_scanner, color: Color(0xFF38BDF8), size: 22),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'QUÉT BARCODE VỊ TRÍ KỆ',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white54),
+                        icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                         onPressed: () => Navigator.pop(modalContext),
                       ),
                     ],
@@ -288,29 +289,31 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                                 ),
                               ),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        isSelected ? Icons.check_circle : Icons.location_on_outlined,
-                                        color: isSelected ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
-                                        size: 18,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        loc.locationCode,
-                                        style: TextStyle(
-                                          color: isSelected ? const Color(0xFF38BDF8) : Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ],
+                                  Icon(
+                                    isSelected ? Icons.check_circle : Icons.location_on_outlined,
+                                    color: isSelected ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                                    size: 18,
                                   ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      loc.locationCode,
+                                      style: TextStyle(
+                                        color: isSelected ? const Color(0xFF38BDF8) : Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
                                   Text(
                                     '${loc.zone} • ${loc.shelf}',
                                     style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
