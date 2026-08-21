@@ -36,7 +36,13 @@ class DatabaseService {
       version: 2,
       onCreate: (db, version) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) => _createTables(db),
-      onOpen: (db) => _createTables(db),
+      onOpen: (db) async {
+        try {
+          await db.execute('PRAGMA journal_mode=WAL;');
+          await db.execute('PRAGMA busy_timeout=5000;');
+        } catch (_) {}
+        await _createTables(db);
+      },
     );
   }
 

@@ -7,6 +7,7 @@ import 'pda_inventory_screen.dart';
 import 'pda_mysql_sync_screen.dart';
 import '../inbound_screen.dart';
 import '../storage_screen.dart';
+import 'pda_putaway_screen.dart';
 
 class PdaHomeScreen extends StatefulWidget {
   const PdaHomeScreen({super.key});
@@ -213,6 +214,55 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         ),
                       ),
                       Icon(Icons.chevron_right, size: 16, color: c.textMuted),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Prominent Putaway (Cất hàng lên kệ) Banner Card
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+                  );
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF0284C7), width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.shelves, color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CẤT HÀNG LÊN KỆ (PUTAWAY)',
+                              style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                            ),
+                            Text(
+                              'Quét Barcode vị trí kệ & mã thùng hàng để cất',
+                              style: TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF38BDF8)),
                     ],
                   ),
                 ),

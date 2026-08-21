@@ -199,38 +199,35 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _isAutoSaving = true;
 
     try {
-      final pallet = _palletController.text.trim().isEmpty ? 'PL-01' : _palletController.text.trim().toUpperCase();
-      final sku = _skuController.text.trim();
-      final prodName = _prodNameController.text.trim();
-      final orderNo = _selectedLiveOrder?.orderNo;
+      final orderNo = _selectedLiveOrder?.orderNo ?? (_scannedTags.isNotEmpty ? _findOrderForEpc(_scannedTags.keys.first)?.orderNo : null);
 
-      final saved = await _repo.confirmHandheldInbound(
-        orderNo: orderNo,
-        palletCode: pallet,
-        locationId: _selectedLiveLocation.isNotEmpty ? _selectedLiveLocation : 'LOC-A1-01-01',
-        scannedEpcs: _scannedTags.keys.toList(),
-        defaultSku: sku.isNotEmpty ? sku : 'SKU-INBOUND',
-        defaultProductName: prodName.isNotEmpty ? prodName : 'Hàng nhập kho',
-      );
-
-      debugPrint('⚡ [ZERO-TOUCH AUTO] Đã tự động nhập kho $saved chip cho đơn $orderNo');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 3),
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('✅ TỰ ĐỘNG NHẬP KHO THÀNH CÔNG: $orderNo ($saved chip) -> Pallet $pallet!'),
-                ),
-              ],
-            ),
-          ),
+      if (orderNo != null && orderNo.isNotEmpty) {
+        final saved = await _repo.confirmGateReceiveToWaitingPutaway(
+          orderNo: orderNo,
+          scannedEpcs: _scannedTags.keys.toList(),
+          gateLocationId: 'LOC-GATE-IN',
+          performedBy: 'Trạm Cổng RFID Desktop',
         );
+
+        debugPrint('⚡ [ZERO-TOUCH AUTO] Cổng RFID đã tiếp nhận kiện $orderNo ($saved chip) -> CHUYỂN SANG CHỜ XẾP KHO');
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF10B981),
+              duration: const Duration(seconds: 3),
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('✅ ĐÃ TIẾP NHẬN KIỆN HÀNG $orderNo ($saved CHIP) -> CHUYỂN SANG CHỜ XẾP KHO!'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
       }
 
       // Tự động đặt lại sau 3 giây để sẵn sàng quét thùng tiếp theo

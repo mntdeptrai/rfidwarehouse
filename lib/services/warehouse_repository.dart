@@ -12,8 +12,14 @@ class WarehouseRepository extends ChangeNotifier {
 
   final DatabaseService _dbService = DatabaseService();
 
+  Future<void>? _initFuture;
+
   WarehouseRepository._internal() {
-    _loadFromSqlite();
+    _initFuture = _loadFromSqlite();
+  }
+
+  Future<void> ensureInitialized() async {
+    if (_initFuture != null) await _initFuture;
   }
 
   Future<void> _loadFromSqlite() async {
@@ -525,6 +531,211 @@ class WarehouseRepository extends ChangeNotifier {
 
     notifyListeners();
     return true;
+  }
+
+  /// Giai đoạn 1: Kiện hàng đi qua Cổng RFID Gate -> Quét đủ thẻ -> Chuyển thành CHỜ XẾP KHO (WAITING_PUTAWAY)
+  Future<int> confirmGateReceiveToWaitingPutaway({
+    required String orderNo,
+    required List<String> scannedEpcs,
+    String? cartonCode,
+    String gateLocationId = 'LOC-GATE-IN',
+    String performedBy = 'Cổng RFID Gate',
+  }) async {
+    final cleanOrderNo = orderNo.trim().toUpperCase();
+    final uniqueEpcs = scannedEpcs.toSet().toList();
+    final now = DateTime.now();
+
+    // 1. Tìm đơn nhập kho
+    final order = _inboundOrders.where((o) =>
+      o.orderNo.trim().toUpperCase() == cleanOrderNo ||
+      o.inboundOrderId.trim().toUpperCase() == cleanOrderNo
+    ).firstOrNull;
+
+    // 2. Chuyển trạng thái các Items trong kiện/thùng sang WAITING_PUTAWAY (Chờ xếp kho)
+    final matchedItems = _items.where((it) {
+      if (uniqueEpcs.contains(it.epc)) return true;
+      if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanOrderNo) return true;
+      return false;
+    }).toList();
+
+    for (var it in matchedItems) {
+      it.status = ItemStatus.waitingPutaway;
+      it.locationId = gateLocationId;
+      it.inboundTime = now;
+      if (it.orderNo == null || it.orderNo!.isEmpty) {
+        it.orderNo = cleanOrderNo;
+      }
+      await _dbService.insertItem(it);
+      await _dbService.enqueueSync(
+        tableName: 'items',
+        recordId: it.itemId,
+        action: 'UPDATE',
+        payload: {
+          'itemId': it.itemId,
+          'status': ItemStatus.waitingPutaway.code,
+          'locationId': gateLocationId,
+          'orderNo': it.orderNo,
+          'inboundTime': now.toIso8601String(),
+        },
+      );
+    }
+
+    // 3. Cập nhật trạng thái Đơn hàng sang WAITING_PUTAWAY
+    if (order != null) {
+      order.status = InboundOrderStatus.waitingPutaway;
+      for (var d in order.details) {
+        d.receivedQty = d.requiredQty;
+      }
+      await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.waitingPutaway, locationId: gateLocationId);
+      await _dbService.enqueueSync(
+        tableName: 'inbound_orders',
+        recordId: order.inboundOrderId,
+        action: 'UPDATE',
+        payload: {
+          'inboundOrderId': order.inboundOrderId,
+          'status': InboundOrderStatus.waitingPutaway.code,
+          'locationId': gateLocationId,
+          'updatedAt': now.toIso8601String(),
+        },
+      );
+    }
+
+    // 4. Ghi nhận giao dịch Cổng tiếp nhận
+    _dbService.enqueueSync(
+      tableName: 'inbound_transactions',
+      recordId: cleanOrderNo,
+      action: 'GATE_RECEIVE_WAITING_PUTAWAY',
+      payload: {
+        'orderNo': cleanOrderNo,
+        'cartonCode': cartonCode ?? cleanOrderNo,
+        'locationId': gateLocationId,
+        'itemCount': matchedItems.length,
+        'performedBy': performedBy,
+        'timestamp': now.toIso8601String(),
+      },
+    );
+
+    _triggerBackgroundSync();
+    notifyListeners();
+    return matchedItems.length;
+  }
+
+  /// Giai đoạn 2: Thủ kho cầm PDA quét Barcode Vị trí kệ và quét Barcode Thùng hàng -> Xác nhận vị trí & Chuyển sang TRONG KHO (IN_STOCK)
+  Future<int> confirmPdaPutawayByCarton({
+    required String cartonOrOrderBarcode,
+    required String locationId,
+    String performedBy = 'Thủ kho PDA',
+  }) async {
+    final cleanBarcode = cartonOrOrderBarcode.trim().toUpperCase();
+    final now = DateTime.now();
+
+    // 1. Tìm vị trí kệ
+    final loc = _locations.where((l) =>
+      l.locationId.toUpperCase() == locationId.toUpperCase() ||
+      l.locationCode.toUpperCase() == locationId.toUpperCase()
+    ).firstOrNull ?? Location(
+      locationId: locationId,
+      locationCode: locationId,
+      zone: 'Khu vực chung',
+      shelf: 'Kệ',
+      level: 'Tầng 1',
+    );
+
+    // 2. Tìm tất cả items thuộc thùng hàng hoặc đơn hàng này
+    final matchedItems = _items.where((it) {
+      if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) return true;
+      if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) return true;
+      if (it.epc.toUpperCase() == cleanBarcode || it.serialNumber.toUpperCase() == cleanBarcode) return true;
+      return false;
+    }).toList();
+
+    if (matchedItems.isEmpty) return 0;
+
+    // 3. Cập nhật tất cả Item trong thùng sang IN_STOCK và lưu vị trí kệ mới nhất
+    for (var it in matchedItems) {
+      final oldLoc = it.locationId ?? 'LOC-GATE-IN';
+      it.status = ItemStatus.inStock;
+      it.locationId = loc.locationId;
+      it.inboundTime ??= now;
+
+      await _dbService.updateItemLocationAndPallet(it.epc, loc.locationId, it.palletId);
+      await _dbService.updateItemStatus(it.epc, ItemStatus.inStock);
+
+      await _dbService.enqueueSync(
+        tableName: 'items',
+        recordId: it.itemId,
+        action: 'UPDATE',
+        payload: {
+          'itemId': it.itemId,
+          'status': ItemStatus.inStock.code,
+          'locationId': loc.locationId,
+          'updatedAt': now.toIso8601String(),
+        },
+      );
+
+      // Ghi log biến động vị trí (Putaway)
+      _transactions.insert(
+        0,
+        InventoryTransaction(
+          transactionId: 'TX-PUTAWAY-${now.millisecondsSinceEpoch}-${it.sku}',
+          type: TransactionType.movement,
+          documentNo: it.orderNo ?? cleanBarcode,
+          sku: it.sku,
+          productName: it.productName,
+          quantity: 1,
+          fromLocation: oldLoc,
+          toLocation: loc.locationCode,
+          performedBy: performedBy,
+          timestamp: now,
+          notes: 'Xác nhận cất thùng hàng $cleanBarcode lên kệ ${loc.locationCode} bằng PDA Barcode',
+        ),
+      );
+    }
+
+    // 4. Cập nhật trạng thái Đơn hàng sang COMPLETED (Hoàn tất nhập kho)
+    final order = _inboundOrders.where((o) =>
+      o.orderNo.trim().toUpperCase() == cleanBarcode ||
+      o.inboundOrderId.trim().toUpperCase() == cleanBarcode
+    ).firstOrNull;
+
+    if (order != null) {
+      order.status = InboundOrderStatus.completed;
+      for (var d in order.details) {
+        d.receivedQty = d.requiredQty;
+      }
+      await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.completed, locationId: loc.locationId);
+      await _dbService.enqueueSync(
+        tableName: 'inbound_orders',
+        recordId: order.inboundOrderId,
+        action: 'UPDATE',
+        payload: {
+          'inboundOrderId': order.inboundOrderId,
+          'status': InboundOrderStatus.completed.code,
+          'locationId': loc.locationId,
+          'updatedAt': now.toIso8601String(),
+        },
+      );
+    }
+
+    // 5. Ghi nhận giao dịch hoàn tất Putaway
+    _dbService.enqueueSync(
+      tableName: 'inbound_transactions',
+      recordId: cleanBarcode,
+      action: 'PDA_PUTAWAY_CONFIRM',
+      payload: {
+        'cartonBarcode': cleanBarcode,
+        'orderNo': order?.orderNo ?? cleanBarcode,
+        'locationId': loc.locationId,
+        'locationCode': loc.locationCode,
+        'itemCount': matchedItems.length,
+        'performedBy': performedBy,
+        'timestamp': now.toIso8601String(),
+      },
+    );
+
+    _triggerBackgroundSync();
+    notifyListeners();
+    return matchedItems.length;
   }
 
   /// Nhập kho trực tiếp bằng súng quét tay cầm Chainway C72e

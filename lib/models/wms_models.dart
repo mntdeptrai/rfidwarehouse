@@ -1,7 +1,8 @@
 /// Trạng thái của từng sản phẩm vật lý (Item)
 enum ItemStatus {
   pendingInbound('PENDING_INBOUND', 'Chờ nhập kho'),
-  inStock('IN_STOCK', 'Đang lưu kho'),
+  waitingPutaway('WAITING_PUTAWAY', 'Chờ xếp kệ'),
+  inStock('IN_STOCK', 'Trong kho'),
   allocated('ALLOCATED', 'Đã giữ cho PO'),
   picked('PICKED', 'Đã lấy hàng'),
   waitingShipment('WAITING_SHIPMENT', 'Chờ giao hàng'),
@@ -15,8 +16,9 @@ enum ItemStatus {
 /// Trạng thái Lệnh Nhập kho
 enum InboundOrderStatus {
   newOrder('NEW', 'Mới tạo'),
+  waitingPutaway('WAITING_PUTAWAY', 'Chờ xếp kho'),
   processing('PROCESSING', 'Đang xử lý'),
-  completed('COMPLETED', 'Hoàn tất'),
+  completed('COMPLETED', 'Trong kho'),
   cancelled('CANCELLED', 'Đã hủy');
 
   final String code;

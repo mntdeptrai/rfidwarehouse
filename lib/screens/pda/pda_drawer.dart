@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/eye_care_theme.dart';
 import 'pda_lookup_screen.dart';
 import 'pda_mysql_sync_screen.dart';
+import 'pda_putaway_screen.dart';
 
 class PdaDrawer extends StatelessWidget {
   const PdaDrawer({super.key});
@@ -40,6 +41,18 @@ class PdaDrawer extends StatelessWidget {
                   'user01@giltech.com',
                   style: TextStyle(color: c.textSecondary, fontSize: 13),
                 ),
+              ),
+              ListTile(
+                leading: Icon(Icons.shelves, color: c.successEmerald),
+                title: Text('Xếp Kho / Cất Hàng (Putaway)', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text('Quét Barcode Thùng & Vị Trí Kệ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+                  );
+                },
               ),
               ListTile(
                 leading: Icon(Icons.inventory_2, color: c.rfidCyan),
