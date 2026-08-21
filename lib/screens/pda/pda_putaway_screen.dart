@@ -219,10 +219,14 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF334155)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 10,
+        runSpacing: 8,
         children: [
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.shelves, color: Color(0xFF38BDF8), size: 20),
               const SizedBox(width: 8),
@@ -249,6 +253,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               child: Text(
                 'Vừa cất: $_lastConfirmedCarton',
                 style: const TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
         ],

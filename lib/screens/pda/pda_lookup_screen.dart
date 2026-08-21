@@ -152,7 +152,10 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
 
             // Result Display
             Expanded(
-              child: _buildLookupResult(),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: _buildLookupResult(),
+              ),
             ),
           ],
         ),
