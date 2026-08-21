@@ -8,8 +8,10 @@ class UhfService extends ChangeNotifier {
   static final UhfService _instance = UhfService._internal();
   factory UhfService() => _instance;
   UhfService._internal() {
-    _methodChannel.setMethodCallHandler(_handleNativeMethodCall);
-    _startListeningEvents();
+    if (Platform.isAndroid) {
+      _methodChannel.setMethodCallHandler(_handleNativeMethodCall);
+      _startListeningEvents();
+    }
   }
 
   static const MethodChannel _methodChannel = MethodChannel('com.example.uhf/methods');
@@ -168,14 +170,19 @@ class UhfService extends ChangeNotifier {
   }
 
   void _startListeningEvents() {
+    if (!Platform.isAndroid) return;
     _eventSubscription?.cancel();
-    _eventSubscription = _eventChannel.receiveBroadcastStream().listen((dynamic event) {
-      if (event is Map) {
-        _handleIncomingTag(event);
-      }
-    }, onError: (error) {
-      debugPrint('UhfService event error: $error');
-    });
+    try {
+      _eventSubscription = _eventChannel.receiveBroadcastStream().listen((dynamic event) {
+        if (event is Map) {
+          _handleIncomingTag(event);
+        }
+      }, onError: (error) {
+        debugPrint('UhfService event error: $error');
+      });
+    } catch (e) {
+      debugPrint('UhfService EventChannel error: $e');
+    }
   }
 
   void _stopListeningEvents() {
