@@ -258,35 +258,17 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
             Row(
               children: [
                 Expanded(
-                  flex: 3,
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _isTracking ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
+                    icon: Icon(_isTracking ? Icons.stop : Icons.sensors, color: Colors.white, size: 20),
                     onPressed: _isTracking ? _stopTracking : _startTracking,
-                    child: Text(
-                      _isTracking ? 'DỪNG QUÉT' : 'BẬT QUÉT (UHF)',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: _quickScanSampleTag,
-                    child: const Text(
-                      'THỬ MẪU',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
+                    label: Text(
+                      _isTracking ? 'DỪNG QUÉT ĐỊNH VỊ' : 'BẬT QUÉT TÌM KIẾM (UHF RFID)',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                 ),

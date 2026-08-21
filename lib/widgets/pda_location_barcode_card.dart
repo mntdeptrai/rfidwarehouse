@@ -65,14 +65,32 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     ).firstOrNull;
 
     if (found == null) {
-      // Nếu chưa có vị trí này trong danh mục: Tự động khởi tạo vị trí mới vào SQLite & MySQL
-      final newLocId = 'LOC-$upper';
+      // Phân tích mã vạch vị trí thực tế được quét từ kệ kho
+      final parts = clean.split('-');
+      String zoneName = 'Khu vực chung';
+      String shelfName = 'Kệ';
+      String levelName = 'Tầng';
+
+      if (parts.length >= 4 && parts[0].toUpperCase() == 'LOC') {
+        zoneName = 'Khu ${parts[1]}';
+        shelfName = 'Kệ ${parts[2]}';
+        levelName = 'Tầng ${parts[3]}';
+      } else if (parts.length == 3) {
+        zoneName = 'Khu ${parts[0]}';
+        shelfName = 'Kệ ${parts[1]}';
+        levelName = 'Tầng ${parts[2]}';
+      } else if (parts.length == 2) {
+        zoneName = 'Khu ${parts[0]}';
+        shelfName = 'Kệ ${parts[1]}';
+        levelName = 'Tầng 1';
+      }
+
       matched = Location(
-        locationId: newLocId,
+        locationId: 'LOC-$upper',
         locationCode: clean,
-        zone: clean.startsWith('LOC-') ? clean.split('-').length > 1 ? 'Zone ${clean.split('-')[1]}' : 'Khu vực chung' : 'Khu vực chung',
-        shelf: 'Kệ 01',
-        level: 'Tầng 1',
+        zone: zoneName,
+        shelf: shelfName,
+        level: levelName,
       );
       await _repo.addLocation(matched);
     } else {
