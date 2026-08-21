@@ -39,7 +39,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   // Live Station State
   InboundOrder? _selectedLiveOrder;
-  String _selectedLiveLocation = '';
   final TextEditingController _palletController = TextEditingController();
   final TextEditingController _skuController = TextEditingController();
   final TextEditingController _prodNameController = TextEditingController();
@@ -66,9 +65,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         orElse: () => _repo.inboundOrders.first,
       );
     }
-    if (_repo.locations.isNotEmpty) {
-      _selectedLiveLocation = _repo.locations.first.locationId;
-    }
+
 
     // Tự động kéo danh sách phiếu nhập mới nhất từ MySQL về khi mở trạm
     Future.microtask(() async {
@@ -428,19 +425,18 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       return;
     }
 
+    if (_selectedLiveOrder == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Color(0xFFF59E0B), content: Text('Chưa chọn đơn nhập kho để đối soát!')),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
-      final pallet = _palletController.text.trim().isEmpty ? 'PL-01' : _palletController.text.trim().toUpperCase();
-      final sku = _skuController.text.trim();
-      final prodName = _prodNameController.text.trim();
-
-      final saved = await _repo.confirmHandheldInbound(
-        orderNo: _selectedLiveOrder?.orderNo,
-        palletCode: pallet,
-        locationId: _selectedLiveLocation,
+      final saved = await _repo.confirmGateReceiveToWaitingPutaway(
+        orderNo: _selectedLiveOrder!.orderNo,
         scannedEpcs: _scannedTags.keys.toList(),
-        defaultSku: sku.isNotEmpty ? sku : 'SKU-INBOUND',
-        defaultProductName: prodName.isNotEmpty ? prodName : 'Hàng nhập kho',
       );
 
       if (!mounted) return;
@@ -448,13 +444,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF10B981),
-          content: Text('Đã nhập thành công $saved chip RFID vào Pallet $pallet (Vị trí $_selectedLiveLocation)!'),
+          content: Text('✅ Đã xác nhận $saved chip RFID qua cổng. Đơn ${_selectedLiveOrder!.orderNo} chuyển sang CHỜ XẾP KHO → Quét barcode vị trí trên PDA để cất hàng!'),
         ),
       );
 
       setState(() {
         _scannedTags.clear();
         _uhf.clearTags();
+        // Chuyển sang đơn mới tiếp theo (bỏ qua đơn đã xác nhận)
+        final nextOrder = _repo.inboundOrders.where((o) =>
+          o.status == InboundOrderStatus.newOrder ||
+          o.status == InboundOrderStatus.processing
+        ).firstOrNull;
+        _selectedLiveOrder = nextOrder;
       });
       _desktopUhf.clearTags();
     } catch (e) {
