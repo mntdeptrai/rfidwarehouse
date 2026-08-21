@@ -32,6 +32,7 @@ class MainActivity : FlutterActivity() {
 
     private var mReader: RFIDWithUHFUART? = null
     private var eventSink: EventChannel.EventSink? = null
+    private var mMethodChannel: MethodChannel? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // Background thread for processing broadcasts & tags (initialized in onCreate)
@@ -144,6 +145,14 @@ class MainActivity : FlutterActivity() {
 
         Log.d(TAG, "Hardware Scanner Data received: $rawData")
 
+        mainHandler.post {
+            try {
+                mMethodChannel?.invokeMethod("onBarcodeRead", mapOf("barcode" to rawData))
+            } catch (e: Exception) {
+                Log.w(TAG, "Error invoking onBarcodeRead: ${e.message}")
+            }
+        }
+
         val tags = rawData.split(Regex("[\\r\\n,;]+")).map { it.trim() }.filter { it.isNotEmpty() }
         for (tagStr in tags) {
             enqueueRawTag(tagStr)
@@ -194,36 +203,28 @@ class MainActivity : FlutterActivity() {
         scheduleFlush()
     }
 
-    /** Schedule a single flush after FLUSH_INTERVAL_MS */
+    /** Schedule a flush of pending tags after FLUSH_INTERVAL_MS */
     private fun scheduleFlush() {
         if (flushScheduled.compareAndSet(false, true)) {
             bgHandler.postDelayed({
-                flushPendingTags()
-                flushScheduled.set(false)
+                flushTagsToFlutter()
             }, FLUSH_INTERVAL_MS)
         }
     }
 
-    /** Flush all pending tags to Flutter in batch on main thread */
-    private fun flushPendingTags() {
-        if (!isScanning.get() || pendingTags.isEmpty()) {
-            pendingTags.clear()
-            return
-        }
+    /** Flush all pending tags in a single batch to Flutter EventSink */
+    private fun flushTagsToFlutter() {
+        flushScheduled.set(false)
+        if (pendingTags.isEmpty()) return
 
-        val batch = ArrayList<HashMap<String, Any?>>(pendingTags.values)
+        val tagsToSend = ArrayList(pendingTags.values)
         pendingTags.clear()
 
-        if (batch.isNotEmpty()) {
-            playBeep()
-        }
-
         mainHandler.post {
-            if (isScanning.get()) {
-                for (map in batch) {
-                    eventSink?.success(map)
-                }
+            for (tagMap in tagsToSend) {
+                eventSink?.success(tagMap)
             }
+            playBeep()
         }
     }
 
@@ -293,7 +294,8 @@ class MainActivity : FlutterActivity() {
             }
         )
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
+        mMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+        mMethodChannel?.setMethodCallHandler { call, result ->
             handleMethodCall(call, result)
         }
     }
@@ -328,6 +330,21 @@ class MainActivity : FlutterActivity() {
                 "stopInventory" -> {
                     val res = stopInventory()
                     result.success(res)
+                }
+                "triggerBarcodeScan", "scanBarcode" -> {
+                    try {
+                        sendBroadcast(Intent("com.rsc.scan.service").apply { putExtra("action", "ACTION_SCAN") })
+                        sendBroadcast(Intent("android.intent.action.SCAN_TRIGGER"))
+                        sendBroadcast(Intent("com.symbol.datawedge.api.ACTION").apply {
+                            putExtra("com.symbol.datawedge.api.SOFT_SCAN_TRIGGER", "START_SCANNING")
+                        })
+                        sendBroadcast(Intent("com.honeywell.decode.intent.action.SCAN_TRIGGER"))
+                        sendBroadcast(Intent("com.seuic.scanner.action.SCAN"))
+                        sendBroadcast(Intent("urovo.scanner.startscan"))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
                 }
                 "setFilterDuplicates" -> {
                     val filter = call.argument<Boolean>("filter") ?: true

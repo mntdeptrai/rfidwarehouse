@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/wms_models.dart';
 import '../services/warehouse_repository.dart';
 import '../widgets/hardware_status_appbar.dart';
+import '../widgets/pda_location_barcode_card.dart';
 
 class StorageScreen extends StatefulWidget {
   const StorageScreen({super.key});
@@ -271,25 +272,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                   const SizedBox(height: 14),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedLocId,
-                    dropdownColor: const Color(0xFF1E293B),
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      labelText: 'Chọn Vị trí Đích',
-                      labelStyle: const TextStyle(color: Color(0xFF38BDF8)),
-                      filled: true,
-                      fillColor: const Color(0xFF0F172A),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    items: _repo.locations.map((l) {
-                      return DropdownMenuItem(
-                        value: l.locationId,
-                        child: Text('${l.locationCode} (${l.zone})'),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) setDialogState(() => selectedLocId = val);
+                  PdaLocationBarcodeCard(
+                    selectedLocationId: selectedLocId,
+                    onLocationChanged: (loc) {
+                      setDialogState(() => selectedLocId = loc.locationId);
                     },
                   ),
                 ],

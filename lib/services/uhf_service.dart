@@ -323,6 +323,26 @@ class UhfService extends ChangeNotifier {
     }
   }
 
+  /// Kích hoạt quét mã vạch 2D / Barcode trên tay cầm PDA
+  Future<bool> triggerBarcodeScan() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final bool? res = await _methodChannel.invokeMethod<bool>('triggerBarcodeScan');
+      return res ?? false;
+    } catch (e) {
+      debugPrint('UhfService.triggerBarcodeScan error: $e');
+      return false;
+    }
+  }
+
+  /// Bắn sự kiện Barcode thủ công hoặc từ bàn phím wedge
+  void injectBarcode(String barcode) {
+    final clean = barcode.trim();
+    if (clean.isEmpty) return;
+    _barcodeStreamController.add(clean);
+    notifyListeners();
+  }
+
   /// Read Data from Tag Memory Bank
   /// Bank: 0=RESERVED, 1=EPC, 2=TID, 3=USER
   Future<String?> readData({

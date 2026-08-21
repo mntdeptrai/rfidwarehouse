@@ -6,6 +6,7 @@ import '../models/wms_models.dart';
 import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
 import '../widgets/hardware_status_appbar.dart';
+import '../widgets/pda_location_barcode_card.dart';
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -584,64 +585,24 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                 ],
               ),
               const SizedBox(height: 10),
+              PdaLocationBarcodeCard(
+                selectedLocationId: _selectedLocationId,
+                onLocationChanged: (loc) {
+                  setState(() {
+                    _selectedLocationId = loc.locationId;
+                  });
+                },
+              ),
+              const SizedBox(height: 10),
+
+              // Nhập Pallet Code
               Row(
                 children: [
-                  // Chọn Vị trí
                   Expanded(
-                    flex: 3,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Vị trí kệ:', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                        const SizedBox(height: 4),
-                        if (locations.isEmpty) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF334155)),
-                            ),
-                            child: const Text('Chưa có vị trí', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                          ),
-                        ] else ...[
-                          DropdownButtonFormField<String>(
-                            initialValue: locations.any((l) => l.locationId == _selectedLocationId)
-                                ? _selectedLocationId
-                                : locations.first.locationId,
-                            isExpanded: true,
-                            dropdownColor: const Color(0xFF1E293B),
-                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: const Color(0xFF0F172A),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                            ),
-                            items: locations.map((l) {
-                              return DropdownMenuItem(
-                                value: l.locationId,
-                                child: Text('${l.locationCode} (${l.zone})', overflow: TextOverflow.ellipsis),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedLocationId = val);
-                            },
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-
-                  // Nhập Pallet Code
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Mã Pallet:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                        const Text('Mã Pallet (Tùy chọn):', style: TextStyle(color: Colors.white70, fontSize: 11)),
                         const SizedBox(height: 4),
                         TextField(
                           controller: _palletController,
@@ -650,6 +611,8 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                             filled: true,
                             fillColor: const Color(0xFF0F172A),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            hintText: 'Mặc định: PL-01',
+                            hintStyle: const TextStyle(color: Colors.white38, fontSize: 11),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
                           ),
