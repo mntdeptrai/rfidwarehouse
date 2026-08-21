@@ -688,15 +688,85 @@ class WarehouseRepository extends ChangeNotifier {
     );
 
     // 2. Tìm tất cả items thuộc thùng hàng, mã barcode ngoài thùng hoặc mã EPC này
-    final matchedItems = _items.where((it) {
+    var matchedItems = _items.where((it) {
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.sku.trim().toUpperCase() == cleanBarcode) return true;
       if (it.epc.trim().toUpperCase() == cleanBarcode || it.serialNumber.trim().toUpperCase() == cleanBarcode) return true;
+      
+      // So khớp mềm khi số lượng số 0 ở giữa khác nhau (VD: 893000000001 vs 8930000000001)
+      final itSkuNorm = it.sku.toUpperCase().replaceAll(RegExp(r'0+'), '0');
+      final cBNorm = cleanBarcode.toUpperCase().replaceAll(RegExp(r'0+'), '0');
+      if (itSkuNorm == cBNorm) return true;
+
       return false;
     }).toList();
 
-    if (matchedItems.isEmpty) return 0;
+    // 2b. Nếu chưa có Item nào trong kho:
+    // Tự động tìm trong danh mục Product hoặc tạo mới Product và sinh Item cất thẳng vào kệ (Direct Putaway)
+    if (matchedItems.isEmpty) {
+      final cBNorm = cleanBarcode.toUpperCase().replaceAll(RegExp(r'0+'), '0');
+      final prod = _products.where((p) {
+        final pSku = p.sku.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+        final pId = p.productId.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+        final cB = cleanBarcode.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+        if (pSku == cB || pId == cB) return true;
+        
+        // So khớp mềm bỏ số 0 lặp
+        final pSkuNorm = pSku.replaceAll(RegExp(r'0+'), '0');
+        if (pSkuNorm == cBNorm) return true;
+
+        return false;
+      }).firstOrNull;
+
+      final effectiveSku = prod != null ? prod.sku : cleanBarcode;
+      final effectiveName = prod != null ? prod.productName : 'Sản phẩm $cleanBarcode';
+      final effectiveProdId = prod != null ? prod.productId : cleanBarcode;
+
+      final epc = generateUniqueEpc(sku: effectiveSku);
+      final newItem = Item(
+        itemId: 'ITEM-${now.millisecondsSinceEpoch}',
+        productId: effectiveProdId,
+        sku: effectiveSku,
+        productName: effectiveName,
+        serialNumber: 'SN-$effectiveSku-${now.millisecondsSinceEpoch.toRadixString(16).toUpperCase()}',
+        epc: epc,
+        status: ItemStatus.inStock,
+        orderNo: 'DIRECT-PUTAWAY',
+        locationId: loc.locationId,
+        inboundTime: now,
+      );
+      _items.add(newItem);
+      await _dbService.insertItem(newItem);
+
+      // Nếu sản phẩm chưa có trong danh mục products, tự động lưu luôn vào danh mục products
+      if (prod == null) {
+        final newProd = Product(
+          productId: effectiveProdId,
+          sku: effectiveSku,
+          productName: effectiveName,
+          unit: 'Cái',
+          category: 'Nhập trực tiếp PDA',
+        );
+        _products.add(newProd);
+        await _dbService.insertProduct(newProd);
+        await _syncDirectOrQueue(
+          tableName: 'products',
+          recordId: newProd.productId,
+          action: 'INSERT',
+          payload: {
+            'productId': newProd.productId,
+            'sku': newProd.sku,
+            'productName': newProd.productName,
+            'unit': newProd.unit,
+            'category': newProd.category,
+            'createdAt': now.toIso8601String(),
+          },
+        );
+      }
+
+      matchedItems = [newItem];
+    }
 
     // 3. Cập nhật tất cả Item trong thùng sang IN_STOCK và lưu vị trí kệ mới nhất
     for (var it in matchedItems) {

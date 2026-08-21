@@ -40,8 +40,8 @@ class MySqlConfig {
     this.host = '127.0.0.1',
     this.port = 3306,
     this.database = 'rfidwarehouse',
-    this.username = 'root',
-    this.password = '',
+    this.username = 'rfid',
+    this.password = '123456',
     this.isAutoSync = true,
     this.syncIntervalSeconds = 5,
   });

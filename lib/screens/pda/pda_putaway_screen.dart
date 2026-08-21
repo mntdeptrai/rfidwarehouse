@@ -113,16 +113,17 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     final clean = cartonBarcode.trim();
     if (clean.isEmpty) return;
 
+    // Tự động lấy vị trí kệ nếu chưa chọn
     if (_selectedLocationId == null || _selectedLocationId!.isEmpty) {
-      HapticFeedback.vibrate();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFFEF4444),
-          duration: Duration(seconds: 3),
-          content: Text('⚠️ VUI LÒNG QUÉT MÃ VỊ TRÍ KỆ TRƯỚC KHI XẾP THÙNG HÀNG!'),
-        ),
-      );
-      return;
+      if (_repo.locations.isNotEmpty) {
+        setState(() {
+          _selectedLocationId = _repo.locations.first.locationId;
+        });
+      } else {
+        setState(() {
+          _selectedLocationId = 'LOC-A01-01';
+        });
+      }
     }
 
     final savedCount = await _repo.confirmPdaPutawayByCarton(
@@ -582,11 +583,20 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Số lượng: $totalReq SP • ${o.details.isNotEmpty ? o.details.first.productName : ""}',
-                            style: TextStyle(color: c.textSecondary, fontSize: 11),
+                            'Mã Barcode: ${o.details.isNotEmpty ? o.details.first.sku : ""} • $totalReq SP',
+                            style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.w600, fontSize: 11),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (o.details.isNotEmpty && o.details.first.productName.isNotEmpty) ...[
+                            const SizedBox(height: 1),
+                            Text(
+                              o.details.first.productName,
+                              style: TextStyle(color: c.textSecondary, fontSize: 10.5),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ],
                       ),
                     ),
