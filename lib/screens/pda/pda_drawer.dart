@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/eye_care_theme.dart';
+import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
 import 'pda_mysql_sync_screen.dart';
 import 'pda_putaway_screen.dart';
@@ -110,6 +111,39 @@ class PdaDrawer extends StatelessWidget {
                       content: Text('Đã chuyển sang: ${eyeCare.modeName}'),
                     ),
                   );
+                },
+              ),
+              const Divider(color: Color(0xFF334155)),
+              ListTile(
+                leading: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
+                title: const Text('Xóa Sạch Dữ Liệu SQLite', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+                subtitle: const Text('Xóa đơn/thẻ cũ trên máy để nhận mới', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: const Color(0xFF1E293B),
+                      title: const Text('Xác nhận xóa dữ liệu?', style: TextStyle(color: Colors.white)),
+                      content: const Text('Toàn bộ dữ liệu đơn hàng và chip trong máy sẽ bị xóa sạch để đồng bộ từ MySQL.', style: TextStyle(color: Colors.white70)),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('HỦY')),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('XÓA SẠCH', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await WarehouseRepository().clearAllData();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(backgroundColor: Colors.green, content: Text('Đã xóa sạch cơ sở dữ liệu SQLite!')),
+                      );
+                    }
+                  }
                 },
               ),
               const Divider(color: Color(0xFF334155)),

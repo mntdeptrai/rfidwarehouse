@@ -309,18 +309,19 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
           // Dropdown lấy từ bảng locations trên Database
           DropdownButtonFormField<String>(
+            isExpanded: true,
             value: (locations.any((l) => l.locationId == _selectedLocationId))
                 ? _selectedLocationId
                 : (locations.isNotEmpty ? locations.first.locationId : null),
             dropdownColor: const Color(0xFF0F172A),
             icon: const Icon(Icons.arrow_drop_down_circle, color: Color(0xFF38BDF8)),
-            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               filled: true,
               fillColor: const Color(0xFF0F172A),
               labelText: 'Vị trí kệ kho (Từ Database)',
-              labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
-              prefixIcon: const Icon(Icons.shelves, color: Color(0xFF38BDF8), size: 22),
+              labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
+              prefixIcon: const Icon(Icons.shelves, color: Color(0xFF38BDF8), size: 20),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: Color(0xFF334155)),
@@ -339,7 +340,8 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 value: loc.locationId,
                 child: Text(
                   '${loc.locationCode} (${loc.zone} • ${loc.shelf} - ${loc.level})',
-                  style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               );
