@@ -90,21 +90,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           ],
         ),
         actions: [
-          // Eye-Care Switcher button
-          IconButton(
-            icon: Icon(
-              _eyeCare.mode == EyeCareMode.amberNight
-                  ? Icons.nightlight_round
-                  : (_eyeCare.mode == EyeCareMode.softSepia ? Icons.menu_book : Icons.remove_red_eye),
-              color: c.warningAmber,
-              size: 19,
-            ),
-            tooltip: 'Chống mỏi mắt: ${_eyeCare.modeName}',
-            onPressed: () {
-              _eyeCare.toggleNextMode();
-            },
-          ),
-
           // Online / Offline / Wi-Fi Status Badge
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -153,12 +138,14 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         fontSize: 10.5,
                       ),
                     ),
-                    const SizedBox(width: 3),
-                    Icon(
-                      isOnline ? Icons.sync : (isWifi ? Icons.wifi : Icons.cloud_off),
-                      size: 13,
-                      color: statusColor,
-                    ),
+                    if (isOnline || isWifi) ...[
+                      const SizedBox(width: 3),
+                      Icon(
+                        isSyncing ? Icons.sync : Icons.sync_problem_outlined,
+                        size: 11,
+                        color: statusColor,
+                      ),
+                    ],
                   ],
                 ),
               ),

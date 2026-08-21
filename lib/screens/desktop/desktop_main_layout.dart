@@ -288,17 +288,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
           Row(
             children: [
               IconButton(
-                icon: Icon(
-                  _eyeCare.mode == EyeCareMode.amberNight
-                      ? Icons.nightlight_round
-                      : (_eyeCare.mode == EyeCareMode.softSepia ? Icons.menu_book : Icons.remove_red_eye),
-                  color: c.warningAmber,
-                  size: 20,
-                ),
-                tooltip: 'Chống mỏi mắt: ${_eyeCare.modeName}',
-                onPressed: () => _eyeCare.toggleNextMode(),
-              ),
-              IconButton(
                 icon: Icon(Icons.notifications_none, color: c.textSecondary),
                 onPressed: () {},
               ),
@@ -313,4 +302,5 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     );
   }
 }
+
 

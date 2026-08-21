@@ -52,34 +52,10 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
             ),
           ),
           actions: [
-            // Nút chuyển đổi Chế độ Chống Mỏi Mắt
-            IconButton(
-              icon: Icon(
-                eyeCare.mode == EyeCareMode.amberNight
-                    ? Icons.nightlight_round
-                    : (eyeCare.mode == EyeCareMode.softSepia ? Icons.menu_book : Icons.remove_red_eye),
-                color: c.warningAmber,
-                size: 19,
-              ),
-              tooltip: 'Chống mỏi mắt: ${eyeCare.modeName}',
-              onPressed: () {
-                eyeCare.toggleNextMode();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: c.bgCardElevated,
-                    duration: const Duration(seconds: 1),
-                    content: Text(
-                      'Chế độ hiển thị: ${eyeCare.modeName}',
-                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600, fontSize: 12),
-                    ),
-                  ),
-                );
-              },
-            ),
-
             // MySQL & Wi-Fi Sync Status Chip
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
