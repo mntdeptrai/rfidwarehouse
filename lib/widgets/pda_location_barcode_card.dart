@@ -365,7 +365,10 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 2,
                     children: [
                       Text(
                         location != null ? 'VỊ TRÍ KỆ (ĐÃ XÁC NHẬN)' : 'VỊ TRÍ KỆ ĐÍCH',
@@ -373,19 +376,22 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                           color: location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
                           fontWeight: FontWeight.bold,
                           fontSize: 10.5,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.3,
                         ),
                       ),
-                      const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                          color: (location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8)).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
-                          '📷 BÓP CÒ QUÉT',
-                          style: TextStyle(color: Color(0xFF38BDF8), fontSize: 8.5, fontWeight: FontWeight.bold),
+                        child: Text(
+                          location != null ? 'BARCODE OK' : '📷 BÓP CÒ QUÉT',
+                          style: TextStyle(
+                            color: location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -395,20 +401,27 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                     Text(
                       location.locationCode,
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       '${location.zone} • ${location.shelf} - ${location.level}',
                       style: const TextStyle(color: Colors.white60, fontSize: 10.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ] else ...[
                     const Text(
                       'Chưa quét mã vạch (Chạm hoặc bóp cò để quét)',
                       style: TextStyle(color: Colors.white54, fontSize: 11.5),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ],
               ),
             ),
+            const SizedBox(width: 6),
             Icon(
               Icons.qr_code_scanner,
               color: location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
