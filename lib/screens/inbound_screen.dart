@@ -542,10 +542,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     return AnimatedBuilder(
       animation: _repo,
       builder: (context, _) {
-        final locations = _repo.locations;
-
         return Container(
           padding: const EdgeInsets.all(14),
+
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(14),

@@ -136,34 +136,6 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     });
   }
 
-  void _quickScanSampleTag() {
-    if (_repo.items.isEmpty) return;
-    final sample = (_repo.items..shuffle()).first;
-    setState(() {
-      _targetItem = sample;
-      _currentRssi = -52.0;
-      if (!_recentLookups.any((it) => it.itemId == sample.itemId)) {
-        _recentLookups.insert(0, sample);
-      }
-    });
-    HapticFeedback.heavyImpact();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF10B981),
-        content: Text('Đã nhận diện thẻ: ${sample.productName} • Vị trí: ${_getLocationName(sample.locationId)}'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  String _getLocationName(String? locId) {
-    if (locId == null) return 'Chưa phân vị trí';
-    final loc = _repo.locations.firstWhere(
-      (l) => l.locationId == locId,
-      orElse: () => Location(locationId: '', locationCode: 'Chưa rõ', zone: '', shelf: '', level: ''),
-    );
-    return '${loc.locationCode} (${loc.zone})';
-  }
 
   @override
   Widget build(BuildContext context) {

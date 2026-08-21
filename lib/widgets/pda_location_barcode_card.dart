@@ -29,7 +29,6 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
   final UhfService _uhf = UhfService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
   StreamSubscription<String>? _barcodeSub;
-  bool _isListening = false;
 
   @override
   void initState() {
@@ -46,12 +45,12 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
 
   void _startBarcodeListener() {
     _barcodeSub?.cancel();
-    _isListening = true;
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
       if (!mounted) return;
       _handleScannedBarcode(barcode);
     });
   }
+
 
   @override
   void dispose() {
@@ -277,7 +276,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                       child: ListView.separated(
                         shrinkWrap: true,
                         itemCount: locations.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        separatorBuilder: (context, index) => const SizedBox(height: 6),
                         itemBuilder: (context, index) {
                           final loc = locations[index];
                           final isSelected = loc.locationId == widget.selectedLocationId;

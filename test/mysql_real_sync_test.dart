@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uhf/services/database_service.dart';
-import 'package:uhf/services/mysql_sync_service.dart';
 import 'package:uhf/models/wms_models.dart';
 
 void main() {
@@ -12,7 +10,6 @@ void main() {
 
   test('Real MySQL Sync Test', () async {
     final dbService = DatabaseService();
-    final syncService = MySqlSyncService();
 
     // Enqueue a sample item
     final item = Item(
@@ -43,7 +40,7 @@ void main() {
       },
     );
 
-    print('Pending sync items in SQLite: ${await dbService.getPendingSyncCount()}');
     expect(await dbService.getPendingSyncCount(), greaterThan(0));
   });
 }
+

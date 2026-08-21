@@ -7,7 +7,6 @@ import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
-import '../../widgets/pda_location_barcode_card.dart';
 
 class PdaPutawayScreen extends StatefulWidget {
   final String? initialLocationId;
@@ -35,8 +34,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   int _sessionPutawayCount = 0;
   String? _lastConfirmedCarton;
-  String? _lastConfirmedLocation;
-  int _lastConfirmedItemCount = 0;
+
 
   @override
   void initState() {
@@ -140,8 +138,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       setState(() {
         _sessionPutawayCount++;
         _lastConfirmedCarton = clean;
-        _lastConfirmedLocation = locName;
-        _lastConfirmedItemCount = savedCount;
         _cartonInputController.clear();
       });
 
@@ -323,13 +319,15 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
           // Dropdown lấy từ bảng locations trên Database
           DropdownButtonFormField<String>(
+            key: ValueKey(_selectedLocationId),
             isExpanded: true,
-            value: (locations.any((l) => l.locationId == _selectedLocationId))
+            initialValue: (locations.any((l) => l.locationId == _selectedLocationId))
                 ? _selectedLocationId
                 : (locations.isNotEmpty ? locations.first.locationId : null),
             dropdownColor: c.bgCardElevated,
             icon: Icon(Icons.arrow_drop_down_circle, color: c.rfidCyan),
             style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+
             decoration: InputDecoration(
               filled: true,
               fillColor: c.bgCardElevated,
@@ -529,7 +527,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: orders.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (context, index) => const SizedBox(height: 8),
           itemBuilder: (context, idx) {
             final o = orders[idx];
             final totalReq = o.details.fold(0, (sum, d) => sum + d.requiredQty);

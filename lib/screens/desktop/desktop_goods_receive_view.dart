@@ -1534,11 +1534,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('LÀM MỚI'),
                     onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
                       await _mysqlSync.syncNow();
                       await _repo.refreshFromDatabase();
                       if (mounted) {
                         setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        messenger.showSnackBar(
                           const SnackBar(
                             backgroundColor: Color(0xFF10B981),
                             duration: Duration(seconds: 2),
@@ -1610,8 +1611,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   Widget _buildLiveRfidStationView() {
     final scannedCount = _scannedTags.length;
     final locations = _repo.locations;
-    final orders = _repo.inboundOrders;
     final expectedOrderItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+
     final expectedCount = expectedOrderItems.length;
     final expectedEpcs = expectedOrderItems.map((i) => i.epc.toUpperCase()).toSet();
     final matchedTags = _scannedTags.values.where((tag) => expectedEpcs.isEmpty || expectedEpcs.contains(tag.epc.toUpperCase())).toList();
