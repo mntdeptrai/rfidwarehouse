@@ -86,7 +86,15 @@ class WarehouseRepository extends ChangeNotifier {
 
   /// Lấy danh sách các Item (Mã EPC) thuộc về một Đơn Nhập kho
   List<Item> getItemsByOrderNo(String orderNo) {
-    return _items.where((i) => i.orderNo == orderNo).toList();
+    final cleanNo = orderNo.trim().toUpperCase();
+    final order = _inboundOrders.where((o) => o.orderNo.trim().toUpperCase() == cleanNo || o.inboundOrderId.trim().toUpperCase() == cleanNo).firstOrNull;
+    return _items.where((i) {
+      if (i.orderNo == null) return false;
+      final itNo = i.orderNo!.trim().toUpperCase();
+      if (itNo == cleanNo) return true;
+      if (order != null && (itNo == order.orderNo.trim().toUpperCase() || itNo == order.inboundOrderId.trim().toUpperCase())) return true;
+      return false;
+    }).toList();
   }
 
   /// Tạo Phiếu Nhập Kho & Tự động sinh danh sách mã EPC duy nhất ở trạng thái CHƯA NHẬP KHO

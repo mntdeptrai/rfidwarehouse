@@ -572,7 +572,7 @@ class MySqlSyncService extends ChangeNotifier {
       }
 
       // 5. Pull Items
-      final itemResult = await conn.execute("SELECT item_id, product_id, sku, product_name, serial_number, epc, status, pallet_id, location_id, inbound_time, allocated_time FROM items");
+      final itemResult = await conn.execute("SELECT item_id, product_id, sku, product_name, serial_number, epc, status, order_no, pallet_id, location_id, inbound_time, allocated_time FROM items");
       for (final row in itemResult.rows) {
         final m = row.assoc();
         final epc = m['epc'] ?? '';
@@ -590,6 +590,7 @@ class MySqlSyncService extends ChangeNotifier {
             serialNumber: m['serial_number'] ?? epc,
             epc: epc,
             status: status,
+            orderNo: m['order_no'],
             palletId: m['pallet_id'],
             locationId: m['location_id'],
             inboundTime: DateTime.tryParse(m['inbound_time'] ?? ''),
@@ -716,8 +717,10 @@ class MySqlSyncService extends ChangeNotifier {
           {"id": palletId, "code": palletId, "loc": locId},
         );
 
+        final orderNo = payload['orderNo']?.toString();
+
         await conn.execute(
-          "INSERT INTO items (item_id, product_id, sku, product_name, serial_number, epc, status, pallet_id, location_id, inbound_time) VALUES (:id, :prod_id, :sku, :name, :sn, :epc, :status, :pal, :loc, NOW()) ON DUPLICATE KEY UPDATE status=VALUES(status), pallet_id=VALUES(pallet_id), location_id=VALUES(location_id), inbound_time=NOW()",
+          "INSERT INTO items (item_id, product_id, sku, product_name, serial_number, epc, status, order_no, pallet_id, location_id, inbound_time) VALUES (:id, :prod_id, :sku, :name, :sn, :epc, :status, :order_no, :pal, :loc, NOW()) ON DUPLICATE KEY UPDATE status=VALUES(status), order_no=COALESCE(VALUES(order_no), order_no), pallet_id=VALUES(pallet_id), location_id=VALUES(location_id), inbound_time=NOW()",
           {
             "id": itemId,
             "prod_id": prodId,
@@ -726,6 +729,7 @@ class MySqlSyncService extends ChangeNotifier {
             "sn": sn,
             "epc": epc,
             "status": status,
+            "order_no": orderNo,
             "pal": palletId,
             "loc": locId,
           },
