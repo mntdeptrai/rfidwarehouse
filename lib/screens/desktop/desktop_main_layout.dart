@@ -166,15 +166,15 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                 CircleAvatar(
                   backgroundColor: Color(0xFF0284C7),
                   radius: 18,
-                  child: Text('U1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                  child: Icon(Icons.desktop_windows_rounded, color: Colors.white, size: 20),
                 ),
                 SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('User01', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text('user01@rfidwarehouse.vn', style: TextStyle(color: Colors.white54, fontSize: 11), overflow: TextOverflow.ellipsis),
+                      Text('Trạm RFID Desktop', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text('RFID Warehouse WMS', style: TextStyle(color: Colors.white54, fontSize: 11), overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),

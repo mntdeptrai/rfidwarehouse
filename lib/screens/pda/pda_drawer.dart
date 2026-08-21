@@ -31,14 +31,14 @@ class PdaDrawer extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: c.rfidCyan,
                   ),
-                  child: Icon(Icons.person, size: 42, color: c.bgDeep),
+                  child: Icon(Icons.qr_code_scanner, size: 36, color: c.bgDeep),
                 ),
                 accountName: Text(
-                  'User01 (Thủ Kho)',
+                  'RFID Warehouse PDA',
                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 accountEmail: Text(
-                  'user01@rfidwarehouse.vn',
+                  'Thiết bị C72e • Sẵn sàng quét',
                   style: TextStyle(color: c.textSecondary, fontSize: 13),
                 ),
               ),
