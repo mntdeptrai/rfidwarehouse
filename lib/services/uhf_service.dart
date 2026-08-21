@@ -127,23 +127,8 @@ class UhfService extends ChangeNotifier {
       final Map? args = call.arguments as Map?;
       final String barcode = (args?['barcode'] ?? '').toString().trim();
       if (barcode.isNotEmpty) {
-        debugPrint('UhfService: Scanned Item: $barcode');
+        debugPrint('UhfService: Scanned Barcode: $barcode');
         _barcodeStreamController.add(barcode);
-        
-        // Ensure tag is recorded if not present in tags collection
-        if (!_tagsMap.containsKey(barcode)) {
-          final tagMap = {
-            'epc': barcode,
-            'tid': '',
-            'user': '',
-            'rssi': '-52',
-            'ant': '1',
-            'count': 1,
-            'timestamp': DateTime.now().millisecondsSinceEpoch,
-          };
-          _handleIncomingTag(tagMap);
-        }
-        notifyListeners();
       }
     }
   }

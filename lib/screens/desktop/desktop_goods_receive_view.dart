@@ -2314,6 +2314,67 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         side: BorderSide(color: c.rfidCyan),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
+                      icon: const Icon(Icons.sync, size: 15),
+                      label: const Text('Làm Mới & Đồng Bộ MySQL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Đang làm mới & đồng bộ dữ liệu từ MySQL...'), duration: Duration(seconds: 1)),
+                        );
+                        await _mysqlSync.syncNow();
+                        await _repo.refreshFromDatabase();
+                        setState(() {});
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('✅ Đã làm mới & đồng bộ thành công!'), duration: Duration(seconds: 2)),
+                          );
+                        }
+                      },
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: c.errorCoral,
+                        side: BorderSide(color: c.errorCoral),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.delete_sweep, size: 15),
+                      label: const Text('Xóa Sạch Dữ Liệu Test', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: c.bgCard,
+                            title: Text('XÁC NHẬN XÓA SẠCH DỮ LIỆU', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold)),
+                            content: Text('Bạn có chắc muốn xóa sạch toàn bộ đơn hàng, chip RFID và pallet thử nghiệm cả trên SQLite và MySQL không?', style: TextStyle(color: c.textPrimary)),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('XÓA SẠCH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await _repo.clearAllData(alsoClearMySql: true);
+                          setState(() {
+                            _scannedTags.clear();
+                            _selectedLiveOrder = null;
+                          });
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('✅ Đã xóa sạch toàn bộ dữ liệu thử nghiệm!')),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: c.rfidCyan,
+                        side: BorderSide(color: c.rfidCyan),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
                       icon: const Icon(Icons.file_upload, size: 15),
                       label: const Text('Import Danh Sách Đơn (Excel)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       onPressed: _showBatchImportOrdersDialog,
@@ -2381,7 +2442,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     padding: const EdgeInsets.all(16),
                     itemCount: inboundOrders.length,
                     separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
-                    itemBuilder: (context, index) {
+                    itemBuilder: (itemCtx, index) {
                       final order = inboundOrders[index];
                       final isCompleted = order.status == InboundOrderStatus.completed;
 
@@ -2452,6 +2513,42 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 fontSize: 11,
                               ),
                             ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline, size: 18, color: c.errorCoral),
+                            tooltip: 'Xóa đơn hàng này',
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: itemCtx,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor: c.bgCard,
+                                  title: Text('XÓA ĐƠN HÀNG', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold)),
+                                  content: Text('Bạn có chắc muốn xóa đơn "${order.orderNo}" và tất cả chip RFID thuộc đơn này không?', style: TextStyle(color: c.textPrimary)),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('XÓA ĐƠN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true) {
+                                await _repo.deleteInboundOrder(order.inboundOrderId);
+                                setState(() {
+                                  if (_selectedLiveOrder?.inboundOrderId == order.inboundOrderId) {
+                                    _selectedLiveOrder = null;
+                                  }
+                                });
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('✅ Đã xóa đơn ${order.orderNo}!')),
+                                  );
+                                }
+                              }
+                            },
                           ),
                         ],
                       ),

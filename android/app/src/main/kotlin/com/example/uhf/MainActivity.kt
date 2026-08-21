@@ -152,11 +152,6 @@ class MainActivity : FlutterActivity() {
                 Log.w(TAG, "Error invoking onBarcodeRead: ${e.message}")
             }
         }
-
-        val tags = rawData.split(Regex("[\\r\\n,;]+")).map { it.trim() }.filter { it.isNotEmpty() }
-        for (tagStr in tags) {
-            enqueueRawTag(tagStr)
-        }
     }
 
     /** Enqueue a raw EPC into the batch buffer, schedule flush */
@@ -456,14 +451,12 @@ class MainActivity : FlutterActivity() {
             Log.d(TAG, "UHF UART init result: $initialized")
 
             if (initialized) {
-                mReader?.setInventoryCallback(object : IUHFInventoryCallback {
-                    override fun callback(tagInfo: UHFTAGInfo?) {
-                        if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
-                            enqueueTag(tagInfo)
-                        }
-                    }
-                })
-                mReader?.setEPCMode()
+                try {
+                    mReader?.setEPCMode()
+                    mReader?.power = 30
+                } catch (e: Exception) {
+                    Log.w(TAG, "UHF configure power/mode warning: ${e.message}")
+                }
             }
             initialized
         } catch (t: Throwable) {
@@ -488,20 +481,7 @@ class MainActivity : FlutterActivity() {
     private fun startInventory(): Boolean {
         isScanning.set(true)
 
-        // Send scanner start broadcasts on background thread
-        bgHandler.post {
-            try {
-                sendBroadcast(Intent("com.android.server.scannerservice.start"))
-                sendBroadcast(Intent("com.android.server.scannerservice.onkey").putExtra("scannerdata", true))
-                sendBroadcast(Intent("com.seuic.scanner.action.SCAN"))
-                sendBroadcast(Intent("com.rscja.android.START_SCAN"))
-                sendBroadcast(Intent("com.ubx.datawedge.START_SCAN"))
-            } catch (e: Exception) {
-                Log.w(TAG, "Error sending scanner start broadcasts: ${e.message}")
-            }
-        }
-
-        // Direct UART Hardware scan if initialized
+        // Direct UART Hardware scan if not initialized
         if (mReader == null || !(mReader?.isPowerOn ?: false)) {
             try {
                 initUHF()
@@ -548,24 +528,13 @@ class MainActivity : FlutterActivity() {
         flushScheduled.set(false)
         bgHandler.removeCallbacksAndMessages(null)
 
-        // Stop UART hardware inventory first if powered on
+        // Stop UART hardware inventory if powered on
         if (mReader != null && (mReader?.isPowerOn ?: false)) {
             try {
                 mReader?.stopInventory()
             } catch (e: Exception) {
                 Log.w(TAG, "stopInventory error: ${e.message}")
             }
-        }
-
-        // Broadcast stop intents immediately on current thread for low latency
-        try {
-            sendBroadcast(Intent("com.android.server.scannerservice.stop"))
-            sendBroadcast(Intent("com.android.server.scannerservice.onkey").putExtra("scannerdata", false))
-            sendBroadcast(Intent("com.seuic.scanner.action.STOP_SCAN"))
-            sendBroadcast(Intent("com.rscja.android.STOP_SCAN"))
-            sendBroadcast(Intent("com.ubx.datawedge.STOP_SCAN"))
-        } catch (e: Exception) {
-            Log.w(TAG, "Error sending scanner stop broadcasts: ${e.message}")
         }
 
         return true

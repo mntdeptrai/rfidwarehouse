@@ -170,6 +170,31 @@ class DatabaseService {
         error_message TEXT
       )
     ''');
+
+    // 10. Bảng Cấu hình hệ thống (system_config)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS system_config (
+        config_key TEXT PRIMARY KEY,
+        config_val TEXT
+      )
+    ''');
+  }
+
+  Future<String?> getSystemConfig(String key) async {
+    final db = await database;
+    final res = await db.query('system_config', where: 'config_key = ?', whereArgs: [key]);
+    if (res.isNotEmpty) {
+      return res.first['config_val'] as String?;
+    }
+    return null;
+  }
+
+  Future<void> setSystemConfig(String key, String val) async {
+    final db = await database;
+    await db.insert('system_config', {
+      'config_key': key,
+      'config_val': val,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> clearAllData() async {
@@ -521,5 +546,12 @@ class DatabaseService {
   Future<void> clearCompletedSyncQueue() async {
     final db = await database;
     await db.delete('sync_queue', where: 'status = ?', whereArgs: [1]);
+  }
+
+  Future<void> deleteInboundOrder(String orderId) async {
+    final db = await database;
+    await db.delete('inbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
+    await db.delete('inbound_orders', where: 'inbound_order_id = ?', whereArgs: [orderId]);
+    await db.delete('items', where: 'order_no = ?', whereArgs: [orderId]);
   }
 }

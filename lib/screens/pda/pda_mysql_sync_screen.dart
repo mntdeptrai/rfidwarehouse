@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/mysql_sync_service.dart';
+import '../../services/warehouse_repository.dart';
 import '../../theme/eye_care_theme.dart';
 
 class PdaMySqlSyncScreen extends StatefulWidget {
@@ -12,6 +13,7 @@ class PdaMySqlSyncScreen extends StatefulWidget {
 
 class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
   final _syncService = MySqlSyncService();
+  final _repo = WarehouseRepository();
   final _eyeCare = EyeCareThemeService();
 
   late TextEditingController _hostController;
@@ -36,6 +38,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
     _passController = TextEditingController(text: _syncService.config.password);
 
     _syncService.addListener(_onSyncUpdate);
+    _repo.addListener(_onSyncUpdate);
     _eyeCare.addListener(_onSyncUpdate);
   }
 
@@ -46,6 +49,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
   @override
   void dispose() {
     _syncService.removeListener(_onSyncUpdate);
+    _repo.removeListener(_onSyncUpdate);
     _eyeCare.removeListener(_onSyncUpdate);
     _hostController.dispose();
     _portController.dispose();
@@ -86,16 +90,22 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
     final res = await _syncService.testConnection();
 
     if (!mounted) return;
+    final success = res['success'] as bool;
     setState(() {
       _isTesting = false;
-      _testSuccess = res['success'] as bool;
+      _testSuccess = success;
       _testMessage = res['message'] as String;
     });
+
+    if (success) {
+      await _triggerSync();
+    }
   }
 
   Future<void> _triggerSync() async {
     setState(() => _isSyncing = true);
     final success = await _syncService.syncNow();
+    await _repo.refreshFromDatabase();
     if (!mounted) return;
     setState(() => _isSyncing = false);
 
@@ -104,8 +114,8 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
         backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFEF4444),
         content: Text(
           success
-              ? 'Đồng bộ dữ liệu SQLite <-> MySQL thành công!'
-              : 'Mất kết nối MySQL. Dữ liệu đang được lưu tạm an toàn trong SQLite.',
+              ? '✅ Đã kéo dữ liệu từ MySQL: ${_repo.locations.length} vị trí, ${_repo.products.length} SP, ${_repo.inboundOrders.length} đơn nhập!'
+              : '❌ Mất kết nối MySQL. Dữ liệu đang được lưu tạm an toàn trong SQLite.',
         ),
       ),
     );
@@ -477,6 +487,112 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
             ),
             const SizedBox(height: 20),
 
+            // 3. Local SQLite Master Data Summary Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: c.bgCard,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: c.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.inventory_2, color: c.rfidCyan, size: 18),
+                          const SizedBox(width: 8),
+                          Text('DỮ LIỆU ĐÃ TẢI VỀ PDA (SQLITE)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.refresh, size: 18, color: c.rfidCyan),
+                        tooltip: 'Làm mới',
+                        onPressed: () => _repo.refreshFromDatabase(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildDataStatTile(
+                          icon: Icons.location_on,
+                          label: 'Vị trí kệ',
+                          count: _repo.locations.length,
+                          color: const Color(0xFF0284C7),
+                          c: c,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildDataStatTile(
+                          icon: Icons.category,
+                          label: 'Sản phẩm',
+                          count: _repo.products.length,
+                          color: const Color(0xFF10B981),
+                          c: c,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildDataStatTile(
+                          icon: Icons.article,
+                          label: 'Đơn nhập',
+                          count: _repo.inboundOrders.length,
+                          color: const Color(0xFFF59E0B),
+                          c: c,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildDataStatTile(
+                          icon: Icons.qr_code_2,
+                          label: 'Chip RFID',
+                          count: _repo.items.length,
+                          color: const Color(0xFF8B5CF6),
+                          c: c,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildDataStatTile(
+                          icon: Icons.grid_view,
+                          label: 'Pallet',
+                          count: _repo.pallets.length,
+                          color: const Color(0xFFEC4899),
+                          c: c,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 38,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: c.rfidCyan,
+                        side: BorderSide(color: c.rfidCyan),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.download, size: 18),
+                      label: const Text('KÉO DỮ LIỆU TỪ MYSQL VỀ PDA (PULL)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: (_isSyncing || _syncService.isSyncing) ? null : _triggerSync,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
             // 3. Live Sync Logs
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -597,6 +713,46 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDataStatTile({
+    required IconData icon,
+    required String label,
+    required int count,
+    required Color color,
+    required EyeCareColors c,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$count',
+            style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ],
+      ),
     );
   }
 }

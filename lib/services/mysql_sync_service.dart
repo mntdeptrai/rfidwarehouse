@@ -89,9 +89,29 @@ class MySqlSyncService extends ChangeNotifier {
   DateTime _lastNetworkInterfaceCheck = DateTime.fromMillisecondsSinceEpoch(0);
 
   MySqlSyncService._internal() {
+    _loadConfigFromDb();
     _refreshPendingCount();
     _startAutoSyncTimer();
     checkConnectivity();
+  }
+
+  Future<void> _loadConfigFromDb() async {
+    try {
+      final h = await _dbService.getSystemConfig('mysql_host');
+      final p = await _dbService.getSystemConfig('mysql_port');
+      final d = await _dbService.getSystemConfig('mysql_database');
+      final u = await _dbService.getSystemConfig('mysql_username');
+      final pw = await _dbService.getSystemConfig('mysql_password');
+      final a = await _dbService.getSystemConfig('mysql_auto_sync');
+
+      if (h != null && h.isNotEmpty) config.host = h;
+      if (p != null) config.port = int.tryParse(p) ?? 3306;
+      if (d != null && d.isNotEmpty) config.database = d;
+      if (u != null && u.isNotEmpty) config.username = u;
+      if (pw != null) config.password = pw;
+      if (a != null) config.isAutoSync = a == '1' || a == 'true';
+      notifyListeners();
+    } catch (_) {}
   }
 
   void _startAutoSyncTimer() {
@@ -124,6 +144,16 @@ class MySqlSyncService extends ChangeNotifier {
     config.username = username.trim();
     config.password = password;
     config.isAutoSync = isAutoSync;
+
+    try {
+      await _dbService.setSystemConfig('mysql_host', config.host);
+      await _dbService.setSystemConfig('mysql_port', config.port.toString());
+      await _dbService.setSystemConfig('mysql_database', config.database);
+      await _dbService.setSystemConfig('mysql_username', config.username);
+      await _dbService.setSystemConfig('mysql_password', config.password);
+      await _dbService.setSystemConfig('mysql_auto_sync', config.isAutoSync ? '1' : '0');
+    } catch (_) {}
+
     _startAutoSyncTimer();
     notifyListeners();
     await checkConnectivity(forceIpRefresh: true);
@@ -471,135 +501,228 @@ class MySqlSyncService extends ChangeNotifier {
 
   Future<int> _pullMasterDataFromMySql(MySQLConnection conn) async {
     int pulledRecords = 0;
+    final db = await _dbService.database;
+
+    // 1. Pull Products
     try {
-      // 1. Pull Products
       final prodResult = await conn.execute("SELECT product_id, sku, product_name, unit, category, description FROM products");
+      final mysqlProdIds = <String>{};
       for (final row in prodResult.rows) {
         final m = row.assoc();
-        final p = Product(
-          productId: m['product_id'] ?? '',
-          sku: m['sku'] ?? '',
-          productName: m['product_name'] ?? '',
-          unit: m['unit'] ?? 'Cái',
-          category: m['category'] ?? 'Chung',
-          description: m['description'],
-        );
-        if (p.productId.isNotEmpty) {
+        final prodId = (m['product_id'] ?? m['PRODUCT_ID'] ?? '').toString().trim();
+        final sku = (m['sku'] ?? m['SKU'] ?? prodId).toString().trim();
+        final pName = (m['product_name'] ?? m['PRODUCT_NAME'] ?? sku).toString().trim();
+        final unit = (m['unit'] ?? m['UNIT'] ?? 'Cái').toString().trim();
+        final cat = (m['category'] ?? m['CATEGORY'] ?? 'Chung').toString().trim();
+        final desc = m['description']?.toString();
+
+        if (prodId.isNotEmpty) {
+          final p = Product(
+            productId: prodId,
+            sku: sku.isNotEmpty ? sku : prodId,
+            productName: pName.isNotEmpty ? pName : sku,
+            unit: unit.isNotEmpty ? unit : 'Cái',
+            category: cat.isNotEmpty ? cat : 'Chung',
+            description: desc,
+          );
+          mysqlProdIds.add(prodId);
           await _dbService.insertProduct(p);
           pulledRecords++;
         }
       }
+      if (mysqlProdIds.isNotEmpty) {
+        final localProds = await _dbService.getProducts();
+        for (final lp in localProds) {
+          if (!mysqlProdIds.contains(lp.productId)) {
+            await db.delete('products', where: 'product_id = ?', whereArgs: [lp.productId]);
+          }
+        }
+      }
+    } catch (prodErr) {
+      debugPrint('Pull products warning: $prodErr');
+    }
 
-      // 2. Pull Locations
+    // 2. Pull Locations
+    try {
       final locResult = await conn.execute("SELECT location_id, location_code, zone, shelf, level, current_pallets FROM locations");
+      final mysqlLocIds = <String>{};
       for (final row in locResult.rows) {
         final m = row.assoc();
-        final l = Location(
-          locationId: m['location_id'] ?? '',
-          locationCode: m['location_code'] ?? '',
-          zone: m['zone'] ?? 'A',
-          shelf: m['shelf'] ?? '01',
-          level: m['level'] ?? '01',
-          currentPallets: int.tryParse(m['current_pallets'] ?? '0') ?? 0,
-        );
-        if (l.locationId.isNotEmpty) {
+        final locId = (m['location_id'] ?? m['LOCATION_ID'] ?? '').toString().trim();
+        final locCode = (m['location_code'] ?? m['LOCATION_CODE'] ?? locId).toString().trim();
+        final zone = (m['zone'] ?? m['ZONE'] ?? 'A').toString().trim();
+        final shelf = (m['shelf'] ?? m['SHELF'] ?? '01').toString().trim();
+        final level = (m['level'] ?? m['LEVEL'] ?? '01').toString().trim();
+        final rawPal = m['current_pallets'] ?? m['CURRENT_PALLETS'];
+        final curPal = (rawPal is num) ? (rawPal as num).toInt() : (int.tryParse(rawPal?.toString() ?? '0') ?? 0);
+
+        if (locId.isNotEmpty) {
+          final l = Location(
+            locationId: locId,
+            locationCode: locCode.isNotEmpty ? locCode : locId,
+            zone: zone.isNotEmpty ? zone : 'A',
+            shelf: shelf.isNotEmpty ? shelf : '01',
+            level: level.isNotEmpty ? level : '01',
+            currentPallets: curPal,
+          );
+          mysqlLocIds.add(locId);
           await _dbService.insertLocation(l);
           pulledRecords++;
         }
       }
+      if (mysqlLocIds.isNotEmpty) {
+        final localLocs = await _dbService.getLocations();
+        for (final ll in localLocs) {
+          if (!mysqlLocIds.contains(ll.locationId)) {
+            await db.delete('locations', where: 'location_id = ?', whereArgs: [ll.locationId]);
+          }
+        }
+      }
+    } catch (locErr) {
+      debugPrint('Pull locations warning: $locErr');
+    }
 
-      // 3. Pull Pallets
+    // 3. Pull Pallets
+    try {
       final palResult = await conn.execute("SELECT pallet_id, pallet_code, location_id, inbound_time, is_multi_sku FROM pallets");
+      final mysqlPalIds = <String>{};
       for (final row in palResult.rows) {
         final m = row.assoc();
-        final p = Pallet(
-          palletId: m['pallet_id'] ?? '',
-          palletCode: m['pallet_code'] ?? '',
-          locationId: m['location_id'],
-          inboundTime: DateTime.tryParse(m['inbound_time'] ?? '') ?? DateTime.now(),
-          isMultiSku: (m['is_multi_sku'] == '1' || m['is_multi_sku'] == 'true'),
-        );
-        if (p.palletId.isNotEmpty) {
+        final palId = (m['pallet_id'] ?? m['PALLET_ID'] ?? '').toString().trim();
+        final palCode = (m['pallet_code'] ?? m['PALLET_CODE'] ?? palId).toString().trim();
+        final locId = m['location_id']?.toString().trim();
+        final inTimeStr = m['inbound_time']?.toString() ?? '';
+        final isMulti = m['is_multi_sku'] == '1' || m['is_multi_sku'] == 'true';
+
+        if (palId.isNotEmpty) {
+          final p = Pallet(
+            palletId: palId,
+            palletCode: palCode.isNotEmpty ? palCode : palId,
+            locationId: (locId != null && locId.isNotEmpty) ? locId : null,
+            inboundTime: DateTime.tryParse(inTimeStr) ?? DateTime.now(),
+            isMultiSku: isMulti,
+          );
+          mysqlPalIds.add(palId);
           await _dbService.insertPallet(p);
           pulledRecords++;
         }
       }
+      if (mysqlPalIds.isNotEmpty) {
+        final localPals = await _dbService.getPallets();
+        for (final lp in localPals) {
+          if (!mysqlPalIds.contains(lp.palletId)) {
+            await db.delete('pallets', where: 'pallet_id = ?', whereArgs: [lp.palletId]);
+          }
+        }
+      }
+    } catch (palErr) {
+      debugPrint('Pull pallets warning: $palErr');
+    }
 
-      // 4. Pull Inbound Orders & Details
+    // 4. Pull Inbound Orders & Details
+    try {
       final orderResult = await conn.execute("SELECT inbound_order_id, order_no, source_supplier, status, created_at FROM inbound_orders");
+      final mysqlOrderIds = <String>{};
       for (final row in orderResult.rows) {
         final m = row.assoc();
-        final orderId = m['inbound_order_id'] ?? '';
-        final orderNo = m['order_no'] ?? orderId;
-        final statusStr = m['status'] ?? 'NEW';
+        final orderId = (m['inbound_order_id'] ?? m['INBOUND_ORDER_ID'] ?? '').toString().trim();
+        final orderNo = (m['order_no'] ?? m['ORDER_NO'] ?? orderId).toString().trim();
+        final statusStr = (m['status'] ?? m['STATUS'] ?? 'NEW').toString().trim();
+        final supplier = (m['source_supplier'] ?? m['SOURCE_SUPPLIER'] ?? 'Nhà cung cấp').toString().trim();
+        final createdAtStr = m['created_at']?.toString() ?? '';
         final status = InboundOrderStatus.values.firstWhere(
           (s) => s.code == statusStr,
           orElse: () => InboundOrderStatus.newOrder,
         );
 
-        final detailResult = await conn.execute(
-          "SELECT product_id, sku, product_name, required_qty, received_qty FROM inbound_order_details WHERE order_id = :oid",
-          {"oid": orderId},
-        );
-
         final List<InboundOrderDetail> details = [];
-        for (final dRow in detailResult.rows) {
-          final dm = dRow.assoc();
-          details.add(InboundOrderDetail(
-            productId: dm['product_id'] ?? '',
-            sku: dm['sku'] ?? '',
-            productName: dm['product_name'] ?? '',
-            requiredQty: int.tryParse(dm['required_qty'] ?? '0') ?? 0,
-            receivedQty: int.tryParse(dm['received_qty'] ?? '0') ?? 0,
-          ));
-        }
+        try {
+          final detailResult = await conn.execute(
+            "SELECT product_id, sku, product_name, required_qty, received_qty FROM inbound_order_details WHERE order_id = :oid",
+            {"oid": orderId},
+          );
+          for (final dRow in detailResult.rows) {
+            final dm = dRow.assoc();
+            final reqNum = dm['required_qty'] ?? dm['REQUIRED_QTY'];
+            final recNum = dm['received_qty'] ?? dm['RECEIVED_QTY'];
+            final reqQty = (reqNum is num) ? (reqNum as num).toInt() : (int.tryParse(reqNum?.toString() ?? '0') ?? 0);
+            final recQty = (recNum is num) ? (recNum as num).toInt() : (int.tryParse(recNum?.toString() ?? '0') ?? 0);
+            details.add(InboundOrderDetail(
+              productId: (dm['product_id'] ?? dm['PRODUCT_ID'] ?? '').toString().trim(),
+              sku: (dm['sku'] ?? dm['SKU'] ?? '').toString().trim(),
+              productName: (dm['product_name'] ?? dm['PRODUCT_NAME'] ?? '').toString().trim(),
+              requiredQty: reqQty,
+              receivedQty: recQty,
+            ));
+          }
+        } catch (_) {}
 
-        final order = InboundOrder(
-          inboundOrderId: orderId,
-          orderNo: orderNo,
-          sourceSupplier: m['source_supplier'] ?? 'Nhà cung cấp',
-          status: status,
-          createdAt: DateTime.tryParse(m['created_at'] ?? '') ?? DateTime.now(),
-          details: details,
-        );
-        if (order.inboundOrderId.isNotEmpty) {
+        if (orderId.isNotEmpty) {
+          final order = InboundOrder(
+            inboundOrderId: orderId,
+            orderNo: orderNo.isNotEmpty ? orderNo : orderId,
+            sourceSupplier: supplier,
+            status: status,
+            createdAt: DateTime.tryParse(createdAtStr) ?? DateTime.now(),
+            details: details,
+          );
+          mysqlOrderIds.add(orderId);
           await _dbService.insertInboundOrder(order);
           pulledRecords++;
         }
       }
+      final localOrders = await _dbService.getInboundOrders();
+      for (final lo in localOrders) {
+        if (!mysqlOrderIds.contains(lo.inboundOrderId)) {
+          await _dbService.deleteInboundOrder(lo.inboundOrderId);
+        }
+      }
+    } catch (orderErr) {
+      debugPrint('Pull inbound orders warning: $orderErr');
+    }
 
-      // 5. Pull Items
+    // 5. Pull Items
+    try {
       final itemResult = await conn.execute("SELECT item_id, product_id, sku, product_name, serial_number, epc, status, order_no, pallet_id, location_id, inbound_time, allocated_time FROM items");
+      final mysqlEpcs = <String>{};
       for (final row in itemResult.rows) {
         final m = row.assoc();
-        final epc = m['epc'] ?? '';
+        final epc = (m['epc'] ?? m['EPC'] ?? '').toString().trim();
         if (epc.isNotEmpty) {
-          final statusStr = m['status'] ?? 'IN_STOCK';
+          mysqlEpcs.add(epc);
+          final statusStr = (m['status'] ?? m['STATUS'] ?? 'IN_STOCK').toString().trim();
           final status = ItemStatus.values.firstWhere(
             (s) => s.code == statusStr,
             orElse: () => ItemStatus.inStock,
           );
           final it = Item(
-            itemId: m['item_id'] ?? 'ITEM-$epc',
-            productId: m['product_id'] ?? '',
-            sku: m['sku'] ?? '',
-            productName: m['product_name'] ?? '',
-            serialNumber: m['serial_number'] ?? epc,
+            itemId: (m['item_id'] ?? m['ITEM_ID'] ?? 'ITEM-$epc').toString().trim(),
+            productId: (m['product_id'] ?? m['PRODUCT_ID'] ?? '').toString().trim(),
+            sku: (m['sku'] ?? m['SKU'] ?? '').toString().trim(),
+            productName: (m['product_name'] ?? m['PRODUCT_NAME'] ?? '').toString().trim(),
+            serialNumber: (m['serial_number'] ?? m['SERIAL_NUMBER'] ?? epc).toString().trim(),
             epc: epc,
             status: status,
-            orderNo: m['order_no'],
-            palletId: m['pallet_id'],
-            locationId: m['location_id'],
-            inboundTime: DateTime.tryParse(m['inbound_time'] ?? ''),
-            allocatedTime: DateTime.tryParse(m['allocated_time'] ?? ''),
+            orderNo: m['order_no']?.toString().trim(),
+            palletId: m['pallet_id']?.toString().trim(),
+            locationId: m['location_id']?.toString().trim(),
+            inboundTime: DateTime.tryParse(m['inbound_time']?.toString() ?? ''),
+            allocatedTime: DateTime.tryParse(m['allocated_time']?.toString() ?? ''),
           );
           await _dbService.insertItem(it);
           pulledRecords++;
         }
       }
-    } catch (err) {
-      debugPrint('Error pulling master data from MySQL: $err');
+      final localItems = await _dbService.getItems();
+      for (final li in localItems) {
+        if (!mysqlEpcs.contains(li.epc)) {
+          await db.delete('items', where: 'epc = ?', whereArgs: [li.epc]);
+        }
+      }
+    } catch (itemErr) {
+      debugPrint('Pull items warning: $itemErr');
     }
+
     return pulledRecords;
   }
 
@@ -811,6 +934,16 @@ class MySqlSyncService extends ChangeNotifier {
         break;
 
       case 'inbound_orders':
+        if (action == 'DELETE') {
+          final orderId = payload['orderId']?.toString() ?? payload['inboundOrderId']?.toString();
+          if (orderId != null && orderId.isNotEmpty) {
+            await conn.execute("DELETE FROM inbound_order_details WHERE order_id = :id", {"id": orderId});
+            await conn.execute("DELETE FROM inbound_orders WHERE inbound_order_id = :id OR order_no = :id", {"id": orderId});
+            await conn.execute("DELETE FROM items WHERE order_no = :id", {"id": orderId});
+          }
+          break;
+        }
+
         final orderId = payload['inboundOrderId']?.toString() ?? '';
         final orderNo = payload['orderNo']?.toString() ?? orderId;
         final supplier = payload['sourceSupplier']?.toString() ?? 'Nhà cung cấp';

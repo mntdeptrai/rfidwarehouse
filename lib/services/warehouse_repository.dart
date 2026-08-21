@@ -61,6 +61,23 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> refreshFromDatabase() => _loadFromSqlite();
 
+  Future<void> deleteInboundOrder(String orderId) async {
+    final cleanId = orderId.trim();
+    await _dbService.deleteInboundOrder(cleanId);
+    _inboundOrders.removeWhere((o) => o.inboundOrderId == cleanId || o.orderNo == cleanId);
+    _items.removeWhere((i) => i.orderNo == cleanId);
+
+    // Enqueue sync delete or direct MySQL delete
+    await _dbService.enqueueSync(
+      tableName: 'inbound_orders',
+      recordId: cleanId,
+      action: 'DELETE',
+      payload: {'orderId': cleanId},
+    );
+
+    notifyListeners();
+  }
+
   Future<void> clearAllData({bool alsoClearMySql = true}) async {
     await _dbService.clearAllData();
     _products.clear();
