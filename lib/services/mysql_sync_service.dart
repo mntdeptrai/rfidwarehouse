@@ -99,15 +99,12 @@ class MySqlSyncService extends ChangeNotifier {
     if (Platform.environment.containsKey('FLUTTER_TEST')) {
       return;
     }
-    // Chạy chu kỳ 10 giây một lần thay vì dồn dập
-    _autoSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+    // Chạy chu kỳ 5 giây một lần để đồng bộ 2 chiều (Đẩy dữ liệu PDA lên và Kéo cập nhật từ MySQL về)
+    _autoSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (config.isAutoSync && !_isSyncing && !_isCheckingConnectivity) {
         await checkConnectivity();
         if (_isOnline) {
-          final count = await _dbService.getPendingSyncCount();
-          if (count > 0) {
-            syncNow();
-          }
+          await syncNow();
         }
       }
     });
