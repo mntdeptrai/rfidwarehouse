@@ -144,8 +144,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     final now = DateTime.now();
     _deliveryNoController.text = 'OUT${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
     _dateController.text = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    _customerController.text = 'Giltech Solutions';
-    _noteController.text = 'Xuất giao hàng';
+    _customerController.text = '';
+    _noteController.text = '';
   }
 
   void _toggleLiveScan() async {

@@ -1394,7 +1394,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final order = InboundOrder(
       inboundOrderId: 'INB-${DateTime.now().millisecondsSinceEpoch}',
       orderNo: code,
-      sourceSupplier: 'Giltech Solutions Supplier',
+      sourceSupplier: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : 'Nhà cung cấp',
       createdAt: DateTime.now(),
       status: markCompleted ? InboundOrderStatus.completed : InboundOrderStatus.newOrder,
       details: [
