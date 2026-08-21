@@ -96,6 +96,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   }
 
   void _handleIncomingTag(TagInfo tag) {
+    if (!_isScanning) return;
+
     if (_uhf.filterDuplicates && _scannedTags.containsKey(tag.epc)) {
       return; // Thẻ đã đọc rồi thì bỏ qua không đọc lại
     }
@@ -824,11 +826,13 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () {
+                            _stopLiveScan();
                             setState(() {
                               _scannedTags.clear();
                               _uhf.clearTags();
+                              _desktopUhf.clearTags();
                             });
-                            _desktopUhf.clearTags();
+                            _towerLight.turnOffAll();
                           },
                           child: const Text('XÓA'),
                         ),

@@ -256,6 +256,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   }
 
   void _handleIncomingTag(TagInfo tag) {
+    if (!_isScanning) return;
+
     // 1. Tự động nhận diện đơn hàng ngay khi bắt được sóng chip đầu tiên
     if (_selectedLiveOrder == null) {
       final detected = _findOrderForEpc(tag.epc);
@@ -1960,11 +1962,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () {
+                            _stopLiveScan();
                             setState(() {
                               _scannedTags.clear();
                               _uhf.clearTags();
+                              _desktopUhf.clearTags();
                             });
-                            _desktopUhf.clearTags();
+                            _towerLight.turnOffAll();
                           },
                           child: const Text('XÓA'),
                         ),

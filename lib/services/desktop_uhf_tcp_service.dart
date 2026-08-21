@@ -242,6 +242,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
 
     switch (type) {
       case 'tag':
+        if (!_isScanning) break;
         final epc = msg['epc']?.toString() ?? '';
         if (epc.isNotEmpty) {
           recordTag(TagInfo(
@@ -480,6 +481,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
   }
 
   void recordTag(TagInfo tag) {
+    if (!_isScanning) return;
+
     // Nếu bật chế độ "Bỏ qua thẻ đã quét" và thẻ này đã từng xuất hiện -> Bỏ qua hoàn toàn
     if (_ignoreAlreadyScanned && _tagsMap.containsKey(tag.epc)) {
       return;
