@@ -174,7 +174,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('User01', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text('user01@giltech.com', style: TextStyle(color: Colors.white54, fontSize: 11), overflow: TextOverflow.ellipsis),
+                      Text('user01@rfidwarehouse.vn', style: TextStyle(color: Colors.white54, fontSize: 11), overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),

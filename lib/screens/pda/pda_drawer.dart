@@ -38,7 +38,7 @@ class PdaDrawer extends StatelessWidget {
                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 accountEmail: Text(
-                  'user01@giltech.com',
+                  'user01@rfidwarehouse.vn',
                   style: TextStyle(color: c.textSecondary, fontSize: 13),
                 ),
               ),
