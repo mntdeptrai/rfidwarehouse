@@ -70,16 +70,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     // Tự động kéo danh sách phiếu nhập mới nhất từ MySQL về khi mở trạm
     Future.microtask(() async {
       await _mysqlSync.syncNow();
-      if (mounted) {
-        setState(() {
-          if (_selectedLiveOrder == null && _repo.inboundOrders.isNotEmpty) {
-            _selectedLiveOrder = _repo.inboundOrders.firstWhere(
-              (o) => o.status == InboundOrderStatus.newOrder,
-              orElse: () => _repo.inboundOrders.first,
-            );
-          }
-        });
-      }
+      if (mounted) setState(() {});
     });
 
     // Đồng bộ tức thì dữ liệu thẻ và trạng thái đang quét từ Desktop UHF Bridge
@@ -92,6 +83,56 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _desktopUhf.addListener(_onDesktopUhfUpdate);
 
     _initTagListener();
+  }
+
+  /// Tự động tìm kiếm Đơn nhập / Thùng tương ứng với mã EPC được quét
+  InboundOrder? _findOrderForEpc(String epc) {
+    final cleanEpc = epc.trim().toUpperCase();
+    final item = _repo.items.where((i) => i.epc.toUpperCase() == cleanEpc).firstOrNull;
+    if (item != null && item.orderNo != null && item.orderNo!.isNotEmpty) {
+      final order = _repo.inboundOrders.where((o) => o.orderNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase() || o.inboundOrderId.trim().toUpperCase() == item.orderNo!.trim().toUpperCase()).firstOrNull;
+      if (order != null) return order;
+      return InboundOrder(
+        inboundOrderId: item.orderNo!,
+        orderNo: item.orderNo!,
+        sourceSupplier: 'Tự động nhận diện',
+        status: InboundOrderStatus.newOrder,
+        createdAt: DateTime.now(),
+        details: [
+          InboundOrderDetail(
+            productId: item.productId,
+            sku: item.sku,
+            productName: item.productName,
+            requiredQty: _repo.getItemsByOrderNo(item.orderNo!).length,
+          ),
+        ],
+      );
+    }
+
+    if (_receiptCartons.isNotEmpty) {
+      for (final carton in _receiptCartons) {
+        final serials = (carton['serials'] as List<dynamic>?)?.map((e) => e.toString().trim().toUpperCase()).toSet() ?? {};
+        if (serials.contains(cleanEpc)) {
+          final code = carton['code']?.toString() ?? _receiveNoController.text;
+          return InboundOrder(
+            inboundOrderId: code,
+            orderNo: code,
+            sourceSupplier: carton['productName'] ?? 'Tệp Excel',
+            status: InboundOrderStatus.newOrder,
+            createdAt: DateTime.now(),
+            details: [
+              InboundOrderDetail(
+                productId: carton['productCode'] ?? '',
+                sku: carton['productCode'] ?? '',
+                productName: carton['productName'] ?? '',
+                requiredQty: serials.length,
+              ),
+            ],
+          );
+        }
+      }
+    }
+    return null;
   }
 
   /// Kiểm tra xem mã EPC quét được có thuộc đơn hàng / tệp Excel đang đối soát hay không
@@ -124,6 +165,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _scannedTags.clear();
       } else {
         for (final tag in _desktopUhf.tags) {
+          if (_selectedLiveOrder == null) {
+            final detected = _findOrderForEpc(tag.epc);
+            if (detected != null) {
+              _selectedLiveOrder = detected;
+              if (detected.details.isNotEmpty) {
+                _skuController.text = detected.details.first.sku;
+                _prodNameController.text = detected.details.first.productName;
+              }
+            }
+          }
           if (_isTagValidForCurrentOrder(tag.epc)) {
             _scannedTags[tag.epc] = tag;
           }
@@ -141,6 +192,18 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   }
 
   void _handleIncomingTag(TagInfo tag) {
+    // 1. Tự động nhận diện đơn hàng ngay khi bắt được sóng chip đầu tiên
+    if (_selectedLiveOrder == null) {
+      final detected = _findOrderForEpc(tag.epc);
+      if (detected != null) {
+        _selectedLiveOrder = detected;
+        if (detected.details.isNotEmpty) {
+          _skuController.text = detected.details.first.sku;
+          _prodNameController.text = detected.details.first.productName;
+        }
+      }
+    }
+
     final bool isValid = _isTagValidForCurrentOrder(tag.epc);
     if (!isValid) {
       // 🔴 ĐÈN ĐỎ + CÒI: Cảnh báo quét trúng mã chip không có trong đơn / sai hàng
@@ -166,7 +229,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       if (matchedCount >= expectedCount) {
         // 🟢 ĐÈN XANH: Đủ hàng thông qua (100% khớp đơn)
         _towerLight.triggerPass(
-          reason: 'ĐỦ HÀNG THÔNG QUA: $matchedCount/$expectedCount chip khớp 100%',
+          reason: 'ĐỦ HÀNG THÔNG QUA: $matchedCount/$expectedCount chip khớp 100% (Đơn ${_selectedLiveOrder!.orderNo})',
         );
       }
     } else {
@@ -1517,104 +1580,91 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('📍 VỊ TRÍ & PHIẾU NHẬP ĐỐI SOÁT', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                    const Text('📍 VỊ TRÍ & ĐỐI SOÁT TỰ ĐỘNG', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(height: 10),
 
-                    // Selector Phiếu Nhập Đối Soát
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      children: [
-                        const Text('Phiếu nhập đối soát:', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                        InkWell(
-                          onTap: () async {
-                            await _mysqlSync.syncNow();
-                            setState(() {});
-                          },
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.sync, size: 12, color: Color(0xFF38BDF8)),
-                              SizedBox(width: 3),
-                              Text('Đồng bộ MySQL', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    DropdownButtonFormField<String>(
-                      value: _selectedLiveOrder != null ? _selectedLiveOrder!.orderNo : '__DIRECT_SCAN__',
-                      isExpanded: true,
-                      dropdownColor: const Color(0xFF1E293B),
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: const Color(0xFF0F172A),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: '__DIRECT_SCAN__',
-                          child: Text('⚡ [QUÉT TỰ DO] Không chọn đơn (Nhận tất cả mã chip)', style: TextStyle(color: Color(0xFF38BDF8))),
-                        ),
-                        if (_receiptCartons.isNotEmpty)
-                          DropdownMenuItem<String>(
-                            value: '__EXCEL_FILE__',
-                            child: Text('📦 [FILE EXCEL] ${_receiveNoController.text} (${_receiptCartons.length} thùng/nhóm)', style: const TextStyle(color: Color(0xFF10B981))),
-                          ),
-                        for (final o in orders)
-                          DropdownMenuItem<String>(
-                            value: o.orderNo,
-                            child: Text(
-                              '[${o.orderNo}] ${o.sourceSupplier} (${_repo.getItemsByOrderNo(o.orderNo).length} chip)',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged: (val) {
-                        if (val == null || val == '__DIRECT_SCAN__') {
-                          _onOrderSelected(null);
-                        } else if (val == '__EXCEL_FILE__') {
-                          // Chế độ file Excel
-                          setState(() {
-                            _selectedLiveOrder = null;
-                            _scannedTags.clear();
-                          });
-                        } else {
-                          final match = orders.firstWhere((o) => o.orderNo == val, orElse: () => orders.first);
-                          _onOrderSelected(match);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 10),
-
-                    if (orders.isEmpty && _receiptCartons.isEmpty)
+                    // Card Tự Động Nhận Diện Đơn Hàng / Thùng
+                    if (_selectedLiveOrder == null)
                       Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: const Color(0xFF0F172A),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF334155)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.4)),
                         ),
-                        child: Row(
+                        child: const Row(
                           children: [
-                            const Icon(Icons.info_outline, color: Color(0xFFF59E0B), size: 16),
-                            const SizedBox(width: 6),
-                            const Expanded(
-                              child: Text('Chưa có phiếu nhập. Bạn có thể nạp file Excel để đối soát ngay.', style: TextStyle(color: Colors.white70, fontSize: 10.5)),
-                            ),
-                            TextButton(
-                              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 24)),
-                              onPressed: _importGoodsReceiveExcel,
-                              child: const Text('+ Nạp File', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                            Icon(Icons.bolt, color: Color(0xFF38BDF8), size: 20),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('TỰ ĐỘNG KHỚP THEO MÃ CHIP', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5)),
+                                  SizedBox(height: 2),
+                                  Text('Quét chip bất kỳ, hệ thống sẽ tự động nhận diện đúng đơn và đếm số lượng.', style: TextStyle(color: Colors.white60, fontSize: 10.5, height: 1.2)),
+                                ],
+                              ),
                             ),
                           ],
                         ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0xFF10B981)),
+                                      ),
+                                      child: const Text('⚡ ĐÃ KHỚP ĐƠN', style: TextStyle(color: Color(0xFF10B981), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _selectedLiveOrder!.orderNo,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedLiveOrder = null;
+                                      _scannedTags.clear();
+                                      _uhf.clearTags();
+                                      _desktopUhf.clearTags();
+                                    });
+                                  },
+                                  child: const Text('Đổi đơn khác', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.w500)),
+                                ),
+                              ],
+                            ),
+                            if (_selectedLiveOrder!.details.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_selectedLiveOrder!.details.first.productName} (SKU: ${_selectedLiveOrder!.details.first.sku})',
+                                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
