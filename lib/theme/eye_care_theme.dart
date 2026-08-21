@@ -105,7 +105,7 @@ class EyeCareThemeService extends ChangeNotifier {
 
   EyeCareThemeService._internal();
 
-  EyeCareMode _mode = EyeCareMode.warmDark;
+  EyeCareMode _mode = EyeCareMode.softSepia;
 
   EyeCareMode get mode => _mode;
   EyeCareColors get colors {

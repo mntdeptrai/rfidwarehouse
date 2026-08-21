@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/wms_models.dart';
 import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
+import '../theme/eye_care_theme.dart';
 
 /// Widget chuyên dụng cho thiết bị cầm tay PDA:
 /// Quét mã vạch Barcode/QR để xác nhận vị trí kệ/ô lưu hàng (Location)
@@ -26,15 +27,21 @@ class PdaLocationBarcodeCard extends StatefulWidget {
 class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
   final WarehouseRepository _repo = WarehouseRepository();
   final UhfService _uhf = UhfService();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
   StreamSubscription<String>? _barcodeSub;
   bool _isListening = false;
 
   @override
   void initState() {
     super.initState();
+    _eyeCare.addListener(_onThemeUpdate);
     if (widget.autoListenHardwareBarcode) {
       _startBarcodeListener();
     }
+  }
+
+  void _onThemeUpdate() {
+    if (mounted) setState(() {});
   }
 
   void _startBarcodeListener() {
@@ -48,6 +55,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
 
   @override
   void dispose() {
+    _eyeCare.removeListener(_onThemeUpdate);
     _barcodeSub?.cancel();
     super.dispose();
   }
@@ -101,17 +109,18 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     widget.onLocationChanged(matched);
 
     if (mounted) {
+      final c = _eyeCare.colors;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: const Color(0xFF10B981),
+          backgroundColor: c.successEmerald,
           duration: const Duration(seconds: 2),
           content: Row(
             children: [
               const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('✅ ĐÃ QUÉT BARCODE VỊ TRÍ: ${matched.locationCode} (${matched.zone})'),
+                child: Text('✓ Đã xác nhận vị trí kệ: ${matched.locationCode} (${matched.zone})'),
               ),
             ],
           ),
@@ -123,14 +132,15 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
   void _openBarcodeScannerModal() {
     final barcodeController = TextEditingController();
     final focusNode = FocusNode();
+    final c = _eyeCare.colors;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF0F172A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: Color(0xFF0284C7), width: 1.5),
+      backgroundColor: c.bgDeep,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        side: BorderSide(color: c.rfidCyan, width: 1.5),
       ),
       builder: (ctx) {
         return StatefulBuilder(
@@ -150,18 +160,18 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.qr_code_scanner, color: Color(0xFF38BDF8), size: 22),
+                      Icon(Icons.qr_code_scanner, color: c.rfidCyan, size: 22),
                       const SizedBox(width: 8),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'QUÉT BARCODE VỊ TRÍ KỆ',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                        icon: Icon(Icons.close, color: c.textMuted, size: 20),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onPressed: () => Navigator.pop(modalContext),
@@ -172,18 +182,18 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.4)),
+                      border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.bolt, color: Color(0xFF38BDF8), size: 18),
-                        SizedBox(width: 8),
+                        Icon(Icons.bolt, color: c.rfidCyan, size: 18),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Bóp cò Barcode trên tay cầm PDA hoặc gõ mã vị trí để xác nhận ngay.',
-                            style: TextStyle(color: Colors.white70, fontSize: 11.5),
+                            style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                           ),
                         ),
                       ],
@@ -196,15 +206,15 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                     controller: barcodeController,
                     focusNode: focusNode,
                     autofocus: true,
-                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       hintText: 'Nhập hoặc quét mã vạch kệ (VD: LOC-A01-01)...',
-                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                      hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                       filled: true,
-                      fillColor: const Color(0xFF1E293B),
-                      prefixIcon: const Icon(Icons.barcode_reader, color: Color(0xFF38BDF8)),
+                      fillColor: c.bgCardElevated,
+                      prefixIcon: Icon(Icons.barcode_reader, color: c.rfidCyan),
                       suffixIcon: IconButton(
-                        icon: const Icon(Icons.check_circle, color: Color(0xFF10B981)),
+                        icon: Icon(Icons.check_circle, color: c.successEmerald),
                         onPressed: () {
                           final code = barcodeController.text.trim();
                           if (code.isNotEmpty) {
@@ -215,11 +225,11 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF0284C7)),
+                        borderSide: BorderSide(color: c.rfidCyan),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF334155)),
+                        borderSide: BorderSide(color: c.border),
                       ),
                     ),
                     onSubmitted: (val) {
@@ -237,7 +247,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                       Expanded(
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0284C7),
+                            backgroundColor: c.rfidCyan,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
@@ -257,9 +267,9 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
 
                   // Quick Select List from Database
                   if (locations.isNotEmpty) ...[
-                    const Text(
+                    Text(
                       'Hoặc chọn nhanh từ danh mục kệ có sẵn:',
-                      style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.w600),
+                      style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     ConstrainedBox(
@@ -282,17 +292,17 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF0284C7).withValues(alpha: 0.25) : const Color(0xFF1E293B),
+                                color: isSelected ? c.rfidCyan.withValues(alpha: 0.2) : c.bgCard,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                  color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+                                  color: isSelected ? c.rfidCyan : c.border,
                                 ),
                               ),
                               child: Row(
                                 children: [
                                   Icon(
                                     isSelected ? Icons.check_circle : Icons.location_on_outlined,
-                                    color: isSelected ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                                    color: isSelected ? c.successEmerald : c.rfidCyan,
                                     size: 18,
                                   ),
                                   const SizedBox(width: 8),
@@ -300,7 +310,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                                     child: Text(
                                       loc.locationCode,
                                       style: TextStyle(
-                                        color: isSelected ? const Color(0xFF38BDF8) : Colors.white,
+                                        color: isSelected ? c.rfidCyan : c.textPrimary,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13,
                                       ),
@@ -311,7 +321,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                                   const SizedBox(width: 8),
                                   Text(
                                     '${loc.zone} • ${loc.shelf}',
-                                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                    style: TextStyle(color: c.textMuted, fontSize: 11),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -335,6 +345,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
   @override
   Widget build(BuildContext context) {
     final location = _repo.locations.where((l) => l.locationId == widget.selectedLocationId).firstOrNull;
+    final c = _eyeCare.colors;
 
     return InkWell(
       onTap: _openBarcodeScannerModal,
@@ -342,10 +353,10 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
+          color: c.bgCard,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: location != null ? const Color(0xFF10B981).withValues(alpha: 0.8) : const Color(0xFF0284C7).withValues(alpha: 0.6),
+            color: location != null ? c.successEmerald.withValues(alpha: 0.8) : c.rfidCyan.withValues(alpha: 0.6),
             width: 1.2,
           ),
         ),
@@ -354,12 +365,12 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: (location != null ? const Color(0xFF10B981) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
+                color: (location != null ? c.successEmerald : c.rfidCyan).withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 location != null ? Icons.qr_code_2 : Icons.barcode_reader,
-                color: location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                color: location != null ? c.successEmerald : c.rfidCyan,
                 size: 22,
               ),
             ),
@@ -376,7 +387,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                       Text(
                         location != null ? 'VỊ TRÍ KỆ (ĐÃ XÁC NHẬN)' : 'VỊ TRÍ KỆ ĐÍCH',
                         style: TextStyle(
-                          color: location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                          color: location != null ? c.successEmerald : c.rfidCyan,
                           fontWeight: FontWeight.bold,
                           fontSize: 10.5,
                           letterSpacing: 0.3,
@@ -385,13 +396,13 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                         decoration: BoxDecoration(
-                          color: (location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8)).withValues(alpha: 0.15),
+                          color: (location != null ? c.successEmerald : c.rfidCyan).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           location != null ? 'BARCODE OK' : '📷 BÓP CÒ QUÉT',
                           style: TextStyle(
-                            color: location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                            color: location != null ? c.successEmerald : c.rfidCyan,
                             fontSize: 8.5,
                             fontWeight: FontWeight.bold,
                           ),
@@ -403,20 +414,20 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                   if (location != null) ...[
                     Text(
                       location.locationCode,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       '${location.zone} • ${location.shelf} - ${location.level}',
-                      style: const TextStyle(color: Colors.white60, fontSize: 10.5),
+                      style: TextStyle(color: c.textSecondary, fontSize: 10.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ] else ...[
-                    const Text(
+                    Text(
                       'Chưa quét mã vạch (Chạm hoặc bóp cò để quét)',
-                      style: TextStyle(color: Colors.white54, fontSize: 11.5),
+                      style: TextStyle(color: c.textMuted, fontSize: 11.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -427,7 +438,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
             const SizedBox(width: 6),
             Icon(
               Icons.qr_code_scanner,
-              color: location != null ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+              color: location != null ? c.successEmerald : c.rfidCyan,
               size: 20,
             ),
           ],

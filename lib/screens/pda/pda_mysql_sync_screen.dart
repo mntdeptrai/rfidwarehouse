@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/mysql_sync_service.dart';
+import '../../theme/eye_care_theme.dart';
 
 class PdaMySqlSyncScreen extends StatefulWidget {
   const PdaMySqlSyncScreen({super.key});
@@ -11,6 +12,7 @@ class PdaMySqlSyncScreen extends StatefulWidget {
 
 class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
   final _syncService = MySqlSyncService();
+  final _eyeCare = EyeCareThemeService();
 
   late TextEditingController _hostController;
   late TextEditingController _portController;
@@ -34,6 +36,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
     _passController = TextEditingController(text: _syncService.config.password);
 
     _syncService.addListener(_onSyncUpdate);
+    _eyeCare.addListener(_onSyncUpdate);
   }
 
   void _onSyncUpdate() {
@@ -43,6 +46,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
   @override
   void dispose() {
     _syncService.removeListener(_onSyncUpdate);
+    _eyeCare.removeListener(_onSyncUpdate);
     _hostController.dispose();
     _portController.dispose();
     _dbController.dispose();
@@ -109,28 +113,29 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
     final isOnline = _syncService.isOnline;
     final pendingCount = _syncService.pendingCount;
     final lastSync = _syncService.lastSyncTime;
     final timeStr = lastSync != null ? DateFormat('HH:mm:ss dd/MM').format(lastSync) : 'Chưa đồng bộ';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: c.bgDeep,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: c.bgCard,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: c.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Đồng Bộ SQLite <-> MySQL',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
         actions: [
           IconButton(
             tooltip: 'Làm mới kết nối',
-            icon: const Icon(Icons.refresh, color: Colors.white70),
+            icon: Icon(Icons.refresh, color: c.textSecondary),
             onPressed: () => _syncService.checkConnectivity(),
           ),
         ],
@@ -145,18 +150,17 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
               builder: (context) {
                 final isWifi = _syncService.isWifiConnected;
                 final pdaIp = _syncService.pdaIpAddress;
+                final Color statusColor = isOnline
+                    ? c.successEmerald
+                    : (isWifi ? c.rfidCyan : c.warningAmber);
 
                 return Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isOnline
-                        ? const Color(0xFF064E3B)
-                        : (isWifi ? const Color(0xFF0C4A6E) : const Color(0xFF451A03)),
+                    color: c.bgCard,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isOnline
-                          ? const Color(0xFF10B981)
-                          : (isWifi ? const Color(0xFF0284C7) : const Color(0xFFF59E0B)),
+                      color: statusColor,
                       width: 1.5,
                     ),
                   ),
@@ -167,19 +171,14 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: (isOnline
-                                      ? const Color(0xFF10B981)
-                                      : (isWifi ? const Color(0xFF38BDF8) : const Color(0xFFF59E0B)))
-                                  .withValues(alpha: 0.2),
+                              color: statusColor.withValues(alpha: 0.15),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               isOnline
                                   ? Icons.cloud_done
                                   : (isWifi ? Icons.wifi : Icons.cloud_off),
-                              color: isOnline
-                                  ? const Color(0xFF10B981)
-                                  : (isWifi ? const Color(0xFF38BDF8) : const Color(0xFFF59E0B)),
+                              color: statusColor,
                               size: 26,
                             ),
                           ),
@@ -195,9 +194,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                                           ? 'ĐÃ KẾT NỐI WI-FI (IP: ${pdaIp.isNotEmpty ? pdaIp : "OK"})'
                                           : 'CHẾ ĐỘ OFFLINE (LƯU TẠM SQLITE)'),
                                   style: TextStyle(
-                                    color: isOnline
-                                        ? const Color(0xFF10B981)
-                                        : (isWifi ? const Color(0xFF38BDF8) : const Color(0xFFF59E0B)),
+                                    color: statusColor,
                                     fontWeight: FontWeight.w900,
                                     fontSize: 13,
                                   ),
@@ -209,7 +206,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                                       : (isWifi
                                           ? 'Đã có Wi-Fi nhưng chưa kết nối tới MySQL ${_syncService.config.host}:${_syncService.config.port}. Hãy nhập đúng IP máy tính bên dưới.'
                                           : 'Mọi thao tác quét kho được lưu trong SQLite cục bộ'),
-                                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                  style: TextStyle(color: c.textSecondary, fontSize: 11),
                                 ),
                               ],
                             ),
@@ -217,7 +214,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                         ],
                       ),
                       const SizedBox(height: 14),
-                      const Divider(color: Colors.white24, height: 1),
+                      Divider(color: c.border, height: 1),
                       const SizedBox(height: 12),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -225,12 +222,12 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('Chờ đồng bộ:', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                              Text('Chờ đồng bộ:', style: TextStyle(color: c.textMuted, fontSize: 11)),
                               const SizedBox(height: 2),
                               Text(
                                 '$pendingCount bản ghi',
                                 style: TextStyle(
-                                  color: pendingCount > 0 ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                  color: pendingCount > 0 ? c.warningAmber : c.successEmerald,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                 ),
@@ -240,9 +237,9 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              const Text('Đồng bộ gần nhất:', style: TextStyle(color: Colors.white60, fontSize: 11)),
+                              Text('Đồng bộ gần nhất:', style: TextStyle(color: c.textMuted, fontSize: 11)),
                               const SizedBox(height: 2),
-                              Text(timeStr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                              Text(timeStr, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
                             ],
                           ),
                         ],
@@ -253,7 +250,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                         height: 42,
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0284C7),
+                            backgroundColor: c.rfidCyan,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           icon: _isSyncing || _syncService.isSyncing
@@ -277,18 +274,18 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: c.bgCard,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: c.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.settings, color: Color(0xFF38BDF8), size: 18),
-                      SizedBox(width: 8),
-                      Text('CẤU HÌNH MÁY CHỦ MYSQL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Icon(Icons.settings, color: c.rfidCyan, size: 18),
+                      const SizedBox(width: 8),
+                      Text('CẤU HÌNH MÁY CHỦ MYSQL', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                     ],
                   ),
                   if (_syncService.isWifiConnected && _syncService.pdaIpAddress.isNotEmpty) ...[
@@ -296,18 +293,18 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                        color: c.rfidCyan.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.4)),
+                        border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.wifi, color: Color(0xFF38BDF8), size: 16),
+                          Icon(Icons.wifi, color: c.rfidCyan, size: 16),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'IP Wi-Fi của tay cầm PDA: ${_syncService.pdaIpAddress}\n(Nhập IP máy tính cùng mạng Wi-Fi này vào ô bên dưới)',
-                              style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
+                              style: TextStyle(color: c.rfidCyan, fontSize: 11),
                             ),
                           ),
                         ],
@@ -324,6 +321,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           label: 'Địa chỉ IP / Host Máy chủ',
                           hint: '192.168.1.104',
                           icon: Icons.dns,
+                          colors: c,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -335,6 +333,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           hint: '3306',
                           icon: Icons.numbers,
                           isNumber: true,
+                          colors: c,
                         ),
                       ),
                     ],
@@ -345,6 +344,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                     label: 'Tên Database MySQL',
                     hint: 'rfidwarehouse',
                     icon: Icons.storage,
+                    colors: c,
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -355,6 +355,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           label: 'Tài khoản (User)',
                           hint: 'root',
                           icon: Icons.person,
+                          colors: c,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -365,13 +366,14 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           hint: '••••••',
                           icon: Icons.lock,
                           obscure: _obscurePass,
+                          colors: c,
                           suffix: GestureDetector(
                             onTap: () => setState(() => _obscurePass = !_obscurePass),
                             child: Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: Icon(
                                 _obscurePass ? Icons.visibility : Icons.visibility_off,
-                                color: Colors.white54,
+                                color: c.textMuted,
                                 size: 18,
                               ),
                             ),
@@ -384,19 +386,19 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Tự động đồng bộ khi có Wi-Fi', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                            Text('Tự động nhận diện Wi-Fi & đồng bộ ngay không cần ấn nút', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                            Text('Tự động đồng bộ khi có Wi-Fi', style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+                            Text('Tự động nhận diện Wi-Fi & đồng bộ ngay không cần ấn nút', style: TextStyle(color: c.textMuted, fontSize: 10)),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
                       Switch(
                         value: _syncService.config.isAutoSync,
-                        activeTrackColor: const Color(0xFF10B981),
+                        activeTrackColor: c.successEmerald,
                         activeThumbColor: Colors.white,
                         onChanged: (val) {
                           setState(() {
@@ -413,15 +415,18 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                       Expanded(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF38BDF8),
-                            side: const BorderSide(color: Color(0xFF38BDF8)),
+                            foregroundColor: c.rfidCyan,
+                            side: BorderSide(color: c.rfidCyan),
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           icon: _isTesting
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF38BDF8), strokeWidth: 2))
+                              ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: c.rfidCyan, strokeWidth: 2))
                               : const Icon(Icons.network_ping, size: 18),
-                          label: Text(_isTesting ? 'ĐANG THỬ...' : 'KIỂM TRA KẾT NỐI', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(_isTesting ? 'ĐANG THỬ...' : 'KIỂM TRA KẾT NỐI', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
                           onPressed: _isTesting ? null : _testConnection,
                         ),
                       ),
@@ -429,12 +434,15 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                       Expanded(
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981),
+                            backgroundColor: c.successEmerald,
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           icon: const Icon(Icons.save, color: Colors.white, size: 18),
-                          label: const Text('LƯU CẤU HÌNH', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          label: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('LƯU CẤU HÌNH', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
                           onPressed: _saveConfig,
                         ),
                       ),
@@ -446,17 +454,18 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: _testSuccess == true ? const Color(0xFF064E3B) : const Color(0xFF7F1D1D),
+                        color: _testSuccess == true ? c.successEmerald.withValues(alpha: 0.15) : c.errorCoral.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _testSuccess == true ? c.successEmerald : c.errorCoral),
                       ),
                       child: Row(
                         children: [
-                          Icon(_testSuccess == true ? Icons.check_circle : Icons.error, color: Colors.white, size: 18),
+                          Icon(_testSuccess == true ? Icons.check_circle : Icons.error, color: _testSuccess == true ? c.successEmerald : c.errorCoral, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _testMessage!,
-                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                              style: TextStyle(color: _testSuccess == true ? c.successEmerald : c.errorCoral, fontSize: 11, fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],
@@ -472,11 +481,11 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('NHẬT KÝ ĐỒNG BỘ (SYNC LOGS)', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 12)),
+                Text('NHẬT KÝ ĐỒNG BỘ (SYNC LOGS)', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
                 if (_syncService.logs.isNotEmpty)
                   TextButton(
                     onPressed: () => _syncService.clearLogs(),
-                    child: const Text('Xóa nhật ký', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                    child: Text('Xóa nhật ký', style: TextStyle(color: c.errorCoral, fontSize: 11)),
                   ),
               ],
             ),
@@ -486,12 +495,12 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: c.bgCard,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: c.border),
                 ),
-                child: const Center(
-                  child: Text('Chưa có lịch sử đồng bộ', style: TextStyle(color: Colors.white38, fontSize: 12)),
+                child: Center(
+                  child: Text('Chưa có lịch sử đồng bộ', style: TextStyle(color: c.textMuted, fontSize: 12)),
                 ),
               )
             else
@@ -502,17 +511,17 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                 separatorBuilder: (_, _) => const SizedBox(height: 6),
                 itemBuilder: (ctx, idx) {
                   final log = _syncService.logs[idx];
-                  Color tagColor = const Color(0xFF38BDF8);
-                  if (log.action == 'PUSH') tagColor = const Color(0xFF10B981);
-                  if (log.action == 'ERROR') tagColor = const Color(0xFFEF4444);
-                  if (log.action == 'CONNECT') tagColor = const Color(0xFFF59E0B);
+                  Color tagColor = c.rfidCyan;
+                  if (log.action == 'PUSH') tagColor = c.successEmerald;
+                  if (log.action == 'ERROR') tagColor = c.errorCoral;
+                  if (log.action == 'CONNECT') tagColor = c.warningAmber;
 
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: c.bgCard,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: c.border),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,7 +529,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: tagColor.withValues(alpha: 0.2),
+                            color: tagColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(color: tagColor),
                           ),
@@ -531,11 +540,11 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(log.message, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                              Text(log.message, style: TextStyle(color: c.textPrimary, fontSize: 12)),
                               const SizedBox(height: 2),
                               Text(
                                 DateFormat('HH:mm:ss dd/MM').format(log.timestamp),
-                                style: const TextStyle(color: Colors.white38, fontSize: 10),
+                                style: TextStyle(color: c.textMuted, fontSize: 10),
                               ),
                             ],
                           ),
@@ -556,6 +565,7 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
     required String label,
     required String hint,
     required IconData icon,
+    required EyeCareColors colors,
     bool isNumber = false,
     bool obscure = false,
     Widget? suffix,
@@ -563,30 +573,31 @@ class _PdaMySqlSyncScreenState extends State<PdaMySqlSyncScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         TextField(
           controller: controller,
           obscureText: obscure,
           keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
+          style: TextStyle(color: colors.textPrimary, fontSize: 12, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             isDense: true,
             hintText: hint,
-            hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
-            prefixIcon: Icon(icon, color: const Color(0xFF38BDF8), size: 16),
+            hintStyle: TextStyle(color: colors.textMuted, fontSize: 12),
+            prefixIcon: Icon(icon, color: colors.rfidCyan, size: 16),
             prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 24),
             suffixIcon: suffix,
             suffixIconConstraints: const BoxConstraints(minWidth: 24, minHeight: 24),
             filled: true,
-            fillColor: const Color(0xFF0F172A),
+            fillColor: colors.bgCardElevated,
             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF334155))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF38BDF8))),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: colors.border)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: colors.border)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: colors.rfidCyan, width: 1.5)),
           ),
         ),
       ],
     );
   }
 }
+

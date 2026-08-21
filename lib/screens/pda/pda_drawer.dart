@@ -88,7 +88,7 @@ class PdaDrawer extends StatelessWidget {
                   );
                 },
               ),
-              const Divider(color: Color(0xFF334155)),
+              Divider(color: c.border),
               ListTile(
                 leading: Icon(
                   eyeCare.mode == EyeCareMode.amberNight
@@ -101,7 +101,7 @@ class PdaDrawer extends StatelessWidget {
                   'Đang dùng: ${eyeCare.modeName}',
                   style: TextStyle(color: c.warningAmber, fontSize: 11, fontWeight: FontWeight.w600),
                 ),
-                trailing: const Icon(Icons.touch_app, size: 18, color: Colors.white38),
+                trailing: Icon(Icons.touch_app, size: 18, color: c.textMuted),
                 onTap: () {
                   eyeCare.toggleNextMode();
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -113,25 +113,25 @@ class PdaDrawer extends StatelessWidget {
                   );
                 },
               ),
-              const Divider(color: Color(0xFF334155)),
+              Divider(color: c.border),
               ListTile(
-                leading: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent),
-                title: const Text('Xóa Sạch Dữ Liệu SQLite', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
-                subtitle: const Text('Xóa đơn/thẻ cũ trên máy để nhận mới', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
+                title: Text('Xóa Sạch Dữ Liệu SQLite', style: TextStyle(color: c.errorCoral, fontSize: 14)),
+                subtitle: Text('Xóa đơn/thẻ cũ trên máy để nhận mới', style: TextStyle(color: c.textMuted, fontSize: 11)),
                 onTap: () async {
                   Navigator.pop(context);
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      backgroundColor: const Color(0xFF1E293B),
-                      title: const Text('Xác nhận xóa dữ liệu?', style: TextStyle(color: Colors.white)),
-                      content: const Text('Toàn bộ dữ liệu đơn hàng và chip trong máy sẽ bị xóa sạch để đồng bộ từ MySQL.', style: TextStyle(color: Colors.white70)),
+                      backgroundColor: c.bgCard,
+                      title: Text('Xác nhận xóa dữ liệu?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
+                      content: Text('Toàn bộ dữ liệu đơn hàng và chip trong máy sẽ bị xóa sạch để đồng bộ từ MySQL.', style: TextStyle(color: c.textSecondary)),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('HỦY')),
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
                         ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                          style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
                           onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('XÓA SẠCH', style: TextStyle(color: Colors.white)),
+                          child: const Text('XÓA SẠCH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),

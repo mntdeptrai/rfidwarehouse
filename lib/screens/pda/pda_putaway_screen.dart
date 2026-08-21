@@ -5,6 +5,7 @@ import '../../models/tag_info.dart';
 import '../../models/wms_models.dart';
 import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
+import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
 import '../../widgets/pda_location_barcode_card.dart';
 
@@ -23,6 +24,7 @@ class PdaPutawayScreen extends StatefulWidget {
 class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   final WarehouseRepository _repo = WarehouseRepository();
   final UhfService _uhf = UhfService();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   String? _selectedLocationId;
   StreamSubscription<String>? _barcodeSub;
@@ -40,6 +42,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   void initState() {
     super.initState();
     _selectedLocationId = widget.initialLocationId ?? (_repo.locations.isNotEmpty ? _repo.locations.first.locationId : null);
+    _eyeCare.addListener(_onStateChange);
 
     // Lắng nghe sự kiện bóp cò quét Barcode phần cứng PDA
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
@@ -52,8 +55,13 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     });
   }
 
+  void _onStateChange() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _eyeCare.removeListener(_onStateChange);
     _barcodeSub?.cancel();
     _rfidSub?.cancel();
     _cartonInputController.dispose();
@@ -176,13 +184,14 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
     final waitingOrders = _repo.inboundOrders.where((o) =>
         o.status == InboundOrderStatus.waitingPutaway ||
         o.status == InboundOrderStatus.newOrder ||
         o.status == InboundOrderStatus.processing).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1120),
+      backgroundColor: c.bgDeep,
       appBar: const HardwareStatusAppBar(
         title: 'CẤT HÀNG LÊN KỆ (PUTAWAY)',
       ),
@@ -192,32 +201,32 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Banner tóm tắt ca làm việc
-            _buildSessionSummaryBanner(),
+            _buildSessionSummaryBanner(c),
             const SizedBox(height: 14),
 
             // BƯỚC 1: CHỌN / QUÉT VỊ TRÍ KỆ
-            _buildStep1LocationCard(),
+            _buildStep1LocationCard(c),
             const SizedBox(height: 14),
 
             // BƯỚC 2: QUÉT BARCODE TRÊN THÙNG HÀNG
-            _buildStep2CartonBarcodeCard(),
+            _buildStep2CartonBarcodeCard(c),
             const SizedBox(height: 16),
 
             // DANH SÁCH CÁC THÙNG ĐANG CHỜ XẾP KHO
-            _buildWaitingOrdersList(waitingOrders),
+            _buildWaitingOrdersList(waitingOrders, c),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSessionSummaryBanner() {
+  Widget _buildSessionSummaryBanner(EyeCareColors c) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: c.border),
       ),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
@@ -228,15 +237,15 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.shelves, color: Color(0xFF38BDF8), size: 20),
+              Icon(Icons.shelves, color: c.rfidCyan, size: 20),
               const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('TIẾN ĐỘ CA XẾP KHO', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+                  Text('TIẾN ĐỘ CA XẾP KHO', style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
                   Text(
                     'Đã cất: $_sessionPutawayCount kiện hàng',
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -246,13 +255,13 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                color: c.successEmerald.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF10B981)),
+                border: Border.all(color: c.successEmerald),
               ),
               child: Text(
                 'Vừa cất: $_lastConfirmedCarton',
-                style: const TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.bold),
+                style: TextStyle(color: c.successEmerald, fontSize: 10.5, fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -261,16 +270,16 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     );
   }
 
-  Widget _buildStep1LocationCard() {
+  Widget _buildStep1LocationCard(EyeCareColors c) {
     final locations = _repo.locations;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: _selectedLocationId != null ? const Color(0xFF10B981) : const Color(0xFF0284C7),
+          color: _selectedLocationId != null ? c.successEmerald : c.rfidCyan,
           width: 1.5,
         ),
       ),
@@ -281,17 +290,17 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0284C7),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan,
                   shape: BoxShape.circle,
                 ),
                 child: const Text('1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'BƯỚC 1: CHỌN VỊ TRÍ KỆ ĐÍCH (DATABASE)',
-                  style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
+                  style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -300,12 +309,12 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                    color: c.successEmerald.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Text(
+                  child: Text(
                     'ĐÃ CHỌN',
-                    style: TextStyle(color: Color(0xFF10B981), fontSize: 9.5, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: c.successEmerald, fontSize: 9.5, fontWeight: FontWeight.bold),
                   ),
                 ),
             ],
@@ -318,26 +327,26 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             value: (locations.any((l) => l.locationId == _selectedLocationId))
                 ? _selectedLocationId
                 : (locations.isNotEmpty ? locations.first.locationId : null),
-            dropdownColor: const Color(0xFF0F172A),
-            icon: const Icon(Icons.arrow_drop_down_circle, color: Color(0xFF38BDF8)),
-            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+            dropdownColor: c.bgCardElevated,
+            icon: Icon(Icons.arrow_drop_down_circle, color: c.rfidCyan),
+            style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFF0F172A),
+              fillColor: c.bgCardElevated,
               labelText: 'Vị trí kệ kho (Từ Database)',
-              labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11),
-              prefixIcon: const Icon(Icons.shelves, color: Color(0xFF38BDF8), size: 20),
+              labelStyle: TextStyle(color: c.rfidCyan, fontSize: 11),
+              prefixIcon: Icon(Icons.shelves, color: c.rfidCyan, size: 20),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF334155)),
+                borderSide: BorderSide(color: c.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF334155)),
+                borderSide: BorderSide(color: c.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
+                borderSide: BorderSide(color: c.rfidCyan, width: 1.5),
               ),
             ),
             items: locations.map((loc) {
@@ -345,7 +354,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 value: loc.locationId,
                 child: Text(
                   '${loc.locationCode} (${loc.zone} • ${loc.shelf} - ${loc.level})',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(color: c.textPrimary, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -366,13 +375,13 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Hoặc bóp cò Barcode để tự động chọn kệ',
-                style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                style: TextStyle(color: c.textMuted, fontSize: 10.5),
               ),
               Text(
                 'Tổng: ${locations.length} vị trí',
-                style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold),
+                style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -381,13 +390,13 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     );
   }
 
-  Widget _buildStep2CartonBarcodeCard() {
+  Widget _buildStep2CartonBarcodeCard(EyeCareColors c) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.6), width: 1.5),
+        border: Border.all(color: c.rfidCyan.withValues(alpha: 0.6), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,17 +405,17 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF10B981),
+                decoration: BoxDecoration(
+                  color: c.successEmerald,
                   shape: BoxShape.circle,
                 ),
                 child: const Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
               const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'BƯỚC 2: BÓP CÒ QUÉT BARCODE TRÊN THÙNG HÀNG',
-                  style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
+                  style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -417,32 +426,32 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: c.bgCardElevated,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF334155)),
+              border: Border.all(color: c.border),
             ),
             child: Row(
               children: [
-                const Icon(Icons.qr_code_scanner, color: Color(0xFF10B981), size: 28),
+                Icon(Icons.qr_code_scanner, color: c.successEmerald, size: 28),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'SẴN SÀNG QUÉT (CÒ PDA)',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       Text(
                         'Hướng tia laser/camera vào mã vạch dán trên kiện hàng để cất',
-                        style: TextStyle(color: Colors.white54, fontSize: 10.5),
+                        style: TextStyle(color: c.textSecondary, fontSize: 10.5),
                       ),
                     ],
                   ),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: c.successEmerald,
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
@@ -459,18 +468,20 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           TextField(
             controller: _cartonInputController,
             focusNode: _cartonFocusNode,
-            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
               hintText: 'Nhập hoặc quét mã vạch thùng (VD: CARTONTEST0001)...',
-              hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+              hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
               filled: true,
-              fillColor: const Color(0xFF0F172A),
-              prefixIcon: const Icon(Icons.inventory_2, color: Color(0xFF38BDF8), size: 18),
+              fillColor: c.bgCardElevated,
+              prefixIcon: Icon(Icons.inventory_2, color: c.rfidCyan, size: 18),
               suffixIcon: IconButton(
-                icon: const Icon(Icons.send_rounded, color: Color(0xFF10B981)),
+                icon: Icon(Icons.send_rounded, color: c.successEmerald),
                 onPressed: () => _processPutawayCarton(_cartonInputController.text),
               ),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF334155))),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.rfidCyan, width: 1.5)),
             ),
             onSubmitted: (val) => _processPutawayCarton(val),
           ),
@@ -479,18 +490,19 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     );
   }
 
-  Widget _buildWaitingOrdersList(List<InboundOrder> orders) {
+  Widget _buildWaitingOrdersList(List<InboundOrder> orders, EyeCareColors c) {
     if (orders.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: c.bgCard,
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: c.border),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Hiện không có kiện hàng nào đang chờ xếp kho.',
-            style: TextStyle(color: Colors.white54, fontSize: 12),
+            style: TextStyle(color: c.textMuted, fontSize: 12),
           ),
         ),
       );
@@ -502,13 +514,13 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               '📦 KIỆN HÀNG ĐANG CHỜ XẾP KHO',
-              style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
+              style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
             ),
             Text(
               '${orders.length} kiện',
-              style: const TextStyle(color: Colors.white54, fontSize: 11),
+              style: TextStyle(color: c.textMuted, fontSize: 11),
             ),
           ],
         ),
@@ -528,19 +540,19 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: c.bgCard,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: c.border),
                 ),
                 child: Row(
                   children: [
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                        color: c.rfidCyan.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.inventory_2, color: Color(0xFF38BDF8), size: 20),
+                      child: Icon(Icons.inventory_2, color: c.rfidCyan, size: 20),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -552,7 +564,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                               Expanded(
                                 child: Text(
                                   o.orderNo,
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -560,12 +572,12 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                  color: c.warningAmber.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'Chờ xếp',
-                                  style: TextStyle(color: Color(0xFFF59E0B), fontSize: 9.5, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: c.warningAmber, fontSize: 9.5, fontWeight: FontWeight.bold),
                                 ),
                               ),
                             ],
@@ -573,7 +585,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                           const SizedBox(height: 2),
                           Text(
                             'Số lượng: $totalReq SP • ${o.details.isNotEmpty ? o.details.first.productName : ""}',
-                            style: const TextStyle(color: Colors.white60, fontSize: 11),
+                            style: TextStyle(color: c.textSecondary, fontSize: 11),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -583,7 +595,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0284C7),
+                        backgroundColor: c.rfidCyan,
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),

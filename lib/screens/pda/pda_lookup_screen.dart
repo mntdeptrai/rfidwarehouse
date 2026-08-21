@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/warehouse_repository.dart';
 import '../../services/uhf_service.dart';
 import '../../models/wms_models.dart';
+import '../../theme/eye_care_theme.dart';
 
 class PdaLookupScreen extends StatefulWidget {
   const PdaLookupScreen({super.key});
@@ -15,6 +16,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
   final TextEditingController _serialController = TextEditingController();
   final WarehouseRepository _repo = WarehouseRepository();
   final UhfService _uhf = UhfService();
+  final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   StreamSubscription? _tagSub;
   StreamSubscription? _triggerSub;
@@ -27,6 +29,11 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
   void initState() {
     super.initState();
     _subscribeHardwareScanner();
+    _eyeCare.addListener(_onThemeUpdate);
+  }
+
+  void _onThemeUpdate() {
+    if (mounted) setState(() {});
   }
 
   void _subscribeHardwareScanner() {
@@ -46,6 +53,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
 
   @override
   void dispose() {
+    _eyeCare.removeListener(_onThemeUpdate);
     _tagSub?.cancel();
     _triggerSub?.cancel();
     _serialController.dispose();
@@ -95,13 +103,16 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = _eyeCare.colors;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: c.bgDeep,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Lookup (Tra Cứu Serial)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        backgroundColor: c.bgCard,
+        elevation: 0,
+        title: Text('Lookup (Tra Cứu Serial)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: c.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -112,18 +123,18 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
             // Search field matching PDF Page 14
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: c.bgCard,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF38BDF8), width: 1.2),
+                border: Border.all(color: c.rfidCyan, width: 1.2),
               ),
               child: TextField(
                 controller: _serialController,
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Courier'),
+                style: TextStyle(color: c.textPrimary, fontSize: 14, fontFamily: 'Courier', fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
                   labelText: 'Serial number / EPC',
-                  labelStyle: const TextStyle(color: Color(0xFF38BDF8), fontSize: 12),
+                  labelStyle: TextStyle(color: c.rfidCyan, fontSize: 12),
                   hintText: 'Quét thẻ RFID hoặc nhập mã...',
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                  hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   border: InputBorder.none,
                   suffixIcon: Row(
@@ -131,14 +142,14 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
                     children: [
                       if (_serialController.text.isNotEmpty)
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+                          icon: Icon(Icons.close, color: c.textMuted, size: 20),
                           onPressed: () {
                             _serialController.clear();
                             _performLookup('');
                           },
                         ),
                       IconButton(
-                        icon: const Icon(Icons.qr_code_scanner, color: Color(0xFF38BDF8)),
+                        icon: Icon(Icons.qr_code_scanner, color: c.rfidCyan),
                         tooltip: 'Quét RFID',
                         onPressed: () => _uhf.startInventory(),
                       ),
@@ -154,7 +165,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
-                child: _buildLookupResult(),
+                child: _buildLookupResult(c),
               ),
             ),
           ],
@@ -163,17 +174,17 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
     );
   }
 
-  Widget _buildLookupResult() {
+  Widget _buildLookupResult(EyeCareColors c) {
     if (_serialController.text.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.radar_outlined, size: 64, color: Colors.white24),
+            Icon(Icons.radar_outlined, size: 64, color: c.textMuted.withValues(alpha: 0.4)),
             const SizedBox(height: 12),
-            const Text(
+            Text(
               'Quét thẻ RFID hoặc nhập mã Serial để tra cứu thông tin',
-              style: TextStyle(color: Colors.white54, fontSize: 13),
+              style: TextStyle(color: c.textMuted, fontSize: 13),
               textAlign: TextAlign.center,
             ),
           ],
@@ -186,24 +197,24 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: c.bgCard,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
+            border: Border.all(color: c.errorCoral.withValues(alpha: 0.5)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.search_off, size: 48, color: Color(0xFFEF4444)),
+              Icon(Icons.search_off, size: 48, color: c.errorCoral),
               const SizedBox(height: 10),
               Text(
                 'Không tìm thấy mã: "${_serialController.text}"',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Mã thẻ/Serial này chưa có trong CSDL SQLite hoặc chưa được nhập kho.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: c.textMuted, fontSize: 12),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -222,40 +233,40 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF334155), width: 1.5),
+        border: Border.all(color: c.border, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildInfoRow('Warehouse (Kho)', whName),
-          const Divider(color: Color(0xFF334155), height: 24),
-          _buildInfoRow('Box (Thùng/Pallet)', boxName),
-          const Divider(color: Color(0xFF334155), height: 24),
-          _buildInfoRow('Barcode (Mã SKU/Vạch)', barcode),
-          const Divider(color: Color(0xFF334155), height: 24),
-          _buildInfoRow('Item name (Tên hàng)', itemName),
+          _buildInfoRow('Warehouse (Kho)', whName, c),
+          Divider(color: c.border, height: 24),
+          _buildInfoRow('Box (Thùng/Pallet)', boxName, c),
+          Divider(color: c.border, height: 24),
+          _buildInfoRow('Barcode (Mã SKU/Vạch)', barcode, c),
+          Divider(color: c.border, height: 24),
+          _buildInfoRow('Item name (Tên hàng)', itemName, c),
           if (_foundItem != null) ...[
-            const Divider(color: Color(0xFF334155), height: 24),
-            _buildInfoRow('EPC Tag', _foundItem!.epc, isEpc: true),
-            const Divider(color: Color(0xFF334155), height: 24),
-            _buildInfoRow('Status (Trạng thái)', _foundItem!.status.name.toUpperCase()),
+            Divider(color: c.border, height: 24),
+            _buildInfoRow('EPC Tag', _foundItem!.epc, c, isEpc: true),
+            Divider(color: c.border, height: 24),
+            _buildInfoRow('Status (Trạng thái)', _foundItem!.status.name.toUpperCase(), c),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, {bool isEpc = false}) {
+  Widget _buildInfoRow(String label, String value, EyeCareColors c, {bool isEpc = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 13),
+          style: TextStyle(color: c.textMuted, fontSize: 13),
         ),
         const SizedBox(width: 16),
         Flexible(
@@ -263,7 +274,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
             value,
             textAlign: TextAlign.end,
             style: TextStyle(
-              color: isEpc ? const Color(0xFF38BDF8) : Colors.white,
+              color: isEpc ? c.rfidCyan : c.textPrimary,
               fontWeight: FontWeight.bold,
               fontSize: isEpc ? 12 : 14,
               fontFamily: isEpc ? 'Courier' : null,
@@ -274,3 +285,4 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
     );
   }
 }
+
