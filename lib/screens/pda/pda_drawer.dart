@@ -147,15 +147,6 @@ class PdaDrawer extends StatelessWidget {
                 },
               ),
               Divider(color: c.border),
-
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'RFIDwarehouse v1.0 • Eye-Care Enabled',
-                  style: TextStyle(color: c.textMuted, fontSize: 11),
-                ),
-              ),
             ],
           ),
         );
@@ -163,3 +154,4 @@ class PdaDrawer extends StatelessWidget {
     );
   }
 }
+

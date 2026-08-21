@@ -346,32 +346,13 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                   ],
                 ),
               ),
-
-              // Bottom Eye-Care Status Indicator
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: c.successEmerald,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'UHF RFID Sẵn sàng • Chế độ: ${_eyeCare.modeName}',
-                    style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
       ),
     );
   }
+
 
   Widget _buildPdaActionTile(
     BuildContext context, {
