@@ -544,7 +544,7 @@ class MySqlSyncService extends ChangeNotifier {
 
     // 2. Pull Locations
     try {
-      final locResult = await conn.execute("SELECT location_id, location_code, zone, shelf, level, current_pallets FROM locations");
+      final locResult = await conn.execute("SELECT location_id, location_code, `zone`, shelf, `level`, current_pallets FROM locations");
       final mysqlLocIds = <String>{};
       for (final row in locResult.rows) {
         final m = row.assoc();
@@ -621,7 +621,7 @@ class MySqlSyncService extends ChangeNotifier {
 
     // 4. Pull Inbound Orders & Details
     try {
-      final orderResult = await conn.execute("SELECT inbound_order_id, order_no, source_supplier, status, created_at FROM inbound_orders");
+      final orderResult = await conn.execute("SELECT inbound_order_id, order_no, source_supplier, `status`, created_at FROM inbound_orders");
       final mysqlOrderIds = <String>{};
       for (final row in orderResult.rows) {
         final m = row.assoc();
@@ -683,7 +683,7 @@ class MySqlSyncService extends ChangeNotifier {
 
     // 5. Pull Items
     try {
-      final itemResult = await conn.execute("SELECT item_id, product_id, sku, product_name, serial_number, epc, status, order_no, pallet_id, location_id, inbound_time, allocated_time FROM items");
+      final itemResult = await conn.execute("SELECT item_id, product_id, sku, product_name, serial_number, epc, `status`, order_no, pallet_id, location_id, inbound_time, allocated_time FROM items");
       final mysqlEpcs = <String>{};
       for (final row in itemResult.rows) {
         final m = row.assoc();
@@ -784,7 +784,7 @@ class MySqlSyncService extends ChangeNotifier {
         final shelf = payload['shelf']?.toString() ?? '01';
         final level = payload['level']?.toString() ?? '01';
         await conn.execute(
-          "INSERT INTO locations (location_id, location_code, zone, shelf, level, max_pallets, current_pallets, status) VALUES (:id, :code, :zone, :shelf, :level, 2, 0, 'AVAILABLE') ON DUPLICATE KEY UPDATE zone=VALUES(zone), shelf=VALUES(shelf), level=VALUES(level)",
+          "INSERT INTO locations (location_id, location_code, `zone`, shelf, `level`, max_pallets, current_pallets, `status`) VALUES (:id, :code, :zone, :shelf, :level, 2, 0, 'AVAILABLE') ON DUPLICATE KEY UPDATE `zone`=VALUES(`zone`), shelf=VALUES(shelf), `level`=VALUES(`level`)",
           {"id": locId, "code": locCode, "zone": zone, "shelf": shelf, "level": level},
         );
         break;
@@ -799,12 +799,12 @@ class MySqlSyncService extends ChangeNotifier {
         final status = payload['status']?.toString() ?? 'IN_STOCK';
 
         await conn.execute(
-          "INSERT INTO locations (location_id, location_code, zone, shelf, level, status) VALUES (:id, :code, 'A', '01', '01', 'AVAILABLE') ON DUPLICATE KEY UPDATE status=VALUES(status)",
+          "INSERT INTO locations (location_id, location_code, `zone`, shelf, `level`, `status`) VALUES (:id, :code, 'A', '01', '01', 'AVAILABLE') ON DUPLICATE KEY UPDATE `status`=VALUES(`status`)",
           {"id": locId, "code": locId},
         );
 
         await conn.execute(
-          "INSERT INTO pallets (pallet_id, pallet_code, location_id, is_multi_sku, status) VALUES (:id, :code, :loc, :multi, :status) ON DUPLICATE KEY UPDATE location_id=VALUES(location_id), status=VALUES(status)",
+          "INSERT INTO pallets (pallet_id, pallet_code, location_id, is_multi_sku, `status`) VALUES (:id, :code, :loc, :multi, :status) ON DUPLICATE KEY UPDATE location_id=VALUES(location_id), `status`=VALUES(`status`)",
           {"id": palletId, "code": palletCode, "loc": locId, "multi": isMulti, "status": status},
         );
         break;
@@ -823,24 +823,29 @@ class MySqlSyncService extends ChangeNotifier {
         final sn = payload['serialNumber']?.toString() ?? (epc.length > 6 ? epc.substring(epc.length - 6) : epc);
         final status = payload['status']?.toString() ?? 'IN_STOCK';
         final rawPal = payload['palletId']?.toString().trim();
-        final palletId = (rawPal != null && rawPal.isNotEmpty) ? rawPal : 'PAL-PL-01';
+        final palletId = (rawPal != null && rawPal.isNotEmpty) ? rawPal : null;
         final rawLoc = payload['locationId']?.toString().trim();
-        final locId = (rawLoc != null && rawLoc.isNotEmpty) ? rawLoc : 'LOC-A1-01-01';
+        final locId = (rawLoc != null && rawLoc.isNotEmpty) ? rawLoc : null;
 
-        await conn.execute(
-          "INSERT INTO locations (location_id, location_code, zone, shelf, level, status) VALUES (:id, :code, 'A', '01', '01', 'AVAILABLE') ON DUPLICATE KEY UPDATE status=VALUES(status)",
-          {"id": locId, "code": locId},
-        );
+        // Chỉ tạo location và pallet trong MySQL nếu thực sự có giá trị
+        if (locId != null) {
+          await conn.execute(
+            "INSERT INTO locations (location_id, location_code, `zone`, shelf, `level`, `status`) VALUES (:id, :code, 'A', '01', '01', 'AVAILABLE') ON DUPLICATE KEY UPDATE `status`=VALUES(`status`)",
+            {"id": locId, "code": locId},
+          );
+        }
 
-        await conn.execute(
-          "INSERT INTO pallets (pallet_id, pallet_code, location_id, status) VALUES (:id, :code, :loc, 'IN_STOCK') ON DUPLICATE KEY UPDATE status=VALUES(status)",
-          {"id": palletId, "code": palletId, "loc": locId},
-        );
+        if (palletId != null) {
+          await conn.execute(
+            "INSERT INTO pallets (pallet_id, pallet_code, location_id, `status`) VALUES (:id, :code, :loc, 'IN_STOCK') ON DUPLICATE KEY UPDATE `status`=VALUES(`status`)",
+            {"id": palletId, "code": palletId, "loc": locId},
+          );
+        }
 
         final orderNo = payload['orderNo']?.toString();
 
         await conn.execute(
-          "INSERT INTO items (item_id, product_id, sku, product_name, serial_number, epc, status, order_no, pallet_id, location_id, inbound_time) VALUES (:id, :prod_id, :sku, :name, :sn, :epc, :status, :order_no, :pal, :loc, NOW()) ON DUPLICATE KEY UPDATE status=VALUES(status), order_no=COALESCE(VALUES(order_no), order_no), pallet_id=VALUES(pallet_id), location_id=VALUES(location_id), inbound_time=NOW()",
+          "INSERT INTO items (item_id, product_id, sku, product_name, serial_number, epc, `status`, order_no, pallet_id, location_id, inbound_time) VALUES (:id, :prod_id, :sku, :name, :sn, :epc, :status, :order_no, :pal, :loc, NOW()) ON DUPLICATE KEY UPDATE `status`=VALUES(`status`), order_no=COALESCE(VALUES(order_no), order_no), pallet_id=VALUES(pallet_id), location_id=VALUES(location_id), inbound_time=NOW()",
           {
             "id": itemId,
             "prod_id": prodId,
@@ -857,79 +862,104 @@ class MySqlSyncService extends ChangeNotifier {
         break;
 
       case 'inbound_transactions':
+        final isGateReceive = action == 'GATE_RECEIVE_WAITING_PUTAWAY';
         final orderNo = payload['orderNo']?.toString();
-        final rawPal = payload['palletCode']?.toString().trim();
-        final palletCode = (rawPal != null && rawPal.isNotEmpty) ? rawPal : 'PL-01';
-        final palletId = 'PAL-$palletCode';
-        final rawLoc = payload['locationId']?.toString().trim();
-        final locId = (rawLoc != null && rawLoc.isNotEmpty) ? rawLoc : 'LOC-A1-01-01';
-        final sku = payload['sku']?.toString() ?? 'SKU-INBOUND';
-        final pName = payload['productName']?.toString() ?? 'Hàng nhập kho';
-        final prodId = 'PROD-$sku';
         final user = payload['performedBy']?.toString() ?? 'Thủ kho';
         final epcs = (payload['epcs'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
-        // 1. Đảm bảo Product tồn tại
-        await conn.execute(
-          "INSERT INTO products (product_id, sku, product_name, unit, category) VALUES (:id, :sku, :name, 'Bộ', 'Nhập Kho') ON DUPLICATE KEY UPDATE product_name=VALUES(product_name)",
-          {"id": prodId, "sku": sku, "name": pName},
-        );
+        if (isGateReceive) {
+          // === GATE RECEIVE: Chỉ cập nhật status -> WAITING_PUTAWAY, KHÔNG gán pallet/location ===
+          if (orderNo != null && orderNo.isNotEmpty) {
+            try {
+              await conn.execute(
+                "UPDATE inbound_orders SET `status`='WAITING_PUTAWAY', total_received = :cnt WHERE order_no = :order_no",
+                {"cnt": payload['itemCount'] ?? 0, "order_no": orderNo},
+              );
+            } catch (_) {}
 
-        // 2. Đảm bảo Location tồn tại
-        await conn.execute(
-          "INSERT INTO locations (location_id, location_code, zone, shelf, level, status) VALUES (:id, :code, 'A', '01', '01', 'OCCUPIED') ON DUPLICATE KEY UPDATE current_pallets=1, status='OCCUPIED'",
-          {"id": locId, "code": locId},
-        );
+            // Cập nhật status items thuộc đơn này
+            try {
+              await conn.execute(
+                "UPDATE items SET `status`='WAITING_PUTAWAY', pallet_id=NULL, location_id=NULL WHERE order_no = :order_no",
+                {"order_no": orderNo},
+              );
+            } catch (_) {}
+          }
+        } else {
+          // === INBOUND_PDA_CONFIRM: Gán pallet + location + IN_STOCK ===
+          final rawPal = payload['palletCode']?.toString().trim();
+          final palletCode = (rawPal != null && rawPal.isNotEmpty) ? rawPal : 'PL-01';
+          final palletId = 'PAL-$palletCode';
+          final rawLoc = payload['locationId']?.toString().trim();
+          final locId = (rawLoc != null && rawLoc.isNotEmpty) ? rawLoc : null;
+          final sku = payload['sku']?.toString() ?? 'SKU-INBOUND';
+          final pName = payload['productName']?.toString() ?? 'Hàng nhập kho';
+          final prodId = 'PROD-$sku';
 
-        // 3. Đảm bảo Pallet tồn tại
-        await conn.execute(
-          "INSERT INTO pallets (pallet_id, pallet_code, location_id, status) VALUES (:id, :code, :loc, 'IN_STOCK') ON DUPLICATE KEY UPDATE location_id=VALUES(location_id), status='IN_STOCK'",
-          {"id": palletId, "code": palletCode, "loc": locId},
-        );
-
-        // 4. Cập nhật đơn nhập nếu có
-        if (orderNo != null && orderNo.isNotEmpty) {
-          try {
-            await conn.execute(
-              "UPDATE inbound_orders SET status='COMPLETED', total_received = :cnt WHERE order_no = :order_no",
-              {"cnt": epcs.length, "order_no": orderNo},
-            );
-          } catch (_) {}
-        }
-
-        // 5. Ghi từng thẻ EPC vào items, rfid_scan_logs, inventory_transactions
-        for (var i = 0; i < epcs.length; i++) {
-          final epc = epcs[i];
-          final itemId = 'ITEM-$epc';
-          final sn = 'SN-${epc.length > 6 ? epc.substring(epc.length - 6) : epc}';
-
+          // 1. Đảm bảo Product tồn tại
           await conn.execute(
-            "INSERT INTO items (item_id, product_id, sku, product_name, serial_number, epc, status, pallet_id, location_id, inbound_time) VALUES (:id, :prod_id, :sku, :name, :sn, :epc, 'IN_STOCK', :pal, :loc, NOW()) ON DUPLICATE KEY UPDATE status='IN_STOCK', pallet_id=VALUES(pallet_id), location_id=VALUES(location_id), inbound_time=NOW()",
-            {"id": itemId, "prod_id": prodId, "sku": sku, "name": pName, "sn": sn, "epc": epc, "pal": palletId, "loc": locId},
+            "INSERT INTO products (product_id, sku, product_name, unit, category) VALUES (:id, :sku, :name, 'Bộ', 'Nhập Kho') ON DUPLICATE KEY UPDATE product_name=VALUES(product_name)",
+            {"id": prodId, "sku": sku, "name": pName},
           );
 
-          try {
+          // 2. Đảm bảo Location tồn tại (nếu có)
+          if (locId != null) {
             await conn.execute(
-              "INSERT INTO rfid_scan_logs (device_id, epc, rssi, antenna, scan_type, result_status) VALUES ('DEV-GATE-01', :epc, '-50', '1', 'INBOUND', 'MATCH')",
-              {"epc": epc},
+              "INSERT INTO locations (location_id, location_code, `zone`, shelf, `level`, `status`) VALUES (:id, :code, 'A', '01', '01', 'OCCUPIED') ON DUPLICATE KEY UPDATE current_pallets=1, `status`='OCCUPIED'",
+              {"id": locId, "code": locId},
             );
-          } catch (_) {}
+          }
 
-          try {
-            final txId = 'TX-${DateTime.now().millisecondsSinceEpoch}-${i + 1}';
+          // 3. Đảm bảo Pallet tồn tại
+          await conn.execute(
+            "INSERT INTO pallets (pallet_id, pallet_code, location_id, `status`) VALUES (:id, :code, :loc, 'IN_STOCK') ON DUPLICATE KEY UPDATE location_id=VALUES(location_id), `status`='IN_STOCK'",
+            {"id": palletId, "code": palletCode, "loc": locId},
+          );
+
+          // 4. Cập nhật đơn nhập nếu có
+          if (orderNo != null && orderNo.isNotEmpty) {
+            try {
+              await conn.execute(
+                "UPDATE inbound_orders SET `status`='COMPLETED', total_received = :cnt WHERE order_no = :order_no",
+                {"cnt": epcs.length, "order_no": orderNo},
+              );
+            } catch (_) {}
+          }
+
+          // 5. Ghi từng thẻ EPC vào items, rfid_scan_logs, inventory_transactions
+          for (var i = 0; i < epcs.length; i++) {
+            final epc = epcs[i];
+            final itemId = 'ITEM-$epc';
+            final sn = 'SN-${epc.length > 6 ? epc.substring(epc.length - 6) : epc}';
+
             await conn.execute(
-              "INSERT INTO inventory_transactions (transaction_id, transaction_type, item_id, epc, to_location_id, to_pallet_id, order_ref, performed_by, note) VALUES (:tx_id, 'IN', :item_id, :epc, :to_loc, :to_pal, :order_ref, :user, 'Nhập kho thành công')",
-              {
-                "tx_id": txId,
-                "item_id": itemId,
-                "epc": epc,
-                "to_loc": locId,
-                "to_pal": palletId,
-                "order_ref": orderNo ?? 'DIRECT-IN',
-                "user": user,
-              },
+              "INSERT INTO items (item_id, product_id, sku, product_name, serial_number, epc, `status`, pallet_id, location_id, inbound_time) VALUES (:id, :prod_id, :sku, :name, :sn, :epc, 'IN_STOCK', :pal, :loc, NOW()) ON DUPLICATE KEY UPDATE `status`='IN_STOCK', pallet_id=VALUES(pallet_id), location_id=VALUES(location_id), inbound_time=NOW()",
+              {"id": itemId, "prod_id": prodId, "sku": sku, "name": pName, "sn": sn, "epc": epc, "pal": palletId, "loc": locId},
             );
-          } catch (_) {}
+
+            try {
+              await conn.execute(
+                "INSERT INTO rfid_scan_logs (device_id, epc, rssi, antenna, scan_type, result_status) VALUES ('DEV-GATE-01', :epc, '-50', '1', 'INBOUND', 'MATCH')",
+                {"epc": epc},
+              );
+            } catch (_) {}
+
+            try {
+              final txId = 'TX-${DateTime.now().millisecondsSinceEpoch}-${i + 1}';
+              await conn.execute(
+                "INSERT INTO inventory_transactions (transaction_id, transaction_type, item_id, epc, to_location_id, to_pallet_id, order_ref, performed_by, note) VALUES (:tx_id, 'IN', :item_id, :epc, :to_loc, :to_pal, :order_ref, :user, 'Nhập kho thành công')",
+                {
+                  "tx_id": txId,
+                  "item_id": itemId,
+                  "epc": epc,
+                  "to_loc": locId,
+                  "to_pal": palletId,
+                  "order_ref": orderNo ?? 'DIRECT-IN',
+                  "user": user,
+                },
+              );
+            } catch (_) {}
+          }
         }
         break;
 

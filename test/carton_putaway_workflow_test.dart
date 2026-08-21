@@ -42,17 +42,17 @@ void main() {
       final gateReceivedCount = await repo.confirmGateReceiveToWaitingPutaway(
         orderNo: testOrderNo,
         scannedEpcs: scannedEpcs,
-        gateLocationId: 'LOC-GATE-IN',
         performedBy: 'Trạm Cổng RFID Desktop',
       );
 
       expect(gateReceivedCount, equals(5));
 
-      // Kiểm tra trạng thái sau khi qua cổng: Chờ xếp kho (WAITING_PUTAWAY) và ở Cổng (LOC-GATE-IN)
+      // Kiểm tra trạng thái sau khi qua cổng: Chờ xếp kho (WAITING_PUTAWAY), chưa có vị trí hay pallet
       final itemsAfterGate = repo.getItemsByOrderNo(testOrderNo);
       expect(itemsAfterGate.length, equals(5));
       expect(itemsAfterGate.every((i) => i.status == ItemStatus.waitingPutaway), isTrue);
-      expect(itemsAfterGate.every((i) => i.locationId == 'LOC-GATE-IN'), isTrue);
+      expect(itemsAfterGate.every((i) => i.locationId == null), isTrue);
+      expect(itemsAfterGate.every((i) => i.palletId == null), isTrue);
 
       final orderAfterGate = repo.inboundOrders.where((o) => o.orderNo == testOrderNo).first;
       expect(orderAfterGate.status, equals(InboundOrderStatus.waitingPutaway));
@@ -153,7 +153,6 @@ void main() {
       await repo.confirmGateReceiveToWaitingPutaway(
         orderNo: cartonCode,
         scannedEpcs: [epc1, epc2, epc3],
-        gateLocationId: 'LOC-GATE-IN',
         performedBy: 'Trạm Cổng RFID Desktop',
       );
 

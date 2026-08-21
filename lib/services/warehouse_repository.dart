@@ -561,7 +561,6 @@ class WarehouseRepository extends ChangeNotifier {
     required String orderNo,
     required List<String> scannedEpcs,
     String? cartonCode,
-    String gateLocationId = 'LOC-GATE-IN',
     String performedBy = 'Cổng RFID Gate',
   }) async {
     final cleanOrderNo = orderNo.trim().toUpperCase();
@@ -574,7 +573,8 @@ class WarehouseRepository extends ChangeNotifier {
       o.inboundOrderId.trim().toUpperCase() == cleanOrderNo
     ).firstOrNull;
 
-    // 2. Chuyển trạng thái các Items trong kiện/thùng sang WAITING_PUTAWAY (Chờ xếp kho)
+    // 2. Chuyển trạng thái các Items sang WAITING_PUTAWAY (Chờ xếp kho)
+    //    KHÔNG gán locationId hay palletId — chỉ PDA putaway mới gán
     final matchedItems = _items.where((it) {
       if (uniqueEpcs.contains(it.epc)) return true;
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanOrderNo) return true;
@@ -583,7 +583,8 @@ class WarehouseRepository extends ChangeNotifier {
 
     for (var it in matchedItems) {
       it.status = ItemStatus.waitingPutaway;
-      it.locationId = gateLocationId;
+      it.palletId = null;
+      it.locationId = null;
       it.inboundTime = now;
       if (it.orderNo == null || it.orderNo!.isEmpty) {
         it.orderNo = cleanOrderNo;
@@ -596,7 +597,8 @@ class WarehouseRepository extends ChangeNotifier {
         payload: {
           'itemId': it.itemId,
           'status': ItemStatus.waitingPutaway.code,
-          'locationId': gateLocationId,
+          'locationId': null,
+          'palletId': null,
           'orderNo': it.orderNo,
           'inboundTime': now.toIso8601String(),
         },
@@ -609,7 +611,7 @@ class WarehouseRepository extends ChangeNotifier {
       for (var d in order.details) {
         d.receivedQty = d.requiredQty;
       }
-      await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.waitingPutaway, locationId: gateLocationId);
+      await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.waitingPutaway);
       await _dbService.enqueueSync(
         tableName: 'inbound_orders',
         recordId: order.inboundOrderId,
@@ -617,7 +619,6 @@ class WarehouseRepository extends ChangeNotifier {
         payload: {
           'inboundOrderId': order.inboundOrderId,
           'status': InboundOrderStatus.waitingPutaway.code,
-          'locationId': gateLocationId,
           'updatedAt': now.toIso8601String(),
         },
       );
@@ -631,7 +632,6 @@ class WarehouseRepository extends ChangeNotifier {
       payload: {
         'orderNo': cleanOrderNo,
         'cartonCode': cartonCode ?? cleanOrderNo,
-        'locationId': gateLocationId,
         'itemCount': matchedItems.length,
         'performedBy': performedBy,
         'timestamp': now.toIso8601String(),

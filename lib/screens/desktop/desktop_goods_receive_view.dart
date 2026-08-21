@@ -211,7 +211,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         final saved = await _repo.confirmGateReceiveToWaitingPutaway(
           orderNo: orderNo,
           scannedEpcs: _scannedTags.keys.toList(),
-          gateLocationId: 'LOC-GATE-IN',
           performedBy: 'Trạm Cổng RFID Desktop',
         );
 
