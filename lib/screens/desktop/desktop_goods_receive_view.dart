@@ -191,6 +191,68 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     });
   }
 
+  bool _isAutoSaving = false;
+  Timer? _autoResetTimer;
+
+  Future<void> _triggerAutoConfirmInbound() async {
+    if (_isAutoSaving || _isSaving) return;
+    _isAutoSaving = true;
+
+    try {
+      final pallet = _palletController.text.trim().isEmpty ? 'PL-01' : _palletController.text.trim().toUpperCase();
+      final sku = _skuController.text.trim();
+      final prodName = _prodNameController.text.trim();
+      final orderNo = _selectedLiveOrder?.orderNo;
+
+      final saved = await _repo.confirmHandheldInbound(
+        orderNo: orderNo,
+        palletCode: pallet,
+        locationId: _selectedLiveLocation.isNotEmpty ? _selectedLiveLocation : 'LOC-A1-01-01',
+        scannedEpcs: _scannedTags.keys.toList(),
+        defaultSku: sku.isNotEmpty ? sku : 'SKU-INBOUND',
+        defaultProductName: prodName.isNotEmpty ? prodName : 'Hàng nhập kho',
+      );
+
+      debugPrint('⚡ [ZERO-TOUCH AUTO] Đã tự động nhập kho $saved chip cho đơn $orderNo');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 3),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('✅ TỰ ĐỘNG NHẬP KHO THÀNH CÔNG: $orderNo ($saved chip) -> Pallet $pallet!'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Tự động đặt lại sau 3 giây để sẵn sàng quét thùng tiếp theo
+      _autoResetTimer?.cancel();
+      _autoResetTimer = Timer(const Duration(milliseconds: 3000), () {
+        if (mounted) {
+          setState(() {
+            _selectedLiveOrder = null;
+            _scannedTags.clear();
+            _uhf.clearTags();
+            _desktopUhf.clearTags();
+            _isAutoSaving = false;
+          });
+          _towerLight.turnOffAll();
+        }
+      });
+    } catch (e) {
+      debugPrint('Auto-confirm error: $e');
+      _isAutoSaving = false;
+    }
+  }
+
   void _handleIncomingTag(TagInfo tag) {
     // 1. Tự động nhận diện đơn hàng ngay khi bắt được sóng chip đầu tiên
     if (_selectedLiveOrder == null) {
@@ -231,6 +293,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _towerLight.triggerPass(
           reason: 'ĐỦ HÀNG THÔNG QUA: $matchedCount/$expectedCount chip khớp 100% (Đơn ${_selectedLiveOrder!.orderNo})',
         );
+
+        // ⚡ TỰ ĐỘNG XÁC NHẬN NHẬP KHO & ĐỒNG BỘ MYSQL (Zero-Touch)
+        _triggerAutoConfirmInbound();
       }
     } else {
       // Nếu không lọc theo đơn, quét chip hợp lệ là xanh
@@ -257,6 +322,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _desktopUhf.removeListener(_onDesktopUhfUpdate);
     _uiRefreshTimer?.cancel();
     _countdownTimer?.cancel();
+    _autoResetTimer?.cancel();
     _tagSub?.cancel();
     _desktopTagSub?.cancel();
     _receiveNoController.dispose();
