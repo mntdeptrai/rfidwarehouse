@@ -1593,7 +1593,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   Widget _buildLiveRfidStationView(EyeCareColors c) {
     final scannedCount = _scannedTags.length;
-    final locations = _repo.locations;
     final expectedOrderItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
 
     final expectedCount = expectedOrderItems.length;
@@ -1627,7 +1626,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('📍 VỊ TRÍ & ĐỐI SOÁT TỰ ĐỘNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text('⚡ THÔNG TIN ĐƠN & ĐỐI SOÁT TỰ ĐỘNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(height: 10),
 
                     // Card Tự Động Nhận Diện Đơn Hàng / Thùng
@@ -1711,56 +1710,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           ],
                         ),
                       ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Vị trí kệ:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                              const SizedBox(height: 4),
-                              DropdownButtonFormField<String>(
-                                initialValue: locations.any((l) => l.locationId == _selectedLiveLocation) ? _selectedLiveLocation : (locations.isNotEmpty ? locations.first.locationId : null),
-                                isExpanded: true,
-                                dropdownColor: c.bgCardElevated,
-                                style: TextStyle(color: c.textPrimary, fontSize: 12),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: c.bgCardElevated,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                items: locations.map((l) => DropdownMenuItem(value: l.locationId, child: Text(l.locationCode))).toList(),
-                                onChanged: (val) => setState(() => _selectedLiveLocation = val ?? ''),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Mã Pallet:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                              const SizedBox(height: 4),
-                              TextField(
-                                controller: _palletController,
-                                style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: c.bgCardElevated,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
