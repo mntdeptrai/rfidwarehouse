@@ -68,7 +68,7 @@ class WarehouseRepository extends ChangeNotifier {
     _items.removeWhere((i) => i.orderNo == cleanId);
 
     // Enqueue sync delete or direct MySQL delete
-    await _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'inbound_orders',
       recordId: cleanId,
       action: 'DELETE',
@@ -130,7 +130,7 @@ class WarehouseRepository extends ChangeNotifier {
   Future<List<Item>> addInboundOrder(InboundOrder order, {bool autoGenerateEpcs = true}) async {
     await _dbService.insertInboundOrder(order);
     _inboundOrders.add(order);
-    await _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'inbound_orders',
       recordId: order.inboundOrderId,
       action: 'INSERT',
@@ -173,7 +173,7 @@ class WarehouseRepository extends ChangeNotifier {
           generatedItems.add(item);
           _items.add(item);
           await _dbService.insertItem(item);
-          await _dbService.enqueueSync(
+          await _syncDirectOrQueue(
             tableName: 'items',
             recordId: item.itemId,
             action: 'INSERT',
@@ -215,7 +215,7 @@ class WarehouseRepository extends ChangeNotifier {
     _items.removeWhere((i) => i.epc == item.epc);
     _items.add(item);
     await _dbService.insertItem(item);
-    await _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'items',
       recordId: item.itemId,
       action: 'INSERT',
@@ -240,7 +240,7 @@ class WarehouseRepository extends ChangeNotifier {
   Future<void> addOutboundOrder(OutboundOrder order) async {
     await _dbService.insertOutboundOrder(order);
     _outboundOrders.add(order);
-    await _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'outbound_orders',
       recordId: order.outboundOrderId,
       action: 'INSERT',
@@ -266,7 +266,7 @@ class WarehouseRepository extends ChangeNotifier {
   Future<void> addProduct(Product product) async {
     await _dbService.insertProduct(product);
     _products.add(product);
-    await _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'products',
       recordId: product.productId,
       action: 'INSERT',
@@ -286,7 +286,7 @@ class WarehouseRepository extends ChangeNotifier {
   Future<void> addLocation(Location location) async {
     await _dbService.insertLocation(location);
     _locations.add(location);
-    await _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'locations',
       recordId: location.locationId,
       action: 'INSERT',
@@ -300,6 +300,29 @@ class WarehouseRepository extends ChangeNotifier {
     );
     _triggerBackgroundSync();
     notifyListeners();
+  }
+
+  Future<void> _syncDirectOrQueue({
+    required String tableName,
+    required String recordId,
+    required String action,
+    required Map<String, dynamic> payload,
+  }) async {
+    try {
+      await MySqlSyncService().syncDirectOrQueue(
+        tableName: tableName,
+        recordId: recordId,
+        action: action,
+        payload: payload,
+      );
+    } catch (_) {
+      await _dbService.enqueueSync(
+        tableName: tableName,
+        recordId: recordId,
+        action: action,
+        payload: payload,
+      );
+    }
   }
 
   void _triggerBackgroundSync() {
@@ -536,8 +559,8 @@ class WarehouseRepository extends ChangeNotifier {
     // Bắn sync về ERP Bravo
     ErpBravoService().pushInboundCompleted(orderNo, pallet.itemIds.length);
 
-    // Lưu vào hàng đợi đồng bộ MySQL (Offline-first)
-    _dbService.enqueueSync(
+    // Đồng bộ Real-time MySQL / Offline Queue
+    _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: orderNo,
       action: 'INBOUND_GATE_CONFIRM',
@@ -590,7 +613,7 @@ class WarehouseRepository extends ChangeNotifier {
         it.orderNo = cleanOrderNo;
       }
       await _dbService.insertItem(it);
-      await _dbService.enqueueSync(
+      await _syncDirectOrQueue(
         tableName: 'items',
         recordId: it.itemId,
         action: 'UPDATE',
@@ -612,7 +635,7 @@ class WarehouseRepository extends ChangeNotifier {
         d.receivedQty = d.requiredQty;
       }
       await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.waitingPutaway);
-      await _dbService.enqueueSync(
+      await _syncDirectOrQueue(
         tableName: 'inbound_orders',
         recordId: order.inboundOrderId,
         action: 'UPDATE',
@@ -625,7 +648,7 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     // 4. Ghi nhận giao dịch Cổng tiếp nhận
-    _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: cleanOrderNo,
       action: 'GATE_RECEIVE_WAITING_PUTAWAY',
@@ -685,7 +708,7 @@ class WarehouseRepository extends ChangeNotifier {
       await _dbService.updateItemLocationAndPallet(it.epc, loc.locationId, it.palletId);
       await _dbService.updateItemStatus(it.epc, ItemStatus.inStock);
 
-      await _dbService.enqueueSync(
+      await _syncDirectOrQueue(
         tableName: 'items',
         recordId: it.itemId,
         action: 'UPDATE',
@@ -728,7 +751,7 @@ class WarehouseRepository extends ChangeNotifier {
         d.receivedQty = d.requiredQty;
       }
       await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.completed, locationId: loc.locationId);
-      await _dbService.enqueueSync(
+      await _syncDirectOrQueue(
         tableName: 'inbound_orders',
         recordId: order.inboundOrderId,
         action: 'UPDATE',
@@ -742,7 +765,7 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     // 5. Ghi nhận giao dịch hoàn tất Putaway
-    _dbService.enqueueSync(
+    await _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: cleanBarcode,
       action: 'PDA_PUTAWAY_CONFIRM',
@@ -852,8 +875,8 @@ class WarehouseRepository extends ChangeNotifier {
     // Đồng bộ ERP Bravo
     ErpBravoService().pushInboundCompleted(orderNo ?? 'PDA-DIRECT-IN', uniqueEpcs.length);
 
-    // Lưu vào hàng đợi đồng bộ MySQL (Offline-first)
-    _dbService.enqueueSync(
+    // Đồng bộ Real-time MySQL / Offline Queue
+    await _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: orderNo ?? 'PDA-DIRECT-${now.millisecondsSinceEpoch}',
       action: 'INBOUND_PDA_CONFIRM',
@@ -1087,8 +1110,8 @@ class WarehouseRepository extends ChangeNotifier {
     // Bắn sync về ERP Bravo
     ErpBravoService().pushOutboundCompleted(poNo, shippedEpcs.length);
 
-    // Lưu vào hàng đợi đồng bộ MySQL (Offline-first)
-    _dbService.enqueueSync(
+    // Đồng bộ Real-time MySQL / Offline Queue
+    _syncDirectOrQueue(
       tableName: 'outbound_transactions',
       recordId: poNo,
       action: 'OUTBOUND_CONFIRM',
@@ -1152,8 +1175,8 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Đồng bộ MySQL
-    _dbService.enqueueSync(
+    // Đồng bộ Real-time MySQL / Offline Queue
+    await _syncDirectOrQueue(
       tableName: 'outbound_transactions',
       recordId: poNo ?? 'DIRECT-OUT-${now.millisecondsSinceEpoch}',
       action: 'OUTBOUND_CONFIRM',
@@ -1298,8 +1321,8 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Lưu vào hàng đợi đồng bộ MySQL (Offline-first)
-    _dbService.enqueueSync(
+    // Đồng bộ Real-time MySQL / Offline Queue
+    _syncDirectOrQueue(
       tableName: 'inventory_sessions',
       recordId: session.sessionId,
       action: 'AUDIT_COMPLETE',
@@ -1367,8 +1390,8 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Lưu vào hàng đợi đồng bộ MySQL (Offline-first)
-    _dbService.enqueueSync(
+    // Đồng bộ Real-time MySQL / Offline Queue
+    _syncDirectOrQueue(
       tableName: 'pallet_moves',
       recordId: palletId,
       action: 'PALLET_MOVE',

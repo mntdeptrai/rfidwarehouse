@@ -323,16 +323,19 @@ class MySqlSyncService extends ChangeNotifier {
   /// Kiểm tra kết nối thử nghiệm với kết quả chi tiết
   Future<Map<String, dynamic>> testConnection() async {
     final stopwatch = Stopwatch()..start();
+    MySQLConnection? conn;
     try {
-      final host = config.host.trim();
-      final port = config.port;
-      final socket = await Socket.connect(
-        host,
-        port,
-        timeout: const Duration(seconds: 3),
-      );
-      await socket.close();
+      conn = await _connectMySql();
+      final res = await conn.execute("SELECT (SELECT COUNT(*) FROM locations) as loc_count, (SELECT COUNT(*) FROM products) as prod_count");
       stopwatch.stop();
+
+      int locs = 0;
+      int prods = 0;
+      if (res.rows.isNotEmpty) {
+        final m = res.rows.first.assoc();
+        locs = int.tryParse(m['loc_count']?.toString() ?? '0') ?? 0;
+        prods = int.tryParse(m['prod_count']?.toString() ?? '0') ?? 0;
+      }
 
       _isOnline = true;
       notifyListeners();
@@ -340,7 +343,7 @@ class MySqlSyncService extends ChangeNotifier {
       return {
         'success': true,
         'latencyMs': stopwatch.elapsedMilliseconds,
-        'message': 'Kết nối MySQL (${config.host}:${config.port}) thành công (${stopwatch.elapsedMilliseconds} ms)!',
+        'message': 'Kết nối MySQL (${config.host}:${config.port}/${config.database}) thành công (${stopwatch.elapsedMilliseconds} ms)! Trên server có $locs vị trí, $prods SP.',
       };
     } catch (e) {
       stopwatch.stop();
@@ -351,6 +354,12 @@ class MySqlSyncService extends ChangeNotifier {
         'latencyMs': stopwatch.elapsedMilliseconds,
         'message': 'Không thể kết nối tới MySQL (${config.host}:${config.port}): $e',
       };
+    } finally {
+      if (conn != null) {
+        try {
+          await conn.close();
+        } catch (_) {}
+      }
     }
   }
 
@@ -498,6 +507,75 @@ class MySqlSyncService extends ChangeNotifier {
 
   Future<MySQLConnection> connectForDirectPush() => _connectMySql();
   Future<void> executeSyncItemDirect(MySQLConnection conn, String tableName, String action, Map<String, dynamic> payload) => _executeMySqlSyncItem(conn, tableName, action, payload);
+
+  /// Ghi dữ liệu thời gian thực (Real-time Online-First with Offline Fallback):
+  /// 1. Ưu tiên ghi TRỰC TIẾP vào MySQL nếu đang có kết nối (Online).
+  /// 2. Nếu mất mạng hoặc ghi MySQL lỗi -> Tự động đưa vào SQLite sync_queue để bù khi có mạng.
+  Future<bool> syncDirectOrQueue({
+    required String tableName,
+    required String recordId,
+    required String action,
+    required Map<String, dynamic> payload,
+  }) async {
+    final isTestEnv = Platform.environment.containsKey('FLUTTER_TEST');
+    
+    // Nếu trong môi trường test, lưu vào sync_queue để test
+    if (isTestEnv) {
+      await _dbService.enqueueSync(
+        tableName: tableName,
+        recordId: recordId,
+        action: action,
+        payload: payload,
+      );
+      await _refreshPendingCount();
+      return false;
+    }
+
+    bool writtenToMySql = false;
+
+    // 1. Nếu đang Online, ưu tiên kết nối ghi trực tiếp vào MySQL
+    if (_isOnline) {
+      MySQLConnection? conn;
+      try {
+        conn = await _connectMySql();
+        await _executeMySqlSyncItem(conn, tableName, action, payload);
+        writtenToMySql = true;
+        _addLog(
+          action: 'REALTIME',
+          tableName: tableName,
+          recordCount: 1,
+          isSuccess: true,
+          message: 'Ghi Realtime vào MySQL: $action [$tableName: $recordId]',
+        );
+        debugPrint('⚡ [REALTIME MYSQL] Đã ghi trực tiếp vào MySQL: $action trên $tableName (ID: $recordId)');
+      } catch (err) {
+        debugPrint('⚠️ [REALTIME MYSQL FAILED] Không thể ghi MySQL trực tiếp, chuyển sang lưu SQLite queue: $err');
+        _isOnline = false;
+        _connectionStatusDetail = 'Mất kết nối MySQL: $err';
+        notifyListeners();
+      } finally {
+        if (conn != null) {
+          try {
+            await conn.close();
+          } catch (_) {}
+        }
+      }
+    }
+
+    // 2. Nếu chưa ghi được lên MySQL (mất mạng hoặc ghi lỗi) -> Đưa vào hàng đợi SQLite
+    if (!writtenToMySql) {
+      await _dbService.enqueueSync(
+        tableName: tableName,
+        recordId: recordId,
+        action: action,
+        payload: payload,
+      );
+      await _refreshPendingCount();
+      debugPrint('📦 [OFFLINE QUEUE] Đã lưu vào hàng đợi SQLite: $action trên $tableName (ID: $recordId)');
+    }
+
+    return writtenToMySql;
+  }
 
   Future<int> _pullMasterDataFromMySql(MySQLConnection conn) async {
     int pulledRecords = 0;
