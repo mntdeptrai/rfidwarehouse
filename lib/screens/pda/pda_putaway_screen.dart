@@ -90,7 +90,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           SnackBar(
             backgroundColor: const Color(0xFF0284C7),
             duration: const Duration(seconds: 2),
-            content: Text('📍 ĐÃ KHÓA VỊ TRÍ KỆ: ${loc.locationCode} (${loc.zone} • ${loc.shelf})'),
+            content: Text('📍 ĐÃ KHÓA VỊ TRÍ KỆ: ${loc.locationCode} - ${loc.zone} • ${loc.shelf}'),
           ),
         );
         return;
@@ -189,7 +189,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     return Scaffold(
       backgroundColor: c.bgDeep,
       appBar: const HardwareStatusAppBar(
-        title: 'CẤT HÀNG LÊN KỆ (PUTAWAY)',
+        title: 'CẤT HÀNG LÊN KỆ',
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(14),
@@ -295,7 +295,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'BƯỚC 1: CHỌN VỊ TRÍ KỆ ĐÍCH (DATABASE)',
+                  'BƯỚC 1: CHỌN VỊ TRÍ KỆ ĐÍCH',
                   style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -327,11 +327,10 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             dropdownColor: c.bgCardElevated,
             icon: Icon(Icons.arrow_drop_down_circle, color: c.rfidCyan),
             style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
-
             decoration: InputDecoration(
               filled: true,
               fillColor: c.bgCardElevated,
-              labelText: 'Vị trí kệ kho (Từ Database)',
+              labelText: 'Vị trí kệ kho',
               labelStyle: TextStyle(color: c.rfidCyan, fontSize: 11),
               prefixIcon: Icon(Icons.shelves, color: c.rfidCyan, size: 20),
               border: OutlineInputBorder(
@@ -351,7 +350,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               return DropdownMenuItem<String>(
                 value: loc.locationId,
                 child: Text(
-                  '${loc.locationCode} (${loc.zone} • ${loc.shelf} - ${loc.level})',
+                  '${loc.locationCode} - ${loc.zone} • ${loc.shelf} - ${loc.level}',
                   style: TextStyle(color: c.textPrimary, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -437,7 +436,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'SẴN SÀNG QUÉT (CÒ PDA)',
+                        'SẴN SÀNG QUÉT',
                         style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       Text(
@@ -468,7 +467,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             focusNode: _cartonFocusNode,
             style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
-              hintText: 'Nhập hoặc quét mã vạch thùng (VD: CARTONTEST0001)...',
+              hintText: 'Nhập hoặc quét mã vạch thùng...',
               hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
               filled: true,
               fillColor: c.bgCardElevated,
@@ -487,6 +486,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       ),
     );
   }
+
 
   Widget _buildWaitingOrdersList(List<InboundOrder> orders, EyeCareColors c) {
     if (orders.isEmpty) {

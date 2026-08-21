@@ -473,8 +473,9 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _buildStockStatBox('Đã Giữ (PO)', allocated.toString(), const Color(0xFFF59E0B)),
+                    child: _buildStockStatBox('Đã Giữ', allocated.toString(), const Color(0xFFF59E0B)),
                   ),
+
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildStockStatBox('Tổng Tồn', total.toString(), const Color(0xFF38BDF8)),

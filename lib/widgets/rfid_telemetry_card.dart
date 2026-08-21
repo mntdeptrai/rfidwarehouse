@@ -90,7 +90,7 @@ class RfidTelemetryCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _buildMetricTile(
-                  title: 'Tổng Đọc (Thô)',
+                  title: 'Tổng Đọc Thô',
                   value: totalReads.toString(),
                   unit: 'Lượt',
                   color: const Color(0xFFA78BFA),

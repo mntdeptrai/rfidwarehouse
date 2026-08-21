@@ -119,8 +119,9 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
               const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('✓ Đã xác nhận vị trí kệ: ${matched.locationCode} (${matched.zone})'),
+                child: Text('✓ Đã xác nhận vị trí kệ: ${matched.locationCode} - ${matched.zone}'),
               ),
+
             ],
           ),
         ),
@@ -207,7 +208,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                     autofocus: true,
                     style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
-                      hintText: 'Nhập hoặc quét mã vạch kệ (VD: LOC-A01-01)...',
+                      hintText: 'Nhập hoặc quét mã vạch kệ...',
                       hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                       filled: true,
                       fillColor: c.bgCardElevated,
@@ -384,7 +385,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                     runSpacing: 2,
                     children: [
                       Text(
-                        location != null ? 'VỊ TRÍ KỆ (ĐÃ XÁC NHẬN)' : 'VỊ TRÍ KỆ ĐÍCH',
+                        location != null ? 'VỊ TRÍ KỆ ĐÃ XÁC NHẬN' : 'VỊ TRÍ KỆ ĐÍCH',
                         style: TextStyle(
                           color: location != null ? c.successEmerald : c.rfidCyan,
                           fontWeight: FontWeight.bold,
@@ -425,12 +426,13 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                     ),
                   ] else ...[
                     Text(
-                      'Chưa quét mã vạch (Chạm hoặc bóp cò để quét)',
+                      'Chưa quét mã vạch · Chạm hoặc bóp cò để quét',
                       style: TextStyle(color: c.textMuted, fontSize: 11.5),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+
                 ],
               ),
             ),

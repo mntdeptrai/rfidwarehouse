@@ -136,7 +136,7 @@ class GatePassFailBanner extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isPass ? 'KẾT QUẢ: PASS (ĐẠT 100%)' : 'KẾT QUẢ: FAIL (SAI LỆCH)',
+                      isPass ? 'KẾT QUẢ: PASS - ĐẠT 100%' : 'KẾT QUẢ: FAIL - SAI LỆCH',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
@@ -148,8 +148,8 @@ class GatePassFailBanner extends StatelessWidget {
                     Text(
                       isPass
                           ? 'Chứng từ ${result!.documentNo}: Toàn bộ cơ cấu SKU và số lượng trùng khớp.'
-                          : 'Chứng từ ${result!.documentNo}: Phát hiện sai lệch cơ cấu SKU hoặc số lượng!',
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                          : 'Phát hiện sai lệch giữa hàng hóa quét thực tế và chứng từ.',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
                 ),
@@ -191,7 +191,7 @@ class GatePassFailBanner extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '${b.sku} (${b.productName})',
+                        '${b.sku} - ${b.productName}',
                         style: const TextStyle(color: Colors.white, fontSize: 12.5),
                         overflow: TextOverflow.ellipsis,
                       ),

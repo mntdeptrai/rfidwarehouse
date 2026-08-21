@@ -152,8 +152,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
-                      Text('1 dBm (Gần ~10cm)', style: TextStyle(color: Colors.white38, fontSize: 11)),
-                      Text('30/33 dBm (Xa ~5-10m)', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                      Text('1 dBm - Gần ~10cm', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                      Text('30/33 dBm - Xa ~5-10m', style: TextStyle(color: Colors.white38, fontSize: 11)),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -256,7 +256,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Rung (Haptic feedback)', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      title: const Text('Rung phản hồi', style: TextStyle(color: Colors.white70, fontSize: 13)),
                       value: _uhfService.hapticEnabled,
                       activeThumbColor: const Color(0xFF38BDF8),
                       onChanged: (val) => setState(() => _uhfService.hapticEnabled = val),
@@ -299,7 +299,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(color: Colors.white24),
                   _buildInfoRow('Trạng thái khởi tạo', _uhfService.isInitialized ? '🟢 ĐÃ KẾT NỐI' : '🔴 CHƯA KẾT NỐI'),
-                  _buildInfoRow('Phần cứng (Hardware)', _uhfService.hardwareVersion),
+                  _buildInfoRow('Phần cứng', _uhfService.hardwareVersion),
                   _buildInfoRow('Firmware module', _uhfService.firmwareVersion),
                   _buildInfoRow('Nhiệt độ chip RFID', '${_uhfService.temperature} °C'),
                   const SizedBox(height: 12),
@@ -307,7 +307,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.restart_alt, size: 18),
-                      label: const Text('KHỞI TẠO LẠI PHẦN CỨNG (RE-INIT)'),
+                      label: const Text('KHỞI TẠO LẠI PHẦN CỨNG'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF38BDF8),
                         side: const BorderSide(color: Color(0xFF38BDF8)),

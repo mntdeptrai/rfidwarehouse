@@ -60,10 +60,10 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
 
     String getProximityText() {
       if (!widget.isTracking) return 'CHƯA BẬT ĐỊNH VỊ';
-      if (strength > 0.85) return '🎯 NGAY TRƯỚC MẶT (< 0.5m)';
-      if (strength > 0.65) return '🔥 RẤT GẦN (1 - 2m)';
-      if (strength > 0.35) return '📍 ĐANG TỚI GẦN (2 - 4m)';
-      return '❄️ TÍN HIỆU XA / YẾU (> 4m)';
+      if (strength > 0.85) return '🎯 NGAY TRƯỚC MẶT · < 0.5m';
+      if (strength > 0.65) return '🔥 RẤT GẦN · 1 - 2m';
+      if (strength > 0.35) return '📍 ĐANG TỚI GẦN · 2 - 4m';
+      return '❄️ TÍN HIỆU XA / YẾU · > 4m';
     }
 
     final signalColor = getSignalColor();

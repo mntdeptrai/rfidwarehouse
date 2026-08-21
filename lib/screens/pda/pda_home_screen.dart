@@ -189,9 +189,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                       Expanded(
                         child: Text(
                           isOnline
-                              ? 'MySQL Online (${_syncService.config.host}) • Tự động đồng bộ'
+                              ? 'MySQL Online · ${_syncService.config.host} • Tự động đồng bộ'
                               : (isWifi
-                                  ? 'Đã có Wi-Fi (${_syncService.pdaIpAddress}) • Chạm để kết nối MySQL'
+                                  ? 'Đã có Wi-Fi · ${_syncService.pdaIpAddress} • Chạm để kết nối MySQL'
                                   : 'Chế độ Ngoại tuyến: Lưu trữ SQLite • Chống mỏi mắt'),
                           style: TextStyle(
                             color: isOnline ? c.textPrimary : statusColor,
@@ -206,7 +206,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                 ),
               ),
 
-              // Prominent Putaway (Cất hàng lên kệ) Banner Card
+              // Prominent Putaway Banner Card
               InkWell(
                 onTap: () {
                   Navigator.push(
@@ -239,7 +239,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'CẤT HÀNG LÊN KỆ (PUTAWAY)',
+                              'CẤT HÀNG LÊN KỆ',
                               style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
                             ),
                             Text(
@@ -254,6 +254,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                   ),
                 ),
               ),
+
 
               // 4 Large Action Tiles with Soft Eye-Comfort Styling
               Expanded(

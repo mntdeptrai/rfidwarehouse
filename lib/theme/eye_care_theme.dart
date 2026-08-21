@@ -142,11 +142,11 @@ class EyeCareThemeService extends ChangeNotifier {
   String get modeName {
     switch (_mode) {
       case EyeCareMode.warmDark:
-        return 'Than Ấm (Warm Dark)';
+        return 'Than Ấm';
       case EyeCareMode.amberNight:
-        return 'Lọc Ánh Sáng Xanh (Amber)';
+        return 'Lọc Ánh Sáng Xanh';
       case EyeCareMode.softSepia:
-        return 'Giấy Mộc Dịu Mắt (Sepia)';
+        return 'Giấy Mộc Dịu Mắt';
     }
   }
 
