@@ -6,6 +6,7 @@ import '../../services/uhf_service.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/excel_import_service.dart';
 import '../../services/tower_light_service.dart';
+import '../../services/mysql_sync_service.dart';
 import '../../widgets/tower_light_widget.dart';
 import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
@@ -23,6 +24,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final DesktopUhfTcpService _desktopUhf = DesktopUhfTcpService();
   final ExcelImportService _excelService = ExcelImportService();
   final TowerLightService _towerLight = TowerLightService();
+  final MySqlSyncService _mysqlSync = MySqlSyncService();
 
   int _currentMode = 0; // 0: Live RFID Station, 1: Orders List & Excel
   bool _isCreating = false;
@@ -64,6 +66,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     if (_repo.locations.isNotEmpty) {
       _selectedLiveLocation = _repo.locations.first.locationId;
     }
+
+    // Tự động kéo danh sách phiếu nhập mới nhất từ MySQL về khi mở trạm
+    Future.microtask(() async {
+      await _mysqlSync.syncNow();
+      if (mounted) {
+        setState(() {
+          if (_selectedLiveOrder == null && _repo.inboundOrders.isNotEmpty) {
+            _selectedLiveOrder = _repo.inboundOrders.firstWhere(
+              (o) => o.status == InboundOrderStatus.newOrder,
+              orElse: () => _repo.inboundOrders.first,
+            );
+          }
+        });
+      }
+    });
 
     // Đồng bộ tức thì dữ liệu thẻ và trạng thái đang quét từ Desktop UHF Bridge
     _isScanning = _desktopUhf.isScanning;
@@ -1390,7 +1407,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     ),
                     icon: const Icon(Icons.refresh, size: 18),
                     label: const Text('LÀM MỚI'),
-                    onPressed: () => _repo.refreshFromDatabase(),
+                    onPressed: () async {
+                      await _mysqlSync.syncNow();
+                      await _repo.refreshFromDatabase();
+                      if (mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            backgroundColor: Color(0xFF10B981),
+                            duration: Duration(seconds: 2),
+                            content: Text('Đã làm mới và đồng bộ danh sách phiếu nhập từ MySQL!'),
+                          ),
+                        );
+                      }
+                    },
                   ),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
@@ -1487,34 +1517,104 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('📍 VỊ TRÍ & ĐƠN HÀNG TIẾP NHẬN', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                    const Text('📍 VỊ TRÍ & PHIẾU NHẬP ĐỐI SOÁT', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(height: 10),
-                    if (orders.isNotEmpty) ...[
-                      const Text('Đơn nhập PO / File:', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                      const SizedBox(height: 4),
-                      DropdownButtonFormField<String>(
-                        initialValue: orders.any((o) => o.orderNo == _selectedLiveOrder?.orderNo) ? _selectedLiveOrder?.orderNo : null,
-                        isExpanded: true,
-                        dropdownColor: const Color(0xFF1E293B),
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFF0F172A),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+
+                    // Selector Phiếu Nhập Đối Soát
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      children: [
+                        const Text('Phiếu nhập đối soát:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                        InkWell(
+                          onTap: () async {
+                            await _mysqlSync.syncNow();
+                            setState(() {});
+                          },
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.sync, size: 12, color: Color(0xFF38BDF8)),
+                              SizedBox(width: 3),
+                              Text('Đồng bộ MySQL', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
                         ),
-                        items: orders.map((o) => DropdownMenuItem<String>(
-                          value: o.orderNo,
-                          child: Text('${o.orderNo} - ${o.sourceSupplier}', overflow: TextOverflow.ellipsis),
-                        )).toList(),
-                        onChanged: (val) {
-                          if (val == null) return;
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    DropdownButtonFormField<String>(
+                      value: _selectedLiveOrder != null ? _selectedLiveOrder!.orderNo : '__DIRECT_SCAN__',
+                      isExpanded: true,
+                      dropdownColor: const Color(0xFF1E293B),
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFF0F172A),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String>(
+                          value: '__DIRECT_SCAN__',
+                          child: Text('⚡ [QUÉT TỰ DO] Không chọn đơn (Nhận tất cả mã chip)', style: TextStyle(color: Color(0xFF38BDF8))),
+                        ),
+                        if (_receiptCartons.isNotEmpty)
+                          DropdownMenuItem<String>(
+                            value: '__EXCEL_FILE__',
+                            child: Text('📦 [FILE EXCEL] ${_receiveNoController.text} (${_receiptCartons.length} thùng/nhóm)', style: const TextStyle(color: Color(0xFF10B981))),
+                          ),
+                        for (final o in orders)
+                          DropdownMenuItem<String>(
+                            value: o.orderNo,
+                            child: Text(
+                              '[${o.orderNo}] ${o.sourceSupplier} (${_repo.getItemsByOrderNo(o.orderNo).length} chip)',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (val) {
+                        if (val == null || val == '__DIRECT_SCAN__') {
+                          _onOrderSelected(null);
+                        } else if (val == '__EXCEL_FILE__') {
+                          // Chế độ file Excel
+                          setState(() {
+                            _selectedLiveOrder = null;
+                            _scannedTags.clear();
+                          });
+                        } else {
                           final match = orders.firstWhere((o) => o.orderNo == val, orElse: () => orders.first);
                           _onOrderSelected(match);
-                        },
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+
+                    if (orders.isEmpty && _receiptCartons.isEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF334155)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, color: Color(0xFFF59E0B), size: 16),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text('Chưa có phiếu nhập. Bạn có thể nạp file Excel để đối soát ngay.', style: TextStyle(color: Colors.white70, fontSize: 10.5)),
+                            ),
+                            TextButton(
+                              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(50, 24)),
+                              onPressed: _importGoodsReceiveExcel,
+                              child: const Text('+ Nạp File', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                    ],
                     Row(
                       children: [
                         Expanded(

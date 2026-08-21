@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:mysql_client/mysql_client.dart';
+import '../models/wms_models.dart';
 import 'database_service.dart';
 import 'warehouse_repository.dart';
 
@@ -348,6 +349,8 @@ class MySqlSyncService extends ChangeNotifier {
         return false;
       }
 
+      final isTestEnv = Platform.environment.containsKey('FLUTTER_TEST');
+
       // ==========================================
       // BƯỚC 1: PUSH DỮ LIỆU TỪ SQLITE LÊN MYSQL
       // ==========================================
@@ -356,7 +359,6 @@ class MySqlSyncService extends ChangeNotifier {
 
       if (pendingItems.isNotEmpty) {
         MySQLConnection? conn;
-        final isTestEnv = Platform.environment.containsKey('FLUTTER_TEST');
 
         if (!isTestEnv) {
           try {
@@ -418,14 +420,31 @@ class MySqlSyncService extends ChangeNotifier {
       // ==========================================
       // BƯỚC 2: PULL DỮ LIỆU MỚI TỪ MYSQL VỀ SQLITE
       // ==========================================
+      int pulledCount = 0;
+      if (!isTestEnv) {
+        MySQLConnection? pullConn;
+        try {
+          pullConn = await _connectMySql();
+          pulledCount = await _pullMasterDataFromMySql(pullConn);
+        } catch (pullErr) {
+          debugPrint('Pull error from MySQL: $pullErr');
+        } finally {
+          if (pullConn != null) {
+            try {
+              await pullConn.close();
+            } catch (_) {}
+          }
+        }
+      }
+
       await WarehouseRepository().refreshFromDatabase();
 
       _addLog(
         action: 'PULL',
         tableName: 'MASTER_DATA',
-        recordCount: 0,
+        recordCount: pulledCount,
         isSuccess: true,
-        message: 'Đã đồng bộ danh mục mới nhất từ MySQL về SQLite cục bộ',
+        message: 'Đã đồng bộ $pulledCount danh mục & phiếu nhập từ MySQL về SQLite cục bộ',
       );
 
       _lastSyncTime = DateTime.now();
@@ -452,6 +471,139 @@ class MySqlSyncService extends ChangeNotifier {
 
   Future<MySQLConnection> connectForDirectPush() => _connectMySql();
   Future<void> executeSyncItemDirect(MySQLConnection conn, String tableName, String action, Map<String, dynamic> payload) => _executeMySqlSyncItem(conn, tableName, action, payload);
+
+  Future<int> _pullMasterDataFromMySql(MySQLConnection conn) async {
+    int pulledRecords = 0;
+    try {
+      // 1. Pull Products
+      final prodResult = await conn.execute("SELECT product_id, sku, product_name, unit, category, description FROM products");
+      for (final row in prodResult.rows) {
+        final m = row.assoc();
+        final p = Product(
+          productId: m['product_id'] ?? '',
+          sku: m['sku'] ?? '',
+          productName: m['product_name'] ?? '',
+          unit: m['unit'] ?? 'Cái',
+          category: m['category'] ?? 'Chung',
+          description: m['description'],
+        );
+        if (p.productId.isNotEmpty) {
+          await _dbService.insertProduct(p);
+          pulledRecords++;
+        }
+      }
+
+      // 2. Pull Locations
+      final locResult = await conn.execute("SELECT location_id, location_code, zone, shelf, level, current_pallets FROM locations");
+      for (final row in locResult.rows) {
+        final m = row.assoc();
+        final l = Location(
+          locationId: m['location_id'] ?? '',
+          locationCode: m['location_code'] ?? '',
+          zone: m['zone'] ?? 'A',
+          shelf: m['shelf'] ?? '01',
+          level: m['level'] ?? '01',
+          currentPallets: int.tryParse(m['current_pallets'] ?? '0') ?? 0,
+        );
+        if (l.locationId.isNotEmpty) {
+          await _dbService.insertLocation(l);
+          pulledRecords++;
+        }
+      }
+
+      // 3. Pull Pallets
+      final palResult = await conn.execute("SELECT pallet_id, pallet_code, location_id, inbound_time, is_multi_sku FROM pallets");
+      for (final row in palResult.rows) {
+        final m = row.assoc();
+        final p = Pallet(
+          palletId: m['pallet_id'] ?? '',
+          palletCode: m['pallet_code'] ?? '',
+          locationId: m['location_id'],
+          inboundTime: DateTime.tryParse(m['inbound_time'] ?? '') ?? DateTime.now(),
+          isMultiSku: (m['is_multi_sku'] == '1' || m['is_multi_sku'] == 'true'),
+        );
+        if (p.palletId.isNotEmpty) {
+          await _dbService.insertPallet(p);
+          pulledRecords++;
+        }
+      }
+
+      // 4. Pull Inbound Orders & Details
+      final orderResult = await conn.execute("SELECT inbound_order_id, order_no, source_supplier, status, created_at FROM inbound_orders");
+      for (final row in orderResult.rows) {
+        final m = row.assoc();
+        final orderId = m['inbound_order_id'] ?? '';
+        final orderNo = m['order_no'] ?? orderId;
+        final statusStr = m['status'] ?? 'NEW';
+        final status = InboundOrderStatus.values.firstWhere(
+          (s) => s.code == statusStr,
+          orElse: () => InboundOrderStatus.newOrder,
+        );
+
+        final detailResult = await conn.execute(
+          "SELECT product_id, sku, product_name, required_qty, received_qty FROM inbound_order_details WHERE order_id = :oid",
+          {"oid": orderId},
+        );
+
+        final List<InboundOrderDetail> details = [];
+        for (final dRow in detailResult.rows) {
+          final dm = dRow.assoc();
+          details.add(InboundOrderDetail(
+            productId: dm['product_id'] ?? '',
+            sku: dm['sku'] ?? '',
+            productName: dm['product_name'] ?? '',
+            requiredQty: int.tryParse(dm['required_qty'] ?? '0') ?? 0,
+            receivedQty: int.tryParse(dm['received_qty'] ?? '0') ?? 0,
+          ));
+        }
+
+        final order = InboundOrder(
+          inboundOrderId: orderId,
+          orderNo: orderNo,
+          sourceSupplier: m['source_supplier'] ?? 'Nhà cung cấp',
+          status: status,
+          createdAt: DateTime.tryParse(m['created_at'] ?? '') ?? DateTime.now(),
+          details: details,
+        );
+        if (order.inboundOrderId.isNotEmpty) {
+          await _dbService.insertInboundOrder(order);
+          pulledRecords++;
+        }
+      }
+
+      // 5. Pull Items
+      final itemResult = await conn.execute("SELECT item_id, product_id, sku, product_name, serial_number, epc, status, pallet_id, location_id, inbound_time, allocated_time FROM items");
+      for (final row in itemResult.rows) {
+        final m = row.assoc();
+        final epc = m['epc'] ?? '';
+        if (epc.isNotEmpty) {
+          final statusStr = m['status'] ?? 'IN_STOCK';
+          final status = ItemStatus.values.firstWhere(
+            (s) => s.code == statusStr,
+            orElse: () => ItemStatus.inStock,
+          );
+          final it = Item(
+            itemId: m['item_id'] ?? 'ITEM-$epc',
+            productId: m['product_id'] ?? '',
+            sku: m['sku'] ?? '',
+            productName: m['product_name'] ?? '',
+            serialNumber: m['serial_number'] ?? epc,
+            epc: epc,
+            status: status,
+            palletId: m['pallet_id'],
+            locationId: m['location_id'],
+            inboundTime: DateTime.tryParse(m['inbound_time'] ?? ''),
+            allocatedTime: DateTime.tryParse(m['allocated_time'] ?? ''),
+          );
+          await _dbService.insertItem(it);
+          pulledRecords++;
+        }
+      }
+    } catch (err) {
+      debugPrint('Error pulling master data from MySQL: $err');
+    }
+    return pulledRecords;
+  }
 
   Future<MySQLConnection> _connectMySql() async {
     try {
