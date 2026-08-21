@@ -61,7 +61,7 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> refreshFromDatabase() => _loadFromSqlite();
 
-  Future<void> clearAllData() async {
+  Future<void> clearAllData({bool alsoClearMySql = true}) async {
     await _dbService.clearAllData();
     _products.clear();
     _locations.clear();
@@ -72,8 +72,14 @@ class WarehouseRepository extends ChangeNotifier {
     _pickingPlans.clear();
     _inventorySessions.clear();
     _transactions.clear();
+
+    if (alsoClearMySql) {
+      await MySqlSyncService().clearAllMySqlData();
+    }
+
     notifyListeners();
   }
+
 
   /// Tạo mã EPC 96-bit (24 ký tự Hex) chuẩn Gen2 duy nhất cho từng sản phẩm
   String generateUniqueEpc({String? sku, int sequence = 1}) {

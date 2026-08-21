@@ -78,6 +78,10 @@ void main() {
       final tx = repo.transactions.where((t) => t.documentNo == testOrderNo).firstOrNull;
       expect(tx, isNotNull);
       expect(tx!.type, equals(TransactionType.movement));
+
+      // Dọn dẹp dữ liệu test khỏi SQLite sau khi test xong
+      await repo.clearAllData(alsoClearMySql: false);
     });
   });
 }
+

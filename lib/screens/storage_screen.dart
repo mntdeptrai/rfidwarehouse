@@ -3,6 +3,8 @@ import '../models/wms_models.dart';
 import '../services/warehouse_repository.dart';
 import '../widgets/hardware_status_appbar.dart';
 import '../widgets/pda_location_barcode_card.dart';
+import '../theme/eye_care_theme.dart';
+
 
 class StorageScreen extends StatefulWidget {
   const StorageScreen({super.key});
@@ -213,40 +215,42 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   }
 
   void _confirmClearAllData() {
+    final c = EyeCareThemeService().colors;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Row(
+        backgroundColor: c.bgCard,
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            SizedBox(width: 8),
-            Text('Xóa Sạch Dữ Liệu Cũ?', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            Icon(Icons.warning_amber_rounded, color: c.warningAmber, size: 28),
+            const SizedBox(width: 8),
+            Text('Xóa Sạch Dữ Liệu Cũ?', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: const Text(
-          'Thao tác này sẽ xóa sạch 100% toàn bộ dữ liệu mẫu / dữ liệu cũ trong CSDL SQLite trên máy cầm tay và đưa về trạng thái trắng hoàn toàn.',
-          style: TextStyle(color: Colors.white70, fontSize: 13),
+        content: Text(
+          'Thao tác này sẽ xóa sạch 100% toàn bộ đơn hàng và chip RFID thử nghiệm trong CSDL SQLite trên máy cầm tay và cả trên máy chủ MySQL, đưa về trạng thái sạch hoàn toàn để bạn nhập dữ liệu thực tế.',
+          style: TextStyle(color: c.textSecondary, fontSize: 13),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('HỦY', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
             onPressed: () async {
-              await _repo.clearAllData();
+              await _repo.clearAllData(alsoClearMySql: true);
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xóa sạch CSDL SQLite cục bộ thành công!')),
+                  SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả SQLite & MySQL thành công!')),
                 );
               }
             },
-            child: const Text('XÓA SẠCH SQLITE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('XÓA SẠCH DỮ LIỆU', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
+
 
   void _showMovePalletDialog(Pallet pallet) {
     if (_repo.locations.isEmpty) return;

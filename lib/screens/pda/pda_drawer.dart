@@ -117,15 +117,15 @@ class PdaDrawer extends StatelessWidget {
               ListTile(
                 leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
                 title: Text('Xóa Sạch Dữ Liệu SQLite', style: TextStyle(color: c.errorCoral, fontSize: 14)),
-                subtitle: Text('Xóa đơn/thẻ cũ trên máy để nhận mới', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                subtitle: Text('Xóa sạch đơn/thẻ thử nghiệm trên PDA & MySQL', style: TextStyle(color: c.textMuted, fontSize: 11)),
                 onTap: () async {
                   Navigator.pop(context);
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
                       backgroundColor: c.bgCard,
-                      title: Text('Xác nhận xóa dữ liệu?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
-                      content: Text('Toàn bộ dữ liệu đơn hàng và chip trong máy sẽ bị xóa sạch để đồng bộ từ MySQL.', style: TextStyle(color: c.textSecondary)),
+                      title: Text('Xác nhận xóa sạch dữ liệu?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
+                      content: Text('Toàn bộ đơn hàng và chip RFID thử nghiệm (trên cả máy chủ MySQL và PDA) sẽ được xóa sạch 100% để bạn bắt đầu tạo dữ liệu thực tế.', style: TextStyle(color: c.textSecondary)),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
                         ElevatedButton(
@@ -137,16 +137,17 @@ class PdaDrawer extends StatelessWidget {
                     ),
                   );
                   if (confirm == true) {
-                    await WarehouseRepository().clearAllData();
+                    await WarehouseRepository().clearAllData(alsoClearMySql: true);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(backgroundColor: Colors.green, content: Text('Đã xóa sạch cơ sở dữ liệu SQLite!')),
+                        SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả PDA & MySQL!')),
                       );
                     }
                   }
                 },
               ),
-              const Divider(color: Color(0xFF334155)),
+              Divider(color: c.border),
+
               const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),

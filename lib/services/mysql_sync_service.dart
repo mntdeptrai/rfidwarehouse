@@ -861,6 +861,52 @@ class MySqlSyncService extends ChangeNotifier {
     }
   }
 
+  Future<bool> clearAllMySqlData({bool keepMasterLocations = true}) async {
+    MySQLConnection? conn;
+    try {
+      conn = await _connectMySql();
+      // Clear transactional tables safely
+      final tables = [
+        'inventory_transactions',
+        'inbound_order_details',
+        'inbound_orders',
+        'outbound_order_details',
+        'outbound_orders',
+        'items',
+        'pallets',
+        if (!keepMasterLocations) 'locations',
+        if (!keepMasterLocations) 'products',
+      ];
+
+      for (final tbl in tables) {
+        try {
+          await conn.execute("DELETE FROM $tbl");
+        } catch (e) {
+          debugPrint('Table clear warning on $tbl: $e');
+        }
+      }
+
+      _addLog(
+        action: 'CLEAR_MYSQL',
+        tableName: 'ALL',
+        recordCount: 0,
+        isSuccess: true,
+        message: 'Đã xóa sạch toàn bộ đơn hàng & chip RFID thử nghiệm trên MySQL',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Error connecting/clearing MySQL data: $e');
+      return false;
+    } finally {
+      if (conn != null) {
+        try {
+          await conn.close();
+        } catch (_) {}
+      }
+    }
+  }
+
+
   void clearLogs() {
     _logs.clear();
     notifyListeners();
@@ -872,3 +918,4 @@ class MySqlSyncService extends ChangeNotifier {
     super.dispose();
   }
 }
+
