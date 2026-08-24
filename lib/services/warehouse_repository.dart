@@ -38,13 +38,11 @@ class WarehouseRepository extends ChangeNotifier {
       _products.clear();
       _products.addAll(dbProducts);
 
-      // Danh sách chuẩn các vị trí kệ trong kho
       final validStandardLocationIds = {
         'LOC-A1-01-01', 'LOC-A1-01-02', 'LOC-A1-02-01', 'LOC-A1-02-02',
         'LOC-B1-01-01', 'LOC-B1-01-02', 'LOC-GATE-IN', 'LOC-GATE-OUT',
       };
 
-      // Xóa các vị trí rác bị chèn nhầm từ mã thẻ RFID hoặc Barcode mặt hàng
       for (final loc in dbLocations) {
         final id = loc.locationId.toUpperCase().trim();
         final isStandard = validStandardLocationIds.contains(id) ||
@@ -109,7 +107,6 @@ class WarehouseRepository extends ChangeNotifier {
     _inboundOrders.removeWhere((o) => o.inboundOrderId == cleanId || o.orderNo == cleanId);
     _items.removeWhere((i) => i.orderNo == cleanId);
 
-    // Enqueue sync delete or direct Supabase delete
     await _syncDirectOrQueue(
       tableName: 'inbound_orders',
       recordId: cleanId,
@@ -139,14 +136,12 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-
-  /// Tạo mã EPC 96-bit (24 ký tự Hex) chuẩn Gen2 duy nhất cho từng sản phẩm
   String generateUniqueEpc({String? sku, int sequence = 1}) {
     final existingEpcs = _items.map((i) => i.epc.toUpperCase()).toSet();
     final timeHex = (DateTime.now().millisecondsSinceEpoch % 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
     final seqHex = (sequence % 0xFFFF).toRadixString(16).padLeft(4, '0').toUpperCase();
     final rndHex = (Random().nextInt(0xFFFF)).toRadixString(16).padLeft(4, '0').toUpperCase();
-    
+
     String epcCandidate = 'E280$timeHex$seqHex$rndHex'.toUpperCase();
     while (existingEpcs.contains(epcCandidate)) {
       final extraRnd = Random().nextInt(0xFFFF).toRadixString(16).padLeft(4, '0').toUpperCase();
@@ -155,7 +150,6 @@ class WarehouseRepository extends ChangeNotifier {
     return epcCandidate;
   }
 
-  /// Lấy danh sách các Item (Mã EPC) thuộc về một Đơn Nhập kho
   List<Item> getItemsByOrderNo(String orderNo) {
     final cleanNo = orderNo.trim().toUpperCase();
     final order = _inboundOrders.where((o) => o.orderNo.trim().toUpperCase() == cleanNo || o.inboundOrderId.trim().toUpperCase() == cleanNo).firstOrNull;
@@ -168,7 +162,6 @@ class WarehouseRepository extends ChangeNotifier {
     }).toList();
   }
 
-  /// Tạo Phiếu Nhập Kho & Tự động sinh danh sách mã EPC duy nhất ở trạng thái CHƯA NHẬP KHO
   Future<List<Item>> addInboundOrder(InboundOrder order, {bool autoGenerateEpcs = true}) async {
     await _dbService.insertInboundOrder(order);
     _inboundOrders.add(order);
@@ -206,7 +199,7 @@ class WarehouseRepository extends ChangeNotifier {
             productName: detail.productName,
             serialNumber: 'SN-${detail.sku}-${now.millisecondsSinceEpoch.toRadixString(16).toUpperCase()}-$globalSeq',
             epc: epc,
-            status: ItemStatus.pendingInbound, // Trạng thái: "Chưa nhập kho" (Chờ quét qua cổng/trạm)
+            status: ItemStatus.pendingInbound,
             orderNo: order.orderNo,
             palletId: null,
             locationId: null,
@@ -242,7 +235,6 @@ class WarehouseRepository extends ChangeNotifier {
     return generatedItems;
   }
 
-  /// Import danh sách nhiều đơn nhập hàng loạt từ Excel & tự động sinh toàn bộ mã EPC
   Future<List<Item>> batchImportInboundOrders(List<InboundOrder> orders) async {
     final List<Item> allGeneratedItems = [];
     for (var order in orders) {
@@ -252,7 +244,6 @@ class WarehouseRepository extends ChangeNotifier {
     return allGeneratedItems;
   }
 
-  /// Thêm trực tiếp 1 Item (từ file Excel có sẵn Serial/EPC) vào kho & SQLite
   Future<void> insertDirectItem(Item item) async {
     _items.removeWhere((i) => i.epc == item.epc);
     _items.add(item);
@@ -377,7 +368,6 @@ class WarehouseRepository extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // Danh mục dữ liệu (Bắt đầu hoàn toàn trống 100% trong SQLite)
   final List<Product> _products = [];
   final List<Location> _locations = [];
   final List<Pallet> _pallets = [];
@@ -389,7 +379,6 @@ class WarehouseRepository extends ChangeNotifier {
   final List<InventoryTransaction> _transactions = [];
   final List<RfidDevice> _devices = [];
 
-  // Getters
   List<Product> get products => List.unmodifiable(_products);
   List<Location> get locations => List.unmodifiable(_locations);
   List<Pallet> get pallets => List.unmodifiable(_pallets);
@@ -401,11 +390,6 @@ class WarehouseRepository extends ChangeNotifier {
   List<InventoryTransaction> get transactions => List.unmodifiable(_transactions);
   List<RfidDevice> get devices => List.unmodifiable(_devices);
 
-  // ==========================================
-  // 2. NGHIỆP VỤ NHẬP KHO (INBOUND)
-  // ==========================================
-
-  /// Khởi tạo các Item mới cho lệnh nhập và mã hóa tem
   List<Item> generateItemsForInbound(InboundOrder order) {
     final existing = _items.where((i) => i.orderNo == order.orderNo).toList();
     if (existing.isNotEmpty) return existing;
@@ -433,10 +417,9 @@ class WarehouseRepository extends ChangeNotifier {
     return newItems;
   }
 
-  /// Gán Item vào Pallet và Location tạm
   Pallet createOrAssignPallet({
     required String palletCode,
-    required String locationId,
+    String? locationId,
     required List<Item> newItems,
   }) {
     Pallet? pallet = _pallets.firstWhere(
@@ -473,16 +456,13 @@ class WarehouseRepository extends ChangeNotifier {
     return pallet;
   }
 
-  /// Đối chiếu tại RFID Gate - INBOUND
   GateVerificationResult verifyGateInbound({
     required String orderNo,
     required List<String> scannedEpcs,
   }) {
     final order = _inboundOrders.firstWhere((o) => o.orderNo == orderNo);
-    // Khử trùng danh sách EPC
     final uniqueEpcs = scannedEpcs.toSet().toList();
 
-    // Map EPC sang Item
     final Map<String, int> actualSkuCounts = {};
     final List<String> unexpectedEpcs = [];
 
@@ -506,7 +486,6 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // So sánh chi tiết từng SKU
     final List<SkuVerificationBreakdown> breakdowns = [];
     bool allMatched = true;
 
@@ -526,7 +505,6 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // Nếu có thẻ lạ hoặc SKU không thuộc đơn thì FAIL
     if (unexpectedEpcs.isNotEmpty) allMatched = false;
 
     int totalReq = order.details.fold(0, (sum, d) => sum + d.requiredQty);
@@ -545,7 +523,6 @@ class WarehouseRepository extends ChangeNotifier {
     );
   }
 
-  /// Xác nhận hoàn tất nhập kho
   bool confirmInboundCompletion({
     required String orderNo,
     required String palletCode,
@@ -556,7 +533,6 @@ class WarehouseRepository extends ChangeNotifier {
     final pallet = _pallets.firstWhere((p) => p.palletCode == palletCode);
     final location = _locations.firstWhere((l) => l.locationId == locationId);
 
-    // Chuyển Item sang IN_STOCK
     for (var itemId in pallet.itemIds) {
       final item = _items.firstWhere((it) => it.itemId == itemId);
       item.status = ItemStatus.inStock;
@@ -566,19 +542,16 @@ class WarehouseRepository extends ChangeNotifier {
       _dbService.updateItemStatus(item.epc, ItemStatus.inStock);
     }
 
-    // Cập nhật lệnh nhập
     order.status = InboundOrderStatus.completed;
     _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.completed, locationId: locationId, palletId: pallet.palletId);
     for (var d in order.details) {
       d.receivedQty = d.requiredQty;
     }
 
-    // Cập nhật vị trí lưu pallet
     pallet.locationId = locationId;
     _dbService.updatePalletLocation(pallet.palletId, locationId);
     location.currentPallets++;
 
-    // Ghi log giao dịch
     for (var d in order.details) {
       _transactions.insert(
         0,
@@ -598,10 +571,8 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // Bắn sync về ERP Bravo
     ErpBravoService().pushInboundCompleted(orderNo, pallet.itemIds.length);
 
-    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: orderNo,
@@ -621,7 +592,6 @@ class WarehouseRepository extends ChangeNotifier {
     return true;
   }
 
-  /// Giai đoạn 1: Kiện hàng đi qua Cổng RFID Gate -> Quét đủ thẻ -> Chuyển thành CHỜ XẾP KHO (WAITING_PUTAWAY)
   Future<int> confirmGateReceiveToWaitingPutaway({
     required String orderNo,
     required List<String> scannedEpcs,
@@ -632,14 +602,11 @@ class WarehouseRepository extends ChangeNotifier {
     final uniqueEpcs = scannedEpcs.toSet().toList();
     final now = DateTime.now();
 
-    // 1. Tìm đơn nhập kho
     final order = _inboundOrders.where((o) =>
       o.orderNo.trim().toUpperCase() == cleanOrderNo ||
       o.inboundOrderId.trim().toUpperCase() == cleanOrderNo
     ).firstOrNull;
 
-    // 2. Chuyển trạng thái các Items sang WAITING_PUTAWAY (Chờ xếp kho)
-    //    KHÔNG gán locationId hay palletId — chỉ PDA putaway mới gán
     final matchedItems = _items.where((it) {
       if (uniqueEpcs.contains(it.epc)) return true;
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanOrderNo) return true;
@@ -670,7 +637,6 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // 3. Cập nhật trạng thái Đơn hàng sang WAITING_PUTAWAY
     if (order != null) {
       order.status = InboundOrderStatus.waitingPutaway;
       for (var d in order.details) {
@@ -689,7 +655,6 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // 4. Ghi nhận giao dịch Cổng tiếp nhận
     await _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: cleanOrderNo,
@@ -708,7 +673,6 @@ class WarehouseRepository extends ChangeNotifier {
     return matchedItems.length;
   }
 
-  /// Giai đoạn 2: Thủ kho cầm PDA quét Barcode Vị trí kệ và quét Barcode Thùng hàng -> Xác nhận vị trí & Chuyển sang TRONG KHO (IN_STOCK)
   Future<int> confirmPdaPutawayByCarton({
     required String cartonOrOrderBarcode,
     required String locationId,
@@ -717,7 +681,6 @@ class WarehouseRepository extends ChangeNotifier {
     final cleanBarcode = cartonOrOrderBarcode.trim().toUpperCase();
     final now = DateTime.now();
 
-    // 1. Tìm vị trí kệ
     final loc = _locations.where((l) =>
       l.locationId.toUpperCase() == locationId.toUpperCase() ||
       l.locationCode.toUpperCase() == locationId.toUpperCase()
@@ -729,14 +692,12 @@ class WarehouseRepository extends ChangeNotifier {
       level: 'Tầng 1',
     );
 
-    // 2. Tìm tất cả items thuộc thùng hàng, mã barcode ngoài thùng hoặc mã EPC này
     var matchedItems = _items.where((it) {
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.sku.trim().toUpperCase() == cleanBarcode) return true;
       if (it.epc.trim().toUpperCase() == cleanBarcode || it.serialNumber.trim().toUpperCase() == cleanBarcode) return true;
-      
-      // So khớp mềm khi số lượng số 0 ở giữa khác nhau (VD: 893000000001 vs 8930000000001)
+
       final itSkuNorm = it.sku.toUpperCase().replaceAll(RegExp(r'0+'), '0');
       final cBNorm = cleanBarcode.toUpperCase().replaceAll(RegExp(r'0+'), '0');
       if (itSkuNorm == cBNorm) return true;
@@ -744,8 +705,6 @@ class WarehouseRepository extends ChangeNotifier {
       return false;
     }).toList();
 
-    // 2b. Nếu chưa có Item nào trong kho:
-    // Tự động tìm trong danh mục Product hoặc tạo mới Product và sinh Item cất thẳng vào kệ (Direct Putaway)
     if (matchedItems.isEmpty) {
       final cBNorm = cleanBarcode.toUpperCase().replaceAll(RegExp(r'0+'), '0');
       final prod = _products.where((p) {
@@ -753,8 +712,7 @@ class WarehouseRepository extends ChangeNotifier {
         final pId = p.productId.toUpperCase().replaceAll(RegExp(r'\s+'), '');
         final cB = cleanBarcode.toUpperCase().replaceAll(RegExp(r'\s+'), '');
         if (pSku == cB || pId == cB) return true;
-        
-        // So khớp mềm bỏ số 0 lặp
+
         final pSkuNorm = pSku.replaceAll(RegExp(r'0+'), '0');
         if (pSkuNorm == cBNorm) return true;
 
@@ -781,7 +739,6 @@ class WarehouseRepository extends ChangeNotifier {
       _items.add(newItem);
       await _dbService.insertItem(newItem);
 
-      // Nếu sản phẩm chưa có trong danh mục products, tự động lưu luôn vào danh mục products
       if (prod == null) {
         final newProd = Product(
           productId: effectiveProdId,
@@ -810,7 +767,6 @@ class WarehouseRepository extends ChangeNotifier {
       matchedItems = [newItem];
     }
 
-    // 3. Cập nhật tất cả Item trong thùng sang IN_STOCK và lưu vị trí kệ mới nhất
     for (var it in matchedItems) {
       final oldLoc = it.locationId ?? 'LOC-GATE-IN';
       it.status = ItemStatus.inStock;
@@ -832,7 +788,6 @@ class WarehouseRepository extends ChangeNotifier {
         },
       );
 
-      // Ghi log biến động vị trí (Putaway)
       _transactions.insert(
         0,
         InventoryTransaction(
@@ -851,7 +806,6 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // 4. Cập nhật trạng thái Đơn hàng sang COMPLETED (Hoàn tất nhập kho)
     final order = _inboundOrders.where((o) =>
       o.orderNo.trim().toUpperCase() == cleanBarcode ||
       o.inboundOrderId.trim().toUpperCase() == cleanBarcode
@@ -876,7 +830,6 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // 5. Ghi nhận giao dịch hoàn tất Putaway
     await _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: cleanBarcode,
@@ -897,11 +850,10 @@ class WarehouseRepository extends ChangeNotifier {
     return matchedItems.length;
   }
 
-  /// Nhập kho trực tiếp bằng súng quét tay cầm Chainway C72e
   Future<int> confirmHandheldInbound({
     String? orderNo,
     required String palletCode,
-    required String locationId,
+    String? locationId,
     required List<String> scannedEpcs,
     String? defaultSku,
     String? defaultProductName,
@@ -910,10 +862,6 @@ class WarehouseRepository extends ChangeNotifier {
     final uniqueEpcs = scannedEpcs.toSet().toList();
     if (uniqueEpcs.isEmpty) return 0;
 
-    final loc = _locations.where((l) => l.locationId == locationId).firstOrNull ??
-        Location(locationId: locationId, locationCode: locationId, zone: 'Khu vực Nhập', shelf: 'Kệ 01', level: 'Tầng 1');
-
-    // Tạo hoặc lấy Pallet
     final pallet = createOrAssignPallet(
       palletCode: palletCode,
       locationId: locationId,
@@ -922,8 +870,8 @@ class WarehouseRepository extends ChangeNotifier {
 
     final now = DateTime.now();
     int count = 0;
+    final effectiveStatus = locationId != null ? ItemStatus.inStock : ItemStatus.waitingPutaway;
 
-    // Đồng bộ Pallet lên Supabase
     await _syncDirectOrQueue(
       tableName: 'pallets',
       recordId: pallet.palletId,
@@ -941,7 +889,7 @@ class WarehouseRepository extends ChangeNotifier {
       count++;
       Item? item = _items.where((it) => it.epc == epc).firstOrNull;
       if (item != null) {
-        item.status = ItemStatus.inStock;
+        item.status = effectiveStatus;
         item.locationId = locationId;
         item.palletId = pallet.palletId;
         item.inboundTime = now;
@@ -972,7 +920,7 @@ class WarehouseRepository extends ChangeNotifier {
           productName: defaultProductName ?? 'Hàng nhập thực tế',
           serialNumber: 'SN-${epc.length > 6 ? epc.substring(epc.length - 6) : epc}',
           epc: epc,
-          status: ItemStatus.inStock,
+          status: effectiveStatus,
           palletId: pallet.palletId,
           locationId: locationId,
           inboundTime: now,
@@ -1003,23 +951,23 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // Cập nhật trạng thái đơn nếu có
     if (orderNo != null) {
       final orderIndex = _inboundOrders.indexWhere((o) => o.orderNo == orderNo);
       if (orderIndex != -1) {
         final order = _inboundOrders[orderIndex];
-        order.status = InboundOrderStatus.completed;
+        final orderStatus = locationId != null ? InboundOrderStatus.completed : InboundOrderStatus.waitingPutaway;
+        order.status = orderStatus;
         for (var d in order.details) {
           d.receivedQty = d.requiredQty;
         }
-        await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.completed, locationId: locationId, palletId: pallet.palletId);
+        await _dbService.updateInboundOrderStatus(order.inboundOrderId, orderStatus, locationId: locationId, palletId: pallet.palletId);
         await _syncDirectOrQueue(
           tableName: 'inbound_orders',
           recordId: order.inboundOrderId,
           action: 'UPDATE',
           payload: {
             'inbound_order_id': order.inboundOrderId,
-            'status': InboundOrderStatus.completed.code,
+            'status': orderStatus.code,
             'location_id': locationId,
             'pallet_id': pallet.palletId,
             'updated_at': now.toIso8601String(),
@@ -1028,7 +976,7 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // Ghi nhận lịch sử giao dịch
+    final destinationName = locationId != null ? (_locations.where((l) => l.locationId == locationId).firstOrNull?.locationCode ?? locationId) : 'Chờ xếp kệ';
     _transactions.insert(
       0,
       InventoryTransaction(
@@ -1038,18 +986,16 @@ class WarehouseRepository extends ChangeNotifier {
         sku: defaultSku ?? 'MULTI-SKU',
         productName: defaultProductName ?? 'Nhập kho quét RFID',
         quantity: uniqueEpcs.length,
-        toLocation: loc.locationCode,
+        toLocation: destinationName,
         palletCode: palletCode,
         performedBy: performedBy,
         timestamp: now,
-        notes: 'Nhập $count thẻ RFID qua PDA vào Pallet $palletCode - Vị trí ${loc.locationCode}',
+        notes: 'Nhập $count thẻ RFID qua PDA vào Pallet $palletCode - Trạng thái: $destinationName',
       ),
     );
 
-    // Đồng bộ ERP Bravo
     ErpBravoService().pushInboundCompleted(orderNo ?? 'PDA-DIRECT-IN', uniqueEpcs.length);
 
-    // Ghi log đồng bộ
     await _syncDirectOrQueue(
       tableName: 'sync_logs',
       recordId: orderNo ?? 'PDA-DIRECT-${now.millisecondsSinceEpoch}',
@@ -1072,11 +1018,6 @@ class WarehouseRepository extends ChangeNotifier {
     return uniqueEpcs.length;
   }
 
-  // ==========================================
-  // 3. THUẬT TOÁN GỢI Ý XUẤT THEO FIFO
-  // ==========================================
-
-  /// Tính toán kế hoạch lấy hàng (Picking Plan) theo nguyên tắc FIFO
   PickingPlan generateFifoPickingPlan(String outboundOrderId) {
     final order = _outboundOrders.firstWhere((o) => o.outboundOrderId == outboundOrderId);
     final List<PickingPlanLine> lines = [];
@@ -1084,18 +1025,15 @@ class WarehouseRepository extends ChangeNotifier {
     for (var detail in order.details) {
       int remainingQtyNeeded = detail.requiredQty;
 
-      // 1. Lấy tất cả Item khả dụng của SKU này
       final availableItems = _items.where(
         (it) => it.productId == detail.productId && it.status == ItemStatus.inStock && it.palletId != null,
       ).toList();
 
-      // 2. Nhóm theo Pallet
       final Map<String, List<Item>> palletGroups = {};
       for (var it in availableItems) {
         palletGroups.putIfAbsent(it.palletId!, () => []).add(it);
       }
 
-      // 3. Sắp xếp các Pallet theo ngày nhập tăng dần (Nhập trước -> Xuất trước)
       final sortedPalletIds = palletGroups.keys.toList()
         ..sort((a, b) {
           final pA = _pallets.firstWhere((p) => p.palletId == a);
@@ -1105,7 +1043,6 @@ class WarehouseRepository extends ChangeNotifier {
           return timeA.compareTo(timeB);
         });
 
-      // 4. Bóc tách từng Pallet cho đến khi đủ số lượng
       for (var palId in sortedPalletIds) {
         if (remainingQtyNeeded <= 0) break;
 
@@ -1119,7 +1056,6 @@ class WarehouseRepository extends ChangeNotifier {
         final qtyFromThisPallet = min(remainingQtyNeeded, palItems.length);
         final targetItems = palItems.take(qtyFromThisPallet).toList();
 
-        // Đánh dấu Item tạm khóa sang ALLOCATED
         for (var item in targetItems) {
           item.status = ItemStatus.allocated;
           item.allocatedTime = DateTime.now();
@@ -1156,7 +1092,6 @@ class WarehouseRepository extends ChangeNotifier {
     return plan;
   }
 
-  /// Xác nhận đã lấy hàng theo dòng picking
   void markPickingLineCompleted(String planId, String palletCode, String sku) {
     final plan = _pickingPlans.firstWhere((p) => p.planId == planId);
     for (var line in plan.lines) {
@@ -1176,7 +1111,6 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Đối chiếu tại RFID Gate - OUTBOUND
   GateVerificationResult verifyGateOutbound({
     required String poNo,
     required List<String> scannedEpcs,
@@ -1244,7 +1178,6 @@ class WarehouseRepository extends ChangeNotifier {
     );
   }
 
-  /// Xác nhận hoàn tất xuất kho
   bool confirmOutboundCompletion({
     required String poNo,
     required List<String> shippedEpcs,
@@ -1282,10 +1215,8 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // Bắn sync về ERP Bravo
     ErpBravoService().pushOutboundCompleted(poNo, shippedEpcs.length);
 
-    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'outbound_transactions',
       recordId: poNo,
@@ -1303,7 +1234,6 @@ class WarehouseRepository extends ChangeNotifier {
     return true;
   }
 
-  /// Xuất kho trực tiếp (Không bắt buộc theo đơn PO trước)
   Future<int> confirmDirectOutbound({
     String? poNo,
     required List<String> scannedEpcs,
@@ -1350,7 +1280,6 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     await _syncDirectOrQueue(
       tableName: 'outbound_transactions',
       recordId: poNo ?? 'DIRECT-OUT-${now.millisecondsSinceEpoch}',
@@ -1368,11 +1297,6 @@ class WarehouseRepository extends ChangeNotifier {
     return uniqueEpcs.length;
   }
 
-  // ==========================================
-  // 4. KIỂM KÊ KHO (INVENTORY AUDIT)
-  // ==========================================
-
-  /// Tạo phiên kiểm kê mới
   InventorySession startInventorySession({required String zone, String? locationCode}) {
     final session = InventorySession(
       sessionId: 'SESS-${DateTime.now().millisecondsSinceEpoch}',
@@ -1386,7 +1310,6 @@ class WarehouseRepository extends ChangeNotifier {
     return session;
   }
 
-  /// Xử lý quét đối chiếu kiểm kê
   void processAuditScan({
     required String sessionId,
     required List<String> scannedEpcs,
@@ -1396,7 +1319,6 @@ class WarehouseRepository extends ChangeNotifier {
 
     final uniqueScannedEpcs = scannedEpcs.toSet();
 
-    // 1. Lấy danh sách Item mong đợi tại khu vực này
     final expectedItems = _items.where((it) {
       if (it.status != ItemStatus.inStock) return false;
       final loc = _locations.firstWhere((l) => l.locationId == it.locationId, orElse: () => Location(locationId: '', locationCode: '', zone: '', shelf: '', level: ''));
@@ -1408,7 +1330,6 @@ class WarehouseRepository extends ChangeNotifier {
 
     final expectedEpcs = expectedItems.map((e) => e.epc).toSet();
 
-    // MATCH & WRONG_LOCATION & UNKNOWN_EPC
     for (var epc in uniqueScannedEpcs) {
       final item = _items.firstWhere(
         (it) => it.epc == epc,
@@ -1436,7 +1357,6 @@ class WarehouseRepository extends ChangeNotifier {
           ),
         );
       } else {
-        // Đọc thấy nhưng trên hệ thống đang ghi ở vị trí khác
         final actualLoc = _locations.firstWhere((l) => l.locationId == item.locationId, orElse: () => Location(locationId: '', locationCode: 'Chưa rõ', zone: '', shelf: '', level: ''));
         session.results.add(
           InventoryItemResult(
@@ -1452,7 +1372,6 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // MISSING: Mong đợi mà không đọc thấy
     for (var expItem in expectedItems) {
       if (!uniqueScannedEpcs.contains(expItem.epc)) {
         session.results.add(
@@ -1472,13 +1391,11 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Chốt phiên kiểm kê
   void completeInventorySession(String sessionId, String approvedBy) {
     final session = _inventorySessions.firstWhere((s) => s.sessionId == sessionId);
     session.isCompleted = true;
     session.completedAt = DateTime.now();
 
-    // Ghi log giao dịch điều chỉnh kiểm kê
     _transactions.insert(
       0,
       InventoryTransaction(
@@ -1496,7 +1413,6 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'inventory_sessions',
       recordId: session.sessionId,
@@ -1519,11 +1435,6 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
-  // 5. QUẢN LÝ LƯU KHO & DI CHUYỂN PALLET
-  // ==========================================
-
-  /// Di chuyển Pallet sang Location mới
   bool movePallet({
     required String palletId,
     required String newLocationId,
@@ -1533,20 +1444,17 @@ class WarehouseRepository extends ChangeNotifier {
     final oldLocation = _locations.firstWhere((l) => l.locationId == pallet.locationId, orElse: () => Location(locationId: '', locationCode: 'N/A', zone: '', shelf: '', level: ''));
     final newLocation = _locations.firstWhere((l) => l.locationId == newLocationId);
 
-    // Cập nhật vị trí pallet
     pallet.locationId = newLocationId;
     _dbService.updatePalletLocation(palletId, newLocationId);
     if (oldLocation.currentPallets > 0) oldLocation.currentPallets--;
     newLocation.currentPallets++;
 
-    // Cập nhật toàn bộ Item trên pallet
     for (var itemId in pallet.itemIds) {
       final item = _items.firstWhere((it) => it.itemId == itemId);
       item.locationId = newLocationId;
       _dbService.updateItemLocationAndPallet(item.epc, newLocationId, palletId);
     }
 
-    // Ghi log giao dịch
     _transactions.insert(
       0,
       InventoryTransaction(
@@ -1565,7 +1473,6 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'pallet_moves',
       recordId: palletId,
@@ -1586,7 +1493,6 @@ class WarehouseRepository extends ChangeNotifier {
     return true;
   }
 
-  /// Tra cứu tổng hợp tồn kho theo SKU
   Map<String, Map<String, dynamic>> getStockSummary() {
     final Map<String, Map<String, dynamic>> summary = {};
     for (var p in _products) {

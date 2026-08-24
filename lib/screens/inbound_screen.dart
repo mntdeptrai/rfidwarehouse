@@ -6,7 +6,6 @@ import '../models/wms_models.dart';
 import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
 import '../widgets/hardware_status_appbar.dart';
-import '../widgets/pda_location_barcode_card.dart';
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -25,7 +24,6 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
 
   // Cấu hình nhập kho
   InboundOrder? _selectedOrder;
-  String _selectedLocationId = '';
   final TextEditingController _palletController = TextEditingController();
   final TextEditingController _skuController = TextEditingController();
   final TextEditingController _productNameController = TextEditingController();
@@ -47,12 +45,6 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
-
-    if (_repo.locations.isNotEmpty) {
-      _selectedLocationId = _repo.locations.first.locationId;
-    } else {
-      _selectedLocationId = 'LOC-A1-01-01';
-    }
 
     // Khởi tạo chọn đơn nếu có
     if (_repo.inboundOrders.isNotEmpty) {
@@ -180,7 +172,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       final savedCount = await _repo.confirmHandheldInbound(
         orderNo: _tabController.index == 0 ? _selectedOrder?.orderNo : null,
         palletCode: pallet,
-        locationId: _selectedLocationId,
+        locationId: null,
         scannedEpcs: _scannedTags.keys.toList(),
         defaultSku: sku.isNotEmpty ? sku : 'SKU-INBOUND',
         defaultProductName: prodName.isNotEmpty ? prodName : 'Hàng nhập kho',
@@ -227,16 +219,16 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Pallet đích:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        const Text('Pallet tiếp nhận:', style: TextStyle(color: Colors.white70, fontSize: 12)),
                         Text(pallet, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Vị trí kho:', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        Text(_selectedLocationId, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('Trạng thái:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text('Chờ xếp kệ kho', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
                     if (_tabController.index == 0 && _selectedOrder != null) ...[
@@ -394,84 +386,6 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     );
   }
 
-  void _showAddLocationDialog() {
-    final codeController = TextEditingController();
-    final zoneController = TextEditingController();
-    final shelfController = TextEditingController();
-    final levelController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Thêm Vị Trí Lưu Kho', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: codeController,
-                decoration: const InputDecoration(labelText: 'Mã Vị trí (Location Code)', hintText: 'Ví dụ: LOC-A01-01', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: zoneController,
-                decoration: const InputDecoration(labelText: 'Khu vực (Zone)', hintText: 'Ví dụ: Zone A', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: shelfController,
-                decoration: const InputDecoration(labelText: 'Dãy Kệ (Shelf)', hintText: 'Ví dụ: Kệ 01', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: levelController,
-                decoration: const InputDecoration(labelText: 'Tầng (Level)', hintText: 'Ví dụ: Tầng 1', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Colors.white54)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-            onPressed: () async {
-              final code = codeController.text.trim();
-              final zone = zoneController.text.trim();
-              final shelf = shelfController.text.trim();
-              final level = levelController.text.trim();
-
-              if (code.isEmpty) return;
-
-              final loc = Location(
-                locationId: 'LOC-${DateTime.now().millisecondsSinceEpoch}',
-                locationCode: code,
-                zone: zone.isNotEmpty ? zone : 'Zone A',
-                shelf: shelf.isNotEmpty ? shelf : 'Kệ 01',
-                level: level.isNotEmpty ? level : 'Tầng 1',
-              );
-
-              await _repo.addLocation(loc);
-              if (ctx.mounted) Navigator.pop(ctx);
-              setState(() {
-                _selectedLocationId = loc.locationId;
-              });
-            },
-            child: const Text('LƯU VỊ TRÍ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -542,92 +456,59 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   }
 
   Widget _buildDestinationConfigCard() {
-    return AnimatedBuilder(
-      animation: _repo,
-      builder: (context, _) {
-        return Container(
-          padding: const EdgeInsets.all(14),
-
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF334155)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF334155)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.location_on, color: Color(0xFF38BDF8), size: 16),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text(
-                      'VỊ TRÍ & PALLET TIẾP NHẬN',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: _showAddLocationDialog,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF0284C7)),
-                      ),
-                      child: const Text(
-                        '+ Thêm Vị Trí',
-                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              PdaLocationBarcodeCard(
-                selectedLocationId: _selectedLocationId,
-                onLocationChanged: (loc) {
-                  setState(() {
-                    _selectedLocationId = loc.locationId;
-                  });
-                },
-              ),
-              const SizedBox(height: 10),
-
-              // Nhập Pallet Code
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Mã Pallet (Tùy chọn):', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: _palletController,
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: const Color(0xFF0F172A),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            hintText: 'Mặc định: PL-01',
-                            hintStyle: const TextStyle(color: Colors.white38, fontSize: 11),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              Icon(Icons.inventory_2_rounded, color: Color(0xFF38BDF8), size: 16),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'PALLET / KIỆN TIẾP NHẬN (TÙY CHỌN)',
+                  style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 6),
+          const Text(
+            'Hàng quét nhập kho sẽ tự động lưu tạm ở trạng thái Chờ xếp kệ. Vị trí kệ lưu trữ sẽ được chọn ở màn hình Lưu kho khi chuyển hàng lên kệ.',
+            style: TextStyle(color: Colors.white60, fontSize: 11),
+          ),
+          const SizedBox(height: 10),
+
+          // Nhập Pallet Code
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Mã Pallet / Kiện:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _palletController,
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: const Color(0xFF0F172A),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  hintText: 'Mặc định: PL-01',
+                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 11),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
