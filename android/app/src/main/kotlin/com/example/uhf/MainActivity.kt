@@ -218,9 +218,20 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private val IGNORED_COMMAND_STRINGS = setOf(
+        "ACTION_SCAN", "ACTION_STOP_SCAN", "SCANNER_START", "SCANNER_STOP",
+        "START_SCAN", "STOP_SCAN", "KEY_CONTROL", "KEY_CONTROL_DISABLED",
+        "ACTION_KEY_DOWN", "ACTION_KEY_UP", "SCAN_TRIGGER", "SCAN", "ACTION_START_SCAN",
+        "TRUE", "FALSE"
+    )
+
+    private val IGNORED_EXTRA_KEYS = setOf(
+        "action", "action_start", "action_stop", "scanner_enabled", "key_enabled", "enabled", "keyCode", "key_code"
+    )
+
     private fun deliverBarcodeToFlutter(barcode: String) {
         val clean = barcode.trim()
-        if (clean.isEmpty()) return
+        if (clean.isEmpty() || IGNORED_COMMAND_STRINGS.contains(clean.uppercase())) return
 
         playBeepThrottled()
         bgHandler.post {
@@ -250,24 +261,31 @@ class MainActivity : FlutterActivity() {
         )
         for (key in stringKeys) {
             val s = intent.getStringExtra(key)
-            if (!s.isNullOrEmpty()) { rawData = s.trim(); break }
+            if (!s.isNullOrEmpty() && !IGNORED_COMMAND_STRINGS.contains(s.trim().uppercase())) {
+                rawData = s.trim()
+                break
+            }
         }
         if (rawData.isNullOrEmpty()) {
             val byteData = intent.getByteArrayExtra("data")
                 ?: intent.getByteArrayExtra("scannerdata")
                 ?: intent.getByteArrayExtra("barcode")
             if (byteData != null && byteData.isNotEmpty()) {
-                rawData = String(byteData).trim()
+                val str = String(byteData).trim()
+                if (str.isNotBlank() && !IGNORED_COMMAND_STRINGS.contains(str.uppercase())) {
+                    rawData = str
+                }
             }
         }
         if (rawData.isNullOrEmpty()) {
             val extras = intent.extras
             if (extras != null) {
                 for (k in extras.keySet()) {
+                    if (IGNORED_EXTRA_KEYS.contains(k.lowercase())) continue
                     val v = extras.get(k)
                     if (v != null) {
                         val str = v.toString().trim()
-                        if (str.isNotBlank() && str.length >= 2 && !str.startsWith("Intent {")) {
+                        if (str.isNotBlank() && str.length >= 2 && !str.startsWith("Intent {") && !IGNORED_COMMAND_STRINGS.contains(str.uppercase())) {
                             rawData = str
                             break
                         }
@@ -276,7 +294,7 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        if (rawData.isNullOrEmpty()) return
+        if (rawData.isNullOrEmpty() || IGNORED_COMMAND_STRINGS.contains(rawData.uppercase())) return
 
         // Nếu app đang ở chế độ RFID (mặc định): Tách từng dòng và đưa vào danh sách thẻ RFID riêng biệt!
         if (currentScanMode.lowercase() != "barcode") {

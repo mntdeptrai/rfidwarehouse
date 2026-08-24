@@ -34,54 +34,45 @@ class WarehouseRepository extends ChangeNotifier {
       final dbItems = await _dbService.getItems();
       final dbInboundOrders = await _dbService.getInboundOrders();
       final dbOutboundOrders = await _dbService.getOutboundOrders();
-
-      _products.clear();
-      _products.addAll(dbProducts);
-
-      final validStandardLocationIds = {
-        'LOC-A1-01-01', 'LOC-A1-01-02', 'LOC-A1-02-01', 'LOC-A1-02-02',
-        'LOC-B1-01-01', 'LOC-B1-01-02', 'LOC-GATE-IN', 'LOC-GATE-OUT',
+      const bogusCommandNames = {
+        'ACTION_SCAN',
+        'ACTION_STOP_SCAN',
+        'SCANNER_START',
+        'SCANNER_STOP',
+        'START_SCAN',
+        'STOP_SCAN',
+        'SCAN',
+        'KEY_CONTROL',
+        'KEY_CONTROL_DISABLED',
+        'TRUE',
+        'FALSE',
       };
 
-      for (final loc in dbLocations) {
-        final id = loc.locationId.toUpperCase().trim();
-        final isStandard = validStandardLocationIds.contains(id) ||
-            id.startsWith('LOC-A') || id.startsWith('LOC-B') || id.startsWith('LOC-GATE');
-        if (!isStandard) {
-          await _dbService.deleteLocation(loc.locationId);
+      for (final p in dbProducts) {
+        if (bogusCommandNames.contains(p.productId.toUpperCase()) || bogusCommandNames.contains(p.sku.toUpperCase())) {
+          await _dbService.deleteProduct(p.productId);
+        }
+      }
+      for (final i in dbItems) {
+        if (bogusCommandNames.contains(i.sku.toUpperCase()) || (i.orderNo != null && bogusCommandNames.contains(i.orderNo!.toUpperCase()))) {
+          await _dbService.deleteItem(i.epc);
         }
       }
 
-      final cleanLocations = await _dbService.getLocations();
+      final cleanProducts = await _dbService.getProducts();
+      final cleanItems = await _dbService.getItems();
+
+      _products.clear();
+      _products.addAll(cleanProducts.where((p) => !bogusCommandNames.contains(p.productId.toUpperCase()) && !bogusCommandNames.contains(p.sku.toUpperCase())));
+
       _locations.clear();
-      _locations.addAll(cleanLocations.where((loc) {
-        final id = loc.locationId.toUpperCase().trim();
-        return validStandardLocationIds.contains(id) ||
-            id.startsWith('LOC-A') || id.startsWith('LOC-B') || id.startsWith('LOC-GATE');
-      }));
-
-      if (_locations.isEmpty) {
-        final standardLocations = [
-          Location(locationId: 'LOC-A1-01-01', locationCode: 'LOC-A1-01-01', zone: 'A', shelf: '01', level: '01'),
-          Location(locationId: 'LOC-A1-01-02', locationCode: 'LOC-A1-01-02', zone: 'A', shelf: '01', level: '02'),
-          Location(locationId: 'LOC-A1-02-01', locationCode: 'LOC-A1-02-01', zone: 'A', shelf: '02', level: '01'),
-          Location(locationId: 'LOC-A1-02-02', locationCode: 'LOC-A1-02-02', zone: 'A', shelf: '02', level: '02'),
-          Location(locationId: 'LOC-B1-01-01', locationCode: 'LOC-B1-01-01', zone: 'B', shelf: '01', level: '01'),
-          Location(locationId: 'LOC-B1-01-02', locationCode: 'LOC-B1-01-02', zone: 'B', shelf: '01', level: '02'),
-          Location(locationId: 'LOC-GATE-IN', locationCode: 'LOC-GATE-IN', zone: 'GATE', shelf: '00', level: '00'),
-          Location(locationId: 'LOC-GATE-OUT', locationCode: 'LOC-GATE-OUT', zone: 'GATE', shelf: '00', level: '00'),
-        ];
-        for (final loc in standardLocations) {
-          await _dbService.insertLocation(loc);
-        }
-        _locations.addAll(standardLocations);
-      }
+      _locations.addAll(dbLocations);
 
       _pallets.clear();
       _pallets.addAll(dbPallets);
 
       _items.clear();
-      _items.addAll(dbItems);
+      _items.addAll(cleanItems.where((i) => !bogusCommandNames.contains(i.sku.toUpperCase()) && !bogusCommandNames.contains(i.orderNo?.toUpperCase())));
       for (final p in _pallets) {
         p.itemIds.clear();
         p.itemIds.addAll(_items.where((i) => i.palletId == p.palletId).map((i) => i.itemId));
@@ -296,6 +287,12 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> addItem(Item item) async {
+    await _dbService.insertItem(item);
+    _items.add(item);
+    notifyListeners();
+  }
+
   Future<void> addProduct(Product product) async {
     await _dbService.insertProduct(product);
     _products.add(product);
@@ -441,7 +438,12 @@ class WarehouseRepository extends ChangeNotifier {
     for (var item in newItems) {
       item.palletId = pallet.palletId;
       item.locationId = locationId;
-      if (!_items.any((it) => it.epc == item.epc)) {
+      final existing = _items.where((it) => it.epc == item.epc).firstOrNull;
+      if (existing != null) {
+        existing.palletId = pallet.palletId;
+        existing.locationId = locationId;
+        existing.status = item.status;
+      } else {
         _items.add(item);
       }
       if (!pallet.itemIds.contains(item.itemId)) {
@@ -679,6 +681,20 @@ class WarehouseRepository extends ChangeNotifier {
     String performedBy = 'Thủ kho PDA',
   }) async {
     final cleanBarcode = cartonOrOrderBarcode.trim().toUpperCase();
+    const ignoredCommands = {
+      'ACTION_SCAN',
+      'ACTION_STOP_SCAN',
+      'SCANNER_START',
+      'SCANNER_STOP',
+      'START_SCAN',
+      'STOP_SCAN',
+      'SCAN',
+      'KEY_CONTROL',
+      'KEY_CONTROL_DISABLED',
+      'TRUE',
+      'FALSE',
+    };
+    if (ignoredCommands.contains(cleanBarcode)) return 0;
     final now = DateTime.now();
 
     final loc = _locations.where((l) =>
@@ -1111,6 +1127,22 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Kiểm tra xem sản phẩm có nằm hợp lệ trên kệ kho hay không (đã putaway inStock hoặc allocated cho đơn xuất, và có locationId)
+  bool isItemStockedInLocation(Item item) {
+    if (item.status != ItemStatus.inStock && item.status != ItemStatus.allocated) return false;
+    String? locId = item.locationId;
+    if (locId == null || locId.trim().isEmpty) {
+      if (item.palletId != null) {
+        final pal = _pallets.where((p) => p.palletId == item.palletId).firstOrNull;
+        locId = pal?.locationId;
+      }
+    }
+    if (locId == null || locId.trim().isEmpty) return false;
+    final loc = locId.trim().toUpperCase();
+    if (loc == 'LOC-GATE-IN' || loc == 'LOC-GATE-OUT') return false;
+    return true;
+  }
+
   GateVerificationResult verifyGateOutbound({
     required String poNo,
     required List<String> scannedEpcs,
@@ -1120,6 +1152,10 @@ class WarehouseRepository extends ChangeNotifier {
 
     final Map<String, int> actualSkuCounts = {};
     final List<String> unexpectedEpcs = [];
+    final List<String> unstockedEpcs = [];
+
+    final List<SkuVerificationBreakdown> breakdowns = [];
+    bool allMatched = true;
 
     for (var epc in uniqueEpcs) {
       final item = _items.firstWhere(
@@ -1136,13 +1172,13 @@ class WarehouseRepository extends ChangeNotifier {
 
       if (item.sku == 'UNKNOWN') {
         unexpectedEpcs.add(epc);
+      } else if (!isItemStockedInLocation(item)) {
+        unstockedEpcs.add(epc);
+        allMatched = false;
       } else {
         actualSkuCounts[item.sku] = (actualSkuCounts[item.sku] ?? 0) + 1;
       }
     }
-
-    final List<SkuVerificationBreakdown> breakdowns = [];
-    bool allMatched = true;
 
     for (var detail in order.details) {
       final actualQty = actualSkuCounts[detail.sku] ?? 0;
@@ -1160,7 +1196,7 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    if (unexpectedEpcs.isNotEmpty) allMatched = false;
+    if (unexpectedEpcs.isNotEmpty || unstockedEpcs.isNotEmpty) allMatched = false;
 
     int totalReq = order.details.fold(0, (sum, d) => sum + d.requiredQty);
     int totalAct = uniqueEpcs.length;
@@ -1173,6 +1209,7 @@ class WarehouseRepository extends ChangeNotifier {
       totalActualQty: totalAct,
       skuBreakdowns: breakdowns,
       unexpectedEpcs: unexpectedEpcs,
+      unstockedEpcs: unstockedEpcs,
       missingEpcs: [],
       verifiedAt: DateTime.now(),
     );
@@ -1184,6 +1221,16 @@ class WarehouseRepository extends ChangeNotifier {
     required String performedBy,
   }) {
     final order = _outboundOrders.firstWhere((o) => o.poNo == poNo);
+
+    final unstocked = shippedEpcs.where((epc) {
+      final item = _items.where((it) => it.epc == epc).firstOrNull;
+      if (item == null) return true;
+      return !isItemStockedInLocation(item);
+    }).toList();
+
+    if (unstocked.isNotEmpty) {
+      throw Exception('Không thể xuất kho: Có ${unstocked.length} sản phẩm chưa được xếp vào kệ nào trong kho (Đang chờ xếp kệ hoặc chưa gán vị trí)!');
+    }
 
     for (var epc in shippedEpcs) {
       final item = _items.firstWhere((it) => it.epc == epc);
@@ -1242,6 +1289,16 @@ class WarehouseRepository extends ChangeNotifier {
     final uniqueEpcs = scannedEpcs.toSet().toList();
     if (uniqueEpcs.isEmpty) return 0;
     final now = DateTime.now();
+
+    final unstocked = uniqueEpcs.where((epc) {
+      final item = _items.where((it) => it.epc == epc).firstOrNull;
+      if (item == null) return true;
+      return !isItemStockedInLocation(item);
+    }).toList();
+
+    if (unstocked.isNotEmpty) {
+      throw Exception('Không thể xuất kho: Có ${unstocked.length} sản phẩm chưa nằm trong kệ kho nào (Vị trí trống hoặc chưa xếp kho)!');
+    }
 
     for (var epc in uniqueEpcs) {
       final item = _items.where((it) => it.epc == epc).firstOrNull;

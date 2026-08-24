@@ -399,6 +399,7 @@ class GateVerificationResult {
   final int totalActualQty;
   final List<SkuVerificationBreakdown> skuBreakdowns;
   final List<String> unexpectedEpcs;
+  final List<String> unstockedEpcs;
   final List<String> missingEpcs;
   final DateTime verifiedAt;
 
@@ -410,6 +411,7 @@ class GateVerificationResult {
     required this.totalActualQty,
     required this.skuBreakdowns,
     required this.unexpectedEpcs,
+    this.unstockedEpcs = const [],
     required this.missingEpcs,
     required this.verifiedAt,
   });

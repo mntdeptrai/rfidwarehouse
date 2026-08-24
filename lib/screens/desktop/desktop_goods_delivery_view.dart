@@ -477,6 +477,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
     final List<Item> matchedItems = [];
     final List<String> unexpectedEpcs = [];
+    final List<String> unstockedEpcs = [];
     final Map<String, int> actualSkuCounts = {};
 
     int totalRequired = 0;
@@ -486,11 +487,22 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
       for (var epc in scannedEpcs) {
         final item = itemsInDb.where((it) => it.epc == epc).firstOrNull;
-        if (item != null && allowedSkus.contains(item.sku)) {
+        if (item == null || !allowedSkus.contains(item.sku)) {
+          unexpectedEpcs.add(epc);
+        } else if (!_repo.isItemStockedInLocation(item)) {
+          unstockedEpcs.add(epc);
+        } else {
           matchedItems.add(item);
           actualSkuCounts[item.sku] = (actualSkuCounts[item.sku] ?? 0) + 1;
+        }
+      }
+    } else {
+      for (var epc in scannedEpcs) {
+        final item = itemsInDb.where((it) => it.epc == epc).firstOrNull;
+        if (item == null || !_repo.isItemStockedInLocation(item)) {
+          unstockedEpcs.add(epc);
         } else {
-          unexpectedEpcs.add(epc);
+          matchedItems.add(item);
         }
       }
     }
@@ -719,36 +731,84 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         children: [
                           Column(
                             children: [
-                              Text('$totalMatched', style: const TextStyle(color: Color(0xFF10B981), fontSize: 40, fontWeight: FontWeight.w900)),
+                              Text('$totalMatched', style: const TextStyle(color: Color(0xFF10B981), fontSize: 34, fontWeight: FontWeight.w900)),
                               Text('Hợp lệ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             ],
                           ),
                           Container(width: 1, height: 35, color: c.border),
                           Column(
                             children: [
-                              Text('$totalRequired', style: TextStyle(color: c.rfidCyan, fontSize: 40, fontWeight: FontWeight.w900)),
+                              Text('$totalRequired', style: TextStyle(color: c.rfidCyan, fontSize: 34, fontWeight: FontWeight.w900)),
                               Text('Yêu cầu', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                             ],
                           ),
+                          if (unstockedEpcs.isNotEmpty) ...[
+                            Container(width: 1, height: 35, color: c.border),
+                            Column(
+                              children: [
+                                Text('${unstockedEpcs.length}', style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 34, fontWeight: FontWeight.w900)),
+                                const Text('Chưa xếp kệ', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
                           if (unexpectedEpcs.isNotEmpty) ...[
                             Container(width: 1, height: 35, color: c.border),
                             Column(
                               children: [
-                                Text('${unexpectedEpcs.length}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 40, fontWeight: FontWeight.w900)),
-                                const Text('Sai hàng', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                                Text('${unexpectedEpcs.length}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 34, fontWeight: FontWeight.w900)),
+                                const Text('Sai hàng', style: TextStyle(color: Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ],
                         ],
                       ),
                     ] else ...[
-                      Column(
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          Text('${_scannedTags.length}', style: TextStyle(color: c.textPrimary, fontSize: 44, fontWeight: FontWeight.w900)),
-                          Text('Thẻ RFID đã quét để xuất kho', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                          Column(
+                            children: [
+                              Text('$totalMatched', style: const TextStyle(color: Color(0xFF10B981), fontSize: 34, fontWeight: FontWeight.w900)),
+                              Text('Đủ điều kiện xuất', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                            ],
+                          ),
+                          if (unstockedEpcs.isNotEmpty) ...[
+                            Container(width: 1, height: 35, color: c.border),
+                            Column(
+                              children: [
+                                Text('${unstockedEpcs.length}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 34, fontWeight: FontWeight.w900)),
+                                const Text('Chưa xếp kệ', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ],
+                    // Warning banner if unstocked goods are scanned
+                    if (unstockedEpcs.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7F1D1D).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFEF4444)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.shelves, color: Color(0xFFEF4444), size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'LỖI: ${unstockedEpcs.length} chip chưa được xếp vào kệ nào trong kho (Vị trí trống/chưa Putaway)!',
+                                style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
                     // Duration Selector & Scan Button
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -849,9 +909,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 height: 48,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: (_selectedLiveOrder != null
-                            ? (totalMatched > 0 && unexpectedEpcs.isEmpty)
-                            : _scannedTags.isNotEmpty)
+                    backgroundColor: (unstockedEpcs.isEmpty &&
+                            (_selectedLiveOrder != null
+                                ? (totalMatched > 0 && unexpectedEpcs.isEmpty && totalMatched == totalRequired)
+                                : totalMatched > 0))
                         ? const Color(0xFF10B981)
                         : Colors.grey.shade600,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -862,13 +923,14 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         ? 'Đang lưu...'
                         : (_selectedLiveOrder != null
                             ? 'XÁC NHẬN XUẤT KHO ($totalMatched CHIP)'
-                            : 'XÁC NHẬN XUẤT KHO (${_scannedTags.length} CHIP)'),
+                            : 'XÁC NHẬN XUẤT KHO ($totalMatched CHIP)'),
                     style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
                   ),
                   onPressed: (_isSaving ||
+                          unstockedEpcs.isNotEmpty ||
                           (_selectedLiveOrder != null
-                              ? (totalMatched == 0 || unexpectedEpcs.isEmpty)
-                              : _scannedTags.isEmpty))
+                              ? (totalMatched == 0 || unexpectedEpcs.isNotEmpty || totalMatched < totalRequired)
+                              : totalMatched == 0))
                       ? null
                       : _confirmShipment,
                 ),
@@ -979,6 +1041,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   final epc = _scannedTags.keys.toList().reversed.toList()[index];
                                   final tag = _scannedTags[epc]!;
                                   final isUnexpected = unexpectedEpcs.contains(epc);
+                                  final isUnstocked = unstockedEpcs.contains(epc);
                                   final antLabel = tag.ant.isNotEmpty ? tag.ant : '1';
                                   final isAnt2 = antLabel == '2';
 
@@ -987,8 +1050,12 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                     child: Row(
                                       children: [
                                         Icon(
-                                          isUnexpected ? Icons.cancel : Icons.check_circle,
-                                          color: isUnexpected ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                                          isUnexpected
+                                              ? Icons.cancel
+                                              : (isUnstocked ? Icons.shelves : Icons.check_circle),
+                                          color: isUnexpected
+                                              ? const Color(0xFFEF4444)
+                                              : (isUnstocked ? const Color(0xFFF59E0B) : const Color(0xFF10B981)),
                                           size: 18,
                                         ),
                                         const SizedBox(width: 10),
@@ -996,13 +1063,25 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                           child: Text(
                                             epc,
                                             style: TextStyle(
-                                              color: isUnexpected ? const Color(0xFFEF4444) : c.textPrimary,
+                                              color: (isUnexpected || isUnstocked) ? const Color(0xFFEF4444) : c.textPrimary,
                                               fontFamily: 'monospace',
                                               fontSize: 12.5,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ),
+                                        if (isUnstocked) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF7F1D1D).withValues(alpha: 0.3),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: const Color(0xFFEF4444)),
+                                            ),
+                                            child: const Text('CHƯA XẾP KỆ', style: TextStyle(color: Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
                                         const SizedBox(width: 8),
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

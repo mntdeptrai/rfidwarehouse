@@ -308,5 +308,57 @@ void main() {
       expect(syncResult, isTrue);
       expect(await dbService.getPendingSyncCount(), 0);
     });
+
+    test('Outbound Validation: Blocks shipping items that are not in stock or have no warehouse location', () async {
+      final now = DateTime.now();
+      // Setup order with 2 items: 1 pending inbound (no location) and 1 with location
+      final unstockedItem = Item(
+        itemId: 'IT-UNSTOCKED-1',
+        productId: 'PROD-001',
+        sku: 'SKU-ELEC-01',
+        productName: 'Bo mạch IoT',
+        serialNumber: 'SN-UNSTOCKED-1',
+        epc: 'EPC-UNSTOCKED-1',
+        status: ItemStatus.pendingInbound,
+        locationId: null, // Chưa nằm trên kệ kho nào
+      );
+      await repo.addItem(unstockedItem);
+
+      final po = OutboundOrder(
+        outboundOrderId: 'OUT-TEST-UNSTOCKED',
+        poNo: 'PO-TEST-UNSTOCKED',
+        customer: 'Khách hàng Test',
+        status: OutboundOrderStatus.newOrder,
+        createdAt: now,
+        details: [
+          OutboundOrderDetail(productId: 'PROD-001', sku: 'SKU-ELEC-01', productName: 'Bo mạch IoT', requiredQty: 1),
+        ],
+      );
+      await repo.addOutboundOrder(po);
+
+      // Verify gate outbound với thẻ chưa nhập lên kệ -> Phải FAIL và chứa unstockedEpcs
+      final gateResult = repo.verifyGateOutbound(poNo: po.poNo, scannedEpcs: [unstockedItem.epc]);
+      expect(gateResult.isPass, isFalse);
+      expect(gateResult.unstockedEpcs.contains(unstockedItem.epc), isTrue);
+
+      // Cố tình xác nhận xuất kho -> Phải quăng lỗi Exception chặn lại
+      expect(
+        () => repo.confirmOutboundCompletion(
+          poNo: po.poNo,
+          shippedEpcs: [unstockedItem.epc],
+          performedBy: 'Tester',
+        ),
+        throwsA(isA<Exception>()),
+      );
+
+      // Cố tình xuất trực tiếp -> Phải quăng lỗi Exception chặn lại
+      expect(
+        () async => await repo.confirmDirectOutbound(
+          scannedEpcs: [unstockedItem.epc],
+          performedBy: 'Tester',
+        ),
+        throwsA(isA<Exception>()),
+      );
+    });
   });
 }

@@ -73,6 +73,21 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     final clean = rawBarcode.trim();
     if (clean.isEmpty) return;
 
+    const ignoredCommands = {
+      'ACTION_SCAN',
+      'ACTION_STOP_SCAN',
+      'SCANNER_START',
+      'SCANNER_STOP',
+      'START_SCAN',
+      'STOP_SCAN',
+      'SCAN',
+      'KEY_CONTROL',
+      'KEY_CONTROL_DISABLED',
+      'TRUE',
+      'FALSE',
+    };
+    if (ignoredCommands.contains(clean.toUpperCase())) return;
+
     // 1. Kiểm tra nếu mã quét được là mã vị trí kệ (Bắt đầu bằng LOC- hoặc khớp trong bảng locations)
     final isLocationCode = clean.toUpperCase().startsWith('LOC-') ||
         _repo.locations.any((l) => l.locationCode.toUpperCase() == clean.toUpperCase());

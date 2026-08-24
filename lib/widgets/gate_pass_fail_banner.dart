@@ -210,6 +210,33 @@ class GatePassFailBanner extends StatelessWidget {
             }).toList(),
           ),
 
+          // Cảnh báo hàng chưa nằm trong kệ kho nào
+          if (result!.unstockedEpcs.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7F1D1D).withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEF4444)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shelves, color: Color(0xFFFCA5A5), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'CẢNH BÁO: ${result!.unstockedEpcs.length} sản phẩm chưa được xếp vào kệ nào trong kho (chưa gán vị trí lưu kho)! Không đủ điều kiện xuất.',
+                      style: const TextStyle(color: Color(0xFFFEE2E2), fontSize: 12, fontWeight: FontWeight.bold),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           // Cảnh báo thẻ lạ nếu có
           if (result!.unexpectedEpcs.isNotEmpty) ...[
             const SizedBox(height: 8),

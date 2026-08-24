@@ -73,21 +73,6 @@ class DatabaseService {
       )
     ''');
 
-    // Chèn 8 vị trí kệ chuẩn của hệ thống kho
-    final standardLocations = [
-      {'location_id': 'LOC-A1-01-01', 'location_code': 'LOC-A1-01-01', 'zone': 'A', 'shelf': '01', 'level': '01', 'current_pallets': 0},
-      {'location_id': 'LOC-A1-01-02', 'location_code': 'LOC-A1-01-02', 'zone': 'A', 'shelf': '01', 'level': '02', 'current_pallets': 0},
-      {'location_id': 'LOC-A1-02-01', 'location_code': 'LOC-A1-02-01', 'zone': 'A', 'shelf': '02', 'level': '01', 'current_pallets': 0},
-      {'location_id': 'LOC-A1-02-02', 'location_code': 'LOC-A1-02-02', 'zone': 'A', 'shelf': '02', 'level': '02', 'current_pallets': 0},
-      {'location_id': 'LOC-B1-01-01', 'location_code': 'LOC-B1-01-01', 'zone': 'B', 'shelf': '01', 'level': '01', 'current_pallets': 0},
-      {'location_id': 'LOC-B1-01-02', 'location_code': 'LOC-B1-01-02', 'zone': 'B', 'shelf': '01', 'level': '02', 'current_pallets': 0},
-      {'location_id': 'LOC-GATE-IN', 'location_code': 'LOC-GATE-IN', 'zone': 'GATE', 'shelf': '00', 'level': '00', 'current_pallets': 0},
-      {'location_id': 'LOC-GATE-OUT', 'location_code': 'LOC-GATE-OUT', 'zone': 'GATE', 'shelf': '00', 'level': '00', 'current_pallets': 0},
-    ];
-    for (final loc in standardLocations) {
-      await db.insert('locations', loc, conflictAlgorithm: ConflictAlgorithm.ignore);
-    }
-
     // 3. Bảng Pallet lưu kho (pallets)
     await db.execute('''
       CREATE TABLE IF NOT EXISTS pallets (
@@ -250,6 +235,16 @@ class DatabaseService {
       'category': p.category,
       'description': p.description,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<int> deleteProduct(String productId) async {
+    final db = await database;
+    return await db.delete('products', where: 'product_id = ? OR sku = ?', whereArgs: [productId, productId]);
+  }
+
+  Future<int> deleteItem(String epc) async {
+    final db = await database;
+    return await db.delete('items', where: 'epc = ?', whereArgs: [epc]);
   }
 
   Future<List<Location>> getLocations() async {

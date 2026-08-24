@@ -451,6 +451,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
     // Phân loại thẻ quét
     final List<Item> matchedItems = [];
     final List<String> unexpectedEpcs = [];
+    final List<String> unstockedEpcs = [];
     final Map<String, int> actualSkuCounts = {};
 
     int totalRequired = 0;
@@ -460,11 +461,13 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
 
       for (var epc in scannedEpcs) {
         final item = itemsInDb.where((it) => it.epc == epc).firstOrNull;
-        if (item != null && allowedSkus.contains(item.sku)) {
+        if (item == null || !allowedSkus.contains(item.sku)) {
+          unexpectedEpcs.add(epc);
+        } else if (!_repo.isItemStockedInLocation(item)) {
+          unstockedEpcs.add(epc);
+        } else {
           matchedItems.add(item);
           actualSkuCounts[item.sku] = (actualSkuCounts[item.sku] ?? 0) + 1;
-        } else {
-          unexpectedEpcs.add(epc);
         }
       }
     }
@@ -481,7 +484,12 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
           const SizedBox(height: 12),
 
           // RFID HUD Telemetry Card
-          _buildOutboundTelemetryCard(totalMatched: totalMatched, totalRequired: totalRequired, unexpectedCount: unexpectedEpcs.length),
+          _buildOutboundTelemetryCard(
+            totalMatched: totalMatched,
+            totalRequired: totalRequired,
+            unexpectedCount: unexpectedEpcs.length,
+            unstockedCount: unstockedEpcs.length,
+          ),
           const SizedBox(height: 12),
 
           // Live SKU Fulfillment Matrix
@@ -491,11 +499,20 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
           ],
 
           // Scanned Tag Classifications
-          _buildScannedTagsVerificationCard(matchedItems: matchedItems, unexpectedEpcs: unexpectedEpcs),
+          _buildScannedTagsVerificationCard(
+            matchedItems: matchedItems,
+            unexpectedEpcs: unexpectedEpcs,
+            unstockedEpcs: unstockedEpcs,
+          ),
           const SizedBox(height: 16),
 
           // Dispatch Action Button
-          _buildDispatchActionButton(totalMatched: totalMatched, totalRequired: totalRequired, unexpectedCount: unexpectedEpcs.length),
+          _buildDispatchActionButton(
+            totalMatched: totalMatched,
+            totalRequired: totalRequired,
+            unexpectedCount: unexpectedEpcs.length,
+            unstockedCount: unstockedEpcs.length,
+          ),
           const SizedBox(height: 24),
         ],
       ),
@@ -624,15 +641,22 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildOutboundTelemetryCard({required int totalMatched, required int totalRequired, required int unexpectedCount}) {
+  Widget _buildOutboundTelemetryCard({
+    required int totalMatched,
+    required int totalRequired,
+    required int unexpectedCount,
+    required int unstockedCount,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _isScanning ? const Color(0xFF0284C7) : (unexpectedCount > 0 ? const Color(0xFFEF4444) : const Color(0xFFC7BDAF)),
-          width: _isScanning || unexpectedCount > 0 ? 2 : 1,
+          color: _isScanning
+              ? const Color(0xFF0284C7)
+              : (unexpectedCount > 0 || unstockedCount > 0 ? const Color(0xFFEF4444) : const Color(0xFFC7BDAF)),
+          width: _isScanning || unexpectedCount > 0 || unstockedCount > 0 ? 2 : 1,
         ),
         boxShadow: _isScanning
             ? [
@@ -887,7 +911,11 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildScannedTagsVerificationCard({required List<Item> matchedItems, required List<String> unexpectedEpcs}) {
+  Widget _buildScannedTagsVerificationCard({
+    required List<Item> matchedItems,
+    required List<String> unexpectedEpcs,
+    required List<String> unstockedEpcs,
+  }) {
     final latestTag = _latestScannedTag;
 
     return Container(
@@ -921,6 +949,31 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
             ],
           ),
           const SizedBox(height: 10),
+
+          // Cảnh báo thẻ chưa nằm trong kệ kho nào
+          if (unstockedEpcs.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7F1D1D).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEF4444)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.shelves, color: Color(0xFFEF4444), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'LỖI: Có ${unstockedEpcs.length} sản phẩm chưa được xếp vào kệ nào trong kho (Vị trí trống hoặc chưa Putaway)! Không thể xuất.',
+                      style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
 
           // Cảnh báo thẻ lạ nếu có
           if (unexpectedEpcs.isNotEmpty) ...[
@@ -994,8 +1047,13 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
     );
   }
 
-  Widget _buildDispatchActionButton({required int totalMatched, required int totalRequired, required int unexpectedCount}) {
-    final bool canShip = totalMatched > 0 && unexpectedCount == 0;
+  Widget _buildDispatchActionButton({
+    required int totalMatched,
+    required int totalRequired,
+    required int unexpectedCount,
+    required int unstockedCount,
+  }) {
+    final bool canShip = totalMatched > 0 && unexpectedCount == 0 && unstockedCount == 0;
 
     return SizedBox(
       width: double.infinity,
@@ -1020,9 +1078,11 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
                   const Icon(Icons.local_shipping, color: Color(0xFF2C251E), size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    unexpectedCount > 0
-                        ? 'CÒN THẺ LẠ CHƯA ĐỐI SOÁT'
-                        : (totalMatched > 0 ? 'XÁC NHẬN XUẤT KHO ($totalMatched CHIP)' : 'CHƯA CÓ HÀNG HỢP LỆ'),
+                    unstockedCount > 0
+                        ? 'CÓ $unstockedCount CHIP CHƯA XẾP KHO (LỖI)'
+                        : (unexpectedCount > 0
+                            ? 'CÒN THẺ LẠ CHƯA ĐỐI SOÁT'
+                            : (totalMatched > 0 ? 'XÁC NHẬN XUẤT KHO ($totalMatched CHIP)' : 'CHƯA CÓ HÀNG HỢP LỆ')),
                     style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                   ),
                 ],
