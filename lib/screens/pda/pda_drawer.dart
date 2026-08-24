@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
-import 'pda_mysql_sync_screen.dart';
 import 'pda_putaway_screen.dart';
 
 class PdaDrawer extends StatelessWidget {
@@ -73,18 +72,6 @@ class PdaDrawer extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const PdaLookupScreen()),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.sync_alt, color: c.successEmerald),
-                title: Text('Đồng Bộ SQLite ⇋ MySQL', style: TextStyle(color: c.textPrimary, fontSize: 14)),
-                subtitle: Text('Tự động đồng bộ khi có mạng', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PdaMySqlSyncScreen()),
                   );
                 },
               ),

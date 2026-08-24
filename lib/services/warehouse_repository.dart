@@ -5,6 +5,7 @@ import '../models/wms_models.dart';
 import 'erp_bravo_service.dart';
 import 'database_service.dart';
 import 'mysql_sync_service.dart';
+import 'supabase_sync_service.dart';
 
 class WarehouseRepository extends ChangeNotifier {
   static final WarehouseRepository _instance = WarehouseRepository._internal();
@@ -20,6 +21,10 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> ensureInitialized() async {
     if (_initFuture != null) await _initFuture;
+  }
+
+  Future<void> reloadFromSqlite() async {
+    await _loadFromSqlite();
   }
 
   Future<void> _loadFromSqlite() async {
@@ -92,6 +97,7 @@ class WarehouseRepository extends ChangeNotifier {
 
     if (alsoClearMySql) {
       await MySqlSyncService().clearAllMySqlData();
+      await SupabaseSyncService().clearAllSupabaseData();
     }
 
     notifyListeners();
@@ -315,6 +321,15 @@ class WarehouseRepository extends ChangeNotifier {
         action: action,
         payload: payload,
       );
+    } catch (_) {}
+
+    try {
+      await SupabaseSyncService().syncDirectOrQueue(
+        tableName: tableName,
+        recordId: recordId,
+        action: action,
+        payload: payload,
+      );
     } catch (_) {
       await _dbService.enqueueSync(
         tableName: tableName,
@@ -328,9 +343,16 @@ class WarehouseRepository extends ChangeNotifier {
   void _triggerBackgroundSync() {
     if (Platform.environment.containsKey('FLUTTER_TEST')) return;
     try {
-      final syncService = MySqlSyncService();
-      if (syncService.config.isAutoSync) {
-        syncService.syncNow();
+      final mysqlSync = MySqlSyncService();
+      if (mysqlSync.config.isAutoSync) {
+        mysqlSync.syncNow();
+      }
+    } catch (_) {}
+
+    try {
+      final supabaseSync = SupabaseSyncService();
+      if (supabaseSync.config.isAutoSync) {
+        supabaseSync.syncNow();
       }
     } catch (_) {}
   }

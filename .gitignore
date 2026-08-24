@@ -49,3 +49,10 @@ app.*.map.json
 /desktop/obj/
 .vs/
 
+# Environment Variables and Secret Keys
+.env
+*.env
+*.env.json
+supabase_secrets.json
+lib/config/secrets.dart
+
