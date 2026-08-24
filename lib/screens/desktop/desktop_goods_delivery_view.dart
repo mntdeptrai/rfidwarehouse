@@ -417,8 +417,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                    label: const Text('TẠO PHIẾU XUẤT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.add, color: Color(0xFF2C251E), size: 18),
+                    label: const Text('TẠO PHIẾU XUẤT', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                     onPressed: () {
                       _resetForm();
                       setState(() => _isCreating = true);
@@ -808,12 +808,12 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            icon: Icon(_isScanning ? Icons.stop_circle_outlined : Icons.sensors, color: Colors.white, size: 18),
+                            icon: Icon(_isScanning ? Icons.stop_circle_outlined : Icons.sensors, color: const Color(0xFF2C251E), size: 18),
                             label: Text(
                               _isScanning
                                   ? (_scanDurationSeconds > 0 ? 'ĐANG QUÉT (${_scanCountdown}s) - DỪNG' : 'ĐANG QUÉT - BẤM DỪNG')
                                   : (_scanDurationSeconds > 0 ? 'BẮT ĐẦU QUÉT (${_scanDurationSeconds}s)' : 'BẮT ĐẦU QUÉT RFID'),
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                              style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                             onPressed: _toggleLiveScan,
                           ),
@@ -856,14 +856,14 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         : Colors.grey.shade600,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: const Icon(Icons.local_shipping, color: Colors.white),
+                  icon: const Icon(Icons.local_shipping, color: Color(0xFF2C251E)),
                   label: Text(
                     _isSaving
                         ? 'Đang lưu...'
                         : (_selectedLiveOrder != null
                             ? 'XÁC NHẬN XUẤT KHO ($totalMatched CHIP)'
                             : 'XÁC NHẬN XUẤT KHO (${_scannedTags.length} CHIP)'),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
                   ),
                   onPressed: (_isSaving ||
                           (_selectedLiveOrder != null
@@ -1061,8 +1061,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
-                    icon: const Icon(Icons.add, color: Colors.white),
-                    label: const Text('Tạo Phiếu Xuất Mới', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.add, color: Color(0xFF2C251E)),
+                    label: const Text('Tạo Phiếu Xuất Mới', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                     onPressed: () {
                       _resetForm();
                       setState(() => _isCreating = true);
@@ -1153,7 +1153,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 ),
                 onPressed: _saveAndProceedToScan,
-                child: const Text('LƯU & CHUYỂN SANG QUÉT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text('LƯU & CHUYỂN SANG QUÉT', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
               ),
             ],
           ),

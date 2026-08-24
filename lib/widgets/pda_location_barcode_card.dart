@@ -86,7 +86,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
           duration: const Duration(seconds: 2),
           content: Row(
             children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const Icon(Icons.check_circle, color: Color(0xFF2C251E), size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text('✓ Đã chọn vị trí: ${found.locationCode} (Khu ${found.zone})'),

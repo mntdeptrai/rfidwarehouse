@@ -104,7 +104,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void _showTagDetailModal(TagInfo tag) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: const Color(0xFFE9E2D5),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -118,20 +118,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.nfc, color: Color(0xFF38BDF8), size: 28),
+                    const Icon(Icons.nfc, color: Color(0xFF0284C7), size: 28),
                     const SizedBox(width: 10),
                     const Text(
                       'Chi tiết Thẻ UHF RFID',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C251E)),
                     ),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white70),
+                      icon: const Icon(Icons.close, color: Color(0xFF6B5D4D)),
                       onPressed: () => Navigator.pop(context),
                     )
                   ],
                 ),
-                const Divider(color: Colors.white24),
+                const Divider(color: Color(0xFF8F8070)),
                 _buildDetailRow('EPC', tag.epc, isSelectable: true),
                 if (tag.tid.isNotEmpty) _buildDetailRow('TID', tag.tid, isSelectable: true),
                 if (tag.user.isNotEmpty) _buildDetailRow('User', tag.user, isSelectable: true),
@@ -190,7 +190,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         children: [
           SizedBox(
             width: 100,
-            child: Text(label, style: const TextStyle(color: Colors.white60, fontSize: 13)),
+            child: Text(label, style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 13)),
           ),
           Expanded(
             child: isSelectable
@@ -200,7 +200,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         child: SelectableText(
                           value,
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF2C251E),
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             fontFamily: 'monospace',
@@ -216,14 +216,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         },
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(Icons.copy, size: 16, color: Color(0xFF38BDF8)),
+                          child: Icon(Icons.copy, size: 16, color: Color(0xFF0284C7)),
                         ),
                       )
                     ],
                   )
                 : Text(
                     value,
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                    style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w600),
                   ),
           ),
         ],
@@ -240,23 +240,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
             t.tid.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFFE9E2D5),
         elevation: 0,
         title: Row(
           children: [
-            const Icon(Icons.wifi_tethering, color: Color(0xFF38BDF8)),
+            const Icon(Icons.wifi_tethering, color: Color(0xFF0284C7)),
             const SizedBox(width: 8),
             const Text(
               'Quét Thẻ UHF RFID',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF2C251E)),
             ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: _uhfService.isScanning ? const Color(0xFF065F46) : const Color(0xFF334155),
+                color: _uhfService.isScanning ? const Color(0xFF065F46) : const Color(0xFFC7BDAF),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -285,12 +285,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.file_download, color: Colors.white70),
+            icon: const Icon(Icons.file_download, color: Color(0xFF6B5D4D)),
             tooltip: 'Xuất CSV',
             onPressed: _exportCsv,
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.white70),
+            icon: const Icon(Icons.delete_outline, color: Color(0xFF6B5D4D)),
             tooltip: 'Xóa danh sách',
             onPressed: () {
               _uhfService.clearTags();
@@ -304,12 +304,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: const BoxDecoration(
-              color: Color(0xFF1E293B),
+              color: Color(0xFFE9E2D5),
               borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
             ),
             child: Row(
               children: [
-                _buildKpiCard('Số thẻ duy nhất', '${_uhfService.uniqueTagCount}', const Color(0xFF38BDF8), Icons.tag),
+                _buildKpiCard('Số thẻ duy nhất', '${_uhfService.uniqueTagCount}', const Color(0xFF0284C7), Icons.tag),
                 const SizedBox(width: 10),
                 _buildKpiCard('Tổng lượt đọc', '${_uhfService.totalReadCount}', const Color(0xFFA78BFA), Icons.sync),
                 const SizedBox(width: 10),
@@ -324,14 +324,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
             child: TextField(
               controller: _searchController,
               onChanged: (val) => setState(() => _searchQuery = val.trim()),
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF2C251E)),
               decoration: InputDecoration(
                 hintText: 'Tìm kiếm theo EPC hoặc TID...',
-                hintStyle: const TextStyle(color: Colors.white38),
-                prefixIcon: const Icon(Icons.search, color: Colors.white38),
+                hintStyle: const TextStyle(color: Color(0xFF8F8070)),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF8F8070)),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.white38),
+                        icon: const Icon(Icons.clear, color: Color(0xFF8F8070)),
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _searchQuery = '');
@@ -339,7 +339,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: const Color(0xFF1E293B),
+                fillColor: const Color(0xFFE9E2D5),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -359,12 +359,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         Icon(
                           _uhfService.isScanning ? Icons.radar : Icons.nfc_outlined,
                           size: 64,
-                          color: _uhfService.isScanning ? const Color(0xFF38BDF8) : Colors.white24,
+                          color: _uhfService.isScanning ? const Color(0xFF0284C7) : Colors.white24,
                         ),
                         const SizedBox(height: 12),
                         Text(
                           _uhfService.isScanning ? 'Đang quét thẻ UHF xung quanh...' : 'Chưa có thẻ nào được quét',
-                          style: const TextStyle(color: Colors.white54, fontSize: 14),
+                          style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 14),
                         ),
                         if (!_uhfService.isScanning)
                           Padding(
@@ -426,7 +426,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF0F172A),
+          color: const Color(0xFFF4EFE6),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
@@ -440,7 +440,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(fontSize: 11, color: Colors.white60),
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF6B5D4D)),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -472,10 +472,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: const Color(0xFF1E293B),
+      color: const Color(0xFFE9E2D5),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFF334155), width: 0.5),
+        side: const BorderSide(color: Color(0xFFC7BDAF), width: 0.5),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -490,12 +490,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF334155),
+                      color: const Color(0xFFC7BDAF),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       '#$index',
-                      style: const TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF6B5D4D), fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -503,7 +503,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     child: Text(
                       tag.epc,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFF2C251E),
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'monospace',
@@ -514,16 +514,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
+                      color: const Color(0xFFF4EFE6),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                      border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       'x${tag.count}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF38BDF8),
+                        color: Color(0xFF0284C7),
                       ),
                     ),
                   ),
@@ -533,7 +533,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'TID: ${tag.tid}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11, fontFamily: 'monospace'),
+                  style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11, fontFamily: 'monospace'),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -554,12 +554,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             const Spacer(),
                             Text(
                               'Ant: #${tag.ant}',
-                              style: const TextStyle(fontSize: 11, color: Colors.white54),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF6B5D4D)),
                             ),
                             const SizedBox(width: 10),
                             Text(
                               DateFormat('HH:mm:ss').format(tag.lastSeen),
-                              style: const TextStyle(fontSize: 11, color: Colors.white38),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF8F8070)),
                             ),
                           ],
                         ),
@@ -569,7 +569,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           child: LinearProgressIndicator(
                             value: signalPct,
                             minHeight: 4,
-                            backgroundColor: const Color(0xFF0F172A),
+                            backgroundColor: const Color(0xFFF4EFE6),
                             valueColor: AlwaysStoppedAnimation<Color>(signalColor),
                           ),
                         ),

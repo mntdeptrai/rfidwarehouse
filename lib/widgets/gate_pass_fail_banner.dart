@@ -20,7 +20,7 @@ class GatePassFailBanner extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF0284C7).withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF38BDF8), width: 1.5),
+          border: Border.all(color: const Color(0xFF0284C7), width: 1.5),
         ),
         child: Row(
           children: [
@@ -29,7 +29,7 @@ class GatePassFailBanner extends StatelessWidget {
               height: 24,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                color: Color(0xFF38BDF8),
+                color: Color(0xFF0284C7),
               ),
             ),
             const SizedBox(width: 14),
@@ -40,7 +40,7 @@ class GatePassFailBanner extends StatelessWidget {
                   Text(
                     'ĐANG QUÉT & ĐỐI CHIẾU CỔNG GATE...',
                     style: TextStyle(
-                      color: Color(0xFF38BDF8),
+                      color: Color(0xFF0284C7),
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                       letterSpacing: 0.5,
@@ -49,7 +49,7 @@ class GatePassFailBanner extends StatelessWidget {
                   SizedBox(height: 2),
                   Text(
                     'Đang thu nhận dữ liệu RFID từ 02 Antenna HF340...',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                    style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                   ),
                 ],
               ),
@@ -64,18 +64,18 @@ class GatePassFailBanner extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: const Color(0xFFE9E2D5),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF334155)),
+          border: Border.all(color: const Color(0xFFC7BDAF)),
         ),
         child: Row(
           children: const [
-            Icon(Icons.sensors, color: Colors.white54, size: 28),
+            Icon(Icons.sensors, color: Color(0xFF6B5D4D), size: 28),
             SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Sẵn sàng quét qua Cổng RFID Gate HF340',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13),
               ),
             ),
           ],
@@ -126,7 +126,7 @@ class GatePassFailBanner extends StatelessWidget {
                 ),
                 child: Icon(
                   isPass ? Icons.check_circle : Icons.dangerous,
-                  color: Colors.white,
+                  color: const Color(0xFF2C251E),
                   size: 32,
                 ),
               ),
@@ -138,7 +138,7 @@ class GatePassFailBanner extends StatelessWidget {
                     Text(
                       isPass ? 'KẾT QUẢ: PASS - ĐẠT 100%' : 'KẾT QUẢ: FAIL - SAI LỆCH',
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFF2C251E),
                         fontWeight: FontWeight.w900,
                         fontSize: 18,
                         letterSpacing: 0.8,
@@ -149,7 +149,7 @@ class GatePassFailBanner extends StatelessWidget {
                       isPass
                           ? 'Chứng từ ${result!.documentNo}: Toàn bộ cơ cấu SKU và số lượng trùng khớp.'
                           : 'Phát hiện sai lệch giữa hàng hóa quét thực tế và chứng từ.',
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                     ),
                   ],
                 ),
@@ -163,7 +163,7 @@ class GatePassFailBanner extends StatelessWidget {
                 child: Text(
                   '${result!.totalActualQty} / ${result!.totalRequiredQty} Thẻ',
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF2C251E),
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -173,7 +173,7 @@ class GatePassFailBanner extends StatelessWidget {
           ),
 
           const SizedBox(height: 14),
-          const Divider(color: Colors.white24, height: 1),
+          const Divider(color: Color(0xFF8F8070), height: 1),
           const SizedBox(height: 12),
 
           // Chi tiết từng SKU
@@ -192,7 +192,7 @@ class GatePassFailBanner extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${b.sku} - ${b.productName}',
-                        style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                        style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12.5),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),

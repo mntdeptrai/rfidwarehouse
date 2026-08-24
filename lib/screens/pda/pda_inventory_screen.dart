@@ -33,17 +33,17 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
     final sessions = _repo.inventorySessions;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFFE9E2D5),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Inventory (Kiểm Kê)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        title: const Text('Inventory (Kiểm Kê)', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.cloud_sync, color: Color(0xFF38BDF8)),
+            icon: const Icon(Icons.cloud_sync, color: Color(0xFF0284C7)),
             tooltip: 'Đồng bộ Supabase Cloud',
             onPressed: () async {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -53,11 +53,11 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.history, color: Colors.white70),
+            icon: const Icon(Icons.history, color: Color(0xFF6B5D4D)),
             onPressed: () => _repo.reloadFromSqlite(),
           ),
           IconButton(
-            icon: const Icon(Icons.add, color: Color(0xFF38BDF8), size: 28),
+            icon: const Icon(Icons.add, color: Color(0xFF0284C7), size: 28),
             tooltip: 'Tạo vé kiểm kê mới',
             onPressed: _showCreateInventoryWorkflowDialog,
           ),
@@ -68,14 +68,14 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.fact_check_outlined, size: 64, color: Colors.white24),
+                  const Icon(Icons.fact_check_outlined, size: 64, color: Color(0xFF8F8070)),
                   const SizedBox(height: 14),
-                  const Text('Chưa có phiếu kiểm kê nào.', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const Text('Chưa có phiếu kiểm kê nào.', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13)),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
                     onPressed: _showCreateInventoryWorkflowDialog,
-                    child: const Text('+ TẠO PHIẾU KIỂM KÊ MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    child: const Text('+ TẠO PHIẾU KIỂM KÊ MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
                   ),
                 ],
               ),
@@ -93,9 +93,9 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: const Color(0xFFE9E2D5),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: const Color(0xFFC7BDAF)),
                     ),
                     child: Row(
                       children: [
@@ -105,7 +105,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                             color: const Color(0xFF0284C7).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.checklist, color: Color(0xFF38BDF8), size: 28),
+                          child: const Icon(Icons.checklist, color: Color(0xFF0284C7), size: 28),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -114,12 +114,12 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                             children: [
                               Text(
                                 s.sessionCode,
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                               const SizedBox(height: 3),
                               Text(
                                 'Inventory date: ${_formatDate(s.startedAt)} • ${s.zone}',
-                                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
                               ),
                             ],
                           ),
@@ -159,8 +159,8 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            backgroundColor: const Color(0xFF1E293B),
-            title: const Text('Select inventory type', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            backgroundColor: const Color(0xFFE9E2D5),
+            title: const Text('Select inventory type', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -180,7 +180,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('CANCEL', style: TextStyle(color: Colors.white54)),
+                child: const Text('CANCEL', style: TextStyle(color: Color(0xFF6B5D4D))),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
@@ -188,7 +188,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   Navigator.pop(ctx);
                   _showSelectWarehouseDialog(selectedType);
                 },
-                child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text('OK', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -206,8 +206,8 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            backgroundColor: const Color(0xFF1E293B),
-            title: const Text('Select warehouse', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            backgroundColor: const Color(0xFFE9E2D5),
+            title: const Text('Select warehouse', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -225,7 +225,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF6B5D4D))),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
@@ -233,7 +233,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   Navigator.pop(ctx);
                   _createNewSession(selectedWarehouse, inventoryType);
                 },
-                child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: const Text('OK', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -253,10 +253,10 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0284C7).withValues(alpha: 0.2) : const Color(0xFF0F172A),
+          color: isSelected ? const Color(0xFF0284C7).withValues(alpha: 0.2) : const Color(0xFFF4EFE6),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFFC7BDAF),
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
@@ -264,7 +264,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? const Color(0xFF38BDF8) : Colors.white38,
+              color: isSelected ? const Color(0xFF0284C7) : Colors.white38,
               size: 20,
             ),
             const SizedBox(width: 10),
@@ -362,13 +362,13 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Confirmation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-        content: const Text('Are you sure you want to complete?', style: TextStyle(color: Colors.white70, fontSize: 14)),
+        backgroundColor: const Color(0xFFE9E2D5),
+        title: const Text('Confirmation', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16)),
+        content: const Text('Are you sure you want to complete?', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 14)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.white54)),
+            child: const Text('CANCEL', style: TextStyle(color: Color(0xFF6B5D4D))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
@@ -380,7 +380,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã hoàn tất phiếu kiểm kê kho thành công!')),
               );
             },
-            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('OK', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -393,21 +393,21 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     final totalScanned = _scannedEpcs.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFFE9E2D5),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
           onPressed: widget.onBack,
         ),
         title: Text(
           s.sessionCode,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 15),
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.save_outlined, color: Colors.white70),
+            icon: const Icon(Icons.save_outlined, color: Color(0xFF6B5D4D)),
             tooltip: 'Lưu tạm',
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -431,9 +431,9 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: const Color(0xFFC7BDAF)),
               ),
               child: Column(
                 children: [
@@ -452,7 +452,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
             // Summary row
             Text(
               'Số lượng SKU: ${_repo.products.length}\nTổng số thẻ đã đọc: $totalScanned',
-              style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+              style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 14),
 
@@ -460,23 +460,23 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.5)),
+                border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.5)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Khu vực: ${s.zone}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   if (s.locationCode != null && s.locationCode!.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Text('Vị trí kệ: ', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                        Text(s.locationCode!, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                        const Text('Vị trí kệ: ', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
+                        Text(s.locationCode!, style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
                   ],
@@ -486,18 +486,18 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     children: [
                       Column(
                         children: [
-                          const Text('Kỳ vọng (CSDL)', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const Text('Kỳ vọng (CSDL)', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                           const SizedBox(height: 4),
                           Text(
                             '${s.matchCount + s.missingCount}',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
+                            style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 22),
                           ),
                         ],
                       ),
-                      Container(width: 1, height: 36, color: const Color(0xFF334155)),
+                      Container(width: 1, height: 36, color: const Color(0xFFC7BDAF)),
                       Column(
                         children: [
-                          const Text('Thực tế (Đã quét)', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12)),
+                          const Text('Thực tế (Đã quét)', style: TextStyle(color: Color(0xFF0284C7), fontSize: 12)),
                           const SizedBox(height: 4),
                           Text(
                             '$totalScanned',
@@ -516,18 +516,18 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: const Color(0xFFF4EFE6),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.barcode_reader, color: Color(0xFF38BDF8), size: 24),
+                  Icon(Icons.barcode_reader, color: Color(0xFF0284C7), size: 24),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Quét hàng loạt thẻ RFID để đối soát kiểm kê trong kho.',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                     ),
                   ),
                 ],
@@ -543,8 +543,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12)),
+        Text(label, style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
+        Text(value, style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.w500, fontSize: 12)),
       ],
     );
   }

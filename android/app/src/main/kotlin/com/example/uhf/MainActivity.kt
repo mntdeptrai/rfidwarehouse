@@ -92,25 +92,28 @@ class MainActivity : FlutterActivity() {
             if (item == null) continue
             try {
                 val epcStr = callMethod(item, "getId") as? String ?: continue
-                val epc = epcStr.uppercase().trim()
-                if (epc.isBlank()) continue
-
-                if (filterDuplicates && scannedEpcs.contains(epc)) continue
-                scannedEpcs.add(epc)
+                val subEpcs = epcStr.split(Regex("[\\r\\n;,]+"))
+                    .map { it.trim().replace(" ", "").uppercase() }
+                    .filter { it.isNotBlank() && it.length >= 4 }
 
                 val rssi = try { item.javaClass.getField("rssi").getInt(item) } catch (_: Throwable) { -50 }
                 val count = try { item.javaClass.getField("count").getInt(item) } catch (_: Throwable) { 1 }
 
-                val map = HashMap<String, Any?>()
-                map["epc"] = epc
-                map["tid"] = ""
-                map["user"] = ""
-                map["rssi"] = rssi.toString()
-                map["ant"] = "1"
-                map["count"] = count
-                map["pc"] = ""
-                map["timestamp"] = now
-                tagMaps.add(map)
+                for (epc in subEpcs) {
+                    if (filterDuplicates && scannedEpcs.contains(epc)) continue
+                    scannedEpcs.add(epc)
+
+                    val map = HashMap<String, Any?>()
+                    map["epc"] = epc
+                    map["tid"] = ""
+                    map["user"] = ""
+                    map["rssi"] = rssi.toString()
+                    map["ant"] = "1"
+                    map["count"] = count
+                    map["pc"] = ""
+                    map["timestamp"] = now
+                    tagMaps.add(map)
+                }
             } catch (e: Throwable) {
                 Log.w(TAG, "Error processing tag: ${e.message}")
             }
@@ -133,6 +136,40 @@ class MainActivity : FlutterActivity() {
                     toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 20)
                 } catch (_: Exception) {}
             }
+        }
+    }
+
+    private fun processRawBroadcastData(rawText: String) {
+        val lines = rawText.split(Regex("[\\r\\n;,]+"))
+            .map { it.trim().replace(" ", "").uppercase() }
+            .filter { it.isNotBlank() && it.length >= 4 }
+
+        if (lines.isEmpty()) return
+
+        val tagMaps = ArrayList<HashMap<String, Any?>>()
+        val now = System.currentTimeMillis()
+
+        for (epc in lines) {
+            if (filterDuplicates && scannedEpcs.contains(epc)) continue
+            scannedEpcs.add(epc)
+
+            val map = HashMap<String, Any?>()
+            map["epc"] = epc
+            map["tid"] = ""
+            map["user"] = ""
+            map["rssi"] = "-45"
+            map["ant"] = "1"
+            map["count"] = 1
+            map["pc"] = ""
+            map["timestamp"] = now
+            tagMaps.add(map)
+        }
+
+        if (tagMaps.isNotEmpty()) {
+            mainHandler.post {
+                eventSink?.success(tagMaps)
+            }
+            playBeepThrottled()
         }
     }
 
@@ -161,7 +198,12 @@ class MainActivity : FlutterActivity() {
                     "com.honeywell.decode.intent.action.SCAN_RESULT",
                     "nlscan.action.SCANNER_RESULT",
                     "urovo.rcv.message",
-                    "com.ubx.datawedge.RECORD_DATA" -> {
+                    "com.ubx.datawedge.RECORD_DATA",
+                    "com.seuic.uhf.action.TAG_READ",
+                    "com.seuic.uhf.action.INVENTORY_TAG",
+                    "com.seuic.uhf.action.ACTION_TAG",
+                    "com.seuic.uhftool.action.TAG",
+                    "com.seuic.uhf.action.TAG" -> {
                         handleBarcodeBroadcastData(intent)
                     }
                 }
@@ -170,19 +212,13 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleBarcodeBroadcastData(intent: Intent) {
-        // Nếu app đang ở chế độ RFID (mặc định), BỎ QUA hoàn toàn dữ liệu barcode để không bị xung đột
-        if (currentScanMode.lowercase() != "barcode") {
-            Log.d(TAG, "Barcode broadcast ignored because currentScanMode is $currentScanMode")
-            return
-        }
-
         var rawData: String? = null
         val stringKeys = listOf(
             "scannerdata", "barcode", "data", "value", "extra_barcode_broadcast_data",
             "com.symbol.datawedge.data_string", "data_string", "SCAN_BARCODE1",
             "barcode_string", "decode_data", "barcode_data",
             "text", "code", "content", "com.seuic.extra.SCAN_RESULT",
-            "se_barcode_data", "scanner_data"
+            "se_barcode_data", "scanner_data", "epc", "tag_epc", "tag"
         )
         for (key in stringKeys) {
             val s = intent.getStringExtra(key)
@@ -197,6 +233,13 @@ class MainActivity : FlutterActivity() {
             }
         }
         if (rawData.isNullOrEmpty()) return
+
+        // Nếu app đang ở chế độ RFID (mặc định): Tách từng dòng và đưa vào danh sách thẻ RFID riêng biệt!
+        if (currentScanMode.lowercase() != "barcode") {
+            processRawBroadcastData(rawData)
+            return
+        }
+
         Log.d(TAG, "Barcode Broadcast Data: $rawData")
         mainHandler.post {
             try {
@@ -235,6 +278,11 @@ class MainActivity : FlutterActivity() {
                 addAction("nlscan.action.SCANNER_RESULT")
                 addAction("urovo.rcv.message")
                 addAction("com.ubx.datawedge.RECORD_DATA")
+                addAction("com.seuic.uhf.action.TAG_READ")
+                addAction("com.seuic.uhf.action.INVENTORY_TAG")
+                addAction("com.seuic.uhf.action.ACTION_TAG")
+                addAction("com.seuic.uhftool.action.TAG")
+                addAction("com.seuic.uhf.action.TAG")
             }
             registerReceiver(keyReceiver, filter)
         } catch (e: Exception) {
@@ -290,7 +338,13 @@ class MainActivity : FlutterActivity() {
                 }
                 "setScanMode" -> {
                     currentScanMode = call.argument<String>("mode") ?: "auto"
-                    Log.d(TAG, "Scan mode: $currentScanMode"); result.success(true)
+                    Log.d(TAG, "Scan mode: $currentScanMode")
+                    if (currentScanMode.lowercase() == "barcode") {
+                        enableBarcodeScannerHardware()
+                    } else {
+                        disableBarcodeScannerHardware()
+                    }
+                    result.success(true)
                 }
                 "getScanMode" -> result.success(currentScanMode)
                 "triggerBarcodeScan", "scanBarcode" -> { triggerBarcodeBroadcast(); result.success(true) }
@@ -642,8 +696,73 @@ class MainActivity : FlutterActivity() {
                keyCode == KeyEvent.KEYCODE_STEM_3
     }
 
+    private fun disableBarcodeScannerHardware() {
+        try {
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "SCANNER_STOP")
+                putExtra("action_stop", "STOP_SCAN")
+                putExtra("scanner_enabled", false)
+                putExtra("key_enabled", false)
+            })
+            sendBroadcast(Intent("com.seuic.scanner.action.STOP_SCAN"))
+            sendBroadcast(Intent("com.seuic.scanner.action.SCANNER_ENABLED").apply {
+                putExtra("enabled", false)
+            })
+            sendBroadcast(Intent("com.seuic.scanner.action.KEY_CONTROL").apply {
+                putExtra("enabled", false)
+            })
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "ACTION_STOP_SCAN")
+            })
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "KEY_CONTROL_DISABLED")
+            })
+            try {
+                val scannerClass = Class.forName("com.seuic.scanner.ScannerFactory")
+                val getScanner = scannerClass.getMethod("getScanner", Context::class.java)
+                val scanner = getScanner.invoke(null, this)
+                if (scanner != null) {
+                    val closeMethod = scanner.javaClass.getMethod("close")
+                    closeMethod.invoke(scanner)
+                }
+            } catch (_: Throwable) {}
+            Log.d(TAG, "Barcode Scanner Hardware disabled for RFID mode")
+        } catch (e: Exception) {
+            Log.w(TAG, "disableBarcodeScannerHardware error: ${e.message}")
+        }
+    }
+
+    private fun enableBarcodeScannerHardware() {
+        try {
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "SCANNER_START")
+                putExtra("scanner_enabled", true)
+                putExtra("key_enabled", true)
+            })
+            sendBroadcast(Intent("com.seuic.scanner.action.SCANNER_ENABLED").apply {
+                putExtra("enabled", true)
+            })
+            sendBroadcast(Intent("com.seuic.scanner.action.KEY_CONTROL").apply {
+                putExtra("enabled", true)
+            })
+            try {
+                val scannerClass = Class.forName("com.seuic.scanner.ScannerFactory")
+                val getScanner = scannerClass.getMethod("getScanner", Context::class.java)
+                val scanner = getScanner.invoke(null, this)
+                if (scanner != null) {
+                    val openMethod = scanner.javaClass.getMethod("open")
+                    openMethod.invoke(scanner)
+                }
+            } catch (_: Throwable) {}
+            Log.d(TAG, "Barcode Scanner Hardware enabled for Barcode mode")
+        } catch (e: Exception) {
+            Log.w(TAG, "enableBarcodeScannerHardware error: ${e.message}")
+        }
+    }
+
     private fun triggerBarcodeBroadcast() {
         try {
+            enableBarcodeScannerHardware()
             sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply { putExtra("action", "ACTION_SCAN") })
             sendBroadcast(Intent("android.intent.action.SCAN_TRIGGER"))
             sendBroadcast(Intent("com.seuic.scanner.action.SCAN"))
@@ -716,6 +835,13 @@ class MainActivity : FlutterActivity() {
             sendTriggerEvent(false, keyCode); return true
         }
         return super.onKeyUp(keyCode, event)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (currentScanMode.lowercase() != "barcode") {
+            disableBarcodeScannerHardware()
+        }
     }
 
     override fun onDestroy() {

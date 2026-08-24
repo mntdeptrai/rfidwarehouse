@@ -229,79 +229,94 @@ class UhfService extends ChangeNotifier {
   void _handleIncomingBatch(List<dynamic> batch) {
     for (final item in batch) {
       if (item is! Map) continue;
-      final newTag = TagInfo.fromMap(item);
-      if (newTag.epc.isEmpty) continue;
+      final rawEpc = (item['epc']?.toString() ?? '').trim();
+      if (rawEpc.isEmpty) continue;
 
-      _totalReadCount++;
-      _recentReadCount++;
+      final epcLines = rawEpc
+          .split(RegExp(r'[\r\n;,]+'))
+          .map((s) => s.replaceAll(' ', '').trim().toUpperCase())
+          .where((s) => s.isNotEmpty && s.length >= 4)
+          .toList();
 
-      final isNew = !_tagsMap.containsKey(newTag.epc);
+      for (final epc in epcLines) {
+        _totalReadCount++;
+        _recentReadCount++;
 
-      if (!isNew) {
-        final existing = _tagsMap[newTag.epc]!;
-        existing.count += newTag.count > 0 ? newTag.count : 1;
-        existing.lastSeen = DateTime.now();
-        _tagsMap[newTag.epc] = TagInfo(
-          epc: existing.epc,
-          tid: newTag.tid.isNotEmpty ? newTag.tid : existing.tid,
-          user: newTag.user.isNotEmpty ? newTag.user : existing.user,
-          rssi: newTag.rssi,
-          ant: newTag.ant,
-          count: existing.count,
-          pc: newTag.pc.isNotEmpty ? newTag.pc : existing.pc,
-          timestamp: newTag.timestamp,
-          firstSeen: existing.firstSeen,
-          lastSeen: existing.lastSeen,
-        );
-        _tagsCacheDirty = true;
-        if (!_filterDuplicates) {
-          _tagStreamController.add(_tagsMap[newTag.epc]!);
+        final isNew = !_tagsMap.containsKey(epc);
+
+        if (!isNew) {
+          final existing = _tagsMap[epc]!;
+          existing.count += (item['count'] as num?)?.toInt() ?? 1;
+          existing.lastSeen = DateTime.now();
+          _tagsCacheDirty = true;
+          if (!_filterDuplicates) {
+            _tagStreamController.add(_tagsMap[epc]!);
+          }
+        } else {
+          final newTag = TagInfo(
+            epc: epc,
+            tid: item['tid']?.toString() ?? '',
+            user: item['user']?.toString() ?? '',
+            rssi: item['rssi']?.toString() ?? '-45',
+            ant: item['ant']?.toString() ?? '1',
+            count: (item['count'] as num?)?.toInt() ?? 1,
+            pc: item['pc']?.toString() ?? '',
+            timestamp: item['timestamp'] != null
+                ? DateTime.fromMillisecondsSinceEpoch((item['timestamp'] as num).toInt())
+                : DateTime.now(),
+          );
+          _tagsMap[epc] = newTag;
+          _tagsCacheDirty = true;
+          _tagStreamController.add(newTag);
         }
-      } else {
-        _tagsMap[newTag.epc] = newTag;
-        _tagsCacheDirty = true;
-        _tagStreamController.add(newTag);
       }
     }
     _throttledNotify();
   }
 
   void _handleIncomingTag(Map<dynamic, dynamic> map, {bool isSingle = false}) {
-    final newTag = TagInfo.fromMap(map);
-    if (newTag.epc.isEmpty) return;
+    final rawEpc = (map['epc']?.toString() ?? '').trim();
+    if (rawEpc.isEmpty) return;
 
-    _totalReadCount++;
-    _recentReadCount++;
+    final epcLines = rawEpc
+        .split(RegExp(r'[\r\n;,]+'))
+        .map((s) => s.replaceAll(' ', '').trim().toUpperCase())
+        .where((s) => s.isNotEmpty && s.length >= 4)
+        .toList();
 
-    final isNew = !_tagsMap.containsKey(newTag.epc);
+    for (final epc in epcLines) {
+      _totalReadCount++;
+      _recentReadCount++;
 
-    if (!isNew) {
-      final existing = _tagsMap[newTag.epc]!;
-      existing.count += newTag.count > 0 ? newTag.count : 1;
-      existing.lastSeen = DateTime.now();
-      _tagsMap[newTag.epc] = TagInfo(
-        epc: existing.epc,
-        tid: newTag.tid.isNotEmpty ? newTag.tid : existing.tid,
-        user: newTag.user.isNotEmpty ? newTag.user : existing.user,
-        rssi: newTag.rssi,
-        ant: newTag.ant,
-        count: existing.count,
-        pc: newTag.pc.isNotEmpty ? newTag.pc : existing.pc,
-        timestamp: newTag.timestamp,
-        firstSeen: existing.firstSeen,
-        lastSeen: existing.lastSeen,
-      );
-      _tagsCacheDirty = true;
-      if (_filterDuplicates) {
-        return; // Bỏ qua phát lại stream khi đang bật chế độ lọc trùng
+      final isNew = !_tagsMap.containsKey(epc);
+
+      if (!isNew) {
+        final existing = _tagsMap[epc]!;
+        existing.count += (map['count'] as num?)?.toInt() ?? 1;
+        existing.lastSeen = DateTime.now();
+        _tagsCacheDirty = true;
+        if (_filterDuplicates) {
+          continue;
+        }
+      } else {
+        final newTag = TagInfo(
+          epc: epc,
+          tid: map['tid']?.toString() ?? '',
+          user: map['user']?.toString() ?? '',
+          rssi: map['rssi']?.toString() ?? '-45',
+          ant: map['ant']?.toString() ?? '1',
+          count: (map['count'] as num?)?.toInt() ?? 1,
+          pc: map['pc']?.toString() ?? '',
+          timestamp: map['timestamp'] != null
+              ? DateTime.fromMillisecondsSinceEpoch((map['timestamp'] as num).toInt())
+              : DateTime.now(),
+        );
+        _tagsMap[epc] = newTag;
+        _tagsCacheDirty = true;
       }
-    } else {
-      _tagsMap[newTag.epc] = newTag;
-      _tagsCacheDirty = true;
-    }
 
-    // Stream tag to UI immediately
-    _tagStreamController.add(_tagsMap[newTag.epc]!);
+      _tagStreamController.add(_tagsMap[epc]!);
+    }
     _throttledNotify();
   }
 

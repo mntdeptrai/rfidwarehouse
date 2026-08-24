@@ -99,9 +99,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           currentIndex: _currentIndex.clamp(0, 4),
           onTap: (index) => setState(() => _currentIndex = index),
           type: BottomNavigationBarType.fixed,
-          backgroundColor: const Color(0xFF0F172A),
-          selectedItemColor: const Color(0xFF38BDF8),
-          unselectedItemColor: Colors.white54,
+          backgroundColor: const Color(0xFFF4EFE6),
+          selectedItemColor: const Color(0xFF0284C7),
+          unselectedItemColor: const Color(0xFF6B5D4D),
           selectedFontSize: 11,
           unselectedFontSize: 10,
           items: const [
@@ -133,28 +133,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   Widget _buildAppDrawer() {
     return Drawer(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF0284C7), Color(0xFF1E293B)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: Color(0xFFE9E2D5),
+              border: Border(bottom: BorderSide(color: Color(0xFFC7BDAF))),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: const [
-                Icon(Icons.nfc, size: 36, color: Colors.white),
+                Icon(Icons.nfc, size: 36, color: Color(0xFF0284C7)),
                 SizedBox(height: 8),
                 Text(
                   'RFID WMS SYSTEM',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF2C251E),
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
                     letterSpacing: 0.8,
@@ -162,7 +159,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 ),
                 Text(
                   'Tích hợp ERP Bravo & Hardware',
-                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                  style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
                 ),
               ],
             ),
@@ -197,7 +194,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             title: '5. Xuất Kho & FIFO (Outbound)',
             subtitle: 'Gợi ý FIFO, Picking list, Gate OUT',
           ),
-          const Divider(color: Color(0xFF334155)),
+          const Divider(color: Color(0xFFC7BDAF)),
           _buildDrawerItem(
             index: 5,
             icon: Icons.meeting_room,
@@ -210,26 +207,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             title: '7. Thiết Bị & ERP Bravo Hub',
             subtitle: 'Quản lý Gate HF340, PDA RFID, Đồng bộ Bravo',
           ),
-          const Divider(color: Color(0xFF334155)),
-          ListTile(
-            leading: const Icon(Icons.remove_red_eye, color: Color(0xFFF59E0B)),
-            title: const Text('Chế Độ Chống Mỏi Mắt', style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.bold)),
+          const Divider(color: Color(0xFFC7BDAF)),
+          const ListTile(
+            leading: Icon(Icons.menu_book, color: Color(0xFF0284C7)),
+            title: Text('Giao Diện Kho', style: TextStyle(color: Color(0xFF2C251E), fontSize: 13.5, fontWeight: FontWeight.bold)),
             subtitle: Text(
-              'Đang dùng: ${EyeCareThemeService().modeName}',
-              style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 10.5),
+              'Giấy Mộc Dịu Mắt',
+              style: TextStyle(color: Color(0xFF0284C7), fontSize: 11),
             ),
-            trailing: const Icon(Icons.touch_app, size: 16, color: Colors.white38),
-            onTap: () {
-              EyeCareThemeService().toggleNextMode();
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFF1E293B),
-                  duration: const Duration(seconds: 1),
-                  content: Text('Đã bật chế độ: ${EyeCareThemeService().modeName}'),
-                ),
-              );
-            },
           ),
         ],
       ),
@@ -244,21 +229,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }) {
     final isSelected = _currentIndex == index;
     return ListTile(
-      leading: Icon(icon, color: isSelected ? const Color(0xFF38BDF8) : Colors.white70),
+      leading: Icon(icon, color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D)),
       title: Text(
         title,
         style: TextStyle(
-          color: isSelected ? const Color(0xFF38BDF8) : Colors.white,
+          color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF2C251E),
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           fontSize: 13.5,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: const TextStyle(color: Colors.white54, fontSize: 10.5),
+        style: const TextStyle(color: Color(0xFF8F8070), fontSize: 10.5),
       ),
       selected: isSelected,
-      selectedTileColor: const Color(0xFF1E293B),
+      selectedTileColor: const Color(0xFFE9E2D5),
       onTap: () {
         setState(() => _currentIndex = index);
         Navigator.pop(context);

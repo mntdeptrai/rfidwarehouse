@@ -1226,7 +1226,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                           content: Text('Bạn có chắc chắn muốn hủy vĩnh viễn thẻ này không?', style: TextStyle(color: c.textPrimary)),
                           actions: [
                             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
-                            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral), child: const Text('HỦY THẺ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+                            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral), child: const Text('HỦY THẺ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold))),
                           ],
                         ),
                       );

@@ -152,7 +152,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             duration: const Duration(seconds: 3),
             content: Row(
               children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const Icon(Icons.check_circle, color: Color(0xFF2C251E), size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -291,7 +291,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                   color: c.rfidCyan,
                   shape: BoxShape.circle,
                 ),
-                child: const Text('1', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('1', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -391,7 +391,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                   color: c.successEmerald,
                   shape: BoxShape.circle,
                 ),
-                child: const Text('2', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('2', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -431,7 +431,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                   onPressed: () => _uhf.triggerBarcodeScan(),
                   child: const Text(
                     'BẬT QUÉT',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                    style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 11),
                   ),
                 ),
               ],
@@ -583,7 +583,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
                       onPressed: () => _processPutawayCarton(o.orderNo),
-                      child: const Text('Cất vị trí này', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: const Text('Cất vị trí này', style: TextStyle(color: Color(0xFF2C251E), fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

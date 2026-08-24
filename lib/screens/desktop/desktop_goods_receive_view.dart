@@ -223,7 +223,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               duration: const Duration(seconds: 3),
               content: Row(
                 children: [
-                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const Icon(Icons.check_circle, color: Color(0xFF2C251E), size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text('✅ ĐÃ TIẾP NHẬN KIỆN HÀNG $orderNo ($saved CHIP) -> CHUYỂN SANG CHỜ XẾP KHO!'),
@@ -646,7 +646,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('ĐÃ HIỂU', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('ĐÃ HIỂU', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -779,8 +779,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     children: [
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
-                        icon: const Icon(Icons.file_open, size: 16, color: Colors.white),
-                        label: const Text('Chọn File Excel Từ Máy', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        icon: const Icon(Icons.file_open, size: 16, color: Color(0xFF2C251E)),
+                        label: const Text('Chọn File Excel Từ Máy', style: TextStyle(color: Color(0xFF2C251E), fontSize: 12, fontWeight: FontWeight.bold)),
                         onPressed: () async {
                           try {
                             final rows = await _excelService.pickAndParseBatchOrdersExcel();
@@ -943,12 +943,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   backgroundColor: previewRows.isNotEmpty ? const Color(0xFF10B981) : Colors.grey.shade600,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
-                icon: Icon(hasExplicitEpcs ? Icons.verified : Icons.check_circle, color: Colors.white, size: 18),
+                icon: Icon(hasExplicitEpcs ? Icons.verified : Icons.check_circle, color: const Color(0xFF2C251E), size: 18),
                 label: Text(
                   hasExplicitEpcs
                       ? 'XÁC NHẬN IMPORT DÙNG EPC TỪ FILE ($totalOrders ĐƠN)'
                       : 'XÁC NHẬN IMPORT ($totalOrders ĐƠN)',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
                 ),
                 onPressed: previewRows.isEmpty
                     ? null
@@ -1198,8 +1198,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-            icon: const Icon(Icons.play_arrow, size: 16, color: Colors.white),
-            label: const Text('Quét Nhập Kho Ngay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            icon: const Icon(Icons.play_arrow, size: 16, color: Color(0xFF2C251E)),
+            label: const Text('Quét Nhập Kho Ngay', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
             onPressed: () {
               Navigator.pop(ctx);
               setState(() {
@@ -1350,7 +1350,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               }
               Navigator.pop(ctx);
             },
-            child: const Text('THÊM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('THÊM', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1540,8 +1540,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                    label: const Text('TẠO PHIẾU EXCEL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.add, color: Color(0xFF2C251E), size: 18),
+                    label: const Text('TẠO PHIẾU EXCEL', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                     onPressed: () {
                       _resetForm();
                       setState(() => _isCreating = true);
@@ -1944,12 +1944,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            icon: Icon(_isScanning ? Icons.stop_circle_outlined : Icons.sensors, color: Colors.white, size: 18),
+                            icon: Icon(_isScanning ? Icons.stop_circle_outlined : Icons.sensors, color: const Color(0xFF2C251E), size: 18),
                             label: Text(
                               _isScanning
                                   ? (_scanDurationSeconds > 0 ? 'ĐANG QUÉT · ${_scanCountdown}s - DỪNG' : 'ĐANG QUÉT - BẤM DỪNG')
                                   : (_scanDurationSeconds > 0 ? 'BẮT ĐẦU QUÉT · ${_scanDurationSeconds}s' : 'BẮT ĐẦU QUÉT RFID'),
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                              style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                             onPressed: _toggleLiveScan,
                           ),
@@ -1988,14 +1988,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     backgroundColor: scannedCount > 0 ? const Color(0xFF10B981) : c.border,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: const Icon(Icons.check_circle, color: Colors.white),
+                  icon: const Icon(Icons.check_circle, color: Color(0xFF2C251E)),
                   label: Text(
                     _isSaving
                         ? 'Đang lưu...'
                         : (_selectedLiveOrder != null
                             ? 'XÁC NHẬN NHẬP ĐƠN · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP'
                             : 'XÁC NHẬN NHẬP KHO · $scannedCount CHIP'),
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
+                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12.5),
                   ),
                   onPressed: (_isSaving || scannedCount == 0) ? null : _saveLiveInbound,
                 ),
@@ -2355,7 +2355,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               ElevatedButton(
                                 style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
                                 onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('XÓA SẠCH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                child: const Text('XÓA SẠCH', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                               ),
                             ],
                           ),
@@ -2389,8 +2389,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         backgroundColor: const Color(0xFF10B981),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
-                      icon: const Icon(Icons.add, size: 15, color: Colors.white),
-                      label: const Text('Tạo Phiếu Mới', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.add, size: 15, color: Color(0xFF2C251E)),
+                      label: const Text('Tạo Phiếu Mới', style: TextStyle(color: Color(0xFF2C251E), fontSize: 11, fontWeight: FontWeight.bold)),
                       onPressed: () {
                         _resetForm();
                         setState(() => _isCreating = true);
@@ -2424,15 +2424,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           children: [
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
-                              icon: const Icon(Icons.file_upload, color: Colors.white),
-                              label: const Text('Import Danh Sách Đơn (Excel)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.file_upload, color: Color(0xFF2C251E)),
+                              label: const Text('Import Danh Sách Đơn (Excel)', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                               onPressed: _showBatchImportOrdersDialog,
                             ),
                             const SizedBox(width: 10),
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-                              icon: const Icon(Icons.add, color: Colors.white),
-                              label: const Text('Tạo Phiếu Nhập Mới', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.add, color: Color(0xFF2C251E)),
+                              label: const Text('Tạo Phiếu Nhập Mới', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                               onPressed: () {
                                 _resetForm();
                                 setState(() => _isCreating = true);
@@ -2494,8 +2494,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               backgroundColor: c.rfidCyan,
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             ),
-                            icon: const Icon(Icons.play_arrow, size: 16, color: Colors.white),
-                            label: const Text('Quét đối soát', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            icon: const Icon(Icons.play_arrow, size: 16, color: Color(0xFF2C251E)),
+                            label: const Text('Quét đối soát', style: TextStyle(color: Color(0xFF2C251E), fontSize: 11, fontWeight: FontWeight.bold)),
                             onPressed: () {
                               _onOrderSelected(order);
                               setState(() {
@@ -2535,7 +2535,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                     ElevatedButton(
                                       style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
                                       onPressed: () => Navigator.pop(ctx, true),
-                                      child: const Text('XÓA ĐƠN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      child: const Text('XÓA ĐƠN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                                     ),
                                   ],
                                 ),
@@ -2603,12 +2603,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: Icon(hasExcelSerials ? Icons.verified : Icons.qr_code_2, color: Colors.white),
+                    icon: Icon(hasExcelSerials ? Icons.verified : Icons.qr_code_2, color: const Color(0xFF2C251E)),
                     label: Text(
                       hasExcelSerials
                           ? 'LƯU PHIẾU DÙNG MÃ EPC EXCEL · $totalExcelSerials CHIP'
                           : 'LƯU & SINH MÃ EPC DUY NHẤT',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
                     ),
                     onPressed: () => _saveReceipt(false),
                   ),
@@ -2685,8 +2685,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           children: [
                             ElevatedButton.icon(
                               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-                              icon: const Icon(Icons.add, size: 16, color: Colors.white),
-                              label: const Text('Thêm mặt hàng', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.add, size: 16, color: Color(0xFF2C251E)),
+                              label: const Text('Thêm mặt hàng', style: TextStyle(color: Color(0xFF2C251E), fontSize: 12, fontWeight: FontWeight.bold)),
                               onPressed: () => _showAddProductRowDialog(c),
                             ),
                             const SizedBox(width: 10),
@@ -2695,8 +2695,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 backgroundColor: c.rfidCyan,
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               ),
-                              icon: const Icon(Icons.file_open, size: 16, color: Colors.white),
-                              label: const Text('Nạp từ File Excel', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                              icon: const Icon(Icons.file_open, size: 16, color: Color(0xFF2C251E)),
+                              label: const Text('Nạp từ File Excel', style: TextStyle(color: Color(0xFF2C251E), fontSize: 12, fontWeight: FontWeight.bold)),
                               onPressed: _importGoodsReceiveExcel,
                             ),
                             const SizedBox(width: 10),

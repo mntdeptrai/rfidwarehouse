@@ -102,7 +102,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               await _repo.addProduct(newProd);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('LƯU SẢN PHẨM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('LƯU SẢN PHẨM', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -173,7 +173,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               await _repo.addLocation(newLoc);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('LƯU VỊ TRÍ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('LƯU VỊ TRÍ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -218,7 +218,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               );
               Navigator.pop(ctx);
             },
-            child: const Text('TẠO PALLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -255,7 +255,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 );
               }
             },
-            child: const Text('XÓA SẠCH DỮ LIỆU', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('XÓA SẠCH DỮ LIỆU', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -320,7 +320,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       ),
                     );
                   },
-                  child: const Text('Xác nhận Di chuyển', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('Xác nhận Di chuyển', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -412,7 +412,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                 onPressed: _showAddProductDialog,
-                child: const Text('+ THÊM SẢN PHẨM MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('+ THÊM SẢN PHẨM MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
@@ -543,7 +543,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
                 onPressed: _showAddPalletDialog,
-                child: const Text('+ TẠO PALLET MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('+ TẠO PALLET MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
@@ -672,7 +672,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                 onPressed: _showAddLocationDialog,
-                child: const Text('+ THÊM VỊ TRÍ MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: const Text('+ THÊM VỊ TRÍ MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),

@@ -186,7 +186,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                 CircleAvatar(
                   backgroundColor: c.rfidCyan,
                   radius: 18,
-                  child: const Icon(Icons.desktop_windows_rounded, color: Colors.white, size: 20),
+                  child: const Icon(Icons.desktop_windows_rounded, color: Color(0xFF2C251E), size: 20),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

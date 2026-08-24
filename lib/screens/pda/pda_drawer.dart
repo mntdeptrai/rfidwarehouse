@@ -38,7 +38,7 @@ class PdaDrawer extends StatelessWidget {
                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 accountEmail: Text(
-                  'Thiết bị C72e',
+                  'Thiết bị Handheld PDA',
                   style: TextStyle(color: c.textSecondary, fontSize: 13),
                 ),
               ),
@@ -74,29 +74,13 @@ class PdaDrawer extends StatelessWidget {
                   );
                 },
               ),
-              Divider(color: c.border),
               ListTile(
-                leading: Icon(
-                  eyeCare.mode == EyeCareMode.amberNight
-                      ? Icons.nightlight_round
-                      : (eyeCare.mode == EyeCareMode.softSepia ? Icons.menu_book : Icons.remove_red_eye),
-                  color: c.warningAmber,
-                ),
-                title: Text('Chế Độ Chống Mỏi Mắt', style: TextStyle(color: c.textPrimary, fontSize: 14)),
+                leading: Icon(Icons.menu_book, color: c.rfidCyan),
+                title: Text('Giao Diện Kho', style: TextStyle(color: c.textPrimary, fontSize: 14)),
                 trailing: Text(
-                  eyeCare.modeName,
-                  style: TextStyle(color: c.warningAmber, fontSize: 12, fontWeight: FontWeight.w600),
+                  'Giấy Mộc Dịu Mắt',
+                  style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
-                onTap: () {
-                  eyeCare.toggleNextMode();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: c.bgCardElevated,
-                      duration: const Duration(seconds: 1),
-                      content: Text('Đã chuyển sang: ${eyeCare.modeName}'),
-                    ),
-                  );
-                },
               ),
               Divider(color: c.border),
               ListTile(
@@ -115,7 +99,7 @@ class PdaDrawer extends StatelessWidget {
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
                           onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('XÓA SẠCH', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          child: const Text('XÓA SẠCH', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),

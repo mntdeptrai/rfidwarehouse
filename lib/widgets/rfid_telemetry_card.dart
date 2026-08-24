@@ -23,9 +23,9 @@ class RfidTelemetryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFC7BDAF)),
       ),
       child: Column(
         children: [
@@ -65,12 +65,12 @@ class RfidTelemetryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: const Color(0xFFF4EFE6),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   antennaInfo,
-                  style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -83,7 +83,7 @@ class RfidTelemetryCard extends StatelessWidget {
                   title: 'Thẻ Duy Nhất',
                   value: uniqueTags.toString(),
                   unit: 'Tags',
-                  color: const Color(0xFF38BDF8),
+                  color: const Color(0xFF0284C7),
                   icon: Icons.tag,
                 ),
               ),
@@ -124,9 +124,9 @@ class RfidTelemetryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFFF4EFE6),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF334155), width: 0.5),
+        border: Border.all(color: const Color(0xFFC7BDAF), width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,7 +138,7 @@ class RfidTelemetryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.w500),
+                  style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 10, fontWeight: FontWeight.w500),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -152,7 +152,7 @@ class RfidTelemetryCard extends StatelessWidget {
               Text(
                 value,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: const Color(0xFF2C251E),
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),

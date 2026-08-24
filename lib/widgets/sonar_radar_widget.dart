@@ -53,7 +53,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
 
     Color getSignalColor() {
       if (strength > 0.75) return const Color(0xFF10B981); // Xanh lá: Rất gần
-      if (strength > 0.45) return const Color(0xFF38BDF8); // Xanh dương: Đang tới gần
+      if (strength > 0.45) return const Color(0xFF0284C7); // Xanh dương: Đang tới gần
       if (strength > 0.2) return const Color(0xFFF59E0B); // Vàng: Xa
       return Colors.white38; // Rất yếu / Chưa thấy
     }
@@ -83,8 +83,8 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
                 height: 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF0F172A),
-                  border: Border.all(color: const Color(0xFF334155), width: 1),
+                  color: const Color(0xFFF4EFE6),
+                  border: Border.all(color: const Color(0xFFC7BDAF), width: 1),
                 ),
               ),
               Container(
@@ -92,7 +92,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
                 height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF334155), width: 1),
+                  border: Border.all(color: const Color(0xFFC7BDAF), width: 1),
                 ),
               ),
               Container(
@@ -100,7 +100,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
                 height: 80,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF334155), width: 1),
+                  border: Border.all(color: const Color(0xFFC7BDAF), width: 1),
                 ),
               ),
 
@@ -130,7 +130,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
                 height: 48,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: widget.isTracking ? signalColor : const Color(0xFF334155),
+                  color: widget.isTracking ? signalColor : const Color(0xFFC7BDAF),
                   boxShadow: widget.isTracking
                       ? [
                           BoxShadow(
@@ -143,7 +143,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
                 ),
                 child: const Icon(
                   Icons.radar,
-                  color: Colors.white,
+                  color: Color(0xFF2C251E),
                   size: 26,
                 ),
               ),
@@ -157,9 +157,9 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFFE9E2D5),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFF334155)),
+            border: Border.all(color: const Color(0xFFC7BDAF)),
           ),
           child: Column(
             children: [
@@ -177,7 +177,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
                   Text(
                     '${widget.rssi.toStringAsFixed(0)} dBm',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color(0xFF2C251E),
                       fontFamily: 'Courier',
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -191,7 +191,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with SingleTickerPr
                 child: LinearProgressIndicator(
                   value: strength,
                   minHeight: 10,
-                  backgroundColor: const Color(0xFF0F172A),
+                  backgroundColor: const Color(0xFFF4EFE6),
                   valueColor: AlwaysStoppedAnimation<Color>(signalColor),
                 ),
               ),

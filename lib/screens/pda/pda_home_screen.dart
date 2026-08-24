@@ -69,7 +69,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'KHO TỔNG C72E',
+              'QUẢN LÝ KHO RFID',
               style: TextStyle(
                 color: c.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -78,7 +78,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
               ),
             ),
             Text(
-              'Chainway UHF RFID WMS',
+              'UHF RFID WMS SYSTEM',
               style: TextStyle(
                 color: c.textMuted,
                 fontSize: 10,
@@ -191,21 +191,21 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           color: const Color(0xFF0284C7),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.shelves, color: Colors.white, size: 20),
+                        child: const Icon(Icons.shelves, color: Color(0xFF2C251E), size: 20),
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
                           'CẤT HÀNG LÊN KỆ (PUTAWAY)',
                           style: TextStyle(
-                            color: Color(0xFF38BDF8),
+                            color: Color(0xFF0284C7),
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.3,
                           ),
                         ),
                       ),
-                      const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF38BDF8)),
+                      const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF0284C7)),
                     ],
                   ),
                 ),

@@ -94,7 +94,7 @@ class _GateMonitorScreenState extends State<GateMonitorScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F19),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFFF4EFE6),
         title: Row(
           children: [
             const Icon(Icons.meeting_room, color: Color(0xFF10B981)),
@@ -130,9 +130,9 @@ class _GateMonitorScreenState extends State<GateMonitorScreen> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: const Color(0xFFC7BDAF)),
               ),
               child: Row(
                 children: [
@@ -154,7 +154,7 @@ class _GateMonitorScreenState extends State<GateMonitorScreen> {
                         child: const Center(
                           child: Text(
                             '🟢 MODE: NHẬP KHO (INBOUND)',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                         ),
                       ),
@@ -179,7 +179,7 @@ class _GateMonitorScreenState extends State<GateMonitorScreen> {
                         child: const Center(
                           child: Text(
                             '🔵 MODE: XUẤT KHO (OUTBOUND)',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                         ),
                       ),
@@ -220,7 +220,7 @@ class _GateMonitorScreenState extends State<GateMonitorScreen> {
                     onPressed: _isGateScanning ? null : _simulateLiveGatePass,
                     child: const Text(
                       'PALLET ĐẠT CHUẨN (PASS)',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                 ),
@@ -235,7 +235,7 @@ class _GateMonitorScreenState extends State<GateMonitorScreen> {
                     onPressed: _isGateScanning ? null : _simulateLiveGateFail,
                     child: const Text(
                       'PALLET LỖI/SAI SKU (FAIL)',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                 ),

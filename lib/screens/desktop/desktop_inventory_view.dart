@@ -89,8 +89,8 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       backgroundColor: const Color(0xFF10B981),
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     ),
-                    icon: const Icon(Icons.file_download, color: Colors.white, size: 18),
-                    label: const Text('BÁO CÁO EXCEL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.file_download, color: Color(0xFF2C251E), size: 18),
+                    label: const Text('BÁO CÁO EXCEL', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xuất báo cáo kiểm kê ra file Excel')),
@@ -221,8 +221,8 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
-                icon: const Icon(Icons.file_download, color: Colors.white, size: 18),
-                label: const Text('XUẤT EXCEL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.file_download, color: Color(0xFF2C251E), size: 18),
+                label: const Text('XUẤT EXCEL', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xuất dữ liệu chi tiết kiểm kê ra Excel')),

@@ -183,14 +183,14 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E293B),
+          backgroundColor: const Color(0xFFE9E2D5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF10B981), width: 1.5)),
           title: const Row(
             children: [
               Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
               SizedBox(width: 10),
               Expanded(
-                child: Text('Nhập Kho Thành Công!', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: Text('Nhập Kho Thành Công!', style: TextStyle(color: Color(0xFF2C251E), fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -201,9 +201,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0F172A),
+                  color: const Color(0xFFF4EFE6),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF334155)),
+                  border: Border.all(color: const Color(0xFFC7BDAF)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,7 +211,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Số lượng nhập:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        const Text('Số lượng nhập:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                         Text('$savedCount Chip RFID', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13)),
                       ],
                     ),
@@ -219,15 +219,15 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Pallet tiếp nhận:', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        Text(pallet, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                        const Text('Pallet tiếp nhận:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
+                        Text(pallet, style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
                     const SizedBox(height: 6),
                     const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Trạng thái:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text('Trạng thái:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                         Text('Chờ xếp kệ kho', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
                       ],
                     ),
@@ -236,7 +236,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Đơn PO:', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                          const Text('Đơn PO:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                           Text(_selectedOrder!.orderNo, style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
                         ],
                       ),
@@ -247,10 +247,10 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               const SizedBox(height: 12),
               const Row(
                 children: [
-                  Icon(Icons.cloud_done, color: Color(0xFF38BDF8), size: 16),
+                  Icon(Icons.cloud_done, color: Color(0xFF0284C7), size: 16),
                   SizedBox(width: 6),
                   Expanded(
-                    child: Text('Đã cập nhật tồn kho SQLite & đồng bộ ERP', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                    child: Text('Đã cập nhật tồn kho SQLite & đồng bộ ERP', style: TextStyle(color: Color(0xFF0284C7), fontSize: 11.5, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -270,7 +270,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   _gateResult = null;
                 });
               },
-              child: const Text('TIẾP TỤC QUÉT LƯỢT MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+              child: const Text('TIẾP TỤC QUÉT LƯỢT MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
             ),
           ],
         ),
@@ -295,13 +295,13 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF334155))),
+        backgroundColor: const Color(0xFFE9E2D5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFC7BDAF))),
         title: const Row(
           children: [
-            Icon(Icons.post_add, color: Color(0xFF38BDF8), size: 24),
+            Icon(Icons.post_add, color: Color(0xFF0284C7), size: 24),
             SizedBox(width: 8),
-            Text('Tạo Đơn Nhập Kho PO', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text('Tạo Đơn Nhập Kho PO', style: TextStyle(color: Color(0xFF2C251E), fontSize: 16, fontWeight: FontWeight.bold)),
           ],
         ),
         content: SingleChildScrollView(
@@ -310,33 +310,33 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
             children: [
               TextField(
                 controller: orderNoController,
-                decoration: const InputDecoration(labelText: 'Mã Lệnh Nhập (Order No)', hintText: 'Ví dụ: PO-IN-001', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(labelText: 'Mã Lệnh Nhập (Order No)', hintText: 'Ví dụ: PO-IN-001', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
+                style: const TextStyle(color: Color(0xFF2C251E)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: supplierController,
-                decoration: const InputDecoration(labelText: 'Nhà cung cấp', hintText: 'Tên nhà cung cấp...', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(labelText: 'Nhà cung cấp', hintText: 'Tên nhà cung cấp...', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
+                style: const TextStyle(color: Color(0xFF2C251E)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: skuController,
-                decoration: const InputDecoration(labelText: 'Mã SKU', hintText: 'Ví dụ: SKU-001', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(labelText: 'Mã SKU', hintText: 'Ví dụ: SKU-001', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
+                style: const TextStyle(color: Color(0xFF2C251E)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(labelText: 'Tên hàng hóa', hintText: 'Tên sản phẩm...', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(labelText: 'Tên hàng hóa', hintText: 'Tên sản phẩm...', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
+                style: const TextStyle(color: Color(0xFF2C251E)),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: qtyController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Số lượng nhập', hintText: '1', labelStyle: TextStyle(color: Colors.white70)),
-                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(labelText: 'Số lượng nhập', hintText: '1', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
+                style: const TextStyle(color: Color(0xFF2C251E)),
               ),
             ],
           ),
@@ -344,7 +344,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Colors.white54)),
+            child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
@@ -379,7 +379,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                 _selectedOrder = newOrder;
               });
             },
-            child: const Text('LƯU ĐƠN NHẬP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('LƯU ĐƠN NHẬP', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -389,21 +389,21 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1120),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: const HardwareStatusAppBar(title: '📥 NHẬP KHO RFID'),
       body: Column(
         children: [
           // 1. Tab Bar 3 Chế độ nhập kho
           Container(
             decoration: const BoxDecoration(
-              color: Color(0xFF1E293B),
-              border: Border(bottom: BorderSide(color: Color(0xFF334155), width: 1)),
+              color: Color(0xFFE9E2D5),
+              border: Border(bottom: BorderSide(color: Color(0xFFC7BDAF), width: 1)),
             ),
             child: TabBar(
               controller: _tabController,
-              indicatorColor: const Color(0xFF38BDF8),
+              indicatorColor: const Color(0xFF0284C7),
               indicatorWeight: 3,
-              labelColor: const Color(0xFF38BDF8),
+              labelColor: const Color(0xFF0284C7),
               unselectedLabelColor: Colors.white60,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               tabs: const [
@@ -459,21 +459,21 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFC7BDAF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.inventory_2_rounded, color: Color(0xFF38BDF8), size: 16),
+              Icon(Icons.inventory_2_rounded, color: Color(0xFF0284C7), size: 16),
               SizedBox(width: 6),
               Expanded(
                 child: Text(
                   'PALLET / KIỆN TIẾP NHẬN (TÙY CHỌN)',
-                  style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
+                  style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -482,7 +482,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           const SizedBox(height: 6),
           const Text(
             'Hàng quét nhập kho sẽ tự động lưu tạm ở trạng thái Chờ xếp kệ. Vị trí kệ lưu trữ sẽ được chọn ở màn hình Lưu kho khi chuyển hàng lên kệ.',
-            style: TextStyle(color: Colors.white60, fontSize: 11),
+            style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
           ),
           const SizedBox(height: 10),
 
@@ -490,19 +490,19 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Mã Pallet / Kiện:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+              const Text('Mã Pallet / Kiện:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
               const SizedBox(height: 4),
               TextField(
                 controller: _palletController,
-                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: const Color(0xFF0F172A),
+                  fillColor: const Color(0xFFF4EFE6),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   hintText: 'Mặc định: PL-01',
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 11),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                  hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 11),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
                 ),
               ),
             ],
@@ -521,21 +521,21 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
         return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFFE9E2D5),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF334155)),
+            border: Border.all(color: const Color(0xFFC7BDAF)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.inventory, color: Color(0xFF38BDF8), size: 16),
+                  const Icon(Icons.inventory, color: Color(0xFF0284C7), size: 16),
                   const SizedBox(width: 6),
                   const Expanded(
                     child: Text(
                       'ĐƠN NHẬP KHO PO (WMS / ERP)',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
+                      style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -552,7 +552,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                       ),
                       child: const Text(
                         '+ Tạo Đơn PO',
-                        style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -564,17 +564,17 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
+                    color: const Color(0xFFF4EFE6),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
                     children: [
-                      const Text('Chưa có đơn nhập nào trong CSDL SQLite.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      const Text('Chưa có đơn nhập nào trong CSDL SQLite.', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                       const SizedBox(height: 8),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
                         onPressed: _showCreateOrderDialog,
-                        child: const Text('+ TẠO ĐƠN MỚI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                        child: const Text('+ TẠO ĐƠN MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 11)),
                       ),
                     ],
                   ),
@@ -583,14 +583,14 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                 DropdownButtonFormField<InboundOrder>(
                   initialValue: availableOrders.contains(_selectedOrder) ? _selectedOrder : null,
                   isExpanded: true,
-                  dropdownColor: const Color(0xFF1E293B),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  dropdownColor: const Color(0xFFE9E2D5),
+                  style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12),
                   decoration: InputDecoration(
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
+                    fillColor: const Color(0xFFF4EFE6),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
                   ),
                   items: availableOrders.map((o) {
                     return DropdownMenuItem(
@@ -608,9 +608,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
+                      color: const Color(0xFFF4EFE6),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: const Color(0xFFC7BDAF)),
                     ),
                     child: Column(
                       children: [
@@ -619,24 +619,24 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                             padding: const EdgeInsets.symmetric(vertical: 2),
                             child: Row(
                               children: [
-                                const Icon(Icons.circle, color: Color(0xFF38BDF8), size: 8),
+                                const Icon(Icons.circle, color: Color(0xFF0284C7), size: 8),
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
                                     '${d.sku} - ${d.productName}',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                    style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF1E293B),
+                                    color: const Color(0xFFE9E2D5),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                                     'Yêu cầu: ${d.requiredQty}',
-                                    style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 10.5),
+                                    style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 10.5),
                                   ),
                                 ),
                               ],
@@ -658,20 +658,20 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFC7BDAF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.local_offer, color: Color(0xFF38BDF8), size: 16),
+              Icon(Icons.local_offer, color: Color(0xFF0284C7), size: 16),
               SizedBox(width: 6),
               Text(
                 'THÔNG TIN HÀNG HÓA GÁN MẶC ĐỊNH',
-                style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+                style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
               ),
             ],
           ),
@@ -683,17 +683,17 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Mã SKU:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    const Text('Mã SKU:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
                     const SizedBox(height: 4),
                     TextField(
                       controller: _skuController,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12),
                       decoration: InputDecoration(
                         filled: true,
-                        fillColor: const Color(0xFF0F172A),
+                        fillColor: const Color(0xFFF4EFE6),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
                       ),
                     ),
                   ],
@@ -705,17 +705,17 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Tên sản phẩm:', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                    const Text('Tên sản phẩm:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
                     const SizedBox(height: 4),
                     TextField(
                       controller: _productNameController,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12),
                       decoration: InputDecoration(
                         filled: true,
-                        fillColor: const Color(0xFF0F172A),
+                        fillColor: const Color(0xFFF4EFE6),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
                       ),
                     ),
                   ],
@@ -732,21 +732,21 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFC7BDAF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.meeting_room, color: Color(0xFF38BDF8), size: 16),
+              const Icon(Icons.meeting_room, color: Color(0xFF0284C7), size: 16),
               const SizedBox(width: 6),
               const Expanded(
                 child: Text(
                   'CỔNG GATE (INBOUND)',
-                  style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
+                  style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -759,8 +759,8 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
-                icon: const Icon(Icons.rule, size: 13, color: Colors.white),
-                label: const Text('ĐỐI SOÁT', style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.rule, size: 13, color: Color(0xFF2C251E)),
+                label: const Text('ĐỐI SOÁT', style: TextStyle(color: Color(0xFF2C251E), fontSize: 10.5, fontWeight: FontWeight.bold)),
                 onPressed: _runGateAudit,
               ),
             ],
@@ -770,15 +770,15 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F172A),
+                color: const Color(0xFFF4EFE6),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.sensors, color: Colors.white38, size: 20),
+                  Icon(Icons.sensors, color: Color(0xFF8F8070), size: 20),
                   SizedBox(width: 10),
                   Expanded(
-                    child: Text('Quét hàng loạt thẻ qua cổng rồi nhấn [ĐỐI SOÁT] để kiểm tra tính hợp lệ của lô hàng.', style: TextStyle(color: Colors.white60, fontSize: 11.5)),
+                    child: Text('Quét hàng loạt thẻ qua cổng rồi nhấn [ĐỐI SOÁT] để kiểm tra tính hợp lệ của lô hàng.', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11.5)),
                   ),
                 ],
               ),
@@ -811,8 +811,8 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Yêu cầu: ${_gateResult!.totalRequiredQty}', style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                      Text('Thực tế: ${_gateResult!.totalActualQty}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                      Text('Yêu cầu: ${_gateResult!.totalRequiredQty}', style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
+                      Text('Thực tế: ${_gateResult!.totalActualQty}', style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 11)),
                       Text('Thẻ lạ: ${_gateResult!.unexpectedEpcs.length}', style: TextStyle(color: _gateResult!.unexpectedEpcs.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11)),
                     ],
                   ),
@@ -831,18 +831,18 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _isScanning ? const Color(0xFF0F2B48) : const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _isScanning ? const Color(0xFF38BDF8) : const Color(0xFF334155),
+          color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFFC7BDAF),
           width: _isScanning ? 2 : 1,
         ),
         boxShadow: _isScanning
             ? [
                 BoxShadow(
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.3),
-                  blurRadius: 16,
-                  spreadRadius: 2,
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                  blurRadius: 12,
+                  spreadRadius: 1,
                 ),
               ]
             : [],
@@ -876,7 +876,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   Text(
                     _isScanning ? 'ĐANG PHÁT SÓNG UHF' : 'SẴN SÀNG QUÉT (CÒ PDA)',
                     style: TextStyle(
-                      color: _isScanning ? const Color(0xFF38BDF8) : Colors.white70,
+                      color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
                       fontWeight: FontWeight.bold,
                       fontSize: 11.5,
                       letterSpacing: 0.3,
@@ -903,23 +903,23 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFF0F172A),
+                        color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFF4EFE6),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF334155)),
+                        border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFFC7BDAF)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             _uhf.filterDuplicates ? Icons.filter_alt : Icons.filter_alt_off,
-                            color: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.white54,
+                            color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
                             size: 11,
                           ),
                           const SizedBox(width: 3),
                           Text(
                             _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
                             style: TextStyle(
-                              color: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.white54,
+                              color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                             ),
@@ -932,9 +932,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0B1120),
+                      color: const Color(0xFFF4EFE6),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: const Color(0xFFC7BDAF)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -943,7 +943,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                         const SizedBox(width: 3),
                         Text(
                           '${_uhf.rfPower} dBm',
-                          style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 10.5, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Color(0xFF0284C7), fontSize: 10.5, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -963,7 +963,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               Text(
                 '$count',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Color(0xFF2C251E),
                   fontSize: 54,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -1,
@@ -972,7 +972,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               const SizedBox(width: 8),
               const Text(
                 'Thẻ RFID đã đọc',
-                style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -1007,9 +1007,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFC7BDAF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1019,11 +1019,11 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
             children: [
               const Row(
                 children: [
-                  Icon(Icons.nfc, color: Color(0xFF38BDF8), size: 16),
+                  Icon(Icons.nfc, color: Color(0xFF0284C7), size: 16),
                   SizedBox(width: 6),
                   Text(
                     'CHIP RFID VỪA ĐỌC TRÚNG',
-                    style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+                    style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
                   ),
                 ],
               ),
@@ -1040,10 +1040,10 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: const Color(0xFFF4EFE6),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: latestTag != null ? const Color(0xFF0284C7).withValues(alpha: 0.5) : const Color(0xFF334155),
+                color: latestTag != null ? const Color(0xFF0284C7).withValues(alpha: 0.5) : const Color(0xFFC7BDAF),
               ),
             ),
             child: Column(
@@ -1054,7 +1054,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   children: [
                     const Text(
                       'MÃ EPC ĐỘC BẢN',
-                      style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                     if (latestTag != null)
                       Container(
@@ -1074,7 +1074,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                 Text(
                   latestTag != null ? latestTag.epc : 'Đang chờ bóp cò hoặc nhấn nút quét...',
                   style: TextStyle(
-                    color: latestTag != null ? Colors.white : Colors.white38,
+                    color: latestTag != null ? const Color(0xFF2C251E) : const Color(0xFF8F8070),
                     fontFamily: 'monospace',
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -1093,8 +1093,8 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               height: 38,
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF38BDF8),
-                  side: const BorderSide(color: Color(0xFF334155)),
+                  foregroundColor: const Color(0xFF0284C7),
+                  side: const BorderSide(color: Color(0xFFC7BDAF)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: () => _showTagDetailsBottomSheet(_scannedTags.values.toList()),
@@ -1113,7 +1113,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
   void _showTagDetailsBottomSheet(List<TagInfo> allTags) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: const Color(0xFFE9E2D5),
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
@@ -1144,27 +1144,27 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                       children: [
                         Text(
                           'DANH SÁCH THẺ RFID (${filteredList.length}/${allTags.length})',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white70),
+                          icon: const Icon(Icons.close, color: Color(0xFF6B5D4D)),
                           onPressed: () => Navigator.pop(ctx),
                         ),
                       ],
                     ),
-                    const Divider(color: Color(0xFF334155)),
+                    const Divider(color: Color(0xFFC7BDAF)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: _searchTagController,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12),
                       decoration: InputDecoration(
                         hintText: 'Tìm kiếm mã EPC...',
-                        hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                        prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8), size: 18),
+                        hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 12),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF0284C7), size: 18),
                         filled: true,
-                        fillColor: const Color(0xFF0F172A),
+                        fillColor: const Color(0xFFF4EFE6),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF334155))),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
                       ),
                       onChanged: (_) => setModalState(() {}),
                     ),
@@ -1178,22 +1178,22 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
+                              color: const Color(0xFFF4EFE6),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFF334155)),
+                              border: Border.all(color: const Color(0xFFC7BDAF)),
                             ),
                             child: Row(
                               children: [
-                                Text('#${index + 1}', style: const TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                                Text('#${index + 1}', style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.bold)),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     tag.epc,
-                                    style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.bold),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                Text('${tag.rssi} dBm', style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                                Text('${tag.rssi} dBm', style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
                               ],
                             ),
                           );
@@ -1228,16 +1228,16 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
             ? const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                child: CircularProgressIndicator(color: Color(0xFF2C251E), strokeWidth: 2.5),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                  const Icon(Icons.check_circle_outline, color: Color(0xFF2C251E), size: 20),
                   const SizedBox(width: 8),
                   Text(
                     count > 0 ? 'XÁC NHẬN NHẬP KHO ($count CHIP)' : 'CHƯA CÓ THẺ ĐỂ NHẬP KHO',
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                   ),
                 ],
               ),

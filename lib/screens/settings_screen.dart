@@ -80,12 +80,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFFE9E2D5),
         title: const Text(
           'Cài Đặt Phần Cứng UHF',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF2C251E)),
         ),
       ),
       body: SingleChildScrollView(
@@ -97,9 +97,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: const Color(0xFFC7BDAF)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,13 +110,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 8),
                       const Text(
                         'Công suất phát sóng (RF Power)',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A),
+                          color: const Color(0xFFF4EFE6),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
                         ),
@@ -136,7 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       activeTrackColor: const Color(0xFFF59E0B),
-                      inactiveTrackColor: const Color(0xFF334155),
+                      inactiveTrackColor: const Color(0xFFC7BDAF),
                       thumbColor: const Color(0xFFF59E0B),
                       overlayColor: const Color(0xFFF59E0B).withValues(alpha: 0.2),
                     ),
@@ -152,8 +152,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: const [
-                      Text('1 dBm - Gần ~10cm', style: TextStyle(color: Colors.white38, fontSize: 11)),
-                      Text('30/33 dBm - Xa ~5-10m', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                      Text('1 dBm - Gần ~10cm', style: TextStyle(color: Color(0xFF8F8070), fontSize: 11)),
+                      Text('30/33 dBm - Xa ~5-10m', style: TextStyle(color: Color(0xFF8F8070), fontSize: 11)),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -179,20 +179,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: const Color(0xFFC7BDAF)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.public, color: Color(0xFF38BDF8), size: 22),
+                      Icon(Icons.public, color: Color(0xFF0284C7), size: 22),
                       SizedBox(width: 8),
                       Text(
                         'Khu vực tần số (Frequency Region)',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                     ],
                   ),
@@ -200,21 +200,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F172A),
+                      color: const Color(0xFFF4EFE6),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(color: const Color(0xFFC7BDAF)),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         isExpanded: true,
-                        dropdownColor: const Color(0xFF1E293B),
+                        dropdownColor: const Color(0xFFE9E2D5),
                         value: _selectedRegion,
                         items: _regions.map((r) {
                           return DropdownMenuItem<int>(
                             value: r['id'] as int,
                             child: Text(
                               r['name'] as String,
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w600),
                             ),
                           );
                         }).toList(),
@@ -233,9 +233,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: const Color(0xFFC7BDAF)),
               ),
               child: Material(
                 color: Colors.transparent,
@@ -244,21 +244,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     const Text(
                       'Âm thanh & Phản hồi',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Âm thanh Beep khi quét thẻ', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      title: const Text('Âm thanh Beep khi quét thẻ', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13)),
                       value: _uhfService.soundEnabled,
-                      activeThumbColor: const Color(0xFF38BDF8),
+                      activeThumbColor: const Color(0xFF0284C7),
                       onChanged: (val) => setState(() => _uhfService.soundEnabled = val),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Rung phản hồi', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      title: const Text('Rung phản hồi', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13)),
                       value: _uhfService.hapticEnabled,
-                      activeThumbColor: const Color(0xFF38BDF8),
+                      activeThumbColor: const Color(0xFF0284C7),
                       onChanged: (val) => setState(() => _uhfService.hapticEnabled = val),
                     ),
                   ],
@@ -271,9 +271,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: const Color(0xFFC7BDAF)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,11 +284,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(width: 8),
                       const Text(
                         'Thông tin phần cứng RFID',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                        style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.refresh, color: Color(0xFF38BDF8), size: 20),
+                        icon: const Icon(Icons.refresh, color: Color(0xFF0284C7), size: 20),
                         tooltip: 'Làm mới',
                         onPressed: () async {
                           await _uhfService.refreshDeviceInfo();
@@ -297,7 +297,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       )
                     ],
                   ),
-                  const Divider(color: Colors.white24),
+                  const Divider(color: Color(0xFF8F8070)),
                   _buildInfoRow('Trạng thái khởi tạo', _uhfService.isInitialized ? '🟢 ĐÃ KẾT NỐI' : '🔴 CHƯA KẾT NỐI'),
                   _buildInfoRow('Phần cứng', _uhfService.hardwareVersion),
                   _buildInfoRow('Firmware module', _uhfService.firmwareVersion),
@@ -309,8 +309,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: const Icon(Icons.restart_alt, size: 18),
                       label: const Text('KHỞI TẠO LẠI PHẦN CỨNG'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF38BDF8),
-                        side: const BorderSide(color: Color(0xFF38BDF8)),
+                        foregroundColor: const Color(0xFF0284C7),
+                        side: const BorderSide(color: Color(0xFF0284C7)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       onPressed: () async {
@@ -334,8 +334,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white60, fontSize: 13)),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13, fontFamily: 'monospace')),
+          Text(label, style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 13)),
+          Text(value, style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.w600, fontSize: 13, fontFamily: 'monospace')),
         ],
       ),
     );

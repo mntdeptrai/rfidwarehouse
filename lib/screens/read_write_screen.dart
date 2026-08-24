@@ -208,17 +208,17 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
     final tags = _uhfService.tags;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFFE9E2D5),
         title: const Text(
           'Đọc & Ghi Thẻ UHF',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF2C251E)),
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF38BDF8),
-          labelColor: const Color(0xFF38BDF8),
+          indicatorColor: const Color(0xFF0284C7),
+          labelColor: const Color(0xFF0284C7),
           unselectedLabelColor: Colors.white60,
           tabs: const [
             Tab(icon: Icon(Icons.memory, size: 20), text: 'Đọc / Ghi chi tiết'),
@@ -272,25 +272,25 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: const Color(0xFFE9E2D5),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: const Color(0xFFC7BDAF)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.filter_alt, size: 18, color: Color(0xFF38BDF8)),
+                          const Icon(Icons.filter_alt, size: 18, color: Color(0xFF0284C7)),
                           const SizedBox(width: 6),
                           const Text(
                             'Lọc theo thẻ cụ thể (Filter Mask)',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const Spacer(),
                           Switch(
                             value: _useFilter,
-                            activeThumbColor: const Color(0xFF38BDF8),
+                            activeThumbColor: const Color(0xFF0284C7),
                             onChanged: (val) => setState(() => _useFilter = val),
                           ),
                         ],
@@ -299,15 +299,15 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                         const SizedBox(height: 8),
                         TextField(
                           controller: _filterEpcController,
-                          style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 13),
+                          style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'monospace', fontSize: 13),
                           decoration: InputDecoration(
                             labelText: 'Mã EPC thẻ mục tiêu',
-                            labelStyle: const TextStyle(color: Colors.white60, fontSize: 12),
+                            labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                             filled: true,
-                            fillColor: const Color(0xFF0F172A),
+                            fillColor: const Color(0xFFF4EFE6),
                             suffixIcon: tags.isNotEmpty
                                 ? PopupMenuButton<String>(
-                                    icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF38BDF8)),
+                                    icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0284C7)),
                                     onSelected: (epc) => setState(() => _filterEpcController.text = epc),
                                     itemBuilder: (ctx) => tags
                                         .map((t) => PopupMenuItem(
@@ -329,20 +329,20 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 // Bank Selector
                 const Text(
                   '1. Chọn Vùng nhớ (Memory Bank)',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: const Color(0xFFE9E2D5),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF334155)),
+                    border: Border.all(color: const Color(0xFFC7BDAF)),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<int>(
                       isExpanded: true,
-                      dropdownColor: const Color(0xFF1E293B),
+                      dropdownColor: const Color(0xFFE9E2D5),
                       value: _selectedBank,
                       items: _banks.map((b) {
                         return DropdownMenuItem<int>(
@@ -351,8 +351,8 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(b['name'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                              Text(b['desc'] as String, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                              Text(b['name'] as String, style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13)),
+                              Text(b['desc'] as String, style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
                             ],
                           ),
                         );
@@ -368,7 +368,7 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 // Parameters: Offset, Length, Password
                 const Text(
                   '2. Tham số truy xuất (Word = 2 Bytes = 4 Hex chars)',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -377,14 +377,14 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                       child: TextField(
                         controller: _ptrController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF2C251E)),
                         decoration: InputDecoration(
                           labelText: 'Word Offset (ptr)',
-                          labelStyle: const TextStyle(color: Colors.white60, fontSize: 12),
+                          labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                           helperText: 'Bắt đầu từ word',
-                          helperStyle: const TextStyle(color: Colors.white38, fontSize: 10),
+                          helperStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 10),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
+                          fillColor: const Color(0xFFE9E2D5),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
@@ -394,14 +394,14 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                       child: TextField(
                         controller: _cntController,
                         keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Color(0xFF2C251E)),
                         decoration: InputDecoration(
                           labelText: 'Word Count (cnt)',
-                          labelStyle: const TextStyle(color: Colors.white60, fontSize: 12),
+                          labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                           helperText: 'Số word cần đọc/ghi',
-                          helperStyle: const TextStyle(color: Colors.white38, fontSize: 10),
+                          helperStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 10),
                           filled: true,
-                          fillColor: const Color(0xFF1E293B),
+                          fillColor: const Color(0xFFE9E2D5),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
@@ -412,14 +412,14 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 TextField(
                   controller: _passwordController,
                   maxLength: 8,
-                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
+                  style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'monospace'),
                   decoration: InputDecoration(
                     labelText: 'Access Password (8 Hex chars)',
-                    labelStyle: const TextStyle(color: Colors.white60, fontSize: 12),
+                    labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                     helperText: 'Mặc định: 00000000',
-                    helperStyle: const TextStyle(color: Colors.white38, fontSize: 10),
+                    helperStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 10),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
+                    fillColor: const Color(0xFFE9E2D5),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
@@ -428,18 +428,18 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 // Data (Hex & ASCII preview)
                 const Text(
                   '3. Dữ liệu (Hex Data)',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _dataController,
                   maxLines: 3,
-                  style: const TextStyle(color: Color(0xFF38BDF8), fontFamily: 'monospace', fontSize: 14),
+                  style: const TextStyle(color: Color(0xFF0284C7), fontFamily: 'monospace', fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Nhập hoặc xem dữ liệu định dạng HEX...',
-                    hintStyle: const TextStyle(color: Colors.white38),
+                    hintStyle: const TextStyle(color: Color(0xFF8F8070)),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
+                    fillColor: const Color(0xFFE9E2D5),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   onChanged: (_) => setState(() {}),
@@ -448,7 +448,7 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                   const SizedBox(height: 6),
                   Text(
                     'ASCII Preview: ${_hexToAscii(_dataController.text)}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12, fontStyle: FontStyle.italic),
+                    style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12, fontStyle: FontStyle.italic),
                   ),
                 ],
                 const SizedBox(height: 20),
@@ -502,18 +502,18 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: const Color(0xFFE9E2D5),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                    border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.info_outline, color: Color(0xFF38BDF8), size: 24),
+                      Icon(Icons.info_outline, color: Color(0xFF0284C7), size: 24),
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Chức năng này cho phép ghi đè nhanh mã EPC mới vào thẻ một cách tự động và an toàn.',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                          style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                         ),
                       )
                     ],
@@ -524,20 +524,20 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 // Target Tag EPC
                 const Text(
                   'Thẻ mục tiêu cần đổi EPC',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _quickTargetEpcController,
-                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
+                  style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'monospace'),
                   decoration: InputDecoration(
                     hintText: 'Nhập hoặc chọn thẻ từ danh sách đã quét',
-                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                    hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 13),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
+                    fillColor: const Color(0xFFE9E2D5),
                     suffixIcon: tags.isNotEmpty
                         ? PopupMenuButton<String>(
-                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF38BDF8)),
+                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0284C7)),
                             onSelected: (epc) => setState(() => _quickTargetEpcController.text = epc),
                             itemBuilder: (ctx) => tags
                                 .map((t) => PopupMenuItem(
@@ -555,7 +555,7 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                 // New EPC
                 const Text(
                   'Mã EPC mới (Hex string, thường 24 ký tự / 96 bits)',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -563,9 +563,9 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
                   style: const TextStyle(color: Color(0xFF34D399), fontFamily: 'monospace', fontWeight: FontWeight.bold),
                   decoration: InputDecoration(
                     hintText: 'Ví dụ: E28011700000020ECA509999',
-                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                    hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 13),
                     filled: true,
-                    fillColor: const Color(0xFF1E293B),
+                    fillColor: const Color(0xFFE9E2D5),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                 ),

@@ -140,7 +140,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: const HardwareStatusAppBar(title: '🎯 Tra Cứu Vị Trí & Định Vị'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -151,12 +151,12 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: _uhfService.isTriggerPressed || _isTracking
                       ? const Color(0xFF10B981)
-                      : const Color(0xFF334155),
+                      : const Color(0xFFC7BDAF),
                 ),
               ),
               child: Row(
@@ -166,7 +166,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                     decoration: BoxDecoration(
                       color: _uhfService.isTriggerPressed || _isTracking
                           ? const Color(0xFF10B981).withValues(alpha: 0.2)
-                          : const Color(0xFF334155),
+                          : const Color(0xFFC7BDAF),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -187,7 +187,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                             const Expanded(
                               child: Text(
                                 'TRA CỨU VỊ TRÍ RFID',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -205,7 +205,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                                 style: TextStyle(
                                   color: _uhfService.isTriggerPressed || _isTracking
                                       ? const Color(0xFF10B981)
-                                      : const Color(0xFF38BDF8),
+                                      : const Color(0xFF0284C7),
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -216,7 +216,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                         const SizedBox(height: 2),
                         const Text(
                           'Quét chip RFID -> Hệ thống sẽ hiển thị vị trí lưu kho & Pallet ngay lập tức.',
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                          style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
                         ),
                       ],
                     ),
@@ -236,11 +236,11 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: Icon(_isTracking ? Icons.stop : Icons.sensors, color: Colors.white, size: 20),
+                    icon: Icon(_isTracking ? Icons.stop : Icons.sensors, color: const Color(0xFF2C251E), size: 20),
                     onPressed: _isTracking ? _stopTracking : _startTracking,
                     label: Text(
                       _isTracking ? 'DỪNG QUÉT ĐỊNH VỊ' : 'BẬT QUÉT TÌM KIẾM (UHF RFID)',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                     ),
                   ),
                 ),
@@ -274,9 +274,9 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFC7BDAF)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -284,7 +284,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           const Text(
             'TRA CỨU THỦ CÔNG THEO SKU / SERIAL / EPC',
             style: TextStyle(
-              color: Color(0xFF38BDF8),
+              color: Color(0xFF0284C7),
               fontWeight: FontWeight.bold,
               fontSize: 13,
               letterSpacing: 0.5,
@@ -294,14 +294,14 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           TextFormField(
             decoration: InputDecoration(
               hintText: 'Nhập mã SKU, Serial hoặc EPC cần tìm...',
-              hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
-              prefixIcon: const Icon(Icons.search, color: Color(0xFF38BDF8)),
+              hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 13),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF0284C7)),
               filled: true,
-              fillColor: const Color(0xFF0F172A),
+              fillColor: const Color(0xFFF4EFE6),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF2C251E)),
             onChanged: (val) {
               setState(() => _searchQuery = val.trim().toLowerCase());
             },
@@ -323,9 +323,9 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                   return ListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    title: Text('${it.sku} - ${it.productName}', style: const TextStyle(color: Colors.white, fontSize: 13)),
-                    subtitle: Text('EPC: ${it.epc}', style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 12, color: Color(0xFF38BDF8)),
+                    title: Text('${it.sku} - ${it.productName}', style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13)),
+                    subtitle: Text('EPC: ${it.epc}', style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 12, color: Color(0xFF0284C7)),
                     onTap: () {
                       setState(() {
                         _targetItem = it;
@@ -356,7 +356,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFFE9E2D5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF10B981), width: 1.5),
       ),
@@ -389,13 +389,13 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           const SizedBox(height: 6),
           Text(
             '${item.sku} - ${item.productName}',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+            style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.w600, fontSize: 14),
           ),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
+              color: const Color(0xFFF4EFE6),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
@@ -403,23 +403,23 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Kệ / Tầng:', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                    Text('${loc.shelf} • ${loc.level}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Text('Kệ / Tầng:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
+                    Text('${loc.shelf} • ${loc.level}', style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Mã Pallet:', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                    Text(pal.palletCode, style: const TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Text('Mã Pallet:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
+                    Text(pal.palletCode, style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 13)),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Mã EPC Chip:', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    const Text('Mã EPC Chip:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                     Expanded(
                       child: Text(
                         item.epc,
@@ -434,7 +434,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Cường độ sóng (RSSI):', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    const Text('Cường độ sóng (RSSI):', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                     Text(
                       '${_currentRssi.toStringAsFixed(1)} dBm',
                       style: TextStyle(

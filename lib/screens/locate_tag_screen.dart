@@ -101,7 +101,7 @@ class _LocateTagScreenState extends State<LocateTagScreen> {
 
   Color get _proximityColor {
     if (_signalPercent <= 0.05) return Colors.grey;
-    if (_signalPercent < 0.3) return const Color(0xFF38BDF8);
+    if (_signalPercent < 0.3) return const Color(0xFF0284C7);
     if (_signalPercent < 0.6) return const Color(0xFFF59E0B);
     if (_signalPercent < 0.85) return const Color(0xFFF97316);
     return const Color(0xFF10B981);
@@ -112,12 +112,12 @@ class _LocateTagScreenState extends State<LocateTagScreen> {
     final tags = _uhfService.tags;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFFF4EFE6),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFFE9E2D5),
         title: const Text(
           'Định Vị & Tìm Thẻ RFID',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF2C251E)),
         ),
       ),
       body: SingleChildScrollView(
@@ -128,35 +128,35 @@ class _LocateTagScreenState extends State<LocateTagScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF334155)),
+                border: Border.all(color: const Color(0xFFC7BDAF)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.gps_fixed, color: Color(0xFF38BDF8), size: 18),
+                      Icon(Icons.gps_fixed, color: Color(0xFF0284C7), size: 18),
                       SizedBox(width: 6),
                       Text(
                         'Mã EPC thẻ cần tìm kiếm',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _epcController,
-                    style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'monospace', fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       hintText: 'Nhập hoặc chọn mã EPC cần định vị...',
-                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                      hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 13),
                       filled: true,
-                      fillColor: const Color(0xFF0F172A),
+                      fillColor: const Color(0xFFF4EFE6),
                       suffixIcon: tags.isNotEmpty
                           ? PopupMenuButton<String>(
-                              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF38BDF8)),
+                              icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF0284C7)),
                               onSelected: (epc) {
                                 setState(() => _epcController.text = epc);
                               },
@@ -239,7 +239,7 @@ class _LocateTagScreenState extends State<LocateTagScreen> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFFE9E2D5),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: _proximityColor.withValues(alpha: 0.5)),
               ),
@@ -260,18 +260,18 @@ class _LocateTagScreenState extends State<LocateTagScreen> {
                     children: [
                       Column(
                         children: [
-                          const Text('RSSI', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const Text('RSSI', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
                             _currentRssi <= -95 ? '-- dBm' : '${_currentRssi.toStringAsFixed(1)} dBm',
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                            style: const TextStyle(color: Color(0xFF2C251E), fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
                           ),
                         ],
                       ),
-                      Container(width: 1, height: 30, color: Colors.white24),
+                      Container(width: 1, height: 30, color: const Color(0xFF8F8070)),
                       Column(
                         children: [
-                          const Text('Cường độ', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const Text('Cường độ', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                           const SizedBox(height: 2),
                           Text(
                             '${(_signalPercent * 100).toInt()}%',
@@ -287,7 +287,7 @@ class _LocateTagScreenState extends State<LocateTagScreen> {
                     child: LinearProgressIndicator(
                       value: _signalPercent,
                       minHeight: 8,
-                      backgroundColor: const Color(0xFF0F172A),
+                      backgroundColor: const Color(0xFFF4EFE6),
                       valueColor: AlwaysStoppedAnimation<Color>(_proximityColor),
                     ),
                   ),

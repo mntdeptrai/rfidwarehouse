@@ -330,9 +330,9 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
       width: 54,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFFF4EFE6),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF334155)),
+        border: Border.all(color: const Color(0xFFC7BDAF)),
         boxShadow: const [
           BoxShadow(
             color: Colors.black45,
@@ -349,7 +349,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
             width: 32,
             height: 6,
             decoration: BoxDecoration(
-              color: const Color(0xFF475569),
+              color: const Color(0xFFB5A999),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
               border: Border.all(color: const Color(0xFF64748B), width: 0.5),
             ),
@@ -393,8 +393,8 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
             width: 38,
             padding: const EdgeInsets.symmetric(vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B),
-              border: Border.all(color: const Color(0xFF475569)),
+              color: const Color(0xFFE9E2D5),
+              border: Border.all(color: const Color(0xFFB5A999)),
             ),
             child: Icon(
               Icons.volume_up,
@@ -419,7 +419,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
             width: 34,
             height: 6,
             decoration: BoxDecoration(
-              color: const Color(0xFF334155),
+              color: const Color(0xFFC7BDAF),
               borderRadius: BorderRadius.circular(2),
               border: Border.all(color: const Color(0xFF64748B)),
             ),
@@ -433,7 +433,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
     return Container(
       width: 38,
       height: 3,
-      color: const Color(0xFF0F172A),
+      color: const Color(0xFFF4EFE6),
     );
   }
 
@@ -656,7 +656,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
                 Navigator.pop(ctx);
                 setState(() {});
               },
-              child: const Text('LƯU & ĐÓNG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('LƯU & ĐÓNG', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
             ),
           ],
         ),
