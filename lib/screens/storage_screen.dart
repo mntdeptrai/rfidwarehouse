@@ -238,7 +238,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           ],
         ),
         content: Text(
-          'Thao tác này sẽ xóa sạch 100% toàn bộ đơn hàng và chip RFID thử nghiệm trong CSDL SQLite trên máy cầm tay và cả trên máy chủ MySQL, đưa về trạng thái sạch hoàn toàn để bạn nhập dữ liệu thực tế.',
+          'Thao tác này sẽ xóa sạch 100% toàn bộ đơn hàng và chip RFID thử nghiệm trong CSDL SQLite trên máy cầm tay và cả trên Supabase Cloud, đưa về trạng thái sạch hoàn toàn để bạn nhập dữ liệu thực tế.',
           style: TextStyle(color: c.textSecondary, fontSize: 13),
         ),
         actions: [
@@ -246,11 +246,11 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
             onPressed: () async {
-              await _repo.clearAllData(alsoClearMySql: true);
+              await _repo.clearAllData();
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả SQLite & MySQL thành công!')),
+                  SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả SQLite & Supabase Cloud!')),
                 );
               }
             },

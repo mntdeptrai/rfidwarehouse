@@ -134,6 +134,9 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     final focusNode = FocusNode();
     final c = _eyeCare.colors;
 
+    // Tự động chuyển cò quét sang chế độ Barcode Laser/2D
+    _uhf.pushScanMode(PdaScanMode.barcode);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -178,28 +181,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: c.bgCard,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.bolt, color: c.rfidCyan, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Bóp cò Barcode trên tay cầm PDA hoặc gõ mã vị trí để xác nhận ngay.',
-                            style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
 
                   // Input Box with Auto-Focus for Hardware Barcode Scanners / Wedge
                   TextField(
@@ -339,7 +321,9 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
           },
         );
       },
-    );
+    ).whenComplete(() {
+      _uhf.popScanMode();
+    });
   }
 
   @override

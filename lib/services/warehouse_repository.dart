@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import '../models/wms_models.dart';
 import 'erp_bravo_service.dart';
 import 'database_service.dart';
-import 'mysql_sync_service.dart';
 import 'supabase_sync_service.dart';
 
 class WarehouseRepository extends ChangeNotifier {
@@ -72,7 +71,7 @@ class WarehouseRepository extends ChangeNotifier {
     _inboundOrders.removeWhere((o) => o.inboundOrderId == cleanId || o.orderNo == cleanId);
     _items.removeWhere((i) => i.orderNo == cleanId);
 
-    // Enqueue sync delete or direct MySQL delete
+    // Enqueue sync delete or direct Supabase delete
     await _syncDirectOrQueue(
       tableName: 'inbound_orders',
       recordId: cleanId,
@@ -83,7 +82,7 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> clearAllData({bool alsoClearMySql = true}) async {
+  Future<void> clearAllData({bool alsoClearCloud = true}) async {
     await _dbService.clearAllData();
     _products.clear();
     _locations.clear();
@@ -95,8 +94,7 @@ class WarehouseRepository extends ChangeNotifier {
     _inventorySessions.clear();
     _transactions.clear();
 
-    if (alsoClearMySql) {
-      await MySqlSyncService().clearAllMySqlData();
+    if (alsoClearCloud) {
       await SupabaseSyncService().clearAllSupabaseData();
     }
 
@@ -315,15 +313,6 @@ class WarehouseRepository extends ChangeNotifier {
     required Map<String, dynamic> payload,
   }) async {
     try {
-      await MySqlSyncService().syncDirectOrQueue(
-        tableName: tableName,
-        recordId: recordId,
-        action: action,
-        payload: payload,
-      );
-    } catch (_) {}
-
-    try {
       await SupabaseSyncService().syncDirectOrQueue(
         tableName: tableName,
         recordId: recordId,
@@ -342,13 +331,6 @@ class WarehouseRepository extends ChangeNotifier {
 
   void _triggerBackgroundSync() {
     if (Platform.environment.containsKey('FLUTTER_TEST')) return;
-    try {
-      final mysqlSync = MySqlSyncService();
-      if (mysqlSync.config.isAutoSync) {
-        mysqlSync.syncNow();
-      }
-    } catch (_) {}
-
     try {
       final supabaseSync = SupabaseSyncService();
       if (supabaseSync.config.isAutoSync) {
@@ -581,7 +563,7 @@ class WarehouseRepository extends ChangeNotifier {
     // Bắn sync về ERP Bravo
     ErpBravoService().pushInboundCompleted(orderNo, pallet.itemIds.length);
 
-    // Đồng bộ Real-time MySQL / Offline Queue
+    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: orderNo,
@@ -967,7 +949,7 @@ class WarehouseRepository extends ChangeNotifier {
     // Đồng bộ ERP Bravo
     ErpBravoService().pushInboundCompleted(orderNo ?? 'PDA-DIRECT-IN', uniqueEpcs.length);
 
-    // Đồng bộ Real-time MySQL / Offline Queue
+    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     await _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: orderNo ?? 'PDA-DIRECT-${now.millisecondsSinceEpoch}',
@@ -1202,7 +1184,7 @@ class WarehouseRepository extends ChangeNotifier {
     // Bắn sync về ERP Bravo
     ErpBravoService().pushOutboundCompleted(poNo, shippedEpcs.length);
 
-    // Đồng bộ Real-time MySQL / Offline Queue
+    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'outbound_transactions',
       recordId: poNo,
@@ -1267,7 +1249,7 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Đồng bộ Real-time MySQL / Offline Queue
+    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     await _syncDirectOrQueue(
       tableName: 'outbound_transactions',
       recordId: poNo ?? 'DIRECT-OUT-${now.millisecondsSinceEpoch}',
@@ -1413,7 +1395,7 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Đồng bộ Real-time MySQL / Offline Queue
+    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'inventory_sessions',
       recordId: session.sessionId,
@@ -1482,7 +1464,7 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // Đồng bộ Real-time MySQL / Offline Queue
+    // Đồng bộ Real-time Supabase Cloud / Offline Queue
     _syncDirectOrQueue(
       tableName: 'pallet_moves',
       recordId: palletId,

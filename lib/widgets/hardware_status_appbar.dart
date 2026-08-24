@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/mysql_sync_service.dart';
+import '../services/supabase_sync_service.dart';
+import '../services/uhf_service.dart';
 import '../theme/eye_care_theme.dart';
-import '../screens/pda/pda_mysql_sync_screen.dart';
 
 class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -18,26 +18,35 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
 
   @override
   Widget build(BuildContext context) {
-    final syncService = MySqlSyncService();
+    final syncService = SupabaseSyncService();
+    final uhfService = UhfService();
     final eyeCare = EyeCareThemeService();
 
     return ListenableBuilder(
-      listenable: Listenable.merge([syncService, eyeCare]),
+      listenable: Listenable.merge([syncService, uhfService, eyeCare]),
       builder: (context, _) {
         final isOnline = syncService.isOnline;
-        final isWifi = syncService.isWifiConnected;
         final pendingCount = syncService.pendingCount;
+        final isSyncing = syncService.isSyncing;
         final c = eyeCare.colors;
 
         final Color statusColor = isOnline
             ? c.successEmerald
-            : (isWifi ? c.rfidCyan : c.warningAmber);
+            : (pendingCount > 0 ? c.warningAmber : c.textMuted);
 
-        final String statusLabel = isOnline
-            ? (pendingCount > 0 ? 'MySQL ($pendingCount)' : 'MySQL Online')
-            : (isWifi
-                ? (pendingCount > 0 ? 'Wi-Fi ($pendingCount)' : 'Wi-Fi OK')
-                : (pendingCount > 0 ? 'SQLite ($pendingCount)' : 'Offline'));
+        final String statusLabel = isSyncing
+            ? 'Đang đồng bộ...'
+            : (isOnline
+                ? (pendingCount > 0 ? 'Cloud ($pendingCount)' : 'Cloud Online')
+                : (pendingCount > 0 ? 'Offline ($pendingCount)' : 'Offline'));
+
+        final scanMode = uhfService.scanMode;
+        final (scanLabel, scanIcon, scanColor) = switch (scanMode) {
+          PdaScanMode.auto => ('AUTO', Icons.auto_mode, c.rfidCyan),
+          PdaScanMode.rfid => ('RFID', Icons.sensors, c.rfidCyan),
+          PdaScanMode.barcode => ('BARCODE', Icons.qr_code_scanner, c.warningAmber),
+          PdaScanMode.hybrid => ('HYBRID', Icons.alt_route, c.successEmerald),
+        };
 
         return AppBar(
           backgroundColor: c.bgDeep,
@@ -52,17 +61,80 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
             ),
           ),
           actions: [
-            // MySQL & Wi-Fi Sync Status Chip
+            // Scan Mode Switcher Chip
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 3),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PdaMySqlSyncScreen()),
+                  final nextMode = switch (scanMode) {
+                    PdaScanMode.auto => PdaScanMode.rfid,
+                    PdaScanMode.rfid => PdaScanMode.barcode,
+                    PdaScanMode.barcode => PdaScanMode.hybrid,
+                    PdaScanMode.hybrid => PdaScanMode.auto,
+                  };
+                  uhfService.scanMode = nextMode;
+
+                  final modeDesc = switch (nextMode) {
+                    PdaScanMode.auto => 'Tự động theo màn hình (Auto Context)',
+                    PdaScanMode.rfid => 'Chỉ quét sóng UHF RFID',
+                    PdaScanMode.barcode => 'Chỉ quét mã Laser/2D Barcode',
+                    PdaScanMode.hybrid => 'Quét song song cả RFID & Barcode',
+                  };
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: c.bgCardElevated,
+                      duration: const Duration(milliseconds: 900),
+                      content: Text('⚡ Chế độ cò PDA: $modeDesc', style: TextStyle(color: c.textPrimary)),
+                    ),
                   );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: scanColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: scanColor, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(scanIcon, size: 12, color: scanColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        scanLabel,
+                        style: TextStyle(
+                          color: scanColor,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Cloud Sync Status Chip
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 3),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () async {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: c.bgCardElevated,
+                      duration: const Duration(seconds: 1),
+                      content: Text(
+                        isOnline
+                            ? 'Đang kích hoạt đồng bộ Supabase Cloud...'
+                            : 'Đang kết nối lại Supabase Cloud...',
+                        style: TextStyle(color: c.textPrimary),
+                      ),
+                    ),
+                  );
+                  await syncService.syncNow();
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -90,15 +162,9 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                         statusLabel,
                         style: TextStyle(
                           color: statusColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        isOnline ? Icons.sync : (isWifi ? Icons.wifi : Icons.cloud_off),
-                        size: 12,
-                        color: statusColor,
                       ),
                     ],
                   ),

@@ -156,7 +156,7 @@ class DatabaseService {
       )
     ''');
 
-    // 9. Bảng Hàng Đợi Đồng Bộ (sync_queue) phục vụ Offline-first SQLite -> MySQL
+    // 9. Bảng Hàng Đợi Đồng Bộ (sync_queue) phục vụ Offline-first SQLite -> Supabase Cloud
     await db.execute('''
       CREATE TABLE IF NOT EXISTS sync_queue (
         queue_id INTEGER PRIMARY KEY AUTOINCREMENT,

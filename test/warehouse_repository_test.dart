@@ -3,7 +3,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uhf/models/tag_info.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/services/database_service.dart';
-import 'package:uhf/services/mysql_sync_service.dart';
+import 'package:uhf/services/supabase_sync_service.dart';
 import 'package:uhf/services/uhf_service.dart';
 import 'package:uhf/services/warehouse_repository.dart';
 
@@ -249,9 +249,9 @@ void main() {
       uhf.filterDuplicates = true;
     });
 
-    test('PDA Offline-First SQLite Queue: operations are saved locally and synced to MySQL', () async {
+    test('PDA Offline-First SQLite Queue: operations are saved locally and synced to Supabase Cloud', () async {
       final dbService = DatabaseService();
-      final syncService = MySqlSyncService();
+      final syncService = SupabaseSyncService();
 
       // Clear sync queue
       await dbService.clearAllData();
@@ -273,7 +273,7 @@ void main() {
       final pendingItems = await dbService.getPendingSyncItems();
       expect(pendingItems.any((item) => item['record_id'] == 'INB-OFFLINE-001'), isTrue);
 
-      // Trigger MySQL Sync
+      // Trigger Supabase Sync
       final syncOk = await syncService.syncNow();
       expect(syncOk, isTrue);
 
@@ -282,9 +282,9 @@ void main() {
       expect(syncService.logs.any((l) => l.action == 'PUSH'), isTrue);
     });
 
-    test('Automatic Sync triggers immediately when Wi-Fi connects without pressing any button', () async {
+    test('Automatic Sync triggers immediately when internet connects without pressing any button', () async {
       final dbService = DatabaseService();
-      final syncService = MySqlSyncService();
+      final syncService = SupabaseSyncService();
 
       // Clear sync queue
       await dbService.clearAllData();
@@ -295,12 +295,12 @@ void main() {
         palletCode: 'PL-AUTO-01',
         locationId: 'LOC-A01-01',
         scannedEpcs: ['E28011600000000000099888'],
-        performedBy: 'Thủ kho Wi-Fi Auto',
+        performedBy: 'Thủ kho Cloud Auto',
       );
 
       expect(await dbService.getPendingSyncCount(), greaterThanOrEqualTo(1));
 
-      // Simulate Wi-Fi connection trigger
+      // Simulate connection trigger
       await syncService.checkConnectivity();
 
       // Auto-sync should process and flush queue

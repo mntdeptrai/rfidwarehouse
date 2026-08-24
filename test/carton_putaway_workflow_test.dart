@@ -80,7 +80,7 @@ void main() {
       expect(tx!.type, equals(TransactionType.movement));
 
       // Dọn dẹp dữ liệu test khỏi SQLite sau khi test xong
-      await repo.clearAllData(alsoClearMySql: false);
+      await repo.clearAllData(alsoClearCloud: false);
     });
 
     test('Excel 4-Column (CARTON CODE, EPC, BARCODE, NAME) -> Putaway via Outer Carton Barcode', () async {
@@ -171,7 +171,7 @@ void main() {
       expect(items.every((i) => i.status == ItemStatus.inStock), isTrue);
       expect(items.every((i) => i.locationId == putawayLocationId), isTrue);
 
-      await repo.clearAllData(alsoClearMySql: false);
+      await repo.clearAllData(alsoClearCloud: false);
     });
   });
 }

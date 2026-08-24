@@ -183,7 +183,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
             Icon(Icons.radar_outlined, size: 64, color: c.textMuted.withValues(alpha: 0.4)),
             const SizedBox(height: 12),
             Text(
-              'Quét thẻ RFID hoặc nhập mã Serial để tra cứu thông tin',
+              'Nhập hoặc quét mã để tra cứu',
               style: TextStyle(color: c.textMuted, fontSize: 13),
               textAlign: TextAlign.center,
             ),

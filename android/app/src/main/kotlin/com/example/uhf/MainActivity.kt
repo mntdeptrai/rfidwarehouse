@@ -56,6 +56,9 @@ class MainActivity : FlutterActivity() {
     private var toneGenerator: ToneGenerator? = null
     private var vibrator: Vibrator? = null
 
+    // Scan Mode: "auto", "rfid", "barcode", "hybrid"
+    private var currentScanMode = "auto"
+
     // Trigger debounce
     private var lastTriggerDown = 0L
     private val TRIGGER_DEBOUNCE_MS = 150L
@@ -326,20 +329,18 @@ class MainActivity : FlutterActivity() {
                     val res = stopInventory()
                     result.success(res)
                 }
+                "setScanMode" -> {
+                    val mode = call.argument<String>("mode") ?: "auto"
+                    currentScanMode = mode
+                    Log.d(TAG, "Hardware scan mode updated to: $currentScanMode")
+                    result.success(true)
+                }
+                "getScanMode" -> {
+                    result.success(currentScanMode)
+                }
                 "triggerBarcodeScan", "scanBarcode" -> {
-                    try {
-                        sendBroadcast(Intent("com.rsc.scan.service").apply { putExtra("action", "ACTION_SCAN") })
-                        sendBroadcast(Intent("android.intent.action.SCAN_TRIGGER"))
-                        sendBroadcast(Intent("com.symbol.datawedge.api.ACTION").apply {
-                            putExtra("com.symbol.datawedge.api.SOFT_SCAN_TRIGGER", "START_SCANNING")
-                        })
-                        sendBroadcast(Intent("com.honeywell.decode.intent.action.SCAN_TRIGGER"))
-                        sendBroadcast(Intent("com.seuic.scanner.action.SCAN"))
-                        sendBroadcast(Intent("urovo.scanner.startscan"))
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.success(false)
-                    }
+                    triggerBarcodeBroadcast()
+                    result.success(true)
                 }
                 "setFilterDuplicates" -> {
                     val filter = call.argument<Boolean>("filter") ?: true
@@ -582,18 +583,47 @@ class MainActivity : FlutterActivity() {
                keyCode == KeyEvent.KEYCODE_STEM_3
     }
 
+    private fun triggerBarcodeBroadcast() {
+        try {
+            sendBroadcast(Intent("com.rsc.scan.service").apply { putExtra("action", "ACTION_SCAN") })
+            sendBroadcast(Intent("android.intent.action.SCAN_TRIGGER"))
+            sendBroadcast(Intent("com.symbol.datawedge.api.ACTION").apply {
+                putExtra("com.symbol.datawedge.api.SOFT_SCAN_TRIGGER", "START_SCANNING")
+            })
+            sendBroadcast(Intent("com.honeywell.decode.intent.action.SCAN_TRIGGER"))
+            sendBroadcast(Intent("com.seuic.scanner.action.SCAN"))
+            sendBroadcast(Intent("urovo.scanner.startscan"))
+        } catch (e: Exception) {
+            Log.w(TAG, "triggerBarcodeBroadcast error: ${e.message}")
+        }
+    }
+
     private fun sendTriggerEvent(pressed: Boolean, keyCode: Int) {
         if (pressed) {
             if (!isTriggerActive.compareAndSet(false, true)) return
             val now = System.currentTimeMillis()
             if (now - lastTriggerDown < TRIGGER_DEBOUNCE_MS) return
             lastTriggerDown = now
-            startInventory()
+
+            val mode = currentScanMode.lowercase()
+            when (mode) {
+                "barcode" -> {
+                    triggerBarcodeBroadcast()
+                }
+                "rfid" -> {
+                    startInventory()
+                }
+                else -> { // "auto", "hybrid"
+                    startInventory()
+                    triggerBarcodeBroadcast()
+                }
+            }
+
             val runnable = Runnable {
                 flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
                     MethodChannel(messenger, METHOD_CHANNEL).invokeMethod(
                         "onHardwareTrigger",
-                        mapOf("pressed" to true, "keyCode" to keyCode)
+                        mapOf("pressed" to true, "keyCode" to keyCode, "mode" to mode)
                     )
                 }
             }
@@ -604,12 +634,15 @@ class MainActivity : FlutterActivity() {
             }
         } else {
             if (!isTriggerActive.compareAndSet(true, false)) return
-            stopInventory()
+            val mode = currentScanMode.lowercase()
+            if (mode != "barcode") {
+                stopInventory()
+            }
             val runnable = Runnable {
                 flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
                     MethodChannel(messenger, METHOD_CHANNEL).invokeMethod(
                         "onHardwareTrigger",
-                        mapOf("pressed" to false, "keyCode" to keyCode)
+                        mapOf("pressed" to false, "keyCode" to keyCode, "mode" to mode)
                     )
                 }
             }

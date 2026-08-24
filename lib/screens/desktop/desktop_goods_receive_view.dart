@@ -6,7 +6,7 @@ import '../../services/uhf_service.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/excel_import_service.dart';
 import '../../services/tower_light_service.dart';
-import '../../services/mysql_sync_service.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../widgets/tower_light_widget.dart';
 import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
@@ -25,7 +25,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final DesktopUhfTcpService _desktopUhf = DesktopUhfTcpService();
   final ExcelImportService _excelService = ExcelImportService();
   final TowerLightService _towerLight = TowerLightService();
-  final MySqlSyncService _mysqlSync = MySqlSyncService();
+  final SupabaseSyncService _supabaseSync = SupabaseSyncService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   int _currentMode = 0; // 0: Live RFID Station, 1: Orders List & Excel
@@ -67,9 +67,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
 
 
-    // Tự động kéo danh sách phiếu nhập mới nhất từ MySQL về khi mở trạm
+    // Tự động kéo danh sách phiếu nhập mới nhất từ Supabase về khi mở trạm
     Future.microtask(() async {
-      await _mysqlSync.syncNow();
+      await _supabaseSync.syncNow();
       if (mounted) setState(() {});
     });
 
@@ -298,7 +298,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           reason: 'ĐỦ HÀNG THÔNG QUA: $matchedCount/$expectedCount chip khớp 100% (Đơn ${_selectedLiveOrder!.orderNo})',
         );
 
-        // ⚡ TỰ ĐỘNG XÁC NHẬN NHẬP KHO & ĐỒNG BỘ MYSQL (Zero-Touch)
+        // ⚡ TỰ ĐỘNG XÁC NHẬN NHẬP KHO & ĐỒNG BỘ SUPABASE CLOUD (Zero-Touch)
         _triggerAutoConfirmInbound();
       }
     } else {
@@ -1520,15 +1520,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
                     onPressed: () async {
                       final messenger = ScaffoldMessenger.of(context);
-                      await _mysqlSync.syncNow();
-                      await _repo.refreshFromDatabase();
+                      await _supabaseSync.syncNow();
+                      await _repo.reloadFromSqlite();
                       if (mounted) {
                         setState(() {});
                         messenger.showSnackBar(
                           const SnackBar(
                             backgroundColor: Color(0xFF10B981),
                             duration: Duration(seconds: 2),
-                            content: Text('Đã làm mới và đồng bộ danh sách phiếu nhập từ MySQL!'),
+                            content: Text('Đã làm mới và đồng bộ danh sách phiếu nhập từ Supabase Cloud!'),
                           ),
                         );
                       }
@@ -2320,13 +2320,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
                       icon: const Icon(Icons.sync, size: 15),
-                      label: const Text('Làm Mới & Đồng Bộ MySQL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      label: const Text('Làm Mới & Đồng Bộ Cloud', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       onPressed: () async {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Đang làm mới & đồng bộ dữ liệu từ MySQL...'), duration: Duration(seconds: 1)),
+                          const SnackBar(content: Text('Đang làm mới & đồng bộ dữ liệu từ Supabase Cloud...'), duration: Duration(seconds: 1)),
                         );
-                        await _mysqlSync.syncNow();
-                        await _repo.refreshFromDatabase();
+                        await _supabaseSync.syncNow();
+                        await _repo.reloadFromSqlite();
                         setState(() {});
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -2349,7 +2349,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           builder: (ctx) => AlertDialog(
                             backgroundColor: c.bgCard,
                             title: Text('XÁC NHẬN XÓA SẠCH DỮ LIỆU', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold)),
-                            content: Text('Bạn có chắc muốn xóa sạch toàn bộ đơn hàng, chip RFID và pallet thử nghiệm cả trên SQLite và MySQL không?', style: TextStyle(color: c.textPrimary)),
+                            content: Text('Bạn có chắc muốn xóa sạch toàn bộ đơn hàng, chip RFID và pallet thử nghiệm cả trên SQLite và Supabase Cloud không?', style: TextStyle(color: c.textPrimary)),
                             actions: [
                               TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
                               ElevatedButton(
@@ -2361,7 +2361,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           ),
                         );
                         if (confirm == true) {
-                          await _repo.clearAllData(alsoClearMySql: true);
+                          await _repo.clearAllData();
                           setState(() {
                             _scannedTags.clear();
                             _selectedLiveOrder = null;

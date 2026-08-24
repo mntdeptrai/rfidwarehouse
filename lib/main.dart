@@ -10,6 +10,7 @@ import 'screens/devices_erp_screen.dart';
 import 'screens/desktop_pda_wrapper.dart';
 import 'services/uhf_service.dart';
 import 'services/supabase_sync_service.dart';
+import 'services/api_service.dart';
 
 import 'theme/eye_care_theme.dart';
 
@@ -23,8 +24,9 @@ void main() async {
   );
   // Khởi tạo UHF service sớm
   UhfService().init();
-  // Khởi tạo Supabase Cloud Sync
+  // Khởi tạo Supabase Cloud Sync & Realtime APIs
   SupabaseSyncService();
+  ApiService().init();
   runApp(const RfidWmsApp());
 }
 

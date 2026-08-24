@@ -38,14 +38,13 @@ class PdaDrawer extends StatelessWidget {
                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 accountEmail: Text(
-                  'Thiết bị C72e • Sẵn sàng quét',
+                  'Thiết bị C72e',
                   style: TextStyle(color: c.textSecondary, fontSize: 13),
                 ),
               ),
               ListTile(
                 leading: Icon(Icons.shelves, color: c.successEmerald),
                 title: Text('Xếp Kho / Cất Hàng (Putaway)', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                subtitle: Text('Quét Barcode Thùng & Vị Trí Kệ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -84,11 +83,10 @@ class PdaDrawer extends StatelessWidget {
                   color: c.warningAmber,
                 ),
                 title: Text('Chế Độ Chống Mỏi Mắt', style: TextStyle(color: c.textPrimary, fontSize: 14)),
-                subtitle: Text(
-                  'Đang dùng: ${eyeCare.modeName}',
-                  style: TextStyle(color: c.warningAmber, fontSize: 11, fontWeight: FontWeight.w600),
+                trailing: Text(
+                  eyeCare.modeName,
+                  style: TextStyle(color: c.warningAmber, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
-                trailing: Icon(Icons.touch_app, size: 18, color: c.textMuted),
                 onTap: () {
                   eyeCare.toggleNextMode();
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +102,6 @@ class PdaDrawer extends StatelessWidget {
               ListTile(
                 leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
                 title: Text('Xóa Sạch Dữ Liệu SQLite', style: TextStyle(color: c.errorCoral, fontSize: 14)),
-                subtitle: Text('Xóa sạch đơn/thẻ thử nghiệm trên PDA & MySQL', style: TextStyle(color: c.textMuted, fontSize: 11)),
                 onTap: () async {
                   Navigator.pop(context);
                   final confirm = await showDialog<bool>(
@@ -112,7 +109,7 @@ class PdaDrawer extends StatelessWidget {
                     builder: (ctx) => AlertDialog(
                       backgroundColor: c.bgCard,
                       title: Text('Xác nhận xóa sạch dữ liệu?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
-                      content: Text('Toàn bộ đơn hàng và chip RFID thử nghiệm (trên cả máy chủ MySQL và PDA) sẽ được xóa sạch 100% để bạn bắt đầu tạo dữ liệu thực tế.', style: TextStyle(color: c.textSecondary)),
+                      content: Text('Toàn bộ đơn hàng và chip RFID thử nghiệm (trên cả Supabase Cloud và PDA) sẽ được xóa sạch 100% để bạn bắt đầu tạo dữ liệu thực tế.', style: TextStyle(color: c.textSecondary)),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
                         ElevatedButton(
@@ -124,10 +121,10 @@ class PdaDrawer extends StatelessWidget {
                     ),
                   );
                   if (confirm == true) {
-                    await WarehouseRepository().clearAllData(alsoClearMySql: true);
+                    await WarehouseRepository().clearAllData();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả PDA & MySQL!')),
+                        SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả PDA & Supabase Cloud!')),
                       );
                     }
                   }

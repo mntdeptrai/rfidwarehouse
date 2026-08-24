@@ -4,6 +4,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/tag_info.dart';
 
+enum PdaScanMode {
+  auto,    // Tự động chuyển theo ngữ cảnh (Context-Aware)
+  rfid,    // Chỉ kích hoạt đầu đọc UHF RFID
+  barcode, // Chỉ kích hoạt mắt đọc 2D Laser Barcode
+  hybrid,  // Kích hoạt song song cả RFID & Barcode khi bóp cò
+}
+
 class UhfService extends ChangeNotifier {
   static final UhfService _instance = UhfService._internal();
   factory UhfService() => _instance;
@@ -24,6 +31,36 @@ class UhfService extends ChangeNotifier {
   String _hardwareVersion = 'N/A';
   String _firmwareVersion = 'N/A';
   int _temperature = 0;
+
+  // Quản lý chế độ quét (Scan Mode)
+  PdaScanMode _scanMode = PdaScanMode.auto;
+  PdaScanMode get scanMode => _scanMode;
+  final List<PdaScanMode> _scanModeStack = [];
+
+  set scanMode(PdaScanMode mode) {
+    _scanMode = mode;
+    if (Platform.isAndroid) {
+      try {
+        _methodChannel.invokeMethod('setScanMode', {'mode': mode.name});
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
+
+  /// Đặt chế độ quét tạm thời khi mở Dialog/Card Barcode
+  void pushScanMode(PdaScanMode temporaryMode) {
+    _scanModeStack.add(_scanMode);
+    scanMode = temporaryMode;
+  }
+
+  /// Khôi phục lại chế độ quét trước đó khi đóng Dialog/Card
+  void popScanMode() {
+    if (_scanModeStack.isNotEmpty) {
+      scanMode = _scanModeStack.removeLast();
+    } else {
+      scanMode = PdaScanMode.auto;
+    }
+  }
 
   bool soundEnabled = true;
   bool hapticEnabled = true;

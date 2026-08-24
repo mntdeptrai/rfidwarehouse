@@ -43,7 +43,6 @@ dependencies:
   sqflite_common_ffi: ^2.3.4+5
   file_picker: ^12.0.0
   excel: ^4.0.6
-  mysql_client: ^0.0.27
   supabase_flutter: ^2.17.2
 
 dev_dependencies:

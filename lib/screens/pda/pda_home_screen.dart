@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../services/mysql_sync_service.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import 'pda_drawer.dart';
 import 'pda_goods_delivery_screen.dart';
 import 'pda_inventory_screen.dart';
-import 'pda_mysql_sync_screen.dart';
 import '../inbound_screen.dart';
 import '../storage_screen.dart';
 import 'pda_putaway_screen.dart';
@@ -17,7 +16,7 @@ class PdaHomeScreen extends StatefulWidget {
 }
 
 class _PdaHomeScreenState extends State<PdaHomeScreen> {
-  final _syncService = MySqlSyncService();
+  final _syncService = SupabaseSyncService();
   final _eyeCare = EyeCareThemeService();
 
   @override
@@ -41,19 +40,18 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isOnline = _syncService.isOnline;
-    final isWifi = _syncService.isWifiConnected;
     final isSyncing = _syncService.isSyncing;
     final pendingCount = _syncService.pendingCount;
     final c = _eyeCare.colors;
 
     final Color statusColor = isOnline
         ? c.successEmerald
-        : (isWifi ? c.rfidCyan : c.warningAmber);
+        : (pendingCount > 0 ? c.warningAmber : c.textMuted);
 
-    final String statusLabel = isOnline
-        ? (pendingCount > 0 ? 'Online ($pendingCount)' : 'MySQL Online')
-        : (isWifi
-            ? (pendingCount > 0 ? 'Wi-Fi ($pendingCount)' : 'Wi-Fi OK')
+    final String statusLabel = isSyncing
+        ? 'Đang đồng bộ...'
+        : (isOnline
+            ? (pendingCount > 0 ? 'Cloud ($pendingCount)' : 'Cloud Online')
             : (pendingCount > 0 ? 'Offline ($pendingCount)' : 'Offline'));
 
     return Scaffold(
@@ -90,16 +88,25 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           ],
         ),
         actions: [
-          // Online / Offline / Wi-Fi Status Badge
+          // Online / Offline / Cloud Status Badge
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PdaMySqlSyncScreen()),
+              onTap: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: c.bgCardElevated,
+                    duration: const Duration(seconds: 1),
+                    content: Text(
+                      isOnline
+                          ? 'Đang kích hoạt đồng bộ Supabase Cloud...'
+                          : 'Đang kết nối lại Supabase Cloud...',
+                      style: TextStyle(color: c.textPrimary),
+                    ),
+                  ),
                 );
+                await _syncService.syncNow();
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -138,10 +145,10 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         fontSize: 10.5,
                       ),
                     ),
-                    if (isOnline || isWifi) ...[
+                    if (isOnline) ...[
                       const SizedBox(width: 3),
                       Icon(
-                        isSyncing ? Icons.sync : Icons.sync_problem_outlined,
+                        isSyncing ? Icons.sync : Icons.check_circle_outline,
                         size: 11,
                         color: statusColor,
                       ),
@@ -159,53 +166,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           child: Column(
             children: [
-              // Offline/Online/Wi-Fi Status Notice Banner (Anti-Glare)
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PdaMySqlSyncScreen()),
-                  );
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: c.bgCard,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isOnline ? c.border : statusColor.withValues(alpha: 0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isOnline
-                            ? Icons.cloud_done_rounded
-                            : (isWifi ? Icons.wifi_rounded : Icons.cloud_off_rounded),
-                        color: statusColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          isOnline
-                              ? 'MySQL Online · ${_syncService.config.host} • Tự động đồng bộ'
-                              : (isWifi
-                                  ? 'Đã có Wi-Fi · ${_syncService.pdaIpAddress} • Chạm để kết nối MySQL'
-                                  : 'Chế độ Ngoại tuyến: Lưu trữ SQLite • Chống mỏi mắt'),
-                          style: TextStyle(
-                            color: isOnline ? c.textPrimary : statusColor,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, size: 16, color: c.textMuted),
-                    ],
-                  ),
-                ),
-              ),
-
               // Prominent Putaway Banner Card
               InkWell(
                 onTap: () {
@@ -235,18 +195,14 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                       ),
                       const SizedBox(width: 12),
                       const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'CẤT HÀNG LÊN KỆ',
-                              style: TextStyle(color: Color(0xFF38BDF8), fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
-                            ),
-                            Text(
-                              'Quét Barcode vị trí kệ & mã thùng hàng để cất',
-                              style: TextStyle(color: Colors.white70, fontSize: 11),
-                            ),
-                          ],
+                        child: Text(
+                          'CẤT HÀNG LÊN KỆ (PUTAWAY)',
+                          style: TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
                         ),
                       ),
                       const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFF38BDF8)),
@@ -255,20 +211,16 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                 ),
               ),
 
-
-              // 4 Large Action Tiles with Soft Eye-Comfort Styling
               Expanded(
                 child: GridView.count(
                   crossAxisCount: 2,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 0.96,
+                  childAspectRatio: 1.05,
                   children: [
-                    // 1. Goods receive
                     _buildPdaActionTile(
                       context,
                       title: 'Nhập kho',
-                      subTitle: 'Quét nhận hàng',
                       icon: Icons.input_rounded,
                       accentColor: c.rfidCyan,
                       badgeColor: c.warningAmber,
@@ -280,12 +232,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         );
                       },
                     ),
-
-                    // 2. Goods delivery
                     _buildPdaActionTile(
                       context,
                       title: 'Xuất kho',
-                      subTitle: 'Quét xuất hàng',
                       icon: Icons.output_rounded,
                       accentColor: c.rfidCyan,
                       badgeColor: c.warningAmber,
@@ -297,12 +246,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         );
                       },
                     ),
-
-                    // 3. Move goods
                     _buildPdaActionTile(
                       context,
                       title: 'Chuyển kho',
-                      subTitle: 'Chuyển vị trí & kệ',
                       icon: Icons.swap_horiz_rounded,
                       accentColor: c.rfidCyan,
                       badgeColor: c.warningAmber,
@@ -314,12 +260,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         );
                       },
                     ),
-
-                    // 4. Inventory
                     _buildPdaActionTile(
                       context,
                       title: 'Kiểm kê kho',
-                      subTitle: 'Kiểm đếm RFID',
                       icon: Icons.inventory_2_rounded,
                       accentColor: c.rfidCyan,
                       badgeColor: c.successEmerald,
@@ -341,11 +284,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     );
   }
 
-
   Widget _buildPdaActionTile(
     BuildContext context, {
     required String title,
-    required String subTitle,
     required IconData icon,
     required Color accentColor,
     required Color badgeColor,
@@ -360,7 +301,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: colors.border, width: 1.2),
@@ -368,10 +309,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Icon container with soft anti-glare elevation
               Container(
-                width: 62,
-                height: 62,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   color: colors.bgCardElevated,
                   borderRadius: BorderRadius.circular(14),
@@ -380,7 +320,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    Icon(icon, size: 34, color: accentColor),
+                    Icon(icon, size: 32, color: accentColor),
                     Positioned(
                       top: 7,
                       right: 7,
@@ -396,7 +336,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Text(
                 title,
                 textAlign: TextAlign.center,
@@ -404,16 +344,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                   color: colors.textPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subTitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],

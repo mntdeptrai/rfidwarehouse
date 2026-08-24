@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/warehouse_repository.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../services/uhf_service.dart';
 import '../../models/wms_models.dart';
-import 'pda_mysql_sync_screen.dart';
 
 class PdaInventoryScreen extends StatefulWidget {
   const PdaInventoryScreen({super.key});
@@ -43,18 +43,18 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
         title: const Text('Inventory (Kiểm Kê)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.sync_alt, color: Color(0xFF10B981)),
-            tooltip: 'Đồng bộ MySQL',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PdaMySqlSyncScreen()),
+            icon: const Icon(Icons.cloud_sync, color: Color(0xFF38BDF8)),
+            tooltip: 'Đồng bộ Supabase Cloud',
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Đang kích hoạt đồng bộ Supabase Cloud...'), duration: Duration(seconds: 1)),
               );
+              await SupabaseSyncService().syncNow();
             },
           ),
           IconButton(
             icon: const Icon(Icons.history, color: Colors.white70),
-            onPressed: () => _repo.refreshFromDatabase(),
+            onPressed: () => _repo.reloadFromSqlite(),
           ),
           IconButton(
             icon: const Icon(Icons.add, color: Color(0xFF38BDF8), size: 28),
