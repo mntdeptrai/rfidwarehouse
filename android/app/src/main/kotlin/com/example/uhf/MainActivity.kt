@@ -218,6 +218,27 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun deliverBarcodeToFlutter(barcode: String) {
+        val clean = barcode.trim()
+        if (clean.isEmpty()) return
+
+        playBeepThrottled()
+        bgHandler.post {
+            try {
+                toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 50)
+                vibrator?.vibrate(40)
+            } catch (_: Throwable) {}
+        }
+
+        mainHandler.post {
+            try {
+                mMethodChannel?.invokeMethod("onBarcodeRead", mapOf("barcode" to clean))
+            } catch (e: Exception) {
+                Log.w(TAG, "Error invoking onBarcodeRead: ${e.message}")
+            }
+        }
+    }
+
     private fun handleBarcodeBroadcastData(intent: Intent) {
         var rawData: String? = null
         val stringKeys = listOf(
@@ -225,7 +246,7 @@ class MainActivity : FlutterActivity() {
             "com.symbol.datawedge.data_string", "data_string", "SCAN_BARCODE1",
             "barcode_string", "decode_data", "barcode_data",
             "text", "code", "content", "com.seuic.extra.SCAN_RESULT",
-            "se_barcode_data", "scanner_data", "epc", "tag_epc", "tag"
+            "SCAN_RESULT", "se_barcode_data", "scanner_data", "epc", "tag_epc", "tag", "se4500"
         )
         for (key in stringKeys) {
             val s = intent.getStringExtra(key)
@@ -239,6 +260,22 @@ class MainActivity : FlutterActivity() {
                 rawData = String(byteData).trim()
             }
         }
+        if (rawData.isNullOrEmpty()) {
+            val extras = intent.extras
+            if (extras != null) {
+                for (k in extras.keySet()) {
+                    val v = extras.get(k)
+                    if (v != null) {
+                        val str = v.toString().trim()
+                        if (str.isNotBlank() && str.length >= 2 && !str.startsWith("Intent {")) {
+                            rawData = str
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
         if (rawData.isNullOrEmpty()) return
 
         // Nếu app đang ở chế độ RFID (mặc định): Tách từng dòng và đưa vào danh sách thẻ RFID riêng biệt!
@@ -247,14 +284,8 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        Log.d(TAG, "Barcode Broadcast Data: $rawData")
-        mainHandler.post {
-            try {
-                mMethodChannel?.invokeMethod("onBarcodeRead", mapOf("barcode" to rawData))
-            } catch (e: Exception) {
-                Log.w(TAG, "Error invoking onBarcodeRead: ${e.message}")
-            }
-        }
+        Log.d(TAG, "Barcode Broadcast Scanned Data: $rawData")
+        deliverBarcodeToFlutter(rawData)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -720,10 +751,58 @@ class MainActivity : FlutterActivity() {
                     try { clazz.getMethod("scan") } catch (_: Throwable) { null }
                 }
                 mBarcodeStopScanMethod = try { clazz.getMethod("stopScan") } catch (_: Throwable) { null }
+
+                // Register DecodeInfoCallBack if available
+                registerBarcodeCallback(scanner)
                 Log.d(TAG, "Barcode Scanner cached successfully, methods ready!")
             }
         } catch (e: Throwable) {
             Log.d(TAG, "Barcode Scanner cache note: ${e.message}")
+        }
+    }
+
+    private fun registerBarcodeCallback(scanner: Any) {
+        try {
+            val callbackClass = Class.forName("com.seuic.scanner.DecodeInfoCallBack")
+            val proxy = Proxy.newProxyInstance(
+                callbackClass.classLoader,
+                arrayOf(callbackClass),
+                InvocationHandler { _, method, args ->
+                    if (method.name == "onDecodeComplete" && args != null && args.isNotEmpty()) {
+                        val decodeInfo = args[0]
+                        if (decodeInfo != null) {
+                            var barcodeStr: String? = null
+                            try {
+                                val field = decodeInfo.javaClass.getField("barcode")
+                                barcodeStr = field.get(decodeInfo) as? String
+                            } catch (_: Throwable) {}
+                            if (barcodeStr.isNullOrEmpty()) {
+                                try {
+                                    val field = decodeInfo.javaClass.getField("data")
+                                    barcodeStr = field.get(decodeInfo) as? String
+                                } catch (_: Throwable) {}
+                            }
+                            if (barcodeStr.isNullOrEmpty()) {
+                                try {
+                                    val m = decodeInfo.javaClass.getMethod("getBarcode")
+                                    barcodeStr = m.invoke(decodeInfo) as? String
+                                } catch (_: Throwable) {}
+                            }
+                            if (!barcodeStr.isNullOrEmpty()) {
+                                val clean = barcodeStr.trim()
+                                Log.d(TAG, "Direct SEUIC Scanner Callback Barcode: $clean")
+                                deliverBarcodeToFlutter(clean)
+                            }
+                        }
+                    }
+                    null
+                }
+            )
+            val setCallbackMethod = scanner.javaClass.getMethod("setDecodeInfoCallBack", callbackClass)
+            setCallbackMethod.invoke(scanner, proxy)
+            Log.d(TAG, "Successfully registered SEUIC DecodeInfoCallBack!")
+        } catch (e: Throwable) {
+            Log.d(TAG, "SEUIC DecodeInfoCallBack registration note: ${e.message}")
         }
     }
 

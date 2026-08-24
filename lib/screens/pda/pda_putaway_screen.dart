@@ -100,6 +100,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     }
 
     // 2. Nếu không phải là vị trí kệ -> Đó là Mã Barcode Thùng Hàng / Đơn hàng -> Thực hiện xếp kho ngay!
+    _cartonInputController.text = clean;
     _processPutawayCarton(clean);
   }
 
