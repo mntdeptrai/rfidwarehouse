@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Ports;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -22,16 +23,19 @@ namespace UHFHardwareBridge
         private static string _currentConnId = "";
         private static bool _isConnected = false;
         private static bool _isScanning = false;
+        private static int _failedProbeCount = 0;
+        private static int _watchdogTicks = 0;
+        private static DateTime _connectedTime = DateTime.MinValue;
         private static readonly Program _instance = new Program();
 
         static void Main(string[] args)
         {
-            Console.OutputEncoding = Encoding.UTF8;
-            Console.Title = "UHF Hardware Bridge - Hopeland RFID API (.NET 4.8)";
-            Console.WriteLine("==================================================================");
-            Console.WriteLine("        UHF HARDWARE BRIDGE SERVICE FOR FLUTTER DESKTOP          ");
-            Console.WriteLine("        Native Drivers: RFIDReaderAPI.dll & Basic.dll            ");
-            Console.WriteLine("==================================================================");
+            try
+            {
+                Console.OutputEncoding = Encoding.UTF8;
+                Console.Title = "UHF Hardware Bridge - Hopeland RFID API (.NET 4.8)";
+            }
+            catch { }
 
             int bridgePort = 9099;
             int p;
@@ -41,12 +45,21 @@ namespace UHFHardwareBridge
             {
                 _server = new TcpListener(IPAddress.Loopback, bridgePort);
                 _server.Start();
-                Console.WriteLine(string.Format("[{0:HH:mm:ss}] Bridge Server listening on 127.0.0.1:{1}...", DateTime.Now, bridgePort));
-                Console.WriteLine("Waiting for Flutter Desktop App connection...");
+
+                try
+                {
+                    Console.WriteLine(string.Format("[{0:HH:mm:ss}] Bridge Server listening on 127.0.0.1:{1}...", DateTime.Now, bridgePort));
+                    Console.WriteLine("Waiting for Flutter Desktop App connection...");
+                }
+                catch { }
 
                 Thread acceptThread = new Thread(AcceptClientsLoop);
                 acceptThread.IsBackground = true;
                 acceptThread.Start();
+
+                Thread watchdogThread = new Thread(ConnectionWatchdogLoop);
+                watchdogThread.IsBackground = true;
+                watchdogThread.Start();
 
                 // Keep main thread alive
                 while (true)
@@ -56,8 +69,111 @@ namespace UHFHardwareBridge
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Fatal Error in Bridge Server: " + ex.Message);
+                try { Console.WriteLine("Fatal Error in Bridge Server: " + ex.Message); } catch { }
             }
+        }
+
+        private static void ConnectionWatchdogLoop()
+        {
+            while (true)
+            {
+                Thread.Sleep(500);
+                _watchdogTicks++;
+
+                if (!_isConnected || string.IsNullOrEmpty(_currentConnId))
+                {
+                    _failedProbeCount = 0;
+                    continue;
+                }
+
+                try
+                {
+                    // 1. Kiểm tra Cáp Cổng COM (RS232 / RS485) siêu tốc qua Windows OS
+                    string portName = ExtractComPort(_currentConnId);
+                    if (!string.IsNullOrEmpty(portName))
+                    {
+                        string[] availablePorts = SerialPort.GetPortNames();
+                        bool portExists = false;
+                        foreach (string p in availablePorts)
+                        {
+                            if (string.Equals(p, portName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                portExists = true;
+                                break;
+                            }
+                        }
+
+                        if (!portExists)
+                        {
+                            BroadcastLog(string.Format("⚠️ Cáp nối cổng {0} đã bị rút ra! Tự động ngắt kết nối.", portName));
+                            HandleDisconnect();
+                            continue;
+                        }
+                    }
+                    else if (_currentConnId.StartsWith("\\\\?\\usb#", StringComparison.OrdinalIgnoreCase) || _currentConnId.Contains("hid"))
+                    {
+                        // 2. Kiểm tra USB HID
+                        List<string> hidList = RFIDReader.GetUsbHidDeviceList();
+                        if (hidList == null || !hidList.Contains(_currentConnId))
+                        {
+                            BroadcastLog("⚠️ Cáp USB HID đã bị rút ra! Tự động ngắt kết nối.");
+                            HandleDisconnect();
+                            continue;
+                        }
+                    }
+
+                    // 3. Proactive Health Probe (định kỳ mỗi 6 giây và sau khi kết nối > 5s)
+                    if (!_isScanning && _watchdogTicks % 12 == 0 && (DateTime.Now - _connectedTime).TotalSeconds > 5)
+                    {
+                        try
+                        {
+                            string info = RFIDReader._ReaderConfig.GetReaderInformation(_currentConnId);
+                            if (string.IsNullOrEmpty(info) || info.StartsWith("1|") || info.StartsWith("255|"))
+                            {
+                                _failedProbeCount++;
+                                if (_failedProbeCount >= 2)
+                                {
+                                    BroadcastLog("⚠️ Đầu đọc không phản hồi (Mất nguồn hoặc lỏng dây). Tự động ngắt kết nối.");
+                                    HandleDisconnect();
+                                    continue;
+                                }
+                            }
+                            else
+                            {
+                                _failedProbeCount = 0;
+                            }
+                        }
+                        catch
+                        {
+                            _failedProbeCount++;
+                            if (_failedProbeCount >= 2)
+                            {
+                                BroadcastLog("⚠️ Mất kết nối tới phần cứng đầu đọc. Tự động ngắt kết nối.");
+                                HandleDisconnect();
+                                continue;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("Watchdog error: " + ex.Message);
+                }
+            }
+        }
+
+        private static string ExtractComPort(string connId)
+        {
+            if (string.IsNullOrEmpty(connId)) return null;
+            string[] parts = connId.Split(':');
+            foreach (string part in parts)
+            {
+                if (part.StartsWith("COM", StringComparison.OrdinalIgnoreCase))
+                {
+                    return part;
+                }
+            }
+            return null;
         }
 
         private static void AcceptClientsLoop()
@@ -274,6 +390,8 @@ namespace UHFHardwareBridge
 
                 if (_isConnected)
                 {
+                    _connectedTime = DateTime.Now;
+                    _failedProbeCount = 0;
                     try
                     {
                         Dictionary<eGPO, eGPOState> gpoReset = new Dictionary<eGPO, eGPOState>();
@@ -625,7 +743,11 @@ namespace UHFHardwareBridge
 
         public static void BroadcastLog(string msg)
         {
-            Console.WriteLine(string.Format("[{0:HH:mm:ss}] {1}", DateTime.Now, msg));
+            try
+            {
+                Console.WriteLine(string.Format("[{0:HH:mm:ss}] {1}", DateTime.Now, msg));
+            }
+            catch { }
             Dictionary<string, object> logObj = new Dictionary<string, object>();
             logObj["type"] = "log";
             logObj["msg"] = msg;
@@ -688,17 +810,16 @@ namespace UHFHardwareBridge
 
         public void WriteDebugMsg(string msg)
         {
-            BroadcastLog("DEBUG: " + msg);
+            // Tắt hoàn toàn in gói tin Hex / Byte debug của SDK
         }
 
         public void WriteLog(string msg)
         {
-            BroadcastLog("INFO: " + msg);
+            // Tắt log nội bộ của SDK
         }
 
         public void PortConnecting(string connID)
         {
-            BroadcastLog("Port Connecting: " + connID);
             _currentConnId = connID;
             _isConnected = true;
 
@@ -711,10 +832,10 @@ namespace UHFHardwareBridge
 
         public void PortClosing(string connID)
         {
-            BroadcastLog("Port Closing: " + connID);
             _isConnected = false;
             _isScanning = false;
             _currentConnId = "";
+            BroadcastLog("Đã ngắt kết nối đầu đọc.");
 
             Dictionary<string, object> res = new Dictionary<string, object>();
             res["type"] = "status";

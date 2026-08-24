@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../theme/eye_care_theme.dart';
-import '../../widgets/tower_light_widget.dart';
 
 class DesktopUhfStudioView extends StatefulWidget {
   const DesktopUhfStudioView({super.key});
@@ -54,14 +53,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   int _rwBank = 1; // 0: Reserved, 1: EPC, 2: TID, 3: User
   int _lockArea = 0;
   int _lockType = 0;
-  int _freqBand = 0;
-  int _gen2Session = 0;
-  int _gen2Target = 0;
 
   final List<String> _comPorts = ['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'];
   final List<int> _baudRates = [115200, 57600, 38400, 19200, 9600];
 
-  final Map<int, double> _antennaPowers = {1: 30, 2: 30, 3: 30, 4: 30};
   bool _soundEnabled = true;
   bool _autoScrollLog = true;
 
@@ -71,7 +66,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
 
     _uhfService.addListener(_onServiceUpdate);
     _eyeCare.addListener(_onServiceUpdate);
@@ -137,7 +132,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
             _buildKpiMetrics(c),
             const SizedBox(height: 8),
 
-            // 3. Tab System (6 Tabs)
+            // 3. Tab System (4 Tabs)
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -155,8 +150,6 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                           _buildTabLiveInventory(c),
                           _buildTabMemoryRw(c),
                           _buildTabSecurity(c),
-                          _buildTabRfPower(c),
-                          _buildTabGpio(c),
                           _buildTabLanManager(c),
                         ],
                       ),
@@ -424,7 +417,23 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           const SizedBox(width: 14),
 
           // Connect / Disconnect Button (SDK Style)
-          if (!_uhfService.isConnected)
+          if (_uhfService.isConnecting)
+            ElevatedButton.icon(
+              onPressed: null,
+              icon: const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              label: const Text('Connecting...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.warningAmber,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                elevation: 1,
+              ),
+            )
+          else if (!_uhfService.isConnected)
             ElevatedButton(
               onPressed: () {
                 if (_selectedConnType == 'RS232') {
@@ -478,8 +487,14 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               children: [
                 const Text('🌡️ ', style: TextStyle(fontSize: 11)),
                 Text(
-                  '${_uhfService.readerTemp.toStringAsFixed(1)} °C',
-                  style: TextStyle(color: c.warningAmber, fontSize: 11, fontWeight: FontWeight.bold),
+                  _uhfService.isConnected
+                      ? '${_uhfService.readerTemp.toStringAsFixed(1)} °C'
+                      : '--.- °C',
+                  style: TextStyle(
+                    color: _uhfService.isConnected ? c.warningAmber : c.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ],
             ),
@@ -488,7 +503,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
 
           OutlinedButton.icon(
             onPressed: () {
-              _tabController.animateTo(5); // Go to Tab 6
+              _tabController.animateTo(3); // Go to Tab 4 (LAN Manager)
               _uhfService.searchLanReaders();
             },
             icon: Icon(Icons.search, size: 14, color: c.rfidCyan),
@@ -506,6 +521,24 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
 
   // ==================== 2. KPI METRICS ====================
   Widget _buildKpiMetrics(EyeCareColors c) {
+    String statusText;
+    String statusIcon;
+    Color statusColor;
+
+    if (_uhfService.isConnecting) {
+      statusText = 'ĐANG KẾT NỐI...';
+      statusIcon = '🟡';
+      statusColor = c.warningAmber;
+    } else if (_uhfService.isConnected) {
+      statusText = _uhfService.isScanning ? 'ĐANG QUÉT' : 'SẴN SÀNG';
+      statusIcon = '🟢';
+      statusColor = c.successEmerald;
+    } else {
+      statusText = 'CHƯA KẾT NỐI';
+      statusIcon = '🔴';
+      statusColor = c.errorCoral;
+    }
+
     return Row(
       children: [
         _buildKpiCard('THẺ DUY NHẤT', '${_uhfService.uniqueCount}', '🏷️', c.rfidCyan, c),
@@ -516,9 +549,9 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
         const SizedBox(width: 8),
         _buildKpiCard(
           'TRẠNG THÁI',
-          _uhfService.isConnected ? (_uhfService.isScanning ? 'ĐANG QUÉT' : 'SẴN SÀNG') : 'CHƯA KẾT NỐI',
-          _uhfService.isConnected ? '🟢' : '🔴',
-          _uhfService.isConnected ? c.successEmerald : c.errorCoral,
+          statusText,
+          statusIcon,
+          statusColor,
           c,
         ),
       ],
@@ -570,8 +603,6 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Tab(icon: Icon(Icons.radar, size: 15), text: 'Quét Thẻ (Live Inventory)'),
           Tab(icon: Icon(Icons.edit_note, size: 15), text: 'Đọc & Ghi Thẻ (Memory R/W)'),
           Tab(icon: Icon(Icons.lock_outline, size: 15), text: 'Bảo Mật Thẻ (Lock & Kill)'),
-          Tab(icon: Icon(Icons.tune, size: 15), text: 'Công Suất & Băng Tần (RF)'),
-          Tab(icon: Icon(Icons.traffic, size: 15), text: 'GPIO & Rơ-le'),
           Tab(icon: Icon(Icons.lan_outlined, size: 15), text: 'Tìm Thiết Bị LAN & Cấu Hình'),
         ],
       ),
@@ -668,7 +699,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           Row(
             children: [
               ElevatedButton.icon(
-                onPressed: _uhfService.isScanning
+                onPressed: (!_uhfService.isConnected || _uhfService.isScanning)
                     ? null
                     : () {
                         _uhfService.startInventory(antennas: _uhfService.activeAntennas.toList(), scanMode: _scanMode);
@@ -684,7 +715,9 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               ),
               const SizedBox(width: 6),
               ElevatedButton.icon(
-                onPressed: !_uhfService.isScanning ? null : () => _uhfService.stopInventory(),
+                onPressed: (!_uhfService.isConnected || !_uhfService.isScanning)
+                    ? null
+                    : () => _uhfService.stopInventory(),
                 icon: const Icon(Icons.stop, size: 14),
                 label: const Text('DỪNG QUÉT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
@@ -1252,310 +1285,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
     );
   }
 
-  // ==================== TAB 4: RF POWER ====================
-  Widget _buildTabRfPower(EyeCareColors c) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Power Sliders
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('CÔNG SUẤT PHÁT SÓNG ĐỘC LẬP TỪNG ANTEN (dBm)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
-                  const SizedBox(height: 8),
-                  ...List.generate(4, (i) {
-                    final ant = i + 1;
-                    final power = _antennaPowers[ant] ?? 30;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          SizedBox(width: 50, child: Text('ANT $ant:', style: TextStyle(color: c.textSecondary, fontSize: 11))),
-                          Expanded(
-                            child: Slider(
-                              value: power,
-                              min: 1,
-                              max: 33,
-                              divisions: 32,
-                              activeColor: c.warningAmber,
-                              inactiveColor: c.border,
-                              onChanged: (val) => setState(() => _antennaPowers[ant] = val),
-                            ),
-                          ),
-                          SizedBox(width: 50, child: Text('${power.toInt()} dBm', style: TextStyle(color: c.warningAmber, fontWeight: FontWeight.bold, fontSize: 11))),
-                        ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      final powers = _antennaPowers.map((k, v) => MapEntry(k, v.toInt()));
-                      await _uhfService.setAntennaPower(powers);
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã áp dụng công suất Anten!')));
-                    },
-                    icon: const Icon(Icons.bolt, size: 15),
-                    label: const Text('ÁP DỤNG CÔNG SUẤT TẤT CẢ ANTEN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: c.warningAmber,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Frequency & Gen2
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('BĂNG TẦN & THÔNG SỐ GEN2 BASEBAND', style: TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold, fontSize: 12)),
-                  const SizedBox(height: 8),
-                  Text('Băng tần chuẩn (Frequency Standard):', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: _freqBand,
-                        isExpanded: true,
-                        dropdownColor: c.bgCard,
-                        style: TextStyle(color: c.textPrimary, fontSize: 11),
-                        items: const [
-                          DropdownMenuItem(value: 0, child: Text('Mỹ / Quốc tế: US FCC (902.75 - 927.25 MHz)')),
-                          DropdownMenuItem(value: 1, child: Text('Châu Âu: EU ETSI (865.7 - 868.1 MHz)')),
-                          DropdownMenuItem(value: 2, child: Text('Trung Quốc: China (920.625 - 924.375 MHz)')),
-                          DropdownMenuItem(value: 3, child: Text('Tự động nhảy tần (Auto Hopping)')),
-                        ],
-                        onChanged: (v) => setState(() => _freqBand = v ?? 0),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Gen2 Session:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<int>(
-                                  value: _gen2Session,
-                                  isExpanded: true,
-                                  dropdownColor: c.bgCard,
-                                  style: TextStyle(color: c.textPrimary, fontSize: 11),
-                                  items: const [
-                                    DropdownMenuItem(value: 0, child: Text('S0 (Nhanh)')),
-                                    DropdownMenuItem(value: 1, child: Text('S1 (Chống lặp)')),
-                                    DropdownMenuItem(value: 2, child: Text('S2 (Cổng gate)')),
-                                    DropdownMenuItem(value: 3, child: Text('S3 (Đa anten)')),
-                                  ],
-                                  onChanged: (v) => setState(() => _gen2Session = v ?? 0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Target Flag:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<int>(
-                                  value: _gen2Target,
-                                  isExpanded: true,
-                                  dropdownColor: c.bgCard,
-                                  style: TextStyle(color: c.textPrimary, fontSize: 11),
-                                  items: const [
-                                    DropdownMenuItem(value: 0, child: Text('Target A')),
-                                    DropdownMenuItem(value: 1, child: Text('Target B')),
-                                    DropdownMenuItem(value: 2, child: Text('Target A/B Toggle')),
-                                  ],
-                                  onChanged: (v) => setState(() => _gen2Target = v ?? 0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã cập nhật cấu hình Gen2 Baseband!')));
-                    },
-                    icon: const Icon(Icons.settings, size: 15),
-                    label: const Text('ÁP DỤNG CẤU HÌNH GEN2', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7C3AED),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==================== TAB 5: GPIO ====================
-  Widget _buildTabGpio(EyeCareColors c) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Tháp đèn tín hiệu công nghiệp CTP50-3T-D-J (Visual Panel & Test)
-          const TowerLightWidget(),
-          const SizedBox(height: 14),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // GPI Inputs
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('GIÁM SÁT TÍN HIỆU ĐẦU VÀO GPI (CẢM BIẾN QUANG)', style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 12)),
-                      const SizedBox(height: 8),
-                      ...List.generate(4, (i) {
-                        final active = _uhfService.gpiStates[i];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: active ? c.successEmerald : c.textMuted.withValues(alpha: 0.3),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Cổng GPI ${i + 1}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11)),
-                                    Text(active ? 'HIGH (Đang kích hoạt)' : 'LOW (Bình thường)', style: TextStyle(color: active ? c.successEmerald : c.textMuted, fontSize: 10)),
-                                  ],
-                                ),
-                              ),
-                              OutlinedButton(
-                                onPressed: () => _uhfService.toggleGpi(i),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: c.rfidCyan,
-                                  side: BorderSide(color: c.border),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                ),
-                                child: const Text('Test Trigger', style: TextStyle(fontSize: 10)),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // GPO Outputs
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('ĐIỀU KHIỂN ĐẦU RA GPO (RƠ-LE / ĐÈN BÁO / CÒI)', style: TextStyle(color: c.warningAmber, fontWeight: FontWeight.bold, fontSize: 12)),
-                      const SizedBox(height: 8),
-                      _buildGpoItem(1, 'GPO 1 (Rơ-le 1 / Dự phòng)', c.rfidCyan, c),
-                      _buildGpoItem(2, 'GPO 2 (L4 - Đèn VÀNG)', c.warningAmber, c),
-                      _buildGpoItem(3, 'GPO 3 (L3 - Đèn XANH)', c.successEmerald, c),
-                      _buildGpoItem(4, 'GPO 4 (L2 - Đèn ĐỎ)', c.errorCoral, c),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGpoItem(int index, String label, Color color, EyeCareColors c) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: c.bgCard, borderRadius: BorderRadius.circular(6), border: Border.all(color: c.border)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w500, fontSize: 11)),
-          Row(
-            children: [
-              ElevatedButton(
-                onPressed: () => _uhfService.setGpo(index, true),
-                style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2)),
-                child: const Text('BẬT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(width: 4),
-              OutlinedButton(
-                onPressed: () => _uhfService.setGpo(index, false),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: c.textSecondary,
-                  side: BorderSide(color: c.border),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                ),
-                child: const Text('TẮT', style: TextStyle(fontSize: 10)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==================== TAB 6: LAN MANAGER ====================
+  // ==================== TAB 4: LAN MANAGER ====================
   Widget _buildTabLanManager(EyeCareColors c) {
     final readers = _uhfService.discoveredReaders;
 

@@ -5,7 +5,6 @@ import '../../services/uhf_service.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/tower_light_service.dart';
 import '../../theme/eye_care_theme.dart';
-import '../../widgets/tower_light_widget.dart';
 import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
 
@@ -518,10 +517,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
           child: SingleChildScrollView(
             child: Column(
               children: [
-              // Tháp đèn tín hiệu công nghiệp CTP50-3T-D-J
-              const TowerLightWidget(),
-              const SizedBox(height: 12),
-
               // Order info card
               Container(
                 padding: const EdgeInsets.all(16),

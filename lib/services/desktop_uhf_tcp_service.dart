@@ -35,16 +35,18 @@ class DesktopUhfTcpService extends ChangeNotifier {
   Socket? _bridgeSocket;
   Process? _bridgeProcess;
   Timer? _rateTimer;
-  Timer? _heartbeatTimer;
-
   bool _isBridgeConnected = false;
   bool _isConnected = false;
+  bool _isConnecting = false;
   bool _isScanning = false;
   bool _isTcpServerMode = false;
   String _currentConnId = '';
   double _readerTemp = 38.5;
+  Timer? _connectTimeoutTimer;
 
+  bool get isBridgeConnected => _isBridgeConnected;
   bool get isConnected => _isConnected;
+  bool get isConnecting => _isConnecting;
   bool get isScanning => _isScanning;
   bool get isTcpServerMode => _isTcpServerMode;
   String get currentConnId => _currentConnId;
@@ -111,8 +113,22 @@ class DesktopUhfTcpService extends ChangeNotifier {
   Stream<String> get onLog => _logStreamController.stream;
 
   void _log(String msg) {
+    final trimmed = msg.trim();
+    if (trimmed.isEmpty) return;
+
+    // Lọc bỏ toàn bộ log debug, raw hex packet, trace nội bộ của SDK
+    if (trimmed.startsWith('DEBUG:') ||
+        trimmed.startsWith('INFO:') ||
+        trimmed.contains('Send :') ||
+        trimmed.contains('Receive :') ||
+        trimmed.contains('Port Connecting:') ||
+        trimmed.contains('Port Closing:') ||
+        RegExp(r'^[0-9A-Fa-f]{16,}$').hasMatch(trimmed)) {
+      return;
+    }
+
     final timeStr = DateTime.now().toIso8601String().substring(11, 19);
-    final logLine = '[$timeStr] $msg';
+    final logLine = '[$timeStr] $trimmed';
     debugPrint('DesktopUhfService: $logLine');
     _logStreamController.add(logLine);
   }
@@ -153,10 +169,16 @@ class DesktopUhfTcpService extends ChangeNotifier {
   }
 
   Future<void> _spawnBridgeProcess() async {
+    final currentDir = Directory.current.path;
+    final exeParent = File(Platform.resolvedExecutable).parent.path;
     final candidatePaths = [
+      '$currentDir\\desktop\\bin\\Release\\UHFHardwareBridge.exe',
+      '$exeParent\\desktop\\bin\\Release\\UHFHardwareBridge.exe',
+      '$exeParent\\..\\..\\..\\..\\..\\desktop\\bin\\Release\\UHFHardwareBridge.exe',
+      '$exeParent\\UHFHardwareBridge.exe',
+      '$currentDir\\UHFHardwareBridge.exe',
+      r'd:\rfidwarehouse\desktop\bin\Release\UHFHardwareBridge.exe',
       r'c:\Users\MNT\Documents\uhf\desktop\bin\Release\UHFHardwareBridge.exe',
-      '${Directory.current.path}\\desktop\\bin\\Release\\UHFHardwareBridge.exe',
-      '${Directory.current.path}\\UHFHardwareBridge.exe',
     ];
 
     File? exeFile;
@@ -176,15 +198,14 @@ class DesktopUhfTcpService extends ChangeNotifier {
     try {
       _log('Đang khởi chạy C# Hardware Bridge (${exeFile.path})...');
       
-      // Chạy nền bằng cmd start để đảm bảo quyền truy cập COM port
-      await Process.run('cmd.exe', ['/c', 'start', '/b', '""', exeFile.path], workingDirectory: exeFile.parent.path);
+      await Process.run('cmd.exe', ['/c', 'start', '/b', '""', exeFile.path, '9099'], workingDirectory: exeFile.parent.path);
 
-      for (int i = 0; i < 25; i++) {
-        await Future.delayed(const Duration(milliseconds: 200));
+      for (int i = 0; i < 30; i++) {
+        await Future.delayed(const Duration(milliseconds: 60));
         try {
-          _bridgeSocket = await Socket.connect('127.0.0.1', 9099, timeout: const Duration(milliseconds: 400));
+          _bridgeSocket = await Socket.connect('127.0.0.1', 9099, timeout: const Duration(milliseconds: 100));
           _isBridgeConnected = true;
-          _log('✅ C# Hardware Bridge đã kết nối thành công (127.0.0.1:9099)! Đã nạp driver HF340.');
+          _log('✅ C# Hardware Bridge đã sẵn sàng (127.0.0.1:9099)!');
           _listenToBridge();
           notifyListeners();
           break;
@@ -215,11 +236,19 @@ class DesktopUhfTcpService extends ChangeNotifier {
       onError: (e) {
         _log('Mất kết nối với C# Bridge: $e');
         _isBridgeConnected = false;
+        _isConnected = false;
+        _isScanning = false;
+        _isConnecting = false;
+        _connectTimeoutTimer?.cancel();
         notifyListeners();
       },
       onDone: () {
         _log('C# Bridge đã đóng kết nối.');
         _isBridgeConnected = false;
+        _isConnected = false;
+        _isScanning = false;
+        _isConnecting = false;
+        _connectTimeoutTimer?.cancel();
         notifyListeners();
       },
     );
@@ -261,6 +290,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
         break;
 
       case 'status':
+        _isConnecting = false;
+        _connectTimeoutTimer?.cancel();
         _isConnected = msg['connected'] == true;
         _isScanning = msg['scanning'] == true;
         _currentConnId = msg['connId']?.toString() ?? '';
@@ -268,17 +299,19 @@ class DesktopUhfTcpService extends ChangeNotifier {
         break;
 
       case 'connect_result':
+        _isConnecting = false;
+        _connectTimeoutTimer?.cancel();
         _isConnected = msg['connected'] == true;
         _currentConnId = msg['connId']?.toString() ?? '';
         if (_isConnected) {
-          _log('✅ Kết nối phần cứng thành công: $_currentConnId');
+          _log('Đã kết nối đầu đọc: $_currentConnId');
           // Tắt toàn bộ đèn GPO về trạng thái chờ, chỉ bật khi có sự kiện
           setGpo(1, false);
           setGpo(2, false);
           setGpo(3, false);
           setGpo(4, false);
         } else {
-          _log('❌ Không thể mở cổng kết nối tới đầu đọc phần cứng.');
+          _log('Không thể kết nối tới đầu đọc ($_currentConnId). Vui lòng kiểm tra cáp hoặc cổng COM.');
         }
         notifyListeners();
         break;
@@ -286,7 +319,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
       case 'inventory_result':
         _isScanning = msg['scanning'] == true;
         if (_isScanning) {
-          _log('✅ Đầu đọc HF340 đang phát sóng (Đèn WORK/RF & ANT đang sáng)');
+          _log('Đang quét thẻ...');
         }
         notifyListeners();
         break;
@@ -321,14 +354,30 @@ class DesktopUhfTcpService extends ChangeNotifier {
 
   // ==================== CONNECTION METHODS ====================
 
+  void _startConnectTimeout() {
+    _connectTimeoutTimer?.cancel();
+    _connectTimeoutTimer = Timer(const Duration(seconds: 8), () {
+      if (_isConnecting) {
+        _isConnecting = false;
+        _isConnected = false;
+        _log('❌ Hết thời gian chờ phản hồi từ thiết bị (Timeout). Vui lòng kiểm tra cáp và nguồn thiết bị.');
+        notifyListeners();
+      }
+    });
+  }
+
   /// Connect via RS232 Serial COM Port
   Future<bool> connectSerial(String portName, int baudRate) async {
     await disconnect();
+    _isConnecting = true;
+    _isConnected = false;
+    notifyListeners();
     _log('Đang kết nối phần cứng đầu đọc qua cổng $portName @ $baudRate bps...');
 
     await ensureBridgeConnected();
 
     if (_isBridgeConnected) {
+      _startConnectTimeout();
       _sendBridgeCommand({
         'cmd': 'connect',
         'type': 'RS232',
@@ -337,9 +386,9 @@ class DesktopUhfTcpService extends ChangeNotifier {
       });
       return true;
     } else {
-      _log('⚠️ Chưa kết nối được C# Bridge. Vui lòng mở run_bridge.bat trong desktop/bin/Release.');
-      _isConnected = true;
-      _currentConnId = '$portName (Chưa có Bridge)';
+      _isConnecting = false;
+      _isConnected = false;
+      _log('❌ Chưa kết nối được C# Bridge. Vui lòng mở run_bridge.bat trong desktop/bin/Release.');
       notifyListeners();
       return false;
     }
@@ -348,11 +397,15 @@ class DesktopUhfTcpService extends ChangeNotifier {
   /// Connect via RS485 Industrial Bus (Address:COM:BaudRate)
   Future<bool> connect485(int address, String portName, int baudRate) async {
     await disconnect();
+    _isConnecting = true;
+    _isConnected = false;
+    notifyListeners();
     _log('Đang kết nối đầu đọc RS485 (Địa chỉ: $address, Cổng: $portName @ $baudRate bps)...');
 
     await ensureBridgeConnected();
 
     if (_isBridgeConnected) {
+      _startConnectTimeout();
       _sendBridgeCommand({
         'cmd': 'connect',
         'type': 'RS485',
@@ -361,18 +414,27 @@ class DesktopUhfTcpService extends ChangeNotifier {
         'baud': baudRate,
       });
       return true;
+    } else {
+      _isConnecting = false;
+      _isConnected = false;
+      _log('❌ Chưa kết nối được C# Bridge.');
+      notifyListeners();
+      return false;
     }
-    return false;
   }
 
   /// Connect via TCP Client (IP + Port)
   Future<bool> connectTcp(String ip, int port) async {
     await disconnect();
+    _isConnecting = true;
+    _isConnected = false;
+    notifyListeners();
     _log('Đang kết nối tới đầu đọc TCP $ip:$port...');
 
     await ensureBridgeConnected();
 
     if (_isBridgeConnected) {
+      _startConnectTimeout();
       _sendBridgeCommand({
         'cmd': 'connect',
         'type': 'TCP Client',
@@ -380,25 +442,39 @@ class DesktopUhfTcpService extends ChangeNotifier {
         'port': port,
       });
       return true;
+    } else {
+      _isConnecting = false;
+      _isConnected = false;
+      _log('❌ Chưa kết nối được C# Bridge.');
+      notifyListeners();
+      return false;
     }
-    return false;
   }
 
   /// Connect via USB HID
   Future<bool> connectUsb() async {
     await disconnect();
+    _isConnecting = true;
+    _isConnected = false;
+    notifyListeners();
     _log('Đang kết nối đầu đọc qua cổng USB HID...');
 
     await ensureBridgeConnected();
 
     if (_isBridgeConnected) {
+      _startConnectTimeout();
       _sendBridgeCommand({
         'cmd': 'connect',
         'type': 'USB',
       });
       return true;
+    } else {
+      _isConnecting = false;
+      _isConnected = false;
+      _log('❌ Chưa kết nối được C# Bridge.');
+      notifyListeners();
+      return false;
     }
-    return false;
   }
 
   /// Start local TCP Server (Listener Mode)
@@ -415,6 +491,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
 
   /// Disconnect current session
   Future<void> disconnect() async {
+    _connectTimeoutTimer?.cancel();
+    _isConnecting = false;
     if (_isBridgeConnected) {
       _sendBridgeCommand({'cmd': 'disconnect'});
     }
@@ -451,7 +529,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
 
     final targetAntennas = (antennas != null && antennas.isNotEmpty) ? antennas : _activeAntennas.toList();
     _isScanning = true;
-    _log('BẮT ĐẦU QUÉT THẺ (Anten: ${targetAntennas.join(", ")}, Mode: $scanMode) - ĐÈN RF SẼ SÁNG!');
+    _log('Bắt đầu quét thẻ...');
     notifyListeners();
 
     if (_isBridgeConnected) {
@@ -675,7 +753,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
 
   @override
   void dispose() {
-    _heartbeatTimer?.cancel();
+    _connectTimeoutTimer?.cancel();
     _rateTimer?.cancel();
     _bridgeSocket?.destroy();
     _bridgeProcess?.kill();

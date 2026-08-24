@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO.Ports;
 using System.Text;
+using System.Threading;
 using RFIDReaderAPI;
 using RFIDReaderAPI.Interface;
 using RFIDReaderAPI.Models;
@@ -33,8 +35,109 @@ namespace UHFDesktopApp.Services
         public event Action<DiscoveredDevice> DeviceDiscovered;
         public event Action<int, int> GpiTriggered; // gpiIndex, state
 
+        private System.Threading.Timer _connectionWatchdog;
+        private int _failedProbeCount = 0;
+
         private RFIDReaderService()
         {
+            _connectionWatchdog = new System.Threading.Timer(CheckConnectionHealth, null, 1000, 800);
+        }
+
+        private void CheckConnectionHealth(object state)
+        {
+            if (!IsConnected || string.IsNullOrEmpty(CurrentConnID))
+            {
+                _failedProbeCount = 0;
+                return;
+            }
+
+            try
+            {
+                // 1. Kiểm tra Cổng COM (RS232 / RS485)
+                string portName = ExtractComPort(CurrentConnID);
+                if (!string.IsNullOrEmpty(portName))
+                {
+                    string[] availablePorts = SerialPort.GetPortNames();
+                    bool portExists = false;
+                    foreach (string p in availablePorts)
+                    {
+                        if (string.Equals(p, portName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            portExists = true;
+                            break;
+                        }
+                    }
+
+                    if (!portExists)
+                    {
+                        FireLog(string.Format("⚠️ Cáp nối cổng {0} đã bị rút ra! Tự động ngắt kết nối.", portName));
+                        Disconnect();
+                        return;
+                    }
+                }
+                // 2. Kiểm tra USB HID
+                else if (CurrentConnID.StartsWith("\\\\?\\usb#", StringComparison.OrdinalIgnoreCase) || CurrentConnID.Contains("hid"))
+                {
+                    List<string> hidList = RFIDReader.GetUsbHidDeviceList();
+                    if (hidList == null || !hidList.Contains(CurrentConnID))
+                    {
+                        FireLog("⚠️ Cáp USB HID đã bị rút ra! Tự động ngắt kết nối.");
+                        Disconnect();
+                        return;
+                    }
+                }
+
+                // 3. Proactive Health Probe (khi không quét thẻ)
+                if (!IsScanning)
+                {
+                    try
+                    {
+                        string info = RFIDReader._ReaderConfig.GetReaderInformation(CurrentConnID);
+                        if (string.IsNullOrEmpty(info) || info.StartsWith("1|") || info.StartsWith("255|"))
+                        {
+                            _failedProbeCount++;
+                            if (_failedProbeCount >= 3)
+                            {
+                                FireLog("⚠️ Không nhận được phản hồi từ đầu đọc (Mất nguồn hoặc lỏng dây). Tự động ngắt kết nối.");
+                                Disconnect();
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            _failedProbeCount = 0;
+                        }
+                    }
+                    catch
+                    {
+                        _failedProbeCount++;
+                        if (_failedProbeCount >= 2)
+                        {
+                            FireLog("⚠️ Mất kết nối tới phần cứng đầu đọc. Tự động ngắt kết nối.");
+                            Disconnect();
+                            return;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Health check error: " + ex.Message);
+            }
+        }
+
+        private static string ExtractComPort(string connId)
+        {
+            if (string.IsNullOrEmpty(connId)) return null;
+            string[] parts = connId.Split(':');
+            foreach (string part in parts)
+            {
+                if (part.StartsWith("COM", StringComparison.OrdinalIgnoreCase))
+                {
+                    return part;
+                }
+            }
+            return null;
         }
 
         #region Helper Logging and Event Triggering
@@ -712,17 +815,16 @@ namespace UHFDesktopApp.Services
 
         public void WriteDebugMsg(string msg)
         {
-            FireLog("DEBUG: " + msg);
+            // Tắt log gói tin Hex / Byte debug
         }
 
         public void WriteLog(string msg)
         {
-            FireLog("INFO: " + msg);
+            // Tắt log SDK
         }
 
         public void PortConnecting(string connID)
         {
-            FireLog("Reader connecting to server: " + connID);
             CurrentConnID = connID;
             IsConnected = true;
             FireConnectionStateChanged(true);
@@ -730,12 +832,12 @@ namespace UHFDesktopApp.Services
 
         public void PortClosing(string connID)
         {
-            FireLog("Connection closing: " + connID);
             if (CurrentConnID == connID)
             {
                 IsConnected = false;
                 CurrentConnID = null;
                 FireConnectionStateChanged(false);
+                FireLog("Đã ngắt kết nối đầu đọc.");
             }
         }
 

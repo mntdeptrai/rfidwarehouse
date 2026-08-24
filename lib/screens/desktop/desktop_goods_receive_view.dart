@@ -7,7 +7,6 @@ import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/excel_import_service.dart';
 import '../../services/tower_light_service.dart';
 import '../../services/supabase_sync_service.dart';
-import '../../widgets/tower_light_widget.dart';
 import '../../widgets/putaway_barcode_modal.dart';
 import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
@@ -1610,110 +1609,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           child: SingleChildScrollView(
             child: Column(
               children: [
-              // Tháp đèn tín hiệu công nghiệp CTP50-3T-D-J
-              const TowerLightWidget(),
-              const SizedBox(height: 12),
-
-              // Target location card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: c.bgCard,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: c.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('⚡ THÔNG TIN ĐƠN & ĐỐI SOÁT TỰ ĐỘNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(height: 10),
-
-                    // Card Tự Động Nhận Diện Đơn Hàng / Thùng
-                    if (_selectedLiveOrder == null)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: c.bgCardElevated,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.bolt, color: c.rfidCyan, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('TỰ ĐỘNG KHỚP THEO MÃ CHIP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5)),
-                                  const SizedBox(height: 2),
-                                  Text('Quét chip bất kỳ, hệ thống sẽ tự động nhận diện đúng đơn và đếm số lượng.', style: TextStyle(color: c.textSecondary, fontSize: 10.5, height: 1.2)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: c.bgCardElevated,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: const Color(0xFF10B981)),
-                                      ),
-                                      child: const Text('⚡ ĐÃ KHỚP ĐƠN', style: TextStyle(color: Color(0xFF10B981), fontSize: 9.5, fontWeight: FontWeight.bold)),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _selectedLiveOrder!.orderNo,
-                                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
-                                    ),
-                                  ],
-                                ),
-                                InkWell(
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedLiveOrder = null;
-                                      _scannedTags.clear();
-                                      _uhf.clearTags();
-                                      _desktopUhf.clearTags();
-                                    });
-                                  },
-                                  child: const Text('Đổi đơn khác', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.w500)),
-                                ),
-                              ],
-                            ),
-                            if (_selectedLiveOrder!.details.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                '${_selectedLiveOrder!.details.first.productName} · SKU: ${_selectedLiveOrder!.details.first.sku}',
-                                style: TextStyle(color: c.rfidCyan, fontSize: 11),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
               // Scan Telemetry Card
               Container(
                 padding: const EdgeInsets.all(18),
