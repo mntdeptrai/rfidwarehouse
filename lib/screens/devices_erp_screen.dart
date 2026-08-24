@@ -40,8 +40,11 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
             child: TabBar(
               controller: _tabController,
               indicatorColor: const Color(0xFF0284C7),
+              indicatorWeight: 3,
               labelColor: const Color(0xFF0284C7),
-              unselectedLabelColor: Colors.white54,
+              unselectedLabelColor: const Color(0xFF6B5D4D),
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
               tabs: const [
                 Tab(icon: Icon(Icons.devices, size: 18), text: 'Thiết Bị RFID'),
                 Tab(icon: Icon(Icons.sync_alt, size: 18), text: 'Đồng Bộ ERP Bravo'),

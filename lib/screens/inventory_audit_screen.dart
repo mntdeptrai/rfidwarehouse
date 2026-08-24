@@ -327,8 +327,11 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
             controller: _varianceTabController,
             isScrollable: true,
             indicatorColor: const Color(0xFF0284C7),
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white54,
+            indicatorWeight: 3,
+            labelColor: const Color(0xFF0284C7),
+            unselectedLabelColor: const Color(0xFF6B5D4D),
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
             tabs: [
               Tab(text: '🟢 Khớp (${session.matchCount})'),
               Tab(text: '🔴 Thiếu (${session.missingCount})'),

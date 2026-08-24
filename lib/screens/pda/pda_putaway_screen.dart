@@ -41,6 +41,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     super.initState();
     _selectedLocationId = widget.initialLocationId ?? (_repo.locations.isNotEmpty ? _repo.locations.first.locationId : null);
     _eyeCare.addListener(_onStateChange);
+    _uhf.setScanMode(PdaScanMode.barcode);
 
     // Lắng nghe sự kiện bóp cò quét Barcode phần cứng PDA
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
@@ -59,6 +60,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   @override
   void dispose() {
+    _uhf.setScanMode(PdaScanMode.rfid);
     _eyeCare.removeListener(_onStateChange);
     _barcodeSub?.cancel();
     _rfidSub?.cancel();

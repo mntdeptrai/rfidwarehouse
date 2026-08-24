@@ -218,8 +218,11 @@ class _ReadWriteScreenState extends State<ReadWriteScreen> with SingleTickerProv
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: const Color(0xFF0284C7),
+          indicatorWeight: 3,
           labelColor: const Color(0xFF0284C7),
-          unselectedLabelColor: Colors.white60,
+          unselectedLabelColor: const Color(0xFF6B5D4D),
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
           tabs: const [
             Tab(icon: Icon(Icons.memory, size: 20), text: 'Đọc / Ghi chi tiết'),
             Tab(icon: Icon(Icons.flash_on, size: 20), text: 'Ghi nhanh EPC'),

@@ -404,8 +404,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               indicatorColor: const Color(0xFF0284C7),
               indicatorWeight: 3,
               labelColor: const Color(0xFF0284C7),
-              unselectedLabelColor: Colors.white60,
+              unselectedLabelColor: const Color(0xFF6B5D4D),
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
               tabs: const [
                 Tab(icon: Icon(Icons.receipt_long, size: 18), text: 'ĐƠN PO'),
                 Tab(icon: Icon(Icons.flash_on, size: 18), text: 'NHẬP TỰ DO'),

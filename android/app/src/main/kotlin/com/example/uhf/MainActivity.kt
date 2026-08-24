@@ -57,7 +57,14 @@ class MainActivity : FlutterActivity() {
     private var currentScanMode = "auto"
 
     private var lastTriggerDown = 0L
-    private val TRIGGER_DEBOUNCE_MS = 80L
+    private val TRIGGER_DEBOUNCE_MS = 50L
+
+    // Cached SEUIC Scanner reflection for 0ms instantaneous laser response
+    private var mBarcodeScanner: Any? = null
+    private var mBarcodeStartScanMethod: Method? = null
+    private var mBarcodeStopScanMethod: Method? = null
+    private var mBarcodeOpenMethod: Method? = null
+    private var mBarcodeCloseMethod: Method? = null
 
     // Create IReadTagsListener proxy via java.lang.reflect.Proxy
     private fun createReadTagsListenerProxy(): Any? {
@@ -287,6 +294,10 @@ class MainActivity : FlutterActivity() {
             registerReceiver(keyReceiver, filter)
         } catch (e: Exception) {
             Log.e(TAG, "Error registering key receiver: ${e.message}")
+        }
+
+        bgHandler.post {
+            initBarcodeScannerCache()
         }
     }
 
@@ -696,6 +707,26 @@ class MainActivity : FlutterActivity() {
                keyCode == KeyEvent.KEYCODE_STEM_3
     }
 
+    private fun initBarcodeScannerCache() {
+        try {
+            val scannerClass = Class.forName("com.seuic.scanner.ScannerFactory")
+            val getScanner = scannerClass.getMethod("getScanner", Context::class.java)
+            mBarcodeScanner = getScanner.invoke(null, applicationContext) ?: getScanner.invoke(null, this)
+            mBarcodeScanner?.let { scanner ->
+                val clazz = scanner.javaClass
+                mBarcodeOpenMethod = try { clazz.getMethod("open") } catch (_: Throwable) { null }
+                mBarcodeCloseMethod = try { clazz.getMethod("close") } catch (_: Throwable) { null }
+                mBarcodeStartScanMethod = try { clazz.getMethod("startScan") } catch (_: Throwable) {
+                    try { clazz.getMethod("scan") } catch (_: Throwable) { null }
+                }
+                mBarcodeStopScanMethod = try { clazz.getMethod("stopScan") } catch (_: Throwable) { null }
+                Log.d(TAG, "Barcode Scanner cached successfully, methods ready!")
+            }
+        } catch (e: Throwable) {
+            Log.d(TAG, "Barcode Scanner cache note: ${e.message}")
+        }
+    }
+
     private fun disableBarcodeScannerHardware() {
         try {
             sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
@@ -718,13 +749,7 @@ class MainActivity : FlutterActivity() {
                 putExtra("action", "KEY_CONTROL_DISABLED")
             })
             try {
-                val scannerClass = Class.forName("com.seuic.scanner.ScannerFactory")
-                val getScanner = scannerClass.getMethod("getScanner", Context::class.java)
-                val scanner = getScanner.invoke(null, this)
-                if (scanner != null) {
-                    val closeMethod = scanner.javaClass.getMethod("close")
-                    closeMethod.invoke(scanner)
-                }
+                mBarcodeCloseMethod?.invoke(mBarcodeScanner)
             } catch (_: Throwable) {}
             Log.d(TAG, "Barcode Scanner Hardware disabled for RFID mode")
         } catch (e: Exception) {
@@ -746,13 +771,8 @@ class MainActivity : FlutterActivity() {
                 putExtra("enabled", true)
             })
             try {
-                val scannerClass = Class.forName("com.seuic.scanner.ScannerFactory")
-                val getScanner = scannerClass.getMethod("getScanner", Context::class.java)
-                val scanner = getScanner.invoke(null, this)
-                if (scanner != null) {
-                    val openMethod = scanner.javaClass.getMethod("open")
-                    openMethod.invoke(scanner)
-                }
+                if (mBarcodeScanner == null) initBarcodeScannerCache()
+                mBarcodeOpenMethod?.invoke(mBarcodeScanner)
             } catch (_: Throwable) {}
             Log.d(TAG, "Barcode Scanner Hardware enabled for Barcode mode")
         } catch (e: Exception) {
@@ -762,13 +782,41 @@ class MainActivity : FlutterActivity() {
 
     private fun triggerBarcodeBroadcast() {
         try {
-            enableBarcodeScannerHardware()
-            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply { putExtra("action", "ACTION_SCAN") })
+            // Direct native hardware call via cached method (0ms instant laser)
+            if (mBarcodeScanner == null) initBarcodeScannerCache()
+            try {
+                mBarcodeStartScanMethod?.invoke(mBarcodeScanner)
+            } catch (_: Throwable) {}
+
+            // Send system broadcasts in parallel
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "ACTION_SCAN")
+                putExtra("action_start", "START_SCAN")
+                putExtra("scanner_enabled", true)
+                putExtra("key_enabled", true)
+            })
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "SCANNER_START")
+            })
             sendBroadcast(Intent("android.intent.action.SCAN_TRIGGER"))
             sendBroadcast(Intent("com.seuic.scanner.action.SCAN"))
+            sendBroadcast(Intent("com.seuic.scanner.action.START_SCAN"))
         } catch (e: Exception) {
             Log.w(TAG, "triggerBarcodeBroadcast error: ${e.message}")
         }
+    }
+
+    private fun stopBarcodeBroadcast() {
+        try {
+            try {
+                mBarcodeStopScanMethod?.invoke(mBarcodeScanner)
+            } catch (_: Throwable) {}
+
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "ACTION_STOP_SCAN")
+            })
+            sendBroadcast(Intent("com.seuic.scanner.action.STOP_SCAN"))
+        } catch (_: Exception) {}
     }
 
     private fun sendTriggerEvent(pressed: Boolean, keyCode: Int) {
@@ -779,21 +827,22 @@ class MainActivity : FlutterActivity() {
             lastTriggerDown = now
 
             val mode = currentScanMode.lowercase()
-            bgHandler.post {
-                if (mode == "barcode") {
-                    triggerBarcodeBroadcast()
-                } else {
-                    // Chế độ RFID (mặc định): Tuyệt đối chỉ quét RFID, không bắn barcode
-                    startInventory()
-                }
+            if (mode == "barcode") {
+                // Instant trigger with 0 delay
+                triggerBarcodeBroadcast()
+            } else {
+                // Chế độ RFID (mặc định): Tuyệt đối chỉ quét RFID, không bắn barcode
+                bgHandler.post { startInventory() }
             }
 
             notifyFlutterTrigger(true, keyCode, mode)
         } else {
             if (!isTriggerActive.compareAndSet(true, false)) return
             val mode = currentScanMode.lowercase()
-            bgHandler.post {
-                if (mode != "barcode") stopInventory()
+            if (mode == "barcode") {
+                stopBarcodeBroadcast()
+            } else {
+                bgHandler.post { stopInventory() }
             }
             notifyFlutterTrigger(false, keyCode, mode)
         }
