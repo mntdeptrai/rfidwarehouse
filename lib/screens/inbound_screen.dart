@@ -6,6 +6,7 @@ import '../models/wms_models.dart';
 import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
 import '../widgets/hardware_status_appbar.dart';
+import '../widgets/putaway_barcode_modal.dart';
 
 class InboundScreen extends StatefulWidget {
   const InboundScreen({super.key});
@@ -180,100 +181,19 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
 
       if (!mounted) return;
 
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFFE9E2D5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF10B981), width: 1.5)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Color(0xFF10B981), size: 28),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text('Nhập Kho Thành Công!', style: TextStyle(color: Color(0xFF2C251E), fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF4EFE6),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFC7BDAF)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Số lượng nhập:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
-                        Text('$savedCount Chip RFID', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Pallet tiếp nhận:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
-                        Text(pallet, style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Trạng thái:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
-                        Text('Chờ xếp kệ kho', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
-                      ],
-                    ),
-                    if (_tabController.index == 0 && _selectedOrder != null) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Đơn PO:', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
-                          Text(_selectedOrder!.orderNo, style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Row(
-                children: [
-                  Icon(Icons.cloud_done, color: Color(0xFF0284C7), size: 16),
-                  SizedBox(width: 6),
-                  Expanded(
-                    child: Text('Đã cập nhật tồn kho SQLite & đồng bộ ERP', style: TextStyle(color: Color(0xFF0284C7), fontSize: 11.5, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                setState(() {
-                  _scannedTags.clear();
-                  _gateResult = null;
-                });
-              },
-              child: const Text('TIẾP TỤC QUÉT LƯỢT MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
-            ),
-          ],
-        ),
+      final effectiveBarcode = _tabController.index == 0 && _selectedOrder != null ? _selectedOrder!.orderNo : pallet;
+
+      setState(() {
+        _scannedTags.clear();
+        _gateResult = null;
+      });
+
+      PutawayBarcodeModal.show(
+        context,
+        barcode: effectiveBarcode,
+        orderNo: effectiveBarcode,
+        itemCount: savedCount,
+        performedBy: 'Thủ kho PDA',
       );
     } catch (e) {
       if (!mounted) return;

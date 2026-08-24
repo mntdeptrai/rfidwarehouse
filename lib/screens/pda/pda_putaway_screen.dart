@@ -561,7 +561,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Mã Barcode: ${o.details.isNotEmpty ? o.details.first.sku : ""} • $totalReq SP',
+                            'Mã Barcode quét: ${o.orderNo} • $totalReq SP',
                             style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.w600, fontSize: 11),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,

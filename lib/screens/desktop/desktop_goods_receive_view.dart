@@ -8,6 +8,7 @@ import '../../services/excel_import_service.dart';
 import '../../services/tower_light_service.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../widgets/tower_light_widget.dart';
+import '../../widgets/putaway_barcode_modal.dart';
 import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
 import '../../theme/eye_care_theme.dart';
@@ -217,27 +218,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         debugPrint('⚡ [ZERO-TOUCH AUTO] Cổng RFID đã tiếp nhận kiện $orderNo ($saved chip) -> CHUYỂN SANG CHỜ XẾP KHO');
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFF10B981),
-              duration: const Duration(seconds: 3),
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Color(0xFF2C251E), size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text('✅ ĐÃ TIẾP NHẬN KIỆN HÀNG $orderNo ($saved CHIP) -> CHUYỂN SANG CHỜ XẾP KHO!'),
-                  ),
-                ],
-              ),
-            ),
+          PutawayBarcodeModal.show(
+            context,
+            barcode: orderNo,
+            orderNo: orderNo,
+            itemCount: saved,
+            performedBy: 'Trạm Cổng RFID Desktop',
           );
         }
       }
 
-      // Tự động đặt lại sau 3 giây để sẵn sàng quét thùng tiếp theo
+      // Tự động đặt lại sau 1.5 giây để sẵn sàng quét thùng tiếp theo
       _autoResetTimer?.cancel();
-      _autoResetTimer = Timer(const Duration(milliseconds: 3000), () {
+      _autoResetTimer = Timer(const Duration(milliseconds: 1500), () {
         if (mounted) {
           setState(() {
             _selectedLiveOrder = null;
@@ -435,18 +428,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     setState(() => _isSaving = true);
     try {
+      final currentOrderNo = _selectedLiveOrder!.orderNo;
       final saved = await _repo.confirmGateReceiveToWaitingPutaway(
-        orderNo: _selectedLiveOrder!.orderNo,
+        orderNo: currentOrderNo,
         scannedEpcs: _scannedTags.keys.toList(),
+        performedBy: 'Thủ kho Desktop',
       );
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF10B981),
-          content: Text('✅ Đã xác nhận $saved chip RFID qua cổng. Đơn ${_selectedLiveOrder!.orderNo} chuyển sang CHỜ XẾP KHO → Quét barcode vị trí trên PDA để cất hàng!'),
-        ),
+      PutawayBarcodeModal.show(
+        context,
+        barcode: currentOrderNo,
+        orderNo: currentOrderNo,
+        itemCount: saved,
+        performedBy: 'Thủ kho Desktop',
       );
 
       setState(() {
