@@ -47,6 +47,10 @@ class UhfService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setScanMode(PdaScanMode mode) {
+    scanMode = mode;
+  }
+
   /// Đặt chế độ quét tạm thời khi mở Dialog/Card Barcode
   void pushScanMode(PdaScanMode temporaryMode) {
     _scanModeStack.add(_scanMode);
@@ -196,7 +200,9 @@ class UhfService extends ChangeNotifier {
     _eventSubscription?.cancel();
     try {
       _eventSubscription = _eventChannel.receiveBroadcastStream().listen((dynamic event) {
-        if (event is Map) {
+        if (event is List) {
+          _handleIncomingBatch(event);
+        } else if (event is Map) {
           _handleIncomingTag(event);
         }
       }, onError: (error) {
@@ -218,6 +224,46 @@ class UhfService extends ChangeNotifier {
     _notifyThrottleTimer = Timer(const Duration(milliseconds: 25), () {
       notifyListeners();
     });
+  }
+
+  void _handleIncomingBatch(List<dynamic> batch) {
+    for (final item in batch) {
+      if (item is! Map) continue;
+      final newTag = TagInfo.fromMap(item);
+      if (newTag.epc.isEmpty) continue;
+
+      _totalReadCount++;
+      _recentReadCount++;
+
+      final isNew = !_tagsMap.containsKey(newTag.epc);
+
+      if (!isNew) {
+        final existing = _tagsMap[newTag.epc]!;
+        existing.count += newTag.count > 0 ? newTag.count : 1;
+        existing.lastSeen = DateTime.now();
+        _tagsMap[newTag.epc] = TagInfo(
+          epc: existing.epc,
+          tid: newTag.tid.isNotEmpty ? newTag.tid : existing.tid,
+          user: newTag.user.isNotEmpty ? newTag.user : existing.user,
+          rssi: newTag.rssi,
+          ant: newTag.ant,
+          count: existing.count,
+          pc: newTag.pc.isNotEmpty ? newTag.pc : existing.pc,
+          timestamp: newTag.timestamp,
+          firstSeen: existing.firstSeen,
+          lastSeen: existing.lastSeen,
+        );
+        _tagsCacheDirty = true;
+        if (!_filterDuplicates) {
+          _tagStreamController.add(_tagsMap[newTag.epc]!);
+        }
+      } else {
+        _tagsMap[newTag.epc] = newTag;
+        _tagsCacheDirty = true;
+        _tagStreamController.add(newTag);
+      }
+    }
+    _throttledNotify();
   }
 
   void _handleIncomingTag(Map<dynamic, dynamic> map, {bool isSingle = false}) {
@@ -245,10 +291,14 @@ class UhfService extends ChangeNotifier {
         firstSeen: existing.firstSeen,
         lastSeen: existing.lastSeen,
       );
+      _tagsCacheDirty = true;
+      if (_filterDuplicates) {
+        return; // Bỏ qua phát lại stream khi đang bật chế độ lọc trùng
+      }
     } else {
       _tagsMap[newTag.epc] = newTag;
+      _tagsCacheDirty = true;
     }
-    _tagsCacheDirty = true;
 
     // Stream tag to UI immediately
     _tagStreamController.add(_tagsMap[newTag.epc]!);

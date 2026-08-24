@@ -73,6 +73,21 @@ class DatabaseService {
       )
     ''');
 
+    // Chèn 8 vị trí kệ chuẩn của hệ thống kho
+    final standardLocations = [
+      {'location_id': 'LOC-A1-01-01', 'location_code': 'LOC-A1-01-01', 'zone': 'A', 'shelf': '01', 'level': '01', 'current_pallets': 0},
+      {'location_id': 'LOC-A1-01-02', 'location_code': 'LOC-A1-01-02', 'zone': 'A', 'shelf': '01', 'level': '02', 'current_pallets': 0},
+      {'location_id': 'LOC-A1-02-01', 'location_code': 'LOC-A1-02-01', 'zone': 'A', 'shelf': '02', 'level': '01', 'current_pallets': 0},
+      {'location_id': 'LOC-A1-02-02', 'location_code': 'LOC-A1-02-02', 'zone': 'A', 'shelf': '02', 'level': '02', 'current_pallets': 0},
+      {'location_id': 'LOC-B1-01-01', 'location_code': 'LOC-B1-01-01', 'zone': 'B', 'shelf': '01', 'level': '01', 'current_pallets': 0},
+      {'location_id': 'LOC-B1-01-02', 'location_code': 'LOC-B1-01-02', 'zone': 'B', 'shelf': '01', 'level': '02', 'current_pallets': 0},
+      {'location_id': 'LOC-GATE-IN', 'location_code': 'LOC-GATE-IN', 'zone': 'GATE', 'shelf': '00', 'level': '00', 'current_pallets': 0},
+      {'location_id': 'LOC-GATE-OUT', 'location_code': 'LOC-GATE-OUT', 'zone': 'GATE', 'shelf': '00', 'level': '00', 'current_pallets': 0},
+    ];
+    for (final loc in standardLocations) {
+      await db.insert('locations', loc, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+
     // 3. Bảng Pallet lưu kho (pallets)
     await db.execute('''
       CREATE TABLE IF NOT EXISTS pallets (
@@ -260,6 +275,11 @@ class DatabaseService {
       'level': l.level,
       'current_pallets': l.currentPallets,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteLocation(String locationId) async {
+    final db = await database;
+    await db.delete('locations', where: 'location_id = ?', whereArgs: [locationId]);
   }
 
   Future<List<Pallet>> getPallets() async {

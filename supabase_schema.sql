@@ -139,7 +139,7 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.outbound_orders;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.locations;
 
 -- ==========================================================
--- TẮT RLS HOẶC MỞ TOÀN QUYỀN TRUY CẬP CHO ANON/AUTHENTICATED TRONG GIAI ĐOẠN DEV
+-- TẮT RLS & MỞ TOÀN QUYỀN TRUY CẬP CHO ANON/AUTHENTICATED
 -- ==========================================================
 ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.locations DISABLE ROW LEVEL SECURITY;
@@ -151,3 +151,16 @@ ALTER TABLE public.outbound_orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.outbound_order_details DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sync_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_config DISABLE ROW LEVEL SECURITY;
+
+-- Tạo chính sách cho phép đầy đủ quyền Đọc/Ghi/Sửa/Xóa cho anon key
+DO $$
+DECLARE
+    tbl text;
+BEGIN
+    FOR tbl IN 
+        SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Allow public all" ON public.%I', tbl);
+        EXECUTE format('CREATE POLICY "Allow public all" ON public.%I FOR ALL TO public USING (true) WITH CHECK (true)', tbl);
+    END LOOP;
+END $$;

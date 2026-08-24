@@ -53,6 +53,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
       );
     }
 
+    _uhf.setScanMode(PdaScanMode.rfid);
     _initHardwareListeners();
   }
 

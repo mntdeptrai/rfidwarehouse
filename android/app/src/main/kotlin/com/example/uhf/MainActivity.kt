@@ -118,11 +118,9 @@ class MainActivity : FlutterActivity() {
 
         if (tagMaps.isNotEmpty()) {
             mainHandler.post {
-                for (tagMap in tagMaps) {
-                    eventSink?.success(tagMap)
-                }
-                playBeepThrottled()
+                eventSink?.success(tagMaps)
             }
+            playBeepThrottled()
         }
     }
 
@@ -130,9 +128,11 @@ class MainActivity : FlutterActivity() {
         val now = System.currentTimeMillis()
         if (now - lastBeepTime >= BEEP_MIN_INTERVAL_MS) {
             lastBeepTime = now
-            try {
-                toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 25)
-            } catch (_: Exception) {}
+            bgHandler.post {
+                try {
+                    toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 20)
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -170,6 +170,12 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleBarcodeBroadcastData(intent: Intent) {
+        // Nếu app đang ở chế độ RFID (mặc định), BỎ QUA hoàn toàn dữ liệu barcode để không bị xung đột
+        if (currentScanMode.lowercase() != "barcode") {
+            Log.d(TAG, "Barcode broadcast ignored because currentScanMode is $currentScanMode")
+            return
+        }
+
         var rawData: String? = null
         val stringKeys = listOf(
             "scannerdata", "barcode", "data", "value", "extra_barcode_broadcast_data",
@@ -446,12 +452,55 @@ class MainActivity : FlutterActivity() {
                 Log.d(TAG, "Registered IReadTagsListener")
             }
 
-            // Set Max Output Power (30 dBm)
+            // Log all available methods on SEUIC UHFService to discover performance tuning APIs
+            for (m in clazz.methods) {
+                if (m.declaringClass == Object::class.java) continue
+                val params = m.parameterTypes.joinToString(",") { it.simpleName }
+                Log.d(TAG, "UHFService Method: ${m.name}($params): ${m.returnType.simpleName}")
+            }
+
+            // Set Max Output Power (Try 33 dBm first, fallback to 30 dBm)
             try {
-                callMethod(service, "setPower", arrayOf(Int::class.javaPrimitiveType!!), arrayOf(30))
+                val ok33 = callMethod(service, "setPower", arrayOf(Int::class.javaPrimitiveType!!), arrayOf(33)) as? Boolean ?: false
+                if (!ok33) {
+                    callMethod(service, "setPower", arrayOf(Int::class.javaPrimitiveType!!), arrayOf(30))
+                }
+                Log.d(TAG, "SEUIC RF Power set (33 attempt: $ok33, current=${callMethod(service, "getPower")})")
             } catch (_: Throwable) {}
 
-            Log.d(TAG, "SEUIC UHF initialized successfully with max RF power")
+            // Try setting high-speed inventory parameters if supported by SEUIC
+            try {
+                // Session S0 (0) or S1 (1) - S0 scans at maximum rate without tag silencing
+                clazz.getMethod("setGen2Session", Int::class.javaPrimitiveType).invoke(service, 0)
+                Log.d(TAG, "Configured setGen2Session(0)")
+            } catch (_: Throwable) {}
+
+            try {
+                clazz.getMethod("setSession", Int::class.javaPrimitiveType).invoke(service, 0)
+                Log.d(TAG, "Configured setSession(0)")
+            } catch (_: Throwable) {}
+
+            try {
+                clazz.getMethod("setQ", Int::class.javaPrimitiveType).invoke(service, 4)
+                Log.d(TAG, "Configured setQ(4)")
+            } catch (_: Throwable) {}
+
+            try {
+                clazz.getMethod("setGen2Q", Int::class.javaPrimitiveType).invoke(service, 4)
+                Log.d(TAG, "Configured setGen2Q(4)")
+            } catch (_: Throwable) {}
+
+            try {
+                clazz.getMethod("setGen2Target", Int::class.javaPrimitiveType).invoke(service, 0)
+                Log.d(TAG, "Configured setGen2Target(0)")
+            } catch (_: Throwable) {}
+
+            try {
+                clazz.getMethod("setTarget", Int::class.javaPrimitiveType).invoke(service, 0)
+                Log.d(TAG, "Configured setTarget(0)")
+            } catch (_: Throwable) {}
+
+            Log.d(TAG, "SEUIC UHF initialized successfully with max RF power and optimized parameters")
             true
         } catch (t: Throwable) {
             Log.e(TAG, "UHF init error: ${t.message}", t)
@@ -612,10 +661,11 @@ class MainActivity : FlutterActivity() {
 
             val mode = currentScanMode.lowercase()
             bgHandler.post {
-                when (mode) {
-                    "barcode" -> triggerBarcodeBroadcast()
-                    "hybrid" -> { startInventory(); triggerBarcodeBroadcast() }
-                    else -> startInventory()
+                if (mode == "barcode") {
+                    triggerBarcodeBroadcast()
+                } else {
+                    // Chế độ RFID (mặc định): Tuyệt đối chỉ quét RFID, không bắn barcode
+                    startInventory()
                 }
             }
 

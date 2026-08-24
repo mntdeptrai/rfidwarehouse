@@ -6,8 +6,8 @@ import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
 import '../theme/eye_care_theme.dart';
 
-/// Widget chuyên dụng cho thiết bị cầm tay PDA:
-/// Quét mã vạch Barcode/QR để xác nhận vị trí kệ/ô lưu hàng (Location)
+/// Widget chuyên dụng cho thiết bị cầm tay PDA & Desktop:
+/// Chọn nhanh hoặc quét vị trí kệ/ô lưu hàng (Location Selector)
 class PdaLocationBarcodeCard extends StatefulWidget {
   final String? selectedLocationId;
   final ValueChanged<Location> onLocationChanged;
@@ -51,7 +51,6 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     });
   }
 
-
   @override
   void dispose() {
     _eyeCare.removeListener(_onThemeUpdate);
@@ -64,7 +63,6 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     if (clean.isEmpty) return;
 
     final upper = clean.toUpperCase();
-    Location matched;
     final found = _repo.locations.where((l) =>
         l.locationCode.trim().toUpperCase() == upper ||
         l.locationId.trim().toUpperCase() == upper ||
@@ -72,40 +70,12 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     ).firstOrNull;
 
     if (found == null) {
-      // Phân tích mã vạch vị trí thực tế được quét từ kệ kho
-      final parts = clean.split('-');
-      String zoneName = 'Khu vực chung';
-      String shelfName = 'Kệ';
-      String levelName = 'Tầng';
-
-      if (parts.length >= 4 && parts[0].toUpperCase() == 'LOC') {
-        zoneName = 'Khu ${parts[1]}';
-        shelfName = 'Kệ ${parts[2]}';
-        levelName = 'Tầng ${parts[3]}';
-      } else if (parts.length == 3) {
-        zoneName = 'Khu ${parts[0]}';
-        shelfName = 'Kệ ${parts[1]}';
-        levelName = 'Tầng ${parts[2]}';
-      } else if (parts.length == 2) {
-        zoneName = 'Khu ${parts[0]}';
-        shelfName = 'Kệ ${parts[1]}';
-        levelName = 'Tầng 1';
-      }
-
-      matched = Location(
-        locationId: 'LOC-$upper',
-        locationCode: clean,
-        zone: zoneName,
-        shelf: shelfName,
-        level: levelName,
-      );
-      await _repo.addLocation(matched);
-    } else {
-      matched = found;
+      // Không phải mã vị trí kệ kho hợp lệ -> Bỏ qua, tuyệt đối không chèn mã thẻ RFID/sản phẩm vào danh mục vị trí
+      return;
     }
 
-    HapticFeedback.heavyImpact();
-    widget.onLocationChanged(matched);
+    HapticFeedback.selectionClick();
+    widget.onLocationChanged(found);
 
     if (mounted) {
       final c = _eyeCare.colors;
@@ -116,12 +86,11 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
           duration: const Duration(seconds: 2),
           content: Row(
             children: [
-              const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('✓ Đã xác nhận vị trí kệ: ${matched.locationCode} - ${matched.zone}'),
+                child: Text('✓ Đã chọn vị trí: ${found.locationCode} (Khu ${found.zone})'),
               ),
-
             ],
           ),
         ),
@@ -129,13 +98,10 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     }
   }
 
-  void _openBarcodeScannerModal() {
-    final barcodeController = TextEditingController();
-    final focusNode = FocusNode();
+  void _openLocationSelectorModal() {
+    final searchController = TextEditingController();
+    String selectedZoneFilter = 'ALL';
     final c = _eyeCare.colors;
-
-    // Tự động chuyển cò quét sang chế độ Barcode Laser/2D
-    _uhf.pushScanMode(PdaScanMode.barcode);
 
     showModalBottomSheet(
       context: context,
@@ -148,9 +114,34 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (modalContext, setModalState) {
-            final locations = _repo.locations;
+            final allLocations = _repo.locations;
+            final query = searchController.text.trim().toUpperCase();
 
-            return Padding(
+            final filteredLocations = allLocations.where((loc) {
+              if (selectedZoneFilter != 'ALL') {
+                if (selectedZoneFilter == 'A' && !loc.zone.toUpperCase().contains('A') && !loc.locationCode.contains('A1')) {
+                  return false;
+                }
+                if (selectedZoneFilter == 'B' && !loc.zone.toUpperCase().contains('B') && !loc.locationCode.contains('B1')) {
+                  return false;
+                }
+                if (selectedZoneFilter == 'GATE' && !loc.zone.toUpperCase().contains('GATE') && !loc.locationCode.contains('GATE')) {
+                  return false;
+                }
+              }
+              if (query.isNotEmpty) {
+                return loc.locationCode.toUpperCase().contains(query) ||
+                    loc.zone.toUpperCase().contains(query) ||
+                    loc.shelf.toUpperCase().contains(query) ||
+                    loc.level.toUpperCase().contains(query);
+              }
+              return true;
+            }).toList();
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(modalContext).size.height * 0.85,
+              ),
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(modalContext).viewInsets.bottom + 16,
                 left: 16,
@@ -161,169 +152,275 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Tiêu đề
                   Row(
                     children: [
-                      Icon(Icons.qr_code_scanner, color: c.rfidCyan, size: 22),
-                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: c.rfidCyan.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.shelves, color: c.rfidCyan, size: 22),
+                      ),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          'QUÉT BARCODE VỊ TRÍ KỆ',
-                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CHỌN VỊ TRÍ KỆ KHO',
+                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            Text(
+                              'Danh sách ${allLocations.length} vị trí kệ sẵn sàng',
+                              style: TextStyle(color: c.textMuted, fontSize: 11),
+                            ),
+                          ],
                         ),
                       ),
                       IconButton(
-                        icon: Icon(Icons.close, color: c.textMuted, size: 20),
+                        icon: Icon(Icons.close, color: c.textMuted, size: 22),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onPressed: () => Navigator.pop(modalContext),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
-                  // Input Box with Auto-Focus for Hardware Barcode Scanners / Wedge
+                  // Thanh tìm kiếm nhanh
                   TextField(
-                    controller: barcodeController,
-                    focusNode: focusNode,
-                    autofocus: true,
-                    style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                    controller: searchController,
+                    style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
-                      hintText: 'Nhập hoặc quét mã vạch kệ...',
+                      hintText: 'Tìm kiếm vị trí (A1, B1, GATE, Tầng...)',
                       hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                       filled: true,
                       fillColor: c.bgCardElevated,
-                      prefixIcon: Icon(Icons.barcode_reader, color: c.rfidCyan),
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.check_circle, color: c.successEmerald),
-                        onPressed: () {
-                          final code = barcodeController.text.trim();
-                          if (code.isNotEmpty) {
-                            Navigator.pop(modalContext);
-                            _handleScannedBarcode(code);
-                          }
-                        },
-                      ),
+                      prefixIcon: Icon(Icons.search, color: c.rfidCyan, size: 20),
+                      suffixIcon: query.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, color: c.textMuted, size: 18),
+                              onPressed: () {
+                                searchController.clear();
+                                setModalState(() {});
+                              },
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: c.rfidCyan),
+                        borderSide: BorderSide(color: c.border),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide(color: c.border),
                       ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: c.rfidCyan, width: 1.5),
+                      ),
                     ),
-                    onSubmitted: (val) {
-                      if (val.trim().isNotEmpty) {
-                        Navigator.pop(modalContext);
-                        _handleScannedBarcode(val);
-                      }
-                    },
+                    onChanged: (_) => setModalState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Filter Chips theo Zone
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildFilterChip(
+                          label: 'Tất cả (${allLocations.length})',
+                          isSelected: selectedZoneFilter == 'ALL',
+                          c: c,
+                          onTap: () => setModalState(() => selectedZoneFilter = 'ALL'),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          label: 'Khu A1 (4 kệ)',
+                          isSelected: selectedZoneFilter == 'A',
+                          c: c,
+                          onTap: () => setModalState(() => selectedZoneFilter = 'A'),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          label: 'Khu B1 (2 kệ)',
+                          isSelected: selectedZoneFilter == 'B',
+                          c: c,
+                          onTap: () => setModalState(() => selectedZoneFilter = 'B'),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildFilterChip(
+                          label: 'Cổng Gate (2)',
+                          isSelected: selectedZoneFilter == 'GATE',
+                          c: c,
+                          onTap: () => setModalState(() => selectedZoneFilter = 'GATE'),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
 
-                  // Hardware Trigger Trigger Button
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: c.rfidCyan,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          icon: const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 18),
-                          label: const Text(
-                            'BÓP CÒ QUÉT 2D/LASER',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                          ),
-                          onPressed: () async {
-                            await _uhf.triggerBarcodeScan();
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Quick Select List from Database
-                  if (locations.isNotEmpty) ...[
-                    Text(
-                      'Hoặc chọn nhanh từ danh mục kệ có sẵn:',
-                      style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 180),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: locations.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 6),
-                        itemBuilder: (context, index) {
-                          final loc = locations[index];
-                          final isSelected = loc.locationId == widget.selectedLocationId;
-
-                          return InkWell(
-                            onTap: () {
-                              Navigator.pop(modalContext);
-                              widget.onLocationChanged(loc);
-                              HapticFeedback.selectionClick();
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected ? c.rfidCyan.withValues(alpha: 0.2) : c.bgCard,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: isSelected ? c.rfidCyan : c.border,
+                  // Danh sách vị trí kệ
+                  Expanded(
+                    child: filteredLocations.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.location_off_outlined, color: c.textMuted, size: 40),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Không tìm thấy vị trí phù hợp',
+                                  style: TextStyle(color: c.textSecondary, fontSize: 13),
                                 ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    isSelected ? Icons.check_circle : Icons.location_on_outlined,
-                                    color: isSelected ? c.successEmerald : c.rfidCyan,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      loc.locationCode,
-                                      style: TextStyle(
-                                        color: isSelected ? c.rfidCyan : c.textPrimary,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filteredLocations.length,
+                            separatorBuilder: (context, index) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final loc = filteredLocations[index];
+                              final isSelected = loc.locationId == widget.selectedLocationId;
+
+                              return InkWell(
+                                onTap: () {
+                                  Navigator.pop(modalContext);
+                                  widget.onLocationChanged(loc);
+                                  HapticFeedback.selectionClick();
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? c.rfidCyan.withValues(alpha: 0.18) : c.bgCard,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected ? c.rfidCyan : c.border,
+                                      width: isSelected ? 1.8 : 1.0,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${loc.zone} • ${loc.shelf}',
-                                    style: TextStyle(color: c.textMuted, fontSize: 11),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? c.successEmerald.withValues(alpha: 0.2)
+                                              : c.rfidCyan.withValues(alpha: 0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          isSelected ? Icons.check_circle : Icons.shelves,
+                                          color: isSelected ? c.successEmerald : c.rfidCyan,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              loc.locationCode,
+                                              style: TextStyle(
+                                                color: isSelected ? c.rfidCyan : c.textPrimary,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Wrap(
+                                              spacing: 6,
+                                              children: [
+                                                _buildInfoTag('Khu ${loc.zone}', c),
+                                                _buildInfoTag('Kệ ${loc.shelf}', c),
+                                                _buildInfoTag('Tầng ${loc.level}', c),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? c.successEmerald.withValues(alpha: 0.2)
+                                              : Colors.white10,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          isSelected ? 'ĐANG CHỌN' : 'CHỌN',
+                                          style: TextStyle(
+                                            color: isSelected ? c.successEmerald : c.textSecondary,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ],
               ),
             );
           },
         );
       },
-    ).whenComplete(() {
-      _uhf.popScanMode();
-    });
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required bool isSelected,
+    required EyeCareColors c,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? c.rfidCyan : c.bgCardElevated,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? c.rfidCyan : c.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : c.textSecondary,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 11.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoTag(String text, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: c.bgCardElevated,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: c.border.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: c.textSecondary, fontSize: 10, fontWeight: FontWeight.w500),
+      ),
+    );
   }
 
   @override
@@ -332,99 +429,102 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     final c = _eyeCare.colors;
 
     return InkWell(
-      onTap: _openBarcodeScannerModal,
-      borderRadius: BorderRadius.circular(10),
+      onTap: _openLocationSelectorModal,
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: c.bgCard,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: location != null ? c.successEmerald.withValues(alpha: 0.8) : c.rfidCyan.withValues(alpha: 0.6),
+            color: location != null ? c.rfidCyan.withValues(alpha: 0.8) : c.border,
             width: 1.2,
           ),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: (location != null ? c.successEmerald : c.rfidCyan).withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                location != null ? Icons.qr_code_2 : Icons.barcode_reader,
+                location != null ? Icons.shelves : Icons.warehouse_rounded,
                 color: location != null ? c.successEmerald : c.rfidCyan,
                 size: 22,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 6,
-                    runSpacing: 2,
-                    children: [
-                      Text(
-                        location != null ? 'VỊ TRÍ KỆ ĐÃ XÁC NHẬN' : 'VỊ TRÍ KỆ ĐÍCH',
-                        style: TextStyle(
-                          color: location != null ? c.successEmerald : c.rfidCyan,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10.5,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: (location != null ? c.successEmerald : c.rfidCyan).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          location != null ? 'BARCODE OK' : '📷 BÓP CÒ QUÉT',
-                          style: TextStyle(
-                            color: location != null ? c.successEmerald : c.rfidCyan,
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'VỊ TRÍ KỆ LƯU KHO',
+                    style: TextStyle(
+                      color: c.rfidCyan,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      letterSpacing: 0.4,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   if (location != null) ...[
                     Text(
                       location.locationCode,
-                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      '${location.zone} • ${location.shelf} - ${location.level}',
-                      style: TextStyle(color: c.textSecondary, fontSize: 10.5),
+                      'Khu ${location.zone} • Kệ ${location.shelf} - Tầng ${location.level}',
+                      style: TextStyle(color: c.textSecondary, fontSize: 11),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ] else ...[
                     Text(
-                      'Chưa quét mã vạch · Chạm hoặc bóp cò để quét',
-                      style: TextStyle(color: c.textMuted, fontSize: 11.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      'Chưa chọn vị trí kệ',
+                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Chạm vào để chọn từ danh mục kệ',
+                      style: TextStyle(color: c.textMuted, fontSize: 11),
                     ),
                   ],
-
                 ],
               ),
             ),
-            const SizedBox(width: 6),
-            Icon(
-              Icons.qr_code_scanner,
-              color: location != null ? c.successEmerald : c.rfidCyan,
-              size: 20,
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: c.rfidCyan.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: c.rfidCyan.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'CHỌN',
+                    style: TextStyle(
+                      color: c.rfidCyan,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down, color: c.rfidCyan, size: 16),
+                ],
+              ),
             ),
           ],
         ),

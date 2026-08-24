@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/wms_models.dart';
 import '../services/warehouse_repository.dart';
+import '../services/uhf_service.dart';
 import '../widgets/hardware_status_appbar.dart';
 import '../widgets/pda_location_barcode_card.dart';
 import '../theme/eye_care_theme.dart';
-
 
 class StorageScreen extends StatefulWidget {
   const StorageScreen({super.key});
@@ -23,6 +23,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _eyeCare.addListener(_onThemeChanged);
+    UhfService().setScanMode(PdaScanMode.rfid);
   }
 
   @override

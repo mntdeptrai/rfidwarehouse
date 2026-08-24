@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/wms_models.dart';
 import '../services/warehouse_repository.dart';
+import '../services/uhf_service.dart';
 import '../widgets/hardware_status_appbar.dart';
 import '../widgets/rfid_telemetry_card.dart';
 
@@ -24,6 +25,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
   void initState() {
     super.initState();
     _varianceTabController = TabController(length: 4, vsync: this);
+    UhfService().setScanMode(PdaScanMode.rfid);
   }
 
   @override

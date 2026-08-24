@@ -38,8 +38,46 @@ class WarehouseRepository extends ChangeNotifier {
       _products.clear();
       _products.addAll(dbProducts);
 
+      // Danh sách chuẩn các vị trí kệ trong kho
+      final validStandardLocationIds = {
+        'LOC-A1-01-01', 'LOC-A1-01-02', 'LOC-A1-02-01', 'LOC-A1-02-02',
+        'LOC-B1-01-01', 'LOC-B1-01-02', 'LOC-GATE-IN', 'LOC-GATE-OUT',
+      };
+
+      // Xóa các vị trí rác bị chèn nhầm từ mã thẻ RFID hoặc Barcode mặt hàng
+      for (final loc in dbLocations) {
+        final id = loc.locationId.toUpperCase().trim();
+        final isStandard = validStandardLocationIds.contains(id) ||
+            id.startsWith('LOC-A') || id.startsWith('LOC-B') || id.startsWith('LOC-GATE');
+        if (!isStandard) {
+          await _dbService.deleteLocation(loc.locationId);
+        }
+      }
+
+      final cleanLocations = await _dbService.getLocations();
       _locations.clear();
-      _locations.addAll(dbLocations);
+      _locations.addAll(cleanLocations.where((loc) {
+        final id = loc.locationId.toUpperCase().trim();
+        return validStandardLocationIds.contains(id) ||
+            id.startsWith('LOC-A') || id.startsWith('LOC-B') || id.startsWith('LOC-GATE');
+      }));
+
+      if (_locations.isEmpty) {
+        final standardLocations = [
+          Location(locationId: 'LOC-A1-01-01', locationCode: 'LOC-A1-01-01', zone: 'A', shelf: '01', level: '01'),
+          Location(locationId: 'LOC-A1-01-02', locationCode: 'LOC-A1-01-02', zone: 'A', shelf: '01', level: '02'),
+          Location(locationId: 'LOC-A1-02-01', locationCode: 'LOC-A1-02-01', zone: 'A', shelf: '02', level: '01'),
+          Location(locationId: 'LOC-A1-02-02', locationCode: 'LOC-A1-02-02', zone: 'A', shelf: '02', level: '02'),
+          Location(locationId: 'LOC-B1-01-01', locationCode: 'LOC-B1-01-01', zone: 'B', shelf: '01', level: '01'),
+          Location(locationId: 'LOC-B1-01-02', locationCode: 'LOC-B1-01-02', zone: 'B', shelf: '01', level: '02'),
+          Location(locationId: 'LOC-GATE-IN', locationCode: 'LOC-GATE-IN', zone: 'GATE', shelf: '00', level: '00'),
+          Location(locationId: 'LOC-GATE-OUT', locationCode: 'LOC-GATE-OUT', zone: 'GATE', shelf: '00', level: '00'),
+        ];
+        for (final loc in standardLocations) {
+          await _dbService.insertLocation(loc);
+        }
+        _locations.addAll(standardLocations);
+      }
 
       _pallets.clear();
       _pallets.addAll(dbPallets);
@@ -885,6 +923,20 @@ class WarehouseRepository extends ChangeNotifier {
     final now = DateTime.now();
     int count = 0;
 
+    // Đồng bộ Pallet lên Supabase
+    await _syncDirectOrQueue(
+      tableName: 'pallets',
+      recordId: pallet.palletId,
+      action: 'INSERT',
+      payload: {
+        'pallet_id': pallet.palletId,
+        'pallet_code': pallet.palletCode,
+        'location_id': pallet.locationId,
+        'inbound_time': pallet.inboundTime?.toIso8601String() ?? now.toIso8601String(),
+        'is_multi_sku': pallet.isMultiSku ? 1 : 0,
+      },
+    );
+
     for (var epc in uniqueEpcs) {
       count++;
       Item? item = _items.where((it) => it.epc == epc).firstOrNull;
@@ -894,6 +946,24 @@ class WarehouseRepository extends ChangeNotifier {
         item.palletId = pallet.palletId;
         item.inboundTime = now;
         await _dbService.insertItem(item);
+        await _syncDirectOrQueue(
+          tableName: 'items',
+          recordId: item.itemId,
+          action: 'UPDATE',
+          payload: {
+            'item_id': item.itemId,
+            'product_id': item.productId,
+            'sku': item.sku,
+            'product_name': item.productName,
+            'serial_number': item.serialNumber,
+            'epc': item.epc,
+            'status': item.status.code,
+            'order_no': item.orderNo ?? orderNo,
+            'pallet_id': pallet.palletId,
+            'location_id': locationId,
+            'inbound_time': now.toIso8601String(),
+          },
+        );
       } else {
         final newItem = Item(
           itemId: 'ITEM-${now.millisecondsSinceEpoch}-$count',
@@ -912,6 +982,24 @@ class WarehouseRepository extends ChangeNotifier {
           pallet.itemIds.add(newItem.itemId);
         }
         await _dbService.insertItem(newItem);
+        await _syncDirectOrQueue(
+          tableName: 'items',
+          recordId: newItem.itemId,
+          action: 'INSERT',
+          payload: {
+            'item_id': newItem.itemId,
+            'product_id': newItem.productId,
+            'sku': newItem.sku,
+            'product_name': newItem.productName,
+            'serial_number': newItem.serialNumber,
+            'epc': newItem.epc,
+            'status': newItem.status.code,
+            'order_no': orderNo,
+            'pallet_id': pallet.palletId,
+            'location_id': locationId,
+            'inbound_time': now.toIso8601String(),
+          },
+        );
       }
     }
 
@@ -925,6 +1013,18 @@ class WarehouseRepository extends ChangeNotifier {
           d.receivedQty = d.requiredQty;
         }
         await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.completed, locationId: locationId, palletId: pallet.palletId);
+        await _syncDirectOrQueue(
+          tableName: 'inbound_orders',
+          recordId: order.inboundOrderId,
+          action: 'UPDATE',
+          payload: {
+            'inbound_order_id': order.inboundOrderId,
+            'status': InboundOrderStatus.completed.code,
+            'location_id': locationId,
+            'pallet_id': pallet.palletId,
+            'updated_at': now.toIso8601String(),
+          },
+        );
       }
     }
 
@@ -949,24 +1049,25 @@ class WarehouseRepository extends ChangeNotifier {
     // Đồng bộ ERP Bravo
     ErpBravoService().pushInboundCompleted(orderNo ?? 'PDA-DIRECT-IN', uniqueEpcs.length);
 
-    // Đồng bộ Real-time Supabase Cloud / Offline Queue
+    // Ghi log đồng bộ
     await _syncDirectOrQueue(
-      tableName: 'inbound_transactions',
+      tableName: 'sync_logs',
       recordId: orderNo ?? 'PDA-DIRECT-${now.millisecondsSinceEpoch}',
       action: 'INBOUND_PDA_CONFIRM',
       payload: {
-        'orderNo': orderNo,
-        'palletCode': palletCode,
-        'locationId': locationId,
+        'order_no': orderNo,
+        'pallet_code': palletCode,
+        'location_id': locationId,
         'epcs': uniqueEpcs,
         'sku': defaultSku,
-        'productName': defaultProductName,
-        'performedBy': performedBy,
+        'product_name': defaultProductName,
+        'performed_by': performedBy,
+        'item_count': uniqueEpcs.length,
         'timestamp': now.toIso8601String(),
       },
     );
-    _triggerBackgroundSync();
 
+    _triggerBackgroundSync();
     notifyListeners();
     return uniqueEpcs.length;
   }

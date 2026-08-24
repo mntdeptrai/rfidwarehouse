@@ -351,6 +351,27 @@ class SupabaseSyncService extends ChangeNotifier {
     }
   }
 
+  Map<String, dynamic> _normalizePayloadForSupabase(String tableName, Map<String, dynamic> input) {
+    final result = <String, dynamic>{};
+    input.forEach((key, value) {
+      // Convert camelCase to snake_case
+      final snakeKey = key.replaceAllMapped(
+        RegExp(r'[A-Z]'),
+        (match) => '_${match.group(0)!.toLowerCase()}',
+      );
+      result[snakeKey] = value;
+    });
+
+    // Special table key corrections
+    if (tableName == 'inbound_orders' && result.containsKey('inbound_order_id')) {
+      result.remove('details');
+    }
+    if (tableName == 'outbound_orders' && result.containsKey('outbound_order_id')) {
+      result.remove('details');
+    }
+    return result;
+  }
+
   /// Đồng bộ trực tiếp hoặc đẩy vào hàng đợi Offline
   Future<void> syncDirectOrQueue({
     required String tableName,
@@ -358,14 +379,33 @@ class SupabaseSyncService extends ChangeNotifier {
     required String action,
     required Map<String, dynamic> payload,
   }) async {
+    // Nếu là bảng giao dịch log không có trong Supabase, map sang sync_logs
+    String targetTable = tableName;
+    if (tableName == 'inbound_transactions' || tableName == 'outbound_transactions') {
+      targetTable = 'sync_logs';
+    }
+
+    final normalized = _normalizePayloadForSupabase(targetTable, payload);
+
     if (_isOnline && _isInitialized) {
       try {
         final supa = Supabase.instance.client;
-        if (action == 'INSERT' || action == 'UPDATE') {
-          await supa.from(tableName).upsert(payload);
+        if (action == 'INSERT' || action == 'UPDATE' || action.contains('CONFIRM')) {
+          if (targetTable == 'sync_logs') {
+            await supa.from(targetTable).insert({
+              'log_id': recordId,
+              'action': action,
+              'table_name': tableName,
+              'record_count': payload['itemCount'] ?? payload['item_count'] ?? 1,
+              'is_success': true,
+              'message': jsonEncode(payload),
+            });
+          } else {
+            await supa.from(targetTable).upsert(normalized);
+          }
         } else if (action == 'DELETE') {
-          final pkCol = _getPrimaryKeyColumn(tableName);
-          await supa.from(tableName).delete().eq(pkCol, recordId);
+          final pkCol = _getPrimaryKeyColumn(targetTable);
+          await supa.from(targetTable).delete().eq(pkCol, recordId);
         }
         return;
       } catch (e) {
@@ -375,10 +415,10 @@ class SupabaseSyncService extends ChangeNotifier {
 
     // Nếu không có mạng hoặc lỗi, lưu vào SQLite sync_queue
     await _dbService.enqueueSync(
-      tableName: tableName,
+      tableName: targetTable,
       recordId: recordId,
       action: action,
-      payload: payload,
+      payload: normalized,
     );
     await _refreshPendingCount();
   }
@@ -478,6 +518,63 @@ class SupabaseSyncService extends ChangeNotifier {
           isSuccess: true,
           message: 'Đã đẩy thành công $pushed bản ghi từ PDA/Desktop lên Supabase',
         );
+      }
+
+      // Tự động đẩy toàn bộ Master Data, Kệ, Pallet, Sản phẩm và Thẻ RFID từ PDA/Desktop lên Supabase Cloud
+      try {
+        final localLocs = await _dbService.getLocations();
+        for (final loc in localLocs) {
+          await supa.from('locations').upsert({
+            'location_id': loc.locationId,
+            'location_code': loc.locationCode,
+            'zone': loc.zone,
+            'shelf': loc.shelf,
+            'level': loc.level,
+            'current_pallets': loc.currentPallets,
+          });
+        }
+
+        final localProds = await _dbService.getProducts();
+        for (final p in localProds) {
+          await supa.from('products').upsert({
+            'product_id': p.productId,
+            'sku': p.sku,
+            'product_name': p.productName,
+            'unit': p.unit,
+            'category': p.category,
+            'description': p.description,
+          });
+        }
+
+        final localPallets = await _dbService.getPallets();
+        for (final pal in localPallets) {
+          await supa.from('pallets').upsert({
+            'pallet_id': pal.palletId,
+            'pallet_code': pal.palletCode,
+            'location_id': pal.locationId,
+            'inbound_time': pal.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+            'is_multi_sku': pal.isMultiSku ? 1 : 0,
+          });
+        }
+
+        final localItems = await _dbService.getItems();
+        for (final it in localItems) {
+          await supa.from('items').upsert({
+            'item_id': it.itemId,
+            'product_id': it.productId,
+            'sku': it.sku,
+            'product_name': it.productName,
+            'serial_number': it.serialNumber,
+            'epc': it.epc,
+            'status': it.status.code,
+            'order_no': it.orderNo,
+            'pallet_id': it.palletId,
+            'location_id': it.locationId,
+            'inbound_time': it.inboundTime?.toIso8601String(),
+          });
+        }
+      } catch (e) {
+        debugPrint('Master data cloud push error: $e');
       }
 
       // 2. PULL DỮ LIỆU TỪ SUPABASE VỀ SQLITE (DANH MỤC SẢN PHẨM, VỊ TRÍ, LỆNH NHẬP/XUẤT)

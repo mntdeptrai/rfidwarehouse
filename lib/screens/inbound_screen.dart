@@ -50,6 +50,8 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
 
     if (_repo.locations.isNotEmpty) {
       _selectedLocationId = _repo.locations.first.locationId;
+    } else {
+      _selectedLocationId = 'LOC-A1-01-01';
     }
 
     // Khởi tạo chọn đơn nếu có
@@ -60,6 +62,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       );
     }
 
+    _uhf.setScanMode(PdaScanMode.rfid);
     _initHardwareListeners();
   }
 
