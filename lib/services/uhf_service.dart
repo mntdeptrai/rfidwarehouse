@@ -215,25 +215,21 @@ class UhfService extends ChangeNotifier {
   Timer? _notifyThrottleTimer;
   void _throttledNotify() {
     if (_notifyThrottleTimer?.isActive ?? false) return;
-    _notifyThrottleTimer = Timer(const Duration(milliseconds: 60), () {
+    _notifyThrottleTimer = Timer(const Duration(milliseconds: 25), () {
       notifyListeners();
     });
   }
 
   void _handleIncomingTag(Map<dynamic, dynamic> map, {bool isSingle = false}) {
-    if (!isSingle && !_isScanning && !_isTriggerPressed) return;
     final newTag = TagInfo.fromMap(map);
     if (newTag.epc.isEmpty) return;
-
-    // Loại bỏ đọc trùng lặp: Nếu thẻ đã từng đọc rồi trong phiên thì bỏ qua không đọc/phát lại
-    if (_filterDuplicates && _tagsMap.containsKey(newTag.epc)) {
-      return;
-    }
 
     _totalReadCount++;
     _recentReadCount++;
 
-    if (_tagsMap.containsKey(newTag.epc)) {
+    final isNew = !_tagsMap.containsKey(newTag.epc);
+
+    if (!isNew) {
       final existing = _tagsMap[newTag.epc]!;
       existing.count += newTag.count > 0 ? newTag.count : 1;
       existing.lastSeen = DateTime.now();
@@ -254,6 +250,7 @@ class UhfService extends ChangeNotifier {
     }
     _tagsCacheDirty = true;
 
+    // Stream tag to UI immediately
     _tagStreamController.add(_tagsMap[newTag.epc]!);
     _throttledNotify();
   }

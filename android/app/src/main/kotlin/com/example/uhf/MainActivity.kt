@@ -14,14 +14,14 @@ import android.os.Vibrator
 import android.util.Log
 import android.view.KeyEvent
 import androidx.annotation.NonNull
-import com.rscja.deviceapi.RFIDWithUHFUART
-import com.rscja.deviceapi.entity.UHFTAGInfo
-import com.rscja.deviceapi.interfaces.IUHFInventoryCallback
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.lang.reflect.InvocationHandler
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -30,44 +30,115 @@ class MainActivity : FlutterActivity() {
     private val EVENT_CHANNEL = "com.example.uhf/events"
     private val TAG = "UHF_MainActivity"
 
-    private var mReader: RFIDWithUHFUART? = null
+    // SEUIC UHF via reflection (system framework class)
+    private var mUhfService: Any? = null
+    private var mUhfServiceClass: Class<*>? = null
+    private var mEpcClass: Class<*>? = null
+    private var mListenerProxy: Any? = null
+
     private var eventSink: EventChannel.EventSink? = null
     private var mMethodChannel: MethodChannel? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    // Background thread for processing broadcasts & tags (initialized in onCreate)
     private lateinit var bgThread: HandlerThread
     private lateinit var bgHandler: Handler
 
     private val isScanning = AtomicBoolean(false)
     private val isTriggerActive = AtomicBoolean(false)
-    private var scanThread: Thread? = null
 
-    // Tag batching: collect tags for 50ms then flush to Flutter in one batch
-    private val pendingTags = ConcurrentHashMap<String, HashMap<String, Any?>>()
-    private val flushScheduled = AtomicBoolean(false)
-    private val FLUSH_INTERVAL_MS = 25L
-
-    // Duplicate Filter
-    private var filterDuplicates = true
+    private var filterDuplicates = false
     private val scannedEpcs = ConcurrentHashMap.newKeySet<String>()
 
-    // Audio & Haptic Feedback
     private var toneGenerator: ToneGenerator? = null
     private var vibrator: Vibrator? = null
+    private var lastBeepTime = 0L
+    private val BEEP_MIN_INTERVAL_MS = 60L
 
-    // Scan Mode: "auto", "rfid", "barcode", "hybrid"
     private var currentScanMode = "auto"
 
-    // Trigger debounce
     private var lastTriggerDown = 0L
-    private val TRIGGER_DEBOUNCE_MS = 150L
+    private val TRIGGER_DEBOUNCE_MS = 80L
 
-    // BroadcastReceiver for hardware scanner broadcasts
+    // Create IReadTagsListener proxy via java.lang.reflect.Proxy
+    private fun createReadTagsListenerProxy(): Any? {
+        return try {
+            val listenerClass = Class.forName("com.seuic.uhf.IReadTagsListener")
+            Proxy.newProxyInstance(
+                listenerClass.classLoader,
+                arrayOf(listenerClass),
+                InvocationHandler { _, method, args ->
+                    if (method.name == "tagsRead" && args != null && args.isNotEmpty()) {
+                        val tags = args[0] as? List<*>
+                        if (tags != null && tags.isNotEmpty()) {
+                            bgHandler.post {
+                                processTagList(tags)
+                            }
+                        }
+                    }
+                    null
+                }
+            )
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to create IReadTagsListener proxy: ${e.message}")
+            null
+        }
+    }
+
+    private fun processTagList(tags: List<*>) {
+        val tagMaps = ArrayList<HashMap<String, Any?>>()
+        val now = System.currentTimeMillis()
+
+        for (item in tags) {
+            if (item == null) continue
+            try {
+                val epcStr = callMethod(item, "getId") as? String ?: continue
+                val epc = epcStr.uppercase().trim()
+                if (epc.isBlank()) continue
+
+                if (filterDuplicates && scannedEpcs.contains(epc)) continue
+                scannedEpcs.add(epc)
+
+                val rssi = try { item.javaClass.getField("rssi").getInt(item) } catch (_: Throwable) { -50 }
+                val count = try { item.javaClass.getField("count").getInt(item) } catch (_: Throwable) { 1 }
+
+                val map = HashMap<String, Any?>()
+                map["epc"] = epc
+                map["tid"] = ""
+                map["user"] = ""
+                map["rssi"] = rssi.toString()
+                map["ant"] = "1"
+                map["count"] = count
+                map["pc"] = ""
+                map["timestamp"] = now
+                tagMaps.add(map)
+            } catch (e: Throwable) {
+                Log.w(TAG, "Error processing tag: ${e.message}")
+            }
+        }
+
+        if (tagMaps.isNotEmpty()) {
+            mainHandler.post {
+                for (tagMap in tagMaps) {
+                    eventSink?.success(tagMap)
+                }
+                playBeepThrottled()
+            }
+        }
+    }
+
+    private fun playBeepThrottled() {
+        val now = System.currentTimeMillis()
+        if (now - lastBeepTime >= BEEP_MIN_INTERVAL_MS) {
+            lastBeepTime = now
+            try {
+                toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 25)
+            } catch (_: Exception) {}
+        }
+    }
+
     private val keyReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val action = intent?.action ?: return
-            // Process on background thread to avoid blocking main
             bgHandler.post {
                 when (action) {
                     "com.rscja.android.KEY_DOWN", "android.rfid.FUN_KEY", "com.rscja.action.KEY_DOWN",
@@ -91,32 +162,26 @@ class MainActivity : FlutterActivity() {
                     "nlscan.action.SCANNER_RESULT",
                     "urovo.rcv.message",
                     "com.ubx.datawedge.RECORD_DATA" -> {
-                        handleScannerBroadcastData(intent)
+                        handleBarcodeBroadcastData(intent)
                     }
                 }
             }
         }
     }
 
-    private fun handleScannerBroadcastData(intent: Intent) {
+    private fun handleBarcodeBroadcastData(intent: Intent) {
         var rawData: String? = null
-
         val stringKeys = listOf(
             "scannerdata", "barcode", "data", "value", "extra_barcode_broadcast_data",
             "com.symbol.datawedge.data_string", "data_string", "SCAN_BARCODE1",
-            "barcode_string", "epc", "tag_info", "decode_data", "barcode_data",
-            "text", "code", "content", "extra_data", "com.seuic.extra.SCAN_RESULT",
-            "com.seuic.extra.TAG_INFO", "se_barcode_data", "scanner_data"
+            "barcode_string", "decode_data", "barcode_data",
+            "text", "code", "content", "com.seuic.extra.SCAN_RESULT",
+            "se_barcode_data", "scanner_data"
         )
-
         for (key in stringKeys) {
             val s = intent.getStringExtra(key)
-            if (!s.isNullOrEmpty()) {
-                rawData = s
-                break
-            }
+            if (!s.isNullOrEmpty()) { rawData = s.trim(); break }
         }
-
         if (rawData.isNullOrEmpty()) {
             val byteData = intent.getByteArrayExtra("data")
                 ?: intent.getByteArrayExtra("scannerdata")
@@ -125,29 +190,8 @@ class MainActivity : FlutterActivity() {
                 rawData = String(byteData).trim()
             }
         }
-
-        if (rawData.isNullOrEmpty()) {
-            val list = intent.getStringArrayListExtra("scannerdata")
-                ?: intent.getStringArrayListExtra("epc_list")
-                ?: intent.getStringArrayListExtra("tag_list")
-            if (list != null && list.isNotEmpty()) {
-                rawData = list.joinToString("\n")
-            }
-        }
-
-        if (rawData.isNullOrEmpty()) {
-            val array = intent.getStringArrayExtra("scannerdata")
-                ?: intent.getStringArrayExtra("epc_list")
-                ?: intent.getStringArrayExtra("data")
-            if (array != null && array.isNotEmpty()) {
-                rawData = array.joinToString("\n")
-            }
-        }
-
         if (rawData.isNullOrEmpty()) return
-
-        Log.d(TAG, "Hardware Scanner Data received: $rawData")
-
+        Log.d(TAG, "Barcode Broadcast Data: $rawData")
         mainHandler.post {
             try {
                 mMethodChannel?.invokeMethod("onBarcodeRead", mapOf("barcode" to rawData))
@@ -157,84 +201,13 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /** Enqueue a raw EPC into the batch buffer, schedule flush */
-    private fun enqueueRawTag(epc: String) {
-        if (epc.isBlank()) return
-        if (filterDuplicates && scannedEpcs.contains(epc)) return
-        scannedEpcs.add(epc)
-        Log.d(TAG, epc)
-
-        val map = HashMap<String, Any?>()
-        map["epc"] = epc
-        map["tid"] = ""
-        map["user"] = ""
-        map["rssi"] = "-52"
-        map["ant"] = "1"
-        map["count"] = 1
-        map["pc"] = ""
-        map["timestamp"] = System.currentTimeMillis()
-
-        pendingTags[epc] = map
-
-        scheduleFlush()
-    }
-
-    /** Enqueue a UHFTAGInfo from UART callback into the batch buffer */
-    private fun enqueueTag(tagInfo: UHFTAGInfo) {
-        val epc = tagInfo.epc ?: return
-        if (epc.isBlank()) return
-        if (filterDuplicates && scannedEpcs.contains(epc)) return
-        scannedEpcs.add(epc)
-
-        val map = HashMap<String, Any?>()
-        map["epc"] = epc
-        map["tid"] = tagInfo.tid ?: ""
-        map["user"] = tagInfo.user ?: ""
-        map["rssi"] = tagInfo.rssi ?: "-50"
-        map["ant"] = tagInfo.ant ?: "1"
-        map["count"] = tagInfo.count
-        map["pc"] = tagInfo.pc ?: ""
-        map["timestamp"] = System.currentTimeMillis()
-
-        pendingTags[epc] = map
-
-        scheduleFlush()
-    }
-
-    /** Schedule a flush of pending tags after FLUSH_INTERVAL_MS */
-    private fun scheduleFlush() {
-        if (flushScheduled.compareAndSet(false, true)) {
-            bgHandler.postDelayed({
-                flushTagsToFlutter()
-            }, FLUSH_INTERVAL_MS)
-        }
-    }
-
-    /** Flush all pending tags in a single batch to Flutter EventSink */
-    private fun flushTagsToFlutter() {
-        flushScheduled.set(false)
-        if (pendingTags.isEmpty()) return
-
-        val tagsToSend = ArrayList(pendingTags.values)
-        pendingTags.clear()
-
-        mainHandler.post {
-            for (tagMap in tagsToSend) {
-                eventSink?.success(tagMap)
-            }
-            playBeep()
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Initialize background thread
         bgThread = HandlerThread("UHF_BG").apply { start() }
         bgHandler = Handler(bgThread.looper)
 
         try {
-            toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 80)
+            toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 85)
             vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         } catch (e: Exception) {
             Log.w(TAG, "Could not initialize ToneGenerator/Vibrator: ${e.message}")
@@ -242,15 +215,11 @@ class MainActivity : FlutterActivity() {
 
         try {
             val filter = IntentFilter().apply {
-                addAction("com.rscja.android.KEY_DOWN")
-                addAction("com.rscja.android.KEY_UP")
+                addAction("com.rscja.android.KEY_DOWN"); addAction("com.rscja.android.KEY_UP")
                 addAction("android.rfid.FUN_KEY")
-                addAction("com.rscja.action.KEY_DOWN")
-                addAction("com.rscja.action.KEY_UP")
-                addAction("com.seuic.android.action.KEY_DOWN")
-                addAction("com.seuic.android.action.KEY_UP")
-                addAction("com.rfid.KEY_DOWN")
-                addAction("com.rfid.KEY_UP")
+                addAction("com.rscja.action.KEY_DOWN"); addAction("com.rscja.action.KEY_UP")
+                addAction("com.seuic.android.action.KEY_DOWN"); addAction("com.seuic.android.action.KEY_UP")
+                addAction("com.rfid.KEY_DOWN"); addAction("com.rfid.KEY_UP")
                 addAction("com.android.server.scannerservice.broadcast")
                 addAction("android.intent.action.SCANNER_BARCODE_DATA")
                 addAction("android.intent.ACTION_DECODE_DATA")
@@ -267,173 +236,120 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun playBeep() {
-        try {
-            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 35)
-        } catch (e: Exception) {
-            // Ignore sound errors
-        }
-    }
-
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    eventSink = events
-                    Log.d(TAG, "EventChannel listening")
+                    eventSink = events; Log.d(TAG, "EventChannel listening")
                 }
-
                 override fun onCancel(arguments: Any?) {
-                    eventSink = null
-                    Log.d(TAG, "EventChannel canceled")
+                    eventSink = null; Log.d(TAG, "EventChannel canceled")
                 }
             }
         )
-
         mMethodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
-        mMethodChannel?.setMethodCallHandler { call, result ->
-            handleMethodCall(call, result)
-        }
+        mMethodChannel?.setMethodCallHandler { call, result -> handleMethodCall(call, result) }
     }
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
             when (call.method) {
                 "init" -> {
-                    Thread {
-                        val res = try {
-                            initUHF()
-                        } catch (t: Throwable) {
-                            Log.e(TAG, "Hardware init error: ${t.message}")
-                            false
+                    bgHandler.post {
+                        val res = try { initUHF() } catch (t: Throwable) {
+                            Log.e(TAG, "Hardware init error: ${t.message}"); false
                         }
-                        mainHandler.post {
-                            result.success(true) // Always return true so Flutter recognizes scanner readiness
-                        }
-                    }.start()
+                        mainHandler.post { result.success(res) }
+                    }
                 }
                 "free" -> {
-                    val res = freeUHF()
-                    result.success(res)
+                    bgHandler.post {
+                        val res = freeUHF()
+                        mainHandler.post { result.success(res) }
+                    }
                 }
-                "isPowerOn" -> {
-                    result.success(mReader?.isPowerOn ?: true)
-                }
+                "isPowerOn" -> result.success(isUhfOpen())
                 "startInventory" -> {
-                    val res = startInventory()
-                    result.success(res)
+                    bgHandler.post {
+                        val res = startInventory()
+                        mainHandler.post { result.success(res) }
+                    }
                 }
                 "stopInventory" -> {
-                    val res = stopInventory()
-                    result.success(res)
+                    bgHandler.post {
+                        val res = stopInventory()
+                        mainHandler.post { result.success(res) }
+                    }
                 }
                 "setScanMode" -> {
-                    val mode = call.argument<String>("mode") ?: "auto"
-                    currentScanMode = mode
-                    Log.d(TAG, "Hardware scan mode updated to: $currentScanMode")
-                    result.success(true)
+                    currentScanMode = call.argument<String>("mode") ?: "auto"
+                    Log.d(TAG, "Scan mode: $currentScanMode"); result.success(true)
                 }
-                "getScanMode" -> {
-                    result.success(currentScanMode)
-                }
-                "triggerBarcodeScan", "scanBarcode" -> {
-                    triggerBarcodeBroadcast()
-                    result.success(true)
-                }
+                "getScanMode" -> result.success(currentScanMode)
+                "triggerBarcodeScan", "scanBarcode" -> { triggerBarcodeBroadcast(); result.success(true) }
                 "setFilterDuplicates" -> {
-                    val filter = call.argument<Boolean>("filter") ?: true
-                    filterDuplicates = filter
-                    result.success(true)
+                    filterDuplicates = call.argument<Boolean>("filter") ?: false; result.success(true)
                 }
-                "clearScannedSession" -> {
-                    scannedEpcs.clear()
-                    result.success(true)
-                }
+                "clearScannedSession" -> { scannedEpcs.clear(); result.success(true) }
                 "inventorySingleTag" -> {
-                    val tag = inventorySingleTag()
-                    result.success(tag)
+                    bgHandler.post {
+                        val tag = inventorySingleTag()
+                        mainHandler.post { result.success(tag) }
+                    }
                 }
                 "readData" -> {
-                    val accessPassword = call.argument<String>("accessPassword") ?: "00000000"
                     val bank = call.argument<Int>("bank") ?: 1
                     val ptr = call.argument<Int>("ptr") ?: 2
                     val cnt = call.argument<Int>("cnt") ?: 6
-                    val filterData = call.argument<String>("filterData")
-                    val filterBank = call.argument<Int>("filterBank") ?: 1
-                    val filterPtr = call.argument<Int>("filterPtr") ?: 32
-                    val filterCnt = call.argument<Int>("filterCnt") ?: 0
-
-                    val data = if (!filterData.isNullOrEmpty() && filterCnt > 0) {
-                        mReader?.readData(accessPassword, bank, ptr, cnt, filterData, filterBank, filterPtr, filterCnt)
-                    } else {
-                        mReader?.readData(accessPassword, bank, ptr, cnt)
+                    val pwd = call.argument<String>("accessPassword") ?: "00000000"
+                    val filter = call.argument<String>("filterData")
+                    bgHandler.post {
+                        val data = readTagData(pwd, bank, ptr, cnt, filter)
+                        mainHandler.post { result.success(data) }
                     }
-                    result.success(data)
                 }
                 "writeData" -> {
-                    val accessPassword = call.argument<String>("accessPassword") ?: "00000000"
                     val bank = call.argument<Int>("bank") ?: 1
                     val ptr = call.argument<Int>("ptr") ?: 2
                     val cnt = call.argument<Int>("cnt") ?: 6
+                    val pwd = call.argument<String>("accessPassword") ?: "00000000"
                     val writeData = call.argument<String>("data") ?: ""
-                    val filterData = call.argument<String>("filterData")
-                    val filterBank = call.argument<Int>("filterBank") ?: 1
-                    val filterPtr = call.argument<Int>("filterPtr") ?: 32
-                    val filterCnt = call.argument<Int>("filterCnt") ?: 0
-
-                    val success = if (!filterData.isNullOrEmpty() && filterCnt > 0) {
-                        mReader?.writeData(accessPassword, bank, ptr, cnt, writeData, filterBank, filterPtr, filterCnt, filterData) ?: false
-                    } else {
-                        mReader?.writeData(accessPassword, bank, ptr, cnt, writeData) ?: false
+                    val filter = call.argument<String>("filterData")
+                    bgHandler.post {
+                        val success = writeTagData(pwd, bank, ptr, cnt, writeData, filter)
+                        mainHandler.post { result.success(success) }
                     }
-                    result.success(success)
                 }
                 "writeDataToEpc" -> {
-                    val accessPassword = call.argument<String>("accessPassword") ?: "00000000"
+                    val pwd = call.argument<String>("accessPassword") ?: "00000000"
                     val epc = call.argument<String>("epc") ?: ""
-                    val filterData = call.argument<String>("filterData")
-                    val filterBank = call.argument<Int>("filterBank") ?: 1
-                    val filterPtr = call.argument<Int>("filterPtr") ?: 32
-                    val filterCnt = call.argument<Int>("filterCnt") ?: 0
-
-                    val success = if (!filterData.isNullOrEmpty() && filterCnt > 0) {
-                        mReader?.writeDataToEpc(accessPassword, filterBank, filterPtr, filterCnt, filterData, epc) ?: false
-                    } else {
-                        mReader?.writeDataToEpc(accessPassword, epc) ?: false
+                    bgHandler.post {
+                        val success = writeTagData(pwd, 1, 2, epc.length / 4, epc, null)
+                        mainHandler.post { result.success(success) }
                     }
-                    result.success(success)
                 }
                 "getPower" -> {
-                    val power = mReader?.power ?: 30
-                    result.success(power)
+                    val p = callMethod(mUhfService, "getPower") as? Int ?: 30
+                    result.success(p)
                 }
                 "setPower" -> {
                     val power = call.argument<Int>("power") ?: 30
-                    val success = mReader?.setPower(power) ?: true
-                    result.success(success)
+                    bgHandler.post {
+                        val ok = callMethod(mUhfService, "setPower", arrayOf(Int::class.javaPrimitiveType!!), arrayOf(power)) as? Boolean ?: false
+                        mainHandler.post { result.success(ok) }
+                    }
                 }
                 "getTemperature" -> {
-                    val temp = mReader?.temperature ?: 28
-                    result.success(temp)
+                    val t = callMethod(mUhfService, "getTemperature") as? String
+                    result.success(t?.toIntOrNull() ?: 28)
                 }
-                "setFrequencyMode" -> {
-                    val mode = call.argument<Int>("mode") ?: 1
-                    val success = mReader?.setFrequencyMode(mode) ?: true
-                    result.success(success)
-                }
-                "getFrequencyMode" -> {
-                    val mode = mReader?.frequencyMode ?: 1
-                    result.success(mode)
-                }
-                "getHardwareVersion" -> {
-                    val version = mReader?.hardwareVersion ?: "PDA UHF Scanner"
-                    result.success(version)
-                }
+                "setFrequencyMode" -> result.success(true)
+                "getFrequencyMode" -> result.success(1)
+                "getHardwareVersion" -> result.success("SEUIC CRUISE2 UHF")
                 "getFirmwareVersion" -> {
-                    val version = mReader?.version ?: "v1.0.0"
-                    result.success(version)
+                    val v = callMethod(mUhfService, "getFirmwareVersion") as? String ?: "Unknown"
+                    result.success(v)
                 }
                 else -> result.notImplemented()
             }
@@ -443,25 +359,102 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    // ──── Reflection helpers ────
+
+    private fun callMethod(obj: Any?, methodName: String): Any? {
+        if (obj == null) return null
+        return try {
+            val m = obj.javaClass.getMethod(methodName)
+            m.invoke(obj)
+        } catch (e: Throwable) {
+            Log.w(TAG, "callMethod($methodName) failed: ${e.message}")
+            null
+        }
+    }
+
+    private fun callMethod(obj: Any?, methodName: String, paramTypes: Array<Class<*>>, args: Array<Any?>): Any? {
+        if (obj == null) return null
+        return try {
+            val m = obj.javaClass.getMethod(methodName, *paramTypes)
+            m.invoke(obj, *args)
+        } catch (e: Throwable) {
+            Log.w(TAG, "callMethod($methodName) failed: ${e.message}")
+            null
+        }
+    }
+
+    // ──── UHF Operations via Reflection ────
+
+    private fun isUhfOpen(): Boolean {
+        return try {
+            callMethod(mUhfService, "isOpen") as? Boolean ?: false
+        } catch (_: Throwable) { false }
+    }
+
     private fun initUHF(): Boolean {
         return try {
-            if (mReader == null) {
-                mReader = RFIDWithUHFUART.getInstance()
+            if (mUhfService != null && isUhfOpen()) {
+                Log.d(TAG, "UHF already initialized")
+                return true
             }
-            val initialized = mReader?.init(applicationContext) ?: false
-            Log.d(TAG, "UHF UART init result: $initialized")
 
-            if (initialized) {
+            Log.d(TAG, "Initializing SEUIC UHFService via reflection...")
+
+            val clazz = Class.forName("com.seuic.uhf.UHFService")
+            mUhfServiceClass = clazz
+            mEpcClass = Class.forName("com.seuic.uhf.EPC")
+
+            var service: Any? = null
+            try {
+                val m = clazz.getMethod("getInstance", Context::class.java)
+                service = m.invoke(null, applicationContext)
+                Log.d(TAG, "getInstance(Context) returned: ${service != null}")
+            } catch (e: Throwable) {
+                Log.d(TAG, "getInstance(Context) failed: ${e.message}")
+            }
+            if (service == null) {
                 try {
-                    mReader?.setEPCMode()
-                    mReader?.power = 30
-                } catch (e: Exception) {
-                    Log.w(TAG, "UHF configure power/mode warning: ${e.message}")
+                    val m = clazz.getMethod("getInstance")
+                    service = m.invoke(null)
+                    Log.d(TAG, "getInstance() returned: ${service != null}")
+                } catch (e: Throwable) {
+                    Log.d(TAG, "getInstance() failed: ${e.message}")
                 }
             }
-            initialized
+
+            if (service == null) {
+                Log.e(TAG, "UHFService.getInstance() returned null")
+                return false
+            }
+
+            mUhfService = service
+
+            val opened = callMethod(service, "open") as? Boolean ?: false
+            Log.d(TAG, "UHFService.open() = $opened")
+
+            if (!opened) {
+                Log.e(TAG, "UHFService.open() failed")
+                return false
+            }
+
+            // Register tag read listener
+            mListenerProxy = createReadTagsListenerProxy()
+            if (mListenerProxy != null) {
+                val listenerClass = Class.forName("com.seuic.uhf.IReadTagsListener")
+                val regMethod = service.javaClass.getMethod("registerReadTags", listenerClass)
+                regMethod.invoke(service, mListenerProxy)
+                Log.d(TAG, "Registered IReadTagsListener")
+            }
+
+            // Set Max Output Power (30 dBm)
+            try {
+                callMethod(service, "setPower", arrayOf(Int::class.javaPrimitiveType!!), arrayOf(30))
+            } catch (_: Throwable) {}
+
+            Log.d(TAG, "SEUIC UHF initialized successfully with max RF power")
+            true
         } catch (t: Throwable) {
-            Log.w(TAG, "UHF Hardware init skipped or non-UART device: ${t.message}")
+            Log.e(TAG, "UHF init error: ${t.message}", t)
             false
         }
     }
@@ -469,10 +462,18 @@ class MainActivity : FlutterActivity() {
     private fun freeUHF(): Boolean {
         return try {
             stopInventory()
-            val freed = mReader?.free() ?: false
-            mReader = null
-            Log.d(TAG, "UHF free result: $freed")
-            freed
+            if (mListenerProxy != null && mUhfService != null) {
+                try {
+                    val listenerClass = Class.forName("com.seuic.uhf.IReadTagsListener")
+                    val m = mUhfService!!.javaClass.getMethod("unregisterReadTags", listenerClass)
+                    m.invoke(mUhfService, mListenerProxy)
+                } catch (_: Throwable) {}
+            }
+            callMethod(mUhfService, "close")
+            mUhfService = null
+            mListenerProxy = null
+            Log.d(TAG, "UHF free completed")
+            true
         } catch (t: Throwable) {
             Log.w(TAG, "Exception during free: ${t.message}")
             false
@@ -480,88 +481,102 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun startInventory(): Boolean {
-        isScanning.set(true)
+        if (isScanning.get()) return true
 
-        // Direct UART Hardware scan if not initialized
-        if (mReader == null || !(mReader?.isPowerOn ?: false)) {
-            try {
-                initUHF()
-            } catch (t: Throwable) {
-                Log.w(TAG, "UART auto-init attempt: ${t.message}")
-            }
+        if (mUhfService == null || !isUhfOpen()) {
+            try { initUHF() } catch (_: Throwable) {}
+        }
+        if (mUhfService == null || !isUhfOpen()) {
+            Log.w(TAG, "UHF not available")
+            return false
         }
 
-        if (mReader != null && (mReader?.isPowerOn ?: false)) {
-            try {
-                val started = mReader?.startInventoryTag() ?: false
-                if (started) {
-                    scanThread = Thread {
-                        while (isScanning.get()) {
-                            try {
-                                val tagInfo: UHFTAGInfo? = mReader?.readTagFromBuffer()
-                                if (tagInfo != null && !tagInfo.epc.isNullOrEmpty()) {
-                                    enqueueTag(tagInfo)
-                                } else {
-                                    Thread.sleep(10)
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error in inventory buffer loop: ${e.message}")
-                            }
-                        }
-                    }.apply { start() }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Direct startInventoryTag: ${e.message}")
-            }
+        return try {
+            val started = callMethod(mUhfService, "inventoryStart") as? Boolean ?: false
+            Log.d(TAG, "inventoryStart() = $started")
+            if (started) isScanning.set(true)
+            started
+        } catch (e: Exception) {
+            Log.e(TAG, "inventoryStart error: ${e.message}")
+            false
         }
-
-        return true
     }
 
     private fun stopInventory(): Boolean {
         Log.d(TAG, "stopInventory called")
         isScanning.set(false)
-        scanThread?.interrupt()
-        scanThread = null
-
-        // Clear any pending tags that arrived before stop
-        pendingTags.clear()
-        flushScheduled.set(false)
-        bgHandler.removeCallbacksAndMessages(null)
-
-        // Stop UART hardware inventory if powered on
-        if (mReader != null && (mReader?.isPowerOn ?: false)) {
-            try {
-                mReader?.stopInventory()
-            } catch (e: Exception) {
-                Log.w(TAG, "stopInventory error: ${e.message}")
-            }
-        }
-
-        return true
+        return try {
+            callMethod(mUhfService, "inventoryStop") as? Boolean ?: true
+        } catch (_: Throwable) { true }
     }
 
     private fun inventorySingleTag(): Map<String, Any?>? {
-        if (mReader == null) {
-            startInventory()
-            return null
+        if (mUhfService == null || !isUhfOpen()) initUHF()
+        if (mUhfService == null) return null
+
+        return try {
+            val epcClass = mEpcClass ?: return null
+            val epc = epcClass.getDeclaredConstructor().newInstance()
+            val m = mUhfService!!.javaClass.getMethod("inventoryOnce", epcClass, Int::class.javaPrimitiveType!!)
+            val found = m.invoke(mUhfService, epc, 300) as? Boolean ?: false
+            if (found) {
+                val epcStr = (callMethod(epc, "getId") as? String)?.uppercase()?.trim() ?: return null
+                if (epcStr.isBlank()) return null
+                val rssi = try { epcClass.getField("rssi").getInt(epc) } catch (_: Throwable) { -50 }
+
+                hashMapOf<String, Any?>(
+                    "epc" to epcStr, "tid" to "", "user" to "",
+                    "rssi" to rssi.toString(), "ant" to "1", "count" to 1,
+                    "pc" to "", "timestamp" to System.currentTimeMillis()
+                )
+            } else null
+        } catch (e: Exception) {
+            Log.e(TAG, "inventorySingleTag error: ${e.message}")
+            null
         }
-        val tagInfo = mReader?.inventorySingleTag() ?: return null
-        if (tagInfo.epc.isNullOrEmpty()) return null
-
-        enqueueTag(tagInfo)
-
-        val map = HashMap<String, Any?>()
-        map["epc"] = tagInfo.epc
-        map["tid"] = tagInfo.tid ?: ""
-        map["user"] = tagInfo.user ?: ""
-        map["rssi"] = tagInfo.rssi ?: "-50"
-        map["ant"] = tagInfo.ant ?: "1"
-        map["count"] = tagInfo.count
-        map["pc"] = tagInfo.pc ?: ""
-        map["timestamp"] = System.currentTimeMillis()
-        return map
     }
+
+    private fun readTagData(accessPassword: String, bank: Int, ptr: Int, cnt: Int, filterEpc: String?): String? {
+        if (mUhfService == null || !isUhfOpen()) return null
+        return try {
+            val pwd = hexToBytes(accessPassword)
+            val filter = if (!filterEpc.isNullOrEmpty()) hexToBytes(filterEpc) else ByteArray(0)
+            val dataOut = ByteArray(cnt * 2)
+            val m = mUhfService!!.javaClass.getMethod("readTagData",
+                ByteArray::class.java, ByteArray::class.java,
+                Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!,
+                Int::class.javaPrimitiveType!!, ByteArray::class.java)
+            val ok = m.invoke(mUhfService, pwd, filter, bank, ptr, cnt, dataOut) as? Boolean ?: false
+            if (ok) bytesToHex(dataOut) else null
+        } catch (e: Exception) {
+            Log.e(TAG, "readTagData error: ${e.message}"); null
+        }
+    }
+
+    private fun writeTagData(accessPassword: String, bank: Int, ptr: Int, cnt: Int, data: String, filterEpc: String?): Boolean {
+        if (mUhfService == null || !isUhfOpen()) return false
+        return try {
+            val pwd = hexToBytes(accessPassword)
+            val filter = if (!filterEpc.isNullOrEmpty()) hexToBytes(filterEpc) else ByteArray(0)
+            val writeBytes = hexToBytes(data)
+            val m = mUhfService!!.javaClass.getMethod("writeTagData",
+                ByteArray::class.java, ByteArray::class.java,
+                Int::class.javaPrimitiveType!!, Int::class.javaPrimitiveType!!,
+                Int::class.javaPrimitiveType!!, ByteArray::class.java)
+            m.invoke(mUhfService, pwd, filter, bank, ptr, cnt, writeBytes) as? Boolean ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "writeTagData error: ${e.message}"); false
+        }
+    }
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val h = hex.replace(" ", "")
+        return ByteArray(h.length / 2) { ((Character.digit(h[it * 2], 16) shl 4) + Character.digit(h[it * 2 + 1], 16)).toByte() }
+    }
+
+    private fun bytesToHex(bytes: ByteArray): String = bytes.joinToString("") { "%02X".format(it) }
+
+    // ──── Trigger Handling ────
 
     private fun isTriggerKey(keyCode: Int): Boolean {
         return keyCode == 142 || keyCode == 293 || keyCode == 294 || keyCode == 280 || keyCode == 281 ||
@@ -569,30 +584,20 @@ class MainActivity : FlutterActivity() {
                keyCode == 131 || keyCode == 132 || keyCode == 133 || keyCode == 134 ||
                keyCode == 135 || keyCode == 136 || keyCode == 137 || keyCode == 138 ||
                keyCode == 139 || keyCode == 140 || keyCode == 141 ||
-               keyCode == KeyEvent.KEYCODE_F4 ||
-               keyCode == KeyEvent.KEYCODE_F1 ||
-               keyCode == KeyEvent.KEYCODE_F2 ||
-               keyCode == KeyEvent.KEYCODE_F3 ||
+               keyCode == KeyEvent.KEYCODE_F4 || keyCode == KeyEvent.KEYCODE_F1 ||
+               keyCode == KeyEvent.KEYCODE_F2 || keyCode == KeyEvent.KEYCODE_F3 ||
                keyCode == KeyEvent.KEYCODE_F5 ||
-               keyCode == KeyEvent.KEYCODE_BUTTON_L1 ||
-               keyCode == KeyEvent.KEYCODE_BUTTON_R1 ||
-               keyCode == KeyEvent.KEYCODE_PROG_RED ||
-               keyCode == KeyEvent.KEYCODE_PROG_GREEN ||
-               keyCode == KeyEvent.KEYCODE_STEM_1 ||
-               keyCode == KeyEvent.KEYCODE_STEM_2 ||
+               keyCode == KeyEvent.KEYCODE_BUTTON_L1 || keyCode == KeyEvent.KEYCODE_BUTTON_R1 ||
+               keyCode == KeyEvent.KEYCODE_PROG_RED || keyCode == KeyEvent.KEYCODE_PROG_GREEN ||
+               keyCode == KeyEvent.KEYCODE_STEM_1 || keyCode == KeyEvent.KEYCODE_STEM_2 ||
                keyCode == KeyEvent.KEYCODE_STEM_3
     }
 
     private fun triggerBarcodeBroadcast() {
         try {
-            sendBroadcast(Intent("com.rsc.scan.service").apply { putExtra("action", "ACTION_SCAN") })
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply { putExtra("action", "ACTION_SCAN") })
             sendBroadcast(Intent("android.intent.action.SCAN_TRIGGER"))
-            sendBroadcast(Intent("com.symbol.datawedge.api.ACTION").apply {
-                putExtra("com.symbol.datawedge.api.SOFT_SCAN_TRIGGER", "START_SCANNING")
-            })
-            sendBroadcast(Intent("com.honeywell.decode.intent.action.SCAN_TRIGGER"))
             sendBroadcast(Intent("com.seuic.scanner.action.SCAN"))
-            sendBroadcast(Intent("urovo.scanner.startscan"))
         } catch (e: Exception) {
             Log.w(TAG, "triggerBarcodeBroadcast error: ${e.message}")
         }
@@ -606,101 +611,66 @@ class MainActivity : FlutterActivity() {
             lastTriggerDown = now
 
             val mode = currentScanMode.lowercase()
-            when (mode) {
-                "barcode" -> {
-                    triggerBarcodeBroadcast()
-                }
-                "rfid" -> {
-                    startInventory()
-                }
-                else -> { // "auto", "hybrid"
-                    startInventory()
-                    triggerBarcodeBroadcast()
+            bgHandler.post {
+                when (mode) {
+                    "barcode" -> triggerBarcodeBroadcast()
+                    "hybrid" -> { startInventory(); triggerBarcodeBroadcast() }
+                    else -> startInventory()
                 }
             }
 
-            val runnable = Runnable {
-                flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-                    MethodChannel(messenger, METHOD_CHANNEL).invokeMethod(
-                        "onHardwareTrigger",
-                        mapOf("pressed" to true, "keyCode" to keyCode, "mode" to mode)
-                    )
-                }
-            }
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                runnable.run()
-            } else {
-                mainHandler.post(runnable)
-            }
+            notifyFlutterTrigger(true, keyCode, mode)
         } else {
             if (!isTriggerActive.compareAndSet(true, false)) return
             val mode = currentScanMode.lowercase()
-            if (mode != "barcode") {
-                stopInventory()
+            bgHandler.post {
+                if (mode != "barcode") stopInventory()
             }
-            val runnable = Runnable {
-                flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-                    MethodChannel(messenger, METHOD_CHANNEL).invokeMethod(
-                        "onHardwareTrigger",
-                        mapOf("pressed" to false, "keyCode" to keyCode, "mode" to mode)
-                    )
-                }
-            }
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                runnable.run()
-            } else {
-                mainHandler.post(runnable)
-            }
+            notifyFlutterTrigger(false, keyCode, mode)
         }
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
-        if (event != null) {
-            val keyCode = event.keyCode
-            if (isTriggerKey(keyCode)) {
-                if (event.action == KeyEvent.ACTION_DOWN) {
-                    if (event.repeatCount == 0) {
-                        Log.d(TAG, "Hardware Trigger Pressed (dispatchKeyEvent: $keyCode)")
-                        sendTriggerEvent(true, keyCode)
-                    }
-                } else if (event.action == KeyEvent.ACTION_UP) {
-                    Log.d(TAG, "Hardware Trigger Released (dispatchKeyEvent: $keyCode)")
-                    sendTriggerEvent(false, keyCode)
-                }
-                return true
+    private fun notifyFlutterTrigger(pressed: Boolean, keyCode: Int, mode: String) {
+        val runnable = Runnable {
+            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                MethodChannel(messenger, METHOD_CHANNEL).invokeMethod(
+                    "onHardwareTrigger",
+                    mapOf("pressed" to pressed, "keyCode" to keyCode, "mode" to mode)
+                )
             }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) runnable.run() else mainHandler.post(runnable)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
+        if (event != null && isTriggerKey(event.keyCode)) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                sendTriggerEvent(true, event.keyCode)
+            } else if (event.action == KeyEvent.ACTION_UP) {
+                sendTriggerEvent(false, event.keyCode)
+            }
+            return true
         }
         return super.dispatchKeyEvent(event)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (isTriggerKey(keyCode)) {
-            if (event?.repeatCount == 0) {
-                Log.d(TAG, "Hardware Trigger Pressed (onKeyDown: $keyCode)")
-                sendTriggerEvent(true, keyCode)
-            }
-            return true
+        if (isTriggerKey(keyCode) && event?.repeatCount == 0) {
+            sendTriggerEvent(true, keyCode); return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         if (isTriggerKey(keyCode)) {
-            Log.d(TAG, "Hardware Trigger Released (onKeyUp: $keyCode)")
-            sendTriggerEvent(false, keyCode)
-            return true
+            sendTriggerEvent(false, keyCode); return true
         }
         return super.onKeyUp(keyCode, event)
     }
 
     override fun onDestroy() {
-        try {
-            unregisterReceiver(keyReceiver)
-        } catch (e: Exception) {
-            Log.d(TAG, "Receiver not registered or already unregistered")
-        }
-        toneGenerator?.release()
-        toneGenerator = null
+        try { unregisterReceiver(keyReceiver) } catch (_: Exception) {}
+        toneGenerator?.release(); toneGenerator = null
         bgThread.quitSafely()
         freeUHF()
         super.onDestroy()
