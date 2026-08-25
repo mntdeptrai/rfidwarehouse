@@ -571,7 +571,7 @@ class WarehouseRepository extends ChangeNotifier {
     await _dbService.insertInventorySession(session);
     _inventorySessions.removeWhere((s) => s.sessionId == session.sessionId || s.sessionCode == session.sessionCode);
     _inventorySessions.insert(0, session);
-    await _syncDirectOrQueue(
+    _syncDirectOrQueue(
       tableName: 'inventory_sessions',
       recordId: session.sessionId,
       action: 'INSERT',
@@ -586,7 +586,7 @@ class WarehouseRepository extends ChangeNotifier {
       },
     );
     for (final r in session.results) {
-      await _syncDirectOrQueue(
+      _dbService.enqueueSync(
         tableName: 'inventory_session_details',
         recordId: '${session.sessionId}-${r.epc}',
         action: 'INSERT',
@@ -1719,8 +1719,8 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    // 2. Đồng bộ Supabase
-    await _syncDirectOrQueue(
+    // 2. Đồng bộ Supabase qua hàng đợi nền (cực nhanh, không block UI thread)
+    _syncDirectOrQueue(
       tableName: 'inventory_sessions',
       recordId: session.sessionId,
       action: 'INSERT',
@@ -1737,7 +1737,7 @@ class WarehouseRepository extends ChangeNotifier {
     );
 
     for (final r in session.results) {
-      await _syncDirectOrQueue(
+      _dbService.enqueueSync(
         tableName: 'inventory_session_details',
         recordId: '${session.sessionId}-${r.epc}',
         action: 'INSERT',
