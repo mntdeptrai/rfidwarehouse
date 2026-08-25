@@ -744,14 +744,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       children: [
                         Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000001', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('áo hồng', style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('Áo Polo RFID Cotton Standard', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                     TableRow(
                       children: [
                         Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000002', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('áo tím', style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('Áo Polo RFID Cotton Standard', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                     TableRow(

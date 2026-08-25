@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/tag_info.dart';
 import '../models/wms_models.dart';
+import '../services/desktop_uhf_tcp_service.dart';
 import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
 import '../widgets/hardware_status_appbar.dart';
@@ -17,9 +18,11 @@ class OutboundScreen extends StatefulWidget {
 class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProviderStateMixin {
   final WarehouseRepository _repo = WarehouseRepository();
   final UhfService _uhf = UhfService();
+  final DesktopUhfTcpService _desktopUhf = DesktopUhfTcpService();
 
   late TabController _tabController;
   StreamSubscription<TagInfo>? _tagSubscription;
+  StreamSubscription<TagInfo>? _desktopTagSubscription;
   StreamSubscription<bool>? _triggerSubscription;
 
   // Đơn hàng xuất được chọn
@@ -76,6 +79,17 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
       _scheduleUiRefresh();
     });
 
+    // Lắng nghe trực tiếp từ Đầu đọc để bàn ZK-RFID105 / C# Hardware Bridge
+    _desktopTagSubscription = _desktopUhf.onTagRead.listen((tag) {
+      if (!mounted) return;
+      if (_uhf.filterDuplicates && _scannedTags.containsKey(tag.epc)) {
+        return;
+      }
+      _scannedTags[tag.epc] = tag;
+      _latestScannedTag = tag;
+      _scheduleUiRefresh();
+    });
+
     _triggerSubscription = _uhf.onTriggerStateChanged.listen((isPressed) {
       if (!mounted) return;
       _uiRefreshTimer?.cancel();
@@ -89,6 +103,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
   void dispose() {
     _uiRefreshTimer?.cancel();
     _tagSubscription?.cancel();
+    _desktopTagSubscription?.cancel();
     _triggerSubscription?.cancel();
     _tabController.dispose();
     _searchOrderController.dispose();
@@ -100,6 +115,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
     HapticFeedback.mediumImpact();
     setState(() => _isScanning = true);
     _uhf.startInventory();
+    _desktopUhf.startInventory();
   }
 
   void _stopScan() {
@@ -107,6 +123,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
     HapticFeedback.lightImpact();
     setState(() => _isScanning = false);
     _uhf.stopInventory();
+    _desktopUhf.stopInventory();
   }
 
   void _toggleScan() {
@@ -294,103 +311,26 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
   }
 
   void _showCreateOutboundDialog() {
-    final poNoController = TextEditingController();
-    final customerController = TextEditingController();
-    final skuController = TextEditingController();
-    final nameController = TextEditingController();
-    final qtyController = TextEditingController();
-
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFE9E2D5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFC7BDAF))),
-        title: const Row(
-          children: [
-            Icon(Icons.output, color: Color(0xFF0284C7), size: 24),
-            SizedBox(width: 8),
-            Text('Tạo Đơn Xuất Kho PO', style: TextStyle(color: Color(0xFF2C251E), fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: poNoController,
-                decoration: const InputDecoration(labelText: 'Mã Lệnh Xuất (PO No)', hintText: 'Ví dụ: PO-OUT-001', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
-                style: const TextStyle(color: Color(0xFF2C251E)),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: customerController,
-                decoration: const InputDecoration(labelText: 'Khách hàng nhận', hintText: 'Tên khách hàng...', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
-                style: const TextStyle(color: Color(0xFF2C251E)),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: skuController,
-                decoration: const InputDecoration(labelText: 'Mã SKU xuất', hintText: 'Ví dụ: SKU-001', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
-                style: const TextStyle(color: Color(0xFF2C251E)),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Tên mặt hàng', hintText: 'Tên sản phẩm...', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
-                style: const TextStyle(color: Color(0xFF2C251E)),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Số lượng xuất', hintText: '1', labelStyle: TextStyle(color: Color(0xFF6B5D4D))),
-                style: const TextStyle(color: Color(0xFF2C251E)),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-            onPressed: () async {
-              final poNo = poNoController.text.trim();
-              final customer = customerController.text.trim();
-              final sku = skuController.text.trim();
-              final name = nameController.text.trim();
-              final qty = int.tryParse(qtyController.text.trim()) ?? 1;
-
-              if (poNo.isEmpty || sku.isEmpty) return;
-
-              final newOrder = OutboundOrder(
-                outboundOrderId: 'OUT-${DateTime.now().millisecondsSinceEpoch}',
-                poNo: poNo,
-                customer: customer,
-                status: OutboundOrderStatus.newOrder,
-                createdAt: DateTime.now(),
-                details: [
-                  OutboundOrderDetail(
-                    productId: 'PROD-OUT-${DateTime.now().millisecondsSinceEpoch}',
-                    sku: sku,
-                    productName: name,
-                    requiredQty: qty,
-                    pickedQty: 0,
-                  ),
-                ],
-              );
-
-              await _repo.addOutboundOrder(newOrder);
-              if (ctx.mounted) Navigator.pop(ctx);
-              setState(() {
-                _selectedOrder = newOrder;
-              });
-            },
-            child: const Text('LƯU ĐƠN XUẤT', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-          ),
-        ],
+      builder: (ctx) => _CreateOutboundOrderDialog(
+        repo: _repo,
+        uhf: _uhf,
+        onOrderCreated: (newOrder) {
+          setState(() {
+            _selectedOrder = newOrder;
+            _scannedTags.clear();
+            _gateResult = null;
+            _activePickingPlan = null;
+          });
+          _tabController.animateTo(0); // Chuyển ngay sang tab Quét & So khớp
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF10B981),
+              content: Text('🎉 Đã tạo đơn xuất ${newOrder.poNo}. Mời đưa hàng qua quét RFID!'),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1451,3 +1391,567 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
     );
   }
 }
+
+class _CreateOutboundOrderDialog extends StatefulWidget {
+  final WarehouseRepository repo;
+  final UhfService uhf;
+  final Function(OutboundOrder) onOrderCreated;
+
+  const _CreateOutboundOrderDialog({
+    required this.repo,
+    required this.uhf,
+    required this.onOrderCreated,
+  });
+
+  @override
+  State<_CreateOutboundOrderDialog> createState() => _CreateOutboundOrderDialogState();
+}
+
+class _CreateOutboundOrderDialogState extends State<_CreateOutboundOrderDialog> {
+  final TextEditingController _poNoController = TextEditingController();
+  final TextEditingController _customerController = TextEditingController();
+  final TextEditingController _scanCodeController = TextEditingController();
+  final TextEditingController _skuController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _qtyController = TextEditingController(text: '1');
+
+  StreamSubscription? _barcodeSub;
+  StreamSubscription? _tagSub;
+  StreamSubscription? _desktopTagSub;
+  bool _isScanning = false;
+  int _inStockQty = 0;
+  String _productLocation = '';
+  bool _isProductFound = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _poNoController.text = 'PO-LE-${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    _customerController.text = 'Khách mua lẻ / Ad-hoc';
+    _subscribeScanner();
+  }
+
+  void _subscribeScanner() {
+    _barcodeSub = widget.uhf.onBarcodeRead.listen((barcode) {
+      if (mounted && barcode.isNotEmpty) {
+        _handleScannedCode(barcode);
+      }
+    });
+
+    _tagSub = widget.uhf.onTagRead.listen((tag) {
+      if (mounted && tag.epc.isNotEmpty) {
+        _handleScannedCode(tag.epc);
+      }
+    });
+
+    // Lắng nghe từ máy để bàn ZK-RFID105
+    _desktopTagSub = DesktopUhfTcpService().onTagRead.listen((tag) {
+      if (mounted && tag.epc.isNotEmpty) {
+        _handleScannedCode(tag.epc);
+      }
+    });
+  }
+
+  void _handleScannedCode(String rawCode) {
+    final code = rawCode.trim();
+    if (code.isEmpty) return;
+    final upperCode = code.toUpperCase();
+    _scanCodeController.text = code;
+
+    // 1. Tìm trong Items
+    final item = widget.repo.items.where((i) =>
+      i.epc.toUpperCase() == upperCode ||
+      i.sku.toUpperCase() == upperCode ||
+      i.productId.toUpperCase() == upperCode ||
+      (i.palletId != null && i.palletId!.toUpperCase() == upperCode)
+    ).firstOrNull;
+
+    // 2. Tìm trong Products
+    final prod = widget.repo.products.where((p) =>
+      p.sku.toUpperCase() == upperCode ||
+      p.productId.toUpperCase() == upperCode ||
+      p.productName.toUpperCase() == upperCode
+    ).firstOrNull;
+
+    // 3. Tìm trong Pallets
+    final pallet = widget.repo.pallets.where((p) =>
+      p.palletCode.toUpperCase() == upperCode ||
+      p.palletId.toUpperCase() == upperCode
+    ).firstOrNull;
+
+    final targetSku = item?.sku ?? prod?.sku ?? pallet?.palletCode ?? code;
+    final targetName = item?.productName ?? prod?.productName ?? (pallet != null ? 'Pallet ${pallet.palletCode}' : 'Sản phẩm $code');
+
+    _skuController.text = targetSku;
+    _nameController.text = targetName;
+
+    // Tính tồn kho khả dụng
+    final inStockItems = widget.repo.items.where((i) =>
+      (i.sku.toUpperCase() == targetSku.toUpperCase() || i.productId.toUpperCase() == targetSku.toUpperCase()) &&
+      widget.repo.isItemStockedInLocation(i)
+    ).toList();
+
+    final locations = inStockItems.map((i) => i.locationId).where((l) => l != null && l.isNotEmpty).toSet().toList();
+
+    setState(() {
+      _inStockQty = inStockItems.length;
+      _productLocation = locations.isNotEmpty ? locations.join(', ') : 'Chưa xếp vào kệ';
+      _isProductFound = (item != null || prod != null || pallet != null || inStockItems.isNotEmpty);
+    });
+
+    HapticFeedback.mediumImpact();
+  }
+
+  void _toggleScanning() async {
+    if (_isScanning) {
+      await widget.uhf.stopInventory();
+      await DesktopUhfTcpService().stopInventory();
+      setState(() => _isScanning = false);
+    } else {
+      await widget.uhf.startInventory();
+      await DesktopUhfTcpService().startInventory();
+      setState(() => _isScanning = true);
+    }
+  }
+
+  void _onProductSelected(Product prod) {
+    _handleScannedCode(prod.sku);
+  }
+
+  @override
+  void dispose() {
+    _barcodeSub?.cancel();
+    _tagSub?.cancel();
+    _desktopTagSub?.cancel();
+    if (_isScanning) {
+      widget.uhf.stopInventory();
+      DesktopUhfTcpService().stopInventory();
+    }
+    _poNoController.dispose();
+    _customerController.dispose();
+    _scanCodeController.dispose();
+    _skuController.dispose();
+    _nameController.dispose();
+    _qtyController.dispose();
+    super.dispose();
+  }
+
+  void _saveOrder() async {
+    final poNo = _poNoController.text.trim();
+    final customer = _customerController.text.trim();
+    final sku = _skuController.text.trim();
+    final name = _nameController.text.trim();
+    final qty = int.tryParse(_qtyController.text.trim()) ?? 1;
+
+    if (poNo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng nhập mã PO xuất kho!')),
+      );
+      return;
+    }
+
+    if (sku.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng quét hoặc nhập mã SKU sản phẩm!')),
+      );
+      return;
+    }
+
+    if (qty <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Số lượng xuất phải lớn hơn 0!')),
+      );
+      return;
+    }
+
+    final newOrder = OutboundOrder(
+      outboundOrderId: 'OUT-${DateTime.now().millisecondsSinceEpoch}',
+      poNo: poNo,
+      customer: customer.isNotEmpty ? customer : 'Khách mua lẻ',
+      status: OutboundOrderStatus.newOrder,
+      createdAt: DateTime.now(),
+      details: [
+        OutboundOrderDetail(
+          productId: 'PROD-OUT-${DateTime.now().millisecondsSinceEpoch}',
+          sku: sku,
+          productName: name.isNotEmpty ? name : 'Sản phẩm $sku',
+          requiredQty: qty,
+          pickedQty: 0,
+        ),
+      ],
+    );
+
+    await widget.repo.addOutboundOrder(newOrder);
+    if (mounted) {
+      Navigator.pop(context);
+      widget.onOrderCreated(newOrder);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final products = widget.repo.products;
+
+    return AlertDialog(
+      backgroundColor: const Color(0xFFFBF8F3),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Color(0xFFC7BDAF), width: 1.2),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+      actionsPadding: const EdgeInsets.fromLTRB(18, 10, 18, 16),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.output_rounded, color: Color(0xFF0284C7), size: 22),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'TẠO ĐƠN XUẤT KHO LẺ',
+                  style: TextStyle(color: Color(0xFF2C251E), fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Quét mã vạch/RFID để tra cứu thông tin SP',
+                  style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+
+              // 1. Mã PO & Khách hàng
+              Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      controller: _poNoController,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12.5, fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        labelText: 'Mã Lệnh Xuất (PO)',
+                        labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                        filled: true,
+                        fillColor: const Color(0xFFE9E2D5),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: TextField(
+                      controller: _customerController,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12.5),
+                      decoration: InputDecoration(
+                        labelText: 'Khách hàng',
+                        labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                        filled: true,
+                        fillColor: const Color(0xFFE9E2D5),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // 2. Khu vực Quét Barcode / RFID
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9E2D5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFC7BDAF)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.qr_code_scanner, color: Color(0xFF0284C7), size: 16),
+                            SizedBox(width: 6),
+                            Text(
+                              'QUÉT MÃ SP / THÙNG / RFID',
+                              style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                        if (_isScanning)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('Đang quét...', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _scanCodeController,
+                            style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12.5),
+                            decoration: InputDecoration(
+                              hintText: 'Quét hoặc nhập mã Barcode/EPC/SKU...',
+                              hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 11),
+                              filled: true,
+                              fillColor: const Color(0xFFF4EFE6),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                              suffixIcon: _scanCodeController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 16, color: Color(0xFF6B5D4D)),
+                                      onPressed: () {
+                                        _scanCodeController.clear();
+                                        setState(() {});
+                                      },
+                                    )
+                                  : null,
+                            ),
+                            onSubmitted: _handleScannedCode,
+                            onChanged: (val) {
+                              if (val.trim().length >= 3) {
+                                _handleScannedCode(val);
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: Icon(_isScanning ? Icons.stop : Icons.sensors, size: 16, color: Colors.white),
+                          label: Text(_isScanning ? 'DỪNG' : 'QUÉT', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                          onPressed: _toggleScanning,
+                        ),
+                      ],
+                    ),
+
+                    if (products.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<Product>(
+                        isExpanded: true,
+                        dropdownColor: const Color(0xFFE9E2D5),
+                        style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12),
+                        decoration: InputDecoration(
+                          hintText: 'Hoặc chọn nhanh từ danh mục kho...',
+                          hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 11),
+                          filled: true,
+                          fillColor: const Color(0xFFF4EFE6),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        ),
+                        items: products.map((p) => DropdownMenuItem(
+                          value: p,
+                          child: Text('${p.sku} - ${p.productName}', overflow: TextOverflow.ellipsis),
+                        )).toList(),
+                        onChanged: (val) {
+                          if (val != null) _onProductSelected(val);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // 3. Thông tin sản phẩm tự động điền & Tồn kho
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _isProductFound
+                      ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                      : const Color(0xFFE9E2D5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isProductFound ? const Color(0xFF10B981) : const Color(0xFFC7BDAF),
+                    width: _isProductFound ? 1.5 : 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'THÔNG TIN SẢN PHẨM XUẤT',
+                          style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10.5, fontWeight: FontWeight.bold),
+                        ),
+                        if (_isProductFound)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _inStockQty > 0
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.2)
+                                  : const Color(0xFFEF4444).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _inStockQty > 0 ? '🟢 Tồn khả dụng: $_inStockQty SP' : '🔴 Hết hàng trong kho',
+                              style: TextStyle(
+                                color: _inStockQty > 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10.5,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _skuController,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12.5, fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        labelText: 'Mã SKU',
+                        labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                        filled: true,
+                        fillColor: const Color(0xFFF4EFE6),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                      ),
+                      onChanged: (val) {
+                        if (val.trim().isNotEmpty) {
+                          _handleScannedCode(val);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _nameController,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12.5),
+                      decoration: InputDecoration(
+                        labelText: 'Tên Mặt Hàng',
+                        labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                        filled: true,
+                        fillColor: const Color(0xFFF4EFE6),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                      ),
+                    ),
+                    if (_productLocation.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '📍 Vị trí kệ: $_productLocation',
+                        style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // 4. Số lượng xuất
+              Row(
+                children: [
+                  const Text('Số Lượng Xuất:', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline, color: Color(0xFF0284C7), size: 22),
+                    onPressed: () {
+                      int q = int.tryParse(_qtyController.text.trim()) ?? 1;
+                      if (q > 1) {
+                        _qtyController.text = (q - 1).toString();
+                        setState(() {});
+                      }
+                    },
+                  ),
+                  SizedBox(
+                    width: 60,
+                    child: TextField(
+                      controller: _qtyController,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 14, fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFFE9E2D5),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, color: Color(0xFF0284C7), size: 22),
+                    onPressed: () {
+                      int q = int.tryParse(_qtyController.text.trim()) ?? 1;
+                      _qtyController.text = (q + 1).toString();
+                      setState(() {});
+                    },
+                  ),
+                  if (_inStockQty > 0)
+                    TextButton(
+                      onPressed: () {
+                        _qtyController.text = _inStockQty.toString();
+                        setState(() {});
+                      },
+                      child: Text('Tất cả ($_inStockQty)', style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Color(0xFFC7BDAF)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D))),
+        ),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          icon: const Icon(Icons.check, size: 18, color: Colors.white),
+          label: const Text('LƯU & XUẤT HÀNG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+          onPressed: _saveOrder,
+        ),
+      ],
+    );
+  }
+}
+

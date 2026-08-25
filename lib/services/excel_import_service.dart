@@ -443,16 +443,16 @@ class ExcelImportService {
 
     // Sample Data chuẩn 3 cột: Mã thùng, Mã chip EPC RFID, Tên sản phẩm
     final sampleData = [
-      ['CARTONTEST0001', 'ABCDEF000000000000000001', 'áo hồng'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000002', 'áo tím'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000003', 'sịp siêu nhân'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000004', 'quần doraemon'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000005', 'áo siêu nhân'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000006', 'váy người mẫu'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000007', 'mũ len'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000008', 'nón lá'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000009', 'áo khoác'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000010', 'quần kakak'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000001', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000002', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000003', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000004', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000005', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000006', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000007', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000008', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000009', 'Áo Polo RFID Cotton Standard'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000010', 'Áo Polo RFID Cotton Standard'],
     ];
 
     for (int r = 0; r < sampleData.length; r++) {

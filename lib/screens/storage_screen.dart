@@ -486,6 +486,13 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       ),
                       const SizedBox(width: 4),
                       IconButton(
+                        icon: Icon(Icons.edit_outlined, color: c.rfidCyan, size: 18),
+                        tooltip: 'Chỉnh sửa tên / thông tin SKU',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        onPressed: () => _showEditProductDialog(prod),
+                      ),
+                      IconButton(
                         icon: Icon(Icons.delete_outline, color: c.textMuted, size: 18),
                         tooltip: 'Xóa sản phẩm',
                         padding: EdgeInsets.zero,
@@ -689,5 +696,100 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
       },
     );
   }
+
+  void _showEditProductDialog(Product prod) {
+    final c = _eyeCare.colors;
+    final nameController = TextEditingController(text: prod.productName);
+    final catController = TextEditingController(text: prod.category);
+    final unitController = TextEditingController(text: prod.unit);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: c.border)),
+        title: Row(
+          children: [
+            Icon(Icons.edit_note, color: c.rfidCyan, size: 22),
+            const SizedBox(width: 8),
+            Text('Chỉnh Sửa Thông Tin SKU', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Mã SKU: ${prod.sku}', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 14),
+              TextField(
+                controller: nameController,
+                style: TextStyle(color: c.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Tên sản phẩm',
+                  labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
+                  filled: true,
+                  fillColor: c.bgDeep,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: catController,
+                style: TextStyle(color: c.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Phân loại / Danh mục',
+                  labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
+                  filled: true,
+                  fillColor: c.bgDeep,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: unitController,
+                style: TextStyle(color: c.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  labelText: 'Đơn vị tính (ĐVT)',
+                  labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
+                  filled: true,
+                  fillColor: c.bgDeep,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('HỦY', style: TextStyle(color: c.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+            onPressed: () async {
+              final newName = nameController.text.trim();
+              final newCat = catController.text.trim();
+              final newUnit = unitController.text.trim();
+
+              final updated = Product(
+                productId: prod.productId,
+                sku: prod.sku,
+                productName: newName.isNotEmpty ? newName : prod.sku,
+                category: newCat.isNotEmpty ? newCat : 'Hàng nhập qua cổng RFID',
+                unit: newUnit.isNotEmpty ? newUnit : 'Cái',
+              );
+
+              await _repo.updateProduct(updated);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('LƯU THAY ĐỔI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
 

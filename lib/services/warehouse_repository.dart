@@ -173,6 +173,30 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateProduct(Product updatedProd) async {
+    await _dbService.insertProduct(updatedProd);
+    final idx = _products.indexWhere((p) => p.productId == updatedProd.productId || p.sku == updatedProd.sku);
+    if (idx >= 0) {
+      _products[idx] = updatedProd;
+    } else {
+      _products.add(updatedProd);
+    }
+    await _syncDirectOrQueue(
+      tableName: 'products',
+      recordId: updatedProd.productId,
+      action: 'UPDATE',
+      payload: {
+        'product_id': updatedProd.productId,
+        'sku': updatedProd.sku,
+        'product_name': updatedProd.productName,
+        'unit': updatedProd.unit,
+        'category': updatedProd.category,
+      },
+    );
+
+    notifyListeners();
+  }
+
   Future<void> deleteProduct(String productId) async {
     final cleanId = productId.trim();
     await _dbService.deleteProduct(cleanId);
@@ -903,10 +927,21 @@ class WarehouseRepository extends ChangeNotifier {
       // Đảm bảo có bản ghi Product tương ứng cho mã Barcode mới sinh
       final existingProd = _products.where((p) => p.sku == effectiveCartonCode || p.productId == effectiveCartonCode).firstOrNull;
       if (existingProd == null) {
+        // Tìm tên sản phẩm chuẩn hóa cho thùng hàng: Nếu tất cả item cùng 1 tên thì lấy tên đó, nếu nhiều tên khác nhau thì đặt 'Kiện hàng $effectiveCartonCode'
+        final distinctNames = matchedItems
+            .map((i) => i.productName.trim())
+            .where((n) => n.isNotEmpty && n != 'Sản phẩm mẫu' && n != 'Item')
+            .toSet()
+            .toList();
+
+        final String cartonProductName = distinctNames.length == 1
+            ? distinctNames.first
+            : 'Kiện hàng $effectiveCartonCode';
+
         final newProd = Product(
           productId: effectiveCartonCode,
           sku: effectiveCartonCode,
-          productName: it.productName.isNotEmpty ? it.productName : 'Kiện hàng $effectiveCartonCode',
+          productName: cartonProductName,
           unit: 'Cái',
           category: 'Hàng nhập qua cổng RFID',
         );
