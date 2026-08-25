@@ -48,32 +48,23 @@ class WarehouseRepository extends ChangeNotifier {
         'FALSE',
       };
 
+      // Chỉ xóa dữ liệu rác do đầu đọc gửi lệnh bị ghi nhầm thành sản phẩm
+      // KHÔNG xóa các mã EPC/đơn hàng nhập từ file Excel (ABCDEF..., CARTONTEST..., PRODUCT TEST...)
       bool isTestProduct(Product p) {
-        final pName = p.productName.toUpperCase();
         final pSku = p.sku.toUpperCase();
         final pId = p.productId.toUpperCase();
-        return pName.contains('PRODUCT TEST') ||
-            pName.contains('HÀNG NHẬP THỰC TẾ') ||
-            p.category == 'Nhập trực tiếp PDA' ||
-            pSku.startsWith('CARTONTEST') ||
-            pId.startsWith('CARTONTEST') ||
-            bogusCommandNames.contains(pId) ||
+        return bogusCommandNames.contains(pId) ||
             bogusCommandNames.contains(pSku);
       }
 
       bool isTestItem(Item i) {
         final epc = i.epc.toUpperCase();
-        final pName = i.productName.toUpperCase();
         final sku = i.sku.toUpperCase();
         final orderNo = (i.orderNo ?? '').toUpperCase();
-        return epc.startsWith('ABCDEF0000') ||
-            epc == 'E28011600000000000099888' ||
+        // Chỉ xóa: lệnh scanner bị ghi nhầm + chip phần cứng kiểm thử cố định
+        return epc == 'E28011600000000000099888' ||
             epc == 'E28032F9666D00012F50' ||
             epc == 'E2803295B8FA00017846' ||
-            pName.contains('PRODUCT TEST') ||
-            pName.contains('HÀNG NHẬP THỰC TẾ') ||
-            orderNo == 'DIRECT-PUTAWAY' ||
-            orderNo.startsWith('CARTONTEST') ||
             bogusCommandNames.contains(sku) ||
             bogusCommandNames.contains(orderNo);
       }

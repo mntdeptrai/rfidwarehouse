@@ -145,12 +145,79 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     return null;
   }
 
+  /// Lấy danh sách mã EPC kỳ vọng cho đơn/thùng hàng (tra cứu đa tầng: Repo items > _receiptCartons)
+  Set<String> _getExpectedEpcsForOrder(String? orderNo) {
+    if (orderNo == null || orderNo.isEmpty) return {};
+    // Tầng 1: Tra từ repo items (đã lưu vào SQLite)
+    final repoItems = _repo.getItemsByOrderNo(orderNo);
+    if (repoItems.isNotEmpty) {
+      return repoItems.map((i) => i.epc.toUpperCase()).toSet();
+    }
+    // Tầng 2: Tra từ _receiptCartons (dữ liệu Excel vừa nạp, chưa lưu hoặc bị xóa khỏi SQLite)
+    final cleanOrderNo = orderNo.trim().toUpperCase();
+    for (final carton in _receiptCartons) {
+      final cartonBox = (carton['cartonBox'] ?? '').toString().trim().toUpperCase();
+      if (cartonBox == cleanOrderNo) {
+        final serials = (carton['serials'] as List<dynamic>?)
+            ?.map((e) => e.toString().trim().toUpperCase())
+            .toSet() ?? {};
+        if (serials.isNotEmpty) return serials;
+      }
+    }
+    return {};
+  }
+
+  /// Lấy danh sách Item kỳ vọng (đầy đủ thông tin sản phẩm) cho hiển thị UI và đối soát
+  List<Item> _getExpectedItemsForOrder(String? orderNo) {
+    if (orderNo == null || orderNo.isEmpty) return [];
+    // Tầng 1: Tra từ repo items
+    final repoItems = _repo.getItemsByOrderNo(orderNo);
+    if (repoItems.isNotEmpty) return repoItems;
+    // Tầng 2: Xây dựng từ _receiptCartons (fallback khi repo trống)
+    final cleanOrderNo = orderNo.trim().toUpperCase();
+    final List<Item> fallbackItems = [];
+    for (final carton in _receiptCartons) {
+      final cartonBox = (carton['cartonBox'] ?? '').toString().trim().toUpperCase();
+      if (cartonBox == cleanOrderNo) {
+        final serialItems = (carton['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        if (serialItems != null && serialItems.isNotEmpty) {
+          for (var sItem in serialItems) {
+            fallbackItems.add(Item(
+              itemId: 'EXCEL-${sItem['serial']}',
+              productId: sItem['barcode']?.toString() ?? carton['productCode'] ?? '',
+              sku: sItem['barcode']?.toString() ?? carton['productCode'] ?? '',
+              productName: sItem['name']?.toString() ?? carton['productName'] ?? '',
+              serialNumber: sItem['serial'].toString(),
+              epc: sItem['serial'].toString(),
+              status: ItemStatus.pendingInbound,
+              orderNo: orderNo,
+            ));
+          }
+        } else {
+          final serials = (carton['serials'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+          for (var serial in serials) {
+            fallbackItems.add(Item(
+              itemId: 'EXCEL-$serial',
+              productId: carton['productCode'] ?? '',
+              sku: carton['productCode'] ?? '',
+              productName: carton['productName'] ?? '',
+              serialNumber: serial,
+              epc: serial,
+              status: ItemStatus.pendingInbound,
+              orderNo: orderNo,
+            ));
+          }
+        }
+      }
+    }
+    return fallbackItems;
+  }
+
   /// Kiểm tra xem mã EPC quét được có thuộc đơn hàng / tệp Excel đang đối soát hay không
   bool _isTagValidForCurrentOrder(String epc) {
     if (!_filterOnlyOrderEpcs || _selectedLiveOrder == null) return true;
-    final expectedItems = _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo);
-    if (expectedItems.isEmpty) return true; // Nếu đơn chưa gán danh sách Item thì không lọc
-    final expectedEpcs = expectedItems.map((i) => i.epc.toUpperCase()).toSet();
+    final expectedEpcs = _getExpectedEpcsForOrder(_selectedLiveOrder!.orderNo);
+    if (expectedEpcs.isEmpty) return true; // Nếu đơn chưa gán danh sách Item nào thì không lọc
     return expectedEpcs.contains(epc.toUpperCase());
   }
 
@@ -216,7 +283,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   Future<void> _triggerAutoConfirmInbound() async {
     if (_isAutoSaving || _isSaving || _hasScanError || _invalidTags.isNotEmpty) return;
-    final expectedItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+    final expectedItems = _getExpectedItemsForOrder(_selectedLiveOrder?.orderNo);
     final expectedCount = expectedItems.length;
     if (expectedCount > 0 && _scannedTags.length != expectedCount) return;
 
@@ -304,7 +371,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _scannedTags[tag.epc] = tag;
 
     // Đánh giá số lượng thực tế so với đơn hàng
-    final expectedItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+    final expectedItems = _getExpectedItemsForOrder(_selectedLiveOrder?.orderNo);
     final expectedCount = expectedItems.length;
 
     if (expectedCount > 0) {
@@ -435,7 +502,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
 
     // Đánh giá kết quả cuối cùng sau khi kết thúc đợt quét:
-    final expectedItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+    final expectedItems = _getExpectedItemsForOrder(_selectedLiveOrder?.orderNo);
     final expectedCount = expectedItems.length;
 
     if (_invalidTags.isNotEmpty) {
@@ -480,7 +547,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       return;
     }
 
-    final expectedItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+    final expectedItems = _getExpectedItemsForOrder(_selectedLiveOrder?.orderNo);
     final expectedCount = expectedItems.length;
     if (expectedCount > 0 && _scannedTags.length > expectedCount) {
       if (!isAuto) {
@@ -1793,7 +1860,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   Widget _buildLiveRfidStationView(EyeCareColors c) {
     final scannedCount = _scannedTags.length;
-    final expectedOrderItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+    final expectedOrderItems = _getExpectedItemsForOrder(_selectedLiveOrder?.orderNo);
 
     final expectedCount = expectedOrderItems.length;
     final expectedEpcs = expectedOrderItems.map((i) => i.epc.toUpperCase()).toSet();
