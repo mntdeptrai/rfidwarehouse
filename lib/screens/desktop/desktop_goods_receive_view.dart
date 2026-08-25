@@ -43,10 +43,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final TextEditingController _skuController = TextEditingController();
   final TextEditingController _prodNameController = TextEditingController();
   final Map<String, TagInfo> _scannedTags = {};
+  final Map<String, TagInfo> _invalidTags = {};
+  bool _hasScanError = false;
+  String? _scanErrorMessage;
   bool _isScanning = false;
   bool _isSaving = false;
   bool _filterOnlyOrderEpcs = true; // Mặc định BẬT: Chỉ nhận các mã EPC có trong đơn/file đang đối soát
-  int _stationTab = 0; // 0: Đã quét khớp, 1: Chưa quét trong đơn
+  int _stationTab = 0; // 0: Đã quét khớp, 1: Chưa quét trong đơn, 2: Sai tem/lạ
   int _scanDurationSeconds = 5; // Mặc định: Quét tự động trong 5 giây
   int _scanCountdown = 5;       // Đếm ngược số giây quét còn lại
   Timer? _countdownTimer;
@@ -155,6 +158,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     setState(() {
       _selectedLiveOrder = order;
       _scannedTags.clear();
+      _invalidTags.clear();
+      _hasScanError = false;
+      _scanErrorMessage = null;
       _uhf.clearTags();
       _desktopUhf.clearTags();
       if (order != null && order.details.isNotEmpty) {
@@ -170,6 +176,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _isScanning = _desktopUhf.isScanning;
       if (_desktopUhf.tags.isEmpty) {
         _scannedTags.clear();
+        _invalidTags.clear();
+        _hasScanError = false;
+        _scanErrorMessage = null;
       } else {
         for (final tag in _desktopUhf.tags) {
           if (_selectedLiveOrder == null) {
@@ -184,6 +193,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           }
           if (_isTagValidForCurrentOrder(tag.epc)) {
             _scannedTags[tag.epc] = tag;
+          } else {
+            _invalidTags[tag.epc] = tag;
+            _hasScanError = true;
+            _scanErrorMessage = 'Phát hiện SAI TEM: Chip ${tag.epc} không thuộc đơn ${_selectedLiveOrder?.orderNo ?? ""}!';
           }
         }
       }
@@ -202,7 +215,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   Timer? _autoResetTimer;
 
   Future<void> _triggerAutoConfirmInbound() async {
-    if (_isAutoSaving || _isSaving) return;
+    if (_isAutoSaving || _isSaving || _hasScanError || _invalidTags.isNotEmpty) return;
+    final expectedItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+    final expectedCount = expectedItems.length;
+    if (expectedCount > 0 && _scannedTags.length != expectedCount) return;
+
     _isAutoSaving = true;
 
     try {
@@ -235,6 +252,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           setState(() {
             _selectedLiveOrder = null;
             _scannedTags.clear();
+            _invalidTags.clear();
+            _hasScanError = false;
+            _scanErrorMessage = null;
             _uhf.clearTags();
             _desktopUhf.clearTags();
             _isAutoSaving = false;
@@ -265,11 +285,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     final bool isValid = _isTagValidForCurrentOrder(tag.epc);
     if (!isValid) {
+      _invalidTags[tag.epc] = tag;
+      _hasScanError = true;
+      _scanErrorMessage = 'Phát hiện SAI TEM: Chip ${tag.epc} không có trong đơn đối soát!';
       // 🔴 ĐÈN ĐỎ + CÒI: Cảnh báo quét trúng mã chip không có trong đơn / sai hàng
       _towerLight.triggerWarningRed(
         withBuzzer: true,
-        reason: 'Phát hiện SAI HÀNG: Chip ${tag.epc} không có trong đơn đối soát!',
+        reason: _scanErrorMessage!,
       );
+      _scheduleUiRefresh();
       return;
     }
 
@@ -285,7 +309,24 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     if (expectedCount > 0) {
       final matchedCount = _scannedTags.length;
-      if (matchedCount >= expectedCount) {
+      if (_invalidTags.isNotEmpty) {
+        _hasScanError = true;
+        _scanErrorMessage = 'Phát hiện SAI TEM: Có ${_invalidTags.length} chip không thuộc đơn!';
+        _towerLight.triggerWarningRed(
+          withBuzzer: true,
+          reason: _scanErrorMessage!,
+        );
+      } else if (matchedCount > expectedCount) {
+        _hasScanError = true;
+        _scanErrorMessage = 'Phát hiện THỪA HÀNG: Đã quét $matchedCount/$expectedCount chip (Thừa ${matchedCount - expectedCount} chip)!';
+        // 🔴 ĐÈN ĐỎ + CÒI: Cảnh báo thừa hàng
+        _towerLight.triggerWarningRed(
+          withBuzzer: true,
+          reason: _scanErrorMessage!,
+        );
+      } else if (matchedCount == expectedCount) {
+        _hasScanError = false;
+        _scanErrorMessage = null;
         // 🟢 ĐÈN XANH: Đủ hàng thông qua (100% khớp đơn)
         _towerLight.triggerPass(
           reason: 'ĐỦ HÀNG THÔNG QUA: $matchedCount/$expectedCount chip khớp 100% (Đơn ${_selectedLiveOrder!.orderNo})',
@@ -397,25 +438,59 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final expectedItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
     final expectedCount = expectedItems.length;
 
-    if (expectedCount > 0) {
+    if (_invalidTags.isNotEmpty) {
+      _hasScanError = true;
+      _scanErrorMessage = 'Phát hiện SAI TEM: Có ${_invalidTags.length} chip lạ không thuộc đơn!';
+      _towerLight.triggerWarningRed(
+        withBuzzer: true,
+        reason: 'KẾT THÚC QUÉT: CẢNH BÁO SAI TEM (${_invalidTags.length} chip lạ)! Đã khóa nhập kho.',
+      );
+    } else if (expectedCount > 0) {
       final matchedCount = _scannedTags.length;
-      if (matchedCount >= expectedCount) {
-        _towerLight.triggerPass(
-          reason: 'HOÀN TẤT ĐỐI SOÁT ($_scanDurationSeconds GIÂY): ĐỦ HÀNG THÔNG QUA ($matchedCount/$expectedCount chip khớp 100%)',
+      if (matchedCount > expectedCount) {
+        _hasScanError = true;
+        _scanErrorMessage = 'Phát hiện THỪA HÀNG: Đã quét $matchedCount/$expectedCount chip (Thừa ${matchedCount - expectedCount} chip)!';
+        _towerLight.triggerWarningRed(
+          withBuzzer: true,
+          reason: 'KẾT THÚC QUÉT: CẢNH BÁO THỪA HÀNG ($matchedCount/$expectedCount chip)! Đã khóa nhập kho.',
         );
-        _triggerAutoConfirmInbound();
-      } else {
+      } else if (matchedCount < expectedCount) {
         _towerLight.triggerWarningRed(
           withBuzzer: true,
           reason: 'KẾT THÚC QUÉT ($_scanDurationSeconds GIÂY): THIẾU HÀNG! Đã quét $matchedCount/$expectedCount chip (Còn thiếu ${expectedCount - matchedCount})',
         );
+      } else {
+        _hasScanError = false;
+        _scanErrorMessage = null;
+        _towerLight.triggerPass(
+          reason: 'HOÀN TẤT ĐỐI SOÁT ($_scanDurationSeconds GIÂY): ĐỦ HÀNG THÔNG QUA ($matchedCount/$expectedCount chip khớp 100%)',
+        );
+        _triggerAutoConfirmInbound();
       }
-    } else if (autoFinished && _scannedTags.isNotEmpty && _selectedLiveOrder != null) {
-      _triggerAutoConfirmInbound();
     }
   }
 
   Future<void> _saveLiveInbound({bool isAuto = false}) async {
+    if (_invalidTags.isNotEmpty) {
+      if (!isAuto) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('⛔ BỊ KHÓA NHẬP KHO: Phát hiện ${_invalidTags.length} chip sai tem/lạ!')),
+        );
+      }
+      return;
+    }
+
+    final expectedItems = _selectedLiveOrder != null ? _repo.getItemsByOrderNo(_selectedLiveOrder!.orderNo) : <Item>[];
+    final expectedCount = expectedItems.length;
+    if (expectedCount > 0 && _scannedTags.length > expectedCount) {
+      if (!isAuto) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('⛔ BỊ KHÓA NHẬP KHO: Phát hiện thừa hàng (${_scannedTags.length}/$expectedCount chip)!')),
+        );
+      }
+      return;
+    }
+
     if (_scannedTags.isEmpty) {
       if (!isAuto) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1886,19 +1961,30 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 height: 48,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: scannedCount > 0 ? const Color(0xFF10B981) : c.border,
+                    backgroundColor: _hasScanError
+                        ? const Color(0xFFEF4444)
+                        : (scannedCount > 0 ? const Color(0xFF10B981) : c.border),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: const Icon(Icons.check_circle, color: Color(0xFF2C251E)),
+                  icon: Icon(
+                    _hasScanError ? Icons.block : Icons.check_circle,
+                    color: _hasScanError ? Colors.white : const Color(0xFF2C251E),
+                  ),
                   label: Text(
                     _isSaving
                         ? 'Đang lưu...'
-                        : (_selectedLiveOrder != null
-                            ? 'XÁC NHẬN QUA CỔNG · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP (CHỜ XẾP KHO)'
-                            : 'XÁC NHẬN QUA CỔNG · $scannedCount CHIP (CHỜ XẾP KHO)'),
-                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12.5),
+                        : (_hasScanError
+                            ? '⛔ BỊ KHÓA: SAI TEM HOẶC THỪA HÀNG'
+                            : (_selectedLiveOrder != null
+                                ? 'XÁC NHẬN QUA CỔNG · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP (CHỜ XẾP KHO)'
+                                : 'XÁC NHẬN QUA CỔNG · $scannedCount CHIP (CHỜ XẾP KHO)')),
+                    style: TextStyle(
+                      color: _hasScanError ? Colors.white : const Color(0xFF2C251E),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
-                  onPressed: (_isSaving || scannedCount == 0) ? null : _saveLiveInbound,
+                  onPressed: (_isSaving || scannedCount == 0 || _hasScanError) ? null : _saveLiveInbound,
                 ),
               ),
             ],
@@ -1969,6 +2055,26 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               ),
                             ),
                           ),
+                        if (_invalidTags.isNotEmpty)
+                          InkWell(
+                            onTap: () => setState(() => _stationTab = 2),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: _stationTab == 2 ? const Color(0xFFEF4444) : const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFEF4444)),
+                              ),
+                              child: Text(
+                                '🔴 Sai tem / Lạ · ${_invalidTags.length}',
+                                style: TextStyle(
+                                  color: _stationTab == 2 ? Colors.white : const Color(0xFFEF4444),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     if (_filterOnlyOrderEpcs && _selectedLiveOrder != null)
@@ -1986,7 +2092,32 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                if (_hasScanError && _scanErrorMessage != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error, color: Color(0xFFEF4444), size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '🔴 CẢNH BÁO: $_scanErrorMessage - ĐÃ KHÓA NHẬP KHO!',
+                            style: const TextStyle(
+                              color: Color(0xFFEF4444),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Expanded(
                   child: _stationTab == 0
                       ? (scannedCount == 0
@@ -2084,62 +2215,119 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 );
                               },
                             ))
-                      : (unscannedItems.isEmpty
-                          ? const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.check_circle, size: 52, color: Color(0xFF10B981)),
-                                  SizedBox(height: 10),
-                                  Text(
-                                    'Tuyệt vời! Đã quét đủ 100% chip theo file đơn hàng.',
-                                    style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 14),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.separated(
-                              itemCount: unscannedItems.length,
-                              separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
-                              itemBuilder: (context, index) {
-                                final item = unscannedItems[index];
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                                  child: Row(
+                      : (_stationTab == 1
+                          ? (unscannedItems.isEmpty
+                              ? const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text('#${index + 1}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              item.epc,
-                                              style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              '${item.productName} | SKU: ${item.sku} ${item.serialNumber.isNotEmpty ? "| SN: ${item.serialNumber}" : ""}',
-                                              style: TextStyle(color: c.textSecondary, fontSize: 11),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: const Color(0xFFF59E0B)),
-                                        ),
-                                        child: const Text('⚡ Chưa quét', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
+                                      Icon(Icons.check_circle, size: 52, color: Color(0xFF10B981)),
+                                      SizedBox(height: 10),
+                                      Text(
+                                        'Tuyệt vời! Đã quét đủ 100% chip theo file đơn hàng.',
+                                        style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 14),
                                       ),
                                     ],
                                   ),
-                                );
-                              },
-                            )),
+                                )
+                              : ListView.separated(
+                                  itemCount: unscannedItems.length,
+                                  separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
+                                  itemBuilder: (context, index) {
+                                    final item = unscannedItems[index];
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                                      child: Row(
+                                        children: [
+                                          Text('#${index + 1}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item.epc,
+                                                  style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '${item.productName} | SKU: ${item.sku} ${item.serialNumber.isNotEmpty ? "| SN: ${item.serialNumber}" : ""}',
+                                                  style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: const Color(0xFFF59E0B)),
+                                            ),
+                                            child: const Text('⚡ Chưa quét', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ))
+                          : (_invalidTags.isEmpty
+                              ? const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.verified, size: 52, color: Color(0xFF10B981)),
+                                      SizedBox(height: 10),
+                                      Text(
+                                        'Không có chip lạ hoặc sai tem nào!',
+                                        style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: _invalidTags.length,
+                                  separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
+                                  itemBuilder: (context, index) {
+                                    final tag = _invalidTags.values.toList().reversed.toList()[index];
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                                      child: Row(
+                                        children: [
+                                          Text('#${index + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  tag.epc,
+                                                  style: const TextStyle(color: Color(0xFFEF4444), fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                const Text(
+                                                  '⚠️ CHIP KHÔNG CÓ TRONG ĐƠN / SAI TEM ĐỐI SOÁT',
+                                                  style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: const Color(0xFFEF4444)),
+                                            ),
+                                            child: const Text('⛔ SAI TEM', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ))),
                 ),
               ],
             ),

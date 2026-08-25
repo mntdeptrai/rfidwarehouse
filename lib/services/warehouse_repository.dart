@@ -48,13 +48,43 @@ class WarehouseRepository extends ChangeNotifier {
         'FALSE',
       };
 
+      bool isTestProduct(Product p) {
+        final pName = p.productName.toUpperCase();
+        final pSku = p.sku.toUpperCase();
+        final pId = p.productId.toUpperCase();
+        return pName.contains('PRODUCT TEST') ||
+            pName.contains('HÀNG NHẬP THỰC TẾ') ||
+            p.category == 'Nhập trực tiếp PDA' ||
+            pSku.startsWith('CARTONTEST') ||
+            pId.startsWith('CARTONTEST') ||
+            bogusCommandNames.contains(pId) ||
+            bogusCommandNames.contains(pSku);
+      }
+
+      bool isTestItem(Item i) {
+        final epc = i.epc.toUpperCase();
+        final pName = i.productName.toUpperCase();
+        final sku = i.sku.toUpperCase();
+        final orderNo = (i.orderNo ?? '').toUpperCase();
+        return epc.startsWith('ABCDEF0000') ||
+            epc == 'E28011600000000000099888' ||
+            epc == 'E28032F9666D00012F50' ||
+            epc == 'E2803295B8FA00017846' ||
+            pName.contains('PRODUCT TEST') ||
+            pName.contains('HÀNG NHẬP THỰC TẾ') ||
+            orderNo == 'DIRECT-PUTAWAY' ||
+            orderNo.startsWith('CARTONTEST') ||
+            bogusCommandNames.contains(sku) ||
+            bogusCommandNames.contains(orderNo);
+      }
+
       for (final p in dbProducts) {
-        if (bogusCommandNames.contains(p.productId.toUpperCase()) || bogusCommandNames.contains(p.sku.toUpperCase())) {
+        if (isTestProduct(p)) {
           await _dbService.deleteProduct(p.productId);
         }
       }
       for (final i in dbItems) {
-        if (bogusCommandNames.contains(i.sku.toUpperCase()) || (i.orderNo != null && bogusCommandNames.contains(i.orderNo!.toUpperCase()))) {
+        if (isTestItem(i)) {
           await _dbService.deleteItem(i.epc);
         }
       }
@@ -67,7 +97,7 @@ class WarehouseRepository extends ChangeNotifier {
       final dbInventorySessions = await _dbService.getInventorySessions();
 
       _products.clear();
-      _products.addAll(cleanProducts.where((p) => !bogusCommandNames.contains(p.productId.toUpperCase()) && !bogusCommandNames.contains(p.sku.toUpperCase())));
+      _products.addAll(cleanProducts.where((p) => !isTestProduct(p)));
 
       _locations.clear();
       _locations.addAll(dbLocations);
@@ -76,7 +106,7 @@ class WarehouseRepository extends ChangeNotifier {
       _pallets.addAll(dbPallets);
 
       _items.clear();
-      _items.addAll(cleanItems.where((i) => !bogusCommandNames.contains(i.sku.toUpperCase()) && !bogusCommandNames.contains(i.orderNo?.toUpperCase())));
+      _items.addAll(cleanItems.where((i) => !isTestItem(i)));
       for (final p in _pallets) {
         p.itemIds.clear();
         p.itemIds.addAll(_items.where((i) => i.palletId == p.palletId).map((i) => i.itemId));
@@ -923,65 +953,7 @@ class WarehouseRepository extends ChangeNotifier {
     }).toList();
 
     if (matchedItems.isEmpty) {
-      final cBNorm = cleanBarcode.toUpperCase().replaceAll(RegExp(r'0+'), '0');
-      final prod = _products.where((p) {
-        final pSku = p.sku.toUpperCase().replaceAll(RegExp(r'\s+'), '');
-        final pId = p.productId.toUpperCase().replaceAll(RegExp(r'\s+'), '');
-        final cB = cleanBarcode.toUpperCase().replaceAll(RegExp(r'\s+'), '');
-        if (pSku == cB || pId == cB) return true;
-
-        final pSkuNorm = pSku.replaceAll(RegExp(r'0+'), '0');
-        if (pSkuNorm == cBNorm) return true;
-
-        return false;
-      }).firstOrNull;
-
-      final effectiveSku = prod != null ? prod.sku : cleanBarcode;
-      final effectiveName = prod != null ? prod.productName : 'Sản phẩm $cleanBarcode';
-      final effectiveProdId = prod != null ? prod.productId : cleanBarcode;
-
-      final epc = generateUniqueEpc(sku: effectiveSku);
-      final newItem = Item(
-        itemId: 'ITEM-${now.millisecondsSinceEpoch}',
-        productId: effectiveProdId,
-        sku: effectiveSku,
-        productName: effectiveName,
-        serialNumber: 'SN-$effectiveSku-${now.millisecondsSinceEpoch.toRadixString(16).toUpperCase()}',
-        epc: epc,
-        status: ItemStatus.inStock,
-        orderNo: 'DIRECT-PUTAWAY',
-        locationId: loc.locationId,
-        inboundTime: now,
-      );
-      _items.add(newItem);
-      await _dbService.insertItem(newItem);
-
-      if (prod == null) {
-        final newProd = Product(
-          productId: effectiveProdId,
-          sku: effectiveSku,
-          productName: effectiveName,
-          unit: 'Cái',
-          category: 'Nhập trực tiếp PDA',
-        );
-        _products.add(newProd);
-        await _dbService.insertProduct(newProd);
-        await _syncDirectOrQueue(
-          tableName: 'products',
-          recordId: newProd.productId,
-          action: 'INSERT',
-          payload: {
-            'productId': newProd.productId,
-            'sku': newProd.sku,
-            'productName': newProd.productName,
-            'unit': newProd.unit,
-            'category': newProd.category,
-            'createdAt': now.toIso8601String(),
-          },
-        );
-      }
-
-      matchedItems = [newItem];
+      return 0;
     }
 
     for (var it in matchedItems) {
@@ -1124,42 +1096,6 @@ class WarehouseRepository extends ChangeNotifier {
             'epc': item.epc,
             'status': item.status.code,
             'order_no': item.orderNo ?? orderNo,
-            'pallet_id': pallet.palletId,
-            'location_id': locationId,
-            'inbound_time': now.toIso8601String(),
-          },
-        );
-      } else {
-        final newItem = Item(
-          itemId: 'ITEM-${now.millisecondsSinceEpoch}-$count',
-          productId: 'PROD-$count',
-          sku: defaultSku ?? 'SKU-INBOUND',
-          productName: defaultProductName ?? 'Hàng nhập thực tế',
-          serialNumber: 'SN-${epc.length > 6 ? epc.substring(epc.length - 6) : epc}',
-          epc: epc,
-          status: effectiveStatus,
-          palletId: pallet.palletId,
-          locationId: locationId,
-          inboundTime: now,
-        );
-        _items.add(newItem);
-        if (!pallet.itemIds.contains(newItem.itemId)) {
-          pallet.itemIds.add(newItem.itemId);
-        }
-        await _dbService.insertItem(newItem);
-        await _syncDirectOrQueue(
-          tableName: 'items',
-          recordId: newItem.itemId,
-          action: 'INSERT',
-          payload: {
-            'item_id': newItem.itemId,
-            'product_id': newItem.productId,
-            'sku': newItem.sku,
-            'product_name': newItem.productName,
-            'serial_number': newItem.serialNumber,
-            'epc': newItem.epc,
-            'status': newItem.status.code,
-            'order_no': orderNo,
             'pallet_id': pallet.palletId,
             'location_id': locationId,
             'inbound_time': now.toIso8601String(),
