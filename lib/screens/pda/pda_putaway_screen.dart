@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/tag_info.dart';
 import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
 
@@ -200,18 +201,27 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       appBar: const HardwareStatusAppBar(
         title: 'CẤT HÀNG LÊN KỆ',
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // BƯỚC 1: CHỌN / QUÉT VỊ TRÍ KỆ
-            _buildStep1LocationCard(c),
-            const SizedBox(height: 14),
+      body: RefreshIndicator(
+        color: c.rfidCyan,
+        onRefresh: () async {
+          await SupabaseSyncService().syncNow();
+          await _repo.reloadFromSqlite();
+          if (mounted) setState(() {});
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // BƯỚC 1: CHỌN / QUÉT VỊ TRÍ KỆ
+              _buildStep1LocationCard(c),
+              const SizedBox(height: 14),
 
-            // BƯỚC 2: QUÉT BARCODE TRÊN THÙNG HÀNG
-            _buildStep2CartonBarcodeCard(c),
-          ],
+              // BƯỚC 2: QUÉT BARCODE TRÊN THÙNG HÀNG
+              _buildStep2CartonBarcodeCard(c),
+            ],
+          ),
         ),
       ),
     );

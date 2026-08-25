@@ -293,7 +293,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       final orderNo = _selectedLiveOrder?.orderNo ?? (_scannedTags.isNotEmpty ? _findOrderForEpc(_scannedTags.keys.first)?.orderNo : null);
 
       if (orderNo != null && orderNo.isNotEmpty) {
-        final hexBarcode = _repo.generateHexBarcode128();
+        final existingBarcode = _repo.items
+            .where((i) => i.orderNo == orderNo)
+            .map((i) => i.sku)
+            .where((s) => s.isNotEmpty && s != orderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
+            .firstOrNull;
+        final hexBarcode = existingBarcode ?? _repo.generateHexBarcode128();
+
         final saved = await _repo.confirmGateReceiveToWaitingPutaway(
           orderNo: orderNo,
           scannedEpcs: _scannedTags.keys.toList(),
@@ -304,12 +310,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         debugPrint('⚡ [ZERO-TOUCH AUTO] Cổng RFID đã tiếp nhận kiện $orderNo ($saved chip) -> CHUYỂN SANG CHỜ XẾP KHO (Mã Barcode: $hexBarcode)');
 
         if (mounted) {
-          PutawayBarcodeModal.show(
-            context,
-            barcode: hexBarcode,
-            orderNo: orderNo,
-            itemCount: saved,
-            performedBy: 'Trạm Cổng RFID Desktop',
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF10B981),
+              duration: const Duration(seconds: 2),
+              content: Text('✅ Kiện $orderNo ($saved chip) đã thông qua cổng RFID thành công!'),
+            ),
           );
         }
       }
@@ -598,12 +604,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       if (!mounted) return;
 
-      PutawayBarcodeModal.show(
-        context,
-        barcode: hexBarcode,
-        orderNo: currentOrderNo,
-        itemCount: saved,
-        performedBy: 'Thủ kho Desktop',
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF10B981),
+          duration: const Duration(seconds: 2),
+          content: Text('✅ Đã xác nhận nhập kho $saved chip cho đơn $currentOrderNo thành công!'),
+        ),
       );
 
       setState(() {
@@ -631,6 +637,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     try {
       final result = await _excelService.pickAndParseGoodsReceiveExcel();
       if (result == null) return; // Người dùng hủy chọn
+
+      for (var carton in result.cartons) {
+        final rawCode = carton['productCode']?.toString().trim() ?? '';
+        if (!RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(rawCode)) {
+          carton['productCode'] = _repo.generateHexBarcode128();
+        }
+      }
 
       final defaultCode = (result.cartons.isNotEmpty && result.cartons.first['cartonBox'] != null && result.cartons.first['cartonBox'].toString().isNotEmpty)
           ? result.cartons.first['cartonBox'].toString().trim()
@@ -959,6 +972,18 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           try {
                             final rows = await _excelService.pickAndParseBatchOrdersExcel();
                             if (rows != null && rows.isNotEmpty) {
+                              final Map<String, String> orderBarcodeMap = {};
+                              for (var row in rows) {
+                                final orderNo = (row['orderNo'] ?? '').toString().trim();
+                                final rawSku = row['sku']?.toString().trim() ?? '';
+                                if (RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(rawSku)) {
+                                  orderBarcodeMap[orderNo] = rawSku.toUpperCase();
+                                } else if (!orderBarcodeMap.containsKey(orderNo)) {
+                                  orderBarcodeMap[orderNo] = _repo.generateHexBarcode128();
+                                }
+                                row['sku'] = orderBarcodeMap[orderNo]!;
+                              }
+
                               setDialogState(() {
                                 previewRows = rows;
                               });
@@ -968,8 +993,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 SnackBar(
                                   backgroundColor: const Color(0xFF10B981),
                                   content: Text(epcCount > 0
-                                      ? 'Đã nạp ${rows.length} dòng ($epcCount mã EPC) từ file Excel!'
-                                      : 'Đã nạp ${rows.length} dòng đơn hàng từ file Excel!'),
+                                      ? 'Đã nạp ${rows.length} dòng ($epcCount mã EPC) từ file Excel! Đã tự động sinh mã Barcode 128 cho các kiện.'
+                                      : 'Đã nạp ${rows.length} dòng đơn hàng từ file Excel! Đã tự động sinh mã Barcode 128 cho các kiện.'),
                                 ),
                               );
                             }
@@ -1555,10 +1580,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               final name = nameCtrl.text.trim();
               final qty = int.tryParse(qtyCtrl.text.trim()) ?? 1;
               if (sku.isNotEmpty && name.isNotEmpty && qty > 0) {
+                final barcode = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(sku) ? sku : _repo.generateHexBarcode128();
                 setState(() {
                   _receiptCartons.add({
                     'cartonBox': 'THUNG-${_receiptCartons.length + 1}',
-                    'productCode': sku,
+                    'productCode': barcode,
                     'productName': name,
                     'quantity': qty,
                     'serials': <String>[],
@@ -1586,6 +1612,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         ),
       );
       return;
+    }
+
+    for (var c in _receiptCartons) {
+      final rawCode = c['productCode']?.toString().trim() ?? '';
+      if (!RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(rawCode)) {
+        c['productCode'] = _repo.generateHexBarcode128();
+      }
     }
 
     final order = InboundOrder(
@@ -2547,6 +2580,29 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     );
   }
 
+  String _getOrEnsureOrderBarcode(InboundOrder order) {
+    final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
+    String? barcode = orderItems
+        .map((i) => i.sku)
+        .where((s) => s.isNotEmpty && s != order.orderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
+        .firstOrNull;
+
+    if (barcode == null || barcode.isEmpty) {
+      barcode = order.details
+          .map((d) => d.sku)
+          .where((s) => s.isNotEmpty && s != order.orderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
+          .firstOrNull;
+    }
+
+    if (barcode == null || barcode.isEmpty) {
+      final newBarcode = _repo.generateHexBarcode128();
+      barcode = newBarcode;
+      _repo.updateInboundOrderBarcode(order.orderNo, newBarcode);
+    }
+
+    return barcode;
+  }
+
   Widget _buildReceiptsList(EyeCareColors c) {
     final inboundOrders = _repo.inboundOrders;
     final activeOrderNos = inboundOrders.map((o) => o.orderNo.trim().toUpperCase()).toSet();
@@ -2712,6 +2768,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     itemBuilder: (itemCtx, index) {
                       final order = inboundOrders[index];
                       final isCompleted = order.status == InboundOrderStatus.completed;
+                      final barcodeDisplay = _getOrEnsureOrderBarcode(order);
+                      final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
+                      final orderItemCount = orderItems.isNotEmpty ? orderItems.length : order.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
@@ -2726,99 +2785,66 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         child: Icon(Icons.article, color: c.rfidCyan, size: 20),
                       ),
                       const SizedBox(width: 16),
-                      Builder(
-                        builder: (context) {
-                          final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
-                          final barcodes = orderItems
-                              .map((i) => i.sku)
-                              .where((s) => s.isNotEmpty && s != order.orderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
-                              .toSet()
-                              .toList();
-                          final barcodeDisplay = barcodes.isNotEmpty
-                              ? barcodes.join(', ')
-                              : (order.details.isNotEmpty ? order.details.map((d) => d.sku).where((s) => RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s)).toSet().join(', ') : '');
-
-                          return Expanded(
-                            flex: 3,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 4,
                               children: [
-                                Wrap(
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  spacing: 8,
-                                  runSpacing: 4,
-                                  children: [
-                                    Text(order.orderNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                                    if (barcodeDisplay.isNotEmpty)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: c.rfidCyan.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.qr_code, size: 12, color: c.rfidCyan),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              'Barcode 128: $barcodeDisplay',
-                                              style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold, fontFamily: 'Courier'),
-                                            ),
-                                          ],
-                                        ),
+                                Text(order.orderNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: c.rfidCyan.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.qr_code, size: 12, color: c.rfidCyan),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Barcode 128: $barcodeDisplay',
+                                        style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold, fontFamily: 'Courier'),
                                       ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text('Ngày tạo: ${order.createdAt.toString().substring(0, 10)} | NCC: ${order.sourceSupplier}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                               ],
                             ),
-                          );
-                        },
+                            const SizedBox(height: 2),
+                            Text('Ngày tạo: ${order.createdAt.toString().substring(0, 10)} | NCC: ${order.sourceSupplier}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                          ],
+                        ),
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Builder(
-                            builder: (context) {
-                              final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
-                              final barcodes = orderItems
-                                  .map((i) => i.sku)
-                                  .where((s) => s.isNotEmpty && s != order.orderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
-                                  .toSet()
-                                  .toList();
-                              final barcodeDisplay = barcodes.isNotEmpty
-                                  ? barcodes.first
-                                  : (order.details.isNotEmpty ? order.details.map((d) => d.sku).where((s) => RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s)).firstOrNull : null);
-
-                              if (barcodeDisplay != null && barcodeDisplay.isNotEmpty) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF10B981),
-                                      side: BorderSide(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    ),
-                                    icon: const Icon(Icons.print, size: 15),
-                                    label: const Text('In Tem Thùng', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                                    onPressed: () {
-                                      final orderItemCount = orderItems.isNotEmpty ? orderItems.length : order.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
-                                      PutawayBarcodeModal.show(
-                                        context,
-                                        barcode: barcodeDisplay,
-                                        orderNo: order.orderNo,
-                                        itemCount: orderItemCount,
-                                        performedBy: 'In Tem Nhập Kho',
-                                      );
-                                    },
-                                  ),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF10B981),
+                                side: BorderSide(color: const Color(0xFF10B981).withValues(alpha: 0.5)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              ),
+                              icon: const Icon(Icons.print, size: 15),
+                              label: const Text('In Tem Thùng', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              onPressed: () {
+                                PutawayBarcodeModal.show(
+                                  context,
+                                  barcode: barcodeDisplay,
+                                  orderNo: order.orderNo,
+                                  itemCount: orderItemCount,
+                                  performedBy: 'In Tem Nhập Kho',
                                 );
-                              }
-                              return const SizedBox.shrink();
-                            },
+                              },
+                            ),
                           ),
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(

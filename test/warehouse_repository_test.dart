@@ -499,5 +499,46 @@ void main() {
       final detectedAfterShipped = repo.findMatchingOutboundOrder(['AUTO_EPC_AAA']);
       expect(detectedAfterShipped, isNull);
     });
+
+    test('PDA Putaway seamlessly finds and moves items using generated 16-hex Barcode 128', () async {
+      final now = DateTime.now();
+      final order = InboundOrder(
+        inboundOrderId: 'INB-HEX-TEST',
+        orderNo: 'CARTONTEST9999',
+        sourceSupplier: 'Supplier Test',
+        status: InboundOrderStatus.newOrder,
+        createdAt: now,
+        details: [
+          InboundOrderDetail(
+            productId: 'CARTONTEST9999',
+            sku: 'CARTONTEST9999',
+            productName: 'Sản phẩm Test Hex',
+            requiredQty: 5,
+          ),
+        ],
+      );
+
+      final items = await repo.addInboundOrder(order, autoGenerateEpcs: true);
+      expect(items.length, 5);
+
+      // Sinh mã Barcode 128 và đồng bộ cho đơn hàng
+      final hexBarcode = repo.generateHexBarcode128();
+      await repo.updateInboundOrderBarcode('CARTONTEST9999', hexBarcode);
+
+      // PDA quét mã Barcode 128 để cất hàng vào kệ LOC-A1-02-01
+      final putawayCount = await repo.confirmPdaPutawayByCarton(
+        cartonOrOrderBarcode: hexBarcode,
+        locationId: 'LOC-A1-02-01',
+        performedBy: 'PDA Tester',
+      );
+
+      expect(putawayCount, 5);
+      final putawayItems = repo.items.where((i) => i.orderNo == 'CARTONTEST9999').toList();
+      for (final it in putawayItems) {
+        expect(it.status, ItemStatus.inStock);
+        expect(it.locationId, 'LOC-A1-02-01');
+        expect(it.sku, hexBarcode);
+      }
+    });
   });
 }

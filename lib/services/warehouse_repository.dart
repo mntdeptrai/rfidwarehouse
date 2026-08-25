@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wms_models.dart';
 import 'erp_bravo_service.dart';
 import 'database_service.dart';
@@ -344,6 +345,108 @@ class WarehouseRepository extends ChangeNotifier {
     _triggerBackgroundSync();
     notifyListeners();
     return generatedItems;
+  }
+
+  Future<void> updateInboundOrderBarcode(String orderNo, String newBarcode) async {
+    final cleanNo = orderNo.trim().toUpperCase();
+    final cleanBarcode = newBarcode.trim().toUpperCase();
+
+    final order = _inboundOrders.where((o) =>
+      o.orderNo.trim().toUpperCase() == cleanNo ||
+      o.inboundOrderId.trim().toUpperCase() == cleanNo
+    ).firstOrNull;
+
+    if (order != null) {
+      final updatedDetails = order.details.map((d) => InboundOrderDetail(
+        productId: cleanBarcode,
+        sku: cleanBarcode,
+        productName: d.productName,
+        requiredQty: d.requiredQty,
+        receivedQty: d.receivedQty,
+      )).toList();
+      order.details.clear();
+      order.details.addAll(updatedDetails);
+      await _dbService.insertInboundOrder(order);
+      await _syncDirectOrQueue(
+        tableName: 'inbound_orders',
+        recordId: order.inboundOrderId,
+        action: 'UPDATE',
+        payload: {
+          'inboundOrderId': order.inboundOrderId,
+          'orderNo': order.orderNo,
+          'sourceSupplier': order.sourceSupplier,
+          'status': order.status.code,
+          'createdAt': order.createdAt.toIso8601String(),
+          'details': order.details.map((d) => {
+            'productId': d.productId,
+            'sku': d.sku,
+            'productName': d.productName,
+            'requiredQty': d.requiredQty,
+            'receivedQty': d.receivedQty,
+          }).toList(),
+        },
+      );
+    }
+
+    final orderItems = _items.where((i) =>
+      i.orderNo != null &&
+      (i.orderNo!.trim().toUpperCase() == cleanNo ||
+       (order != null && i.orderNo!.trim().toUpperCase() == order.inboundOrderId.trim().toUpperCase()))
+    ).toList();
+
+    for (var it in orderItems) {
+      it.sku = cleanBarcode;
+      it.productId = cleanBarcode;
+      await _dbService.insertItem(it);
+      await _syncDirectOrQueue(
+        tableName: 'items',
+        recordId: it.itemId,
+        action: 'UPDATE',
+        payload: {
+          'itemId': it.itemId,
+          'productId': it.productId,
+          'sku': it.sku,
+          'productName': it.productName,
+          'serialNumber': it.serialNumber,
+          'epc': it.epc,
+          'status': it.status.code,
+          'orderNo': it.orderNo,
+          'palletId': it.palletId,
+          'locationId': it.locationId,
+          'inboundTime': it.inboundTime?.toIso8601String(),
+        },
+      );
+    }
+
+    // Đảm bảo Product record tồn tại
+    final existingProd = _products.where((p) => p.sku == cleanBarcode || p.productId == cleanBarcode).firstOrNull;
+    if (existingProd == null) {
+      final pName = order?.details.firstOrNull?.productName ?? 'Kiện hàng $cleanBarcode';
+      final newProd = Product(
+        productId: cleanBarcode,
+        sku: cleanBarcode,
+        productName: pName,
+        unit: 'Cái',
+        category: 'Hàng nhập qua cổng RFID',
+      );
+      _products.add(newProd);
+      await _dbService.insertProduct(newProd);
+      await _syncDirectOrQueue(
+        tableName: 'products',
+        recordId: newProd.productId,
+        action: 'INSERT',
+        payload: {
+          'productId': newProd.productId,
+          'sku': newProd.sku,
+          'productName': newProd.productName,
+          'unit': newProd.unit,
+          'category': newProd.category,
+        },
+      );
+    }
+
+    _triggerBackgroundSync();
+    notifyListeners();
   }
 
   Future<List<Item>> batchImportInboundOrders(List<InboundOrder> orders) async {
@@ -1068,18 +1171,99 @@ class WarehouseRepository extends ChangeNotifier {
       return false;
     }).toList();
 
-    // Nếu không khớp trực tiếp, tìm theo InboundOrder tương ứng
+    // 1. Tìm theo InboundOrder tương ứng (theo orderNo, inboundOrderId HOẶC SKU trong details)
     if (matchedItems.isEmpty) {
-      final matchedOrder = _inboundOrders.where((o) =>
+      final matchedOrders = _inboundOrders.where((o) =>
         o.orderNo.trim().toUpperCase() == cleanBarcode ||
-        o.inboundOrderId.trim().toUpperCase() == cleanBarcode
-      ).firstOrNull;
-      if (matchedOrder != null) {
+        o.inboundOrderId.trim().toUpperCase() == cleanBarcode ||
+        o.details.any((d) => d.sku.trim().toUpperCase() == cleanBarcode || d.productId.trim().toUpperCase() == cleanBarcode)
+      ).toList();
+
+      if (matchedOrders.isNotEmpty) {
+        final orderNos = matchedOrders.map((o) => o.orderNo.trim().toUpperCase()).toSet();
+        final orderIds = matchedOrders.map((o) => o.inboundOrderId.trim().toUpperCase()).toSet();
         matchedItems = _items.where((it) =>
           it.orderNo != null &&
-          (it.orderNo!.trim().toUpperCase() == matchedOrder.orderNo.trim().toUpperCase() ||
-           it.orderNo!.trim().toUpperCase() == matchedOrder.inboundOrderId.trim().toUpperCase())
+          (orderNos.contains(it.orderNo!.trim().toUpperCase()) ||
+           orderIds.contains(it.orderNo!.trim().toUpperCase()))
         ).toList();
+      }
+    }
+
+    // 2. Tra cứu trực tiếp từ SQLite theo LIKE / orderNo nếu bộ nhớ RAM chưa load kịp
+    if (matchedItems.isEmpty) {
+      final dbItems = await _dbService.getItems();
+      final pulledFromDb = dbItems.where((it) =>
+        (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) ||
+        (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) ||
+        it.sku.trim().toUpperCase() == cleanBarcode
+      ).toList();
+      if (pulledFromDb.isNotEmpty) {
+        matchedItems = pulledFromDb;
+        for (var pItem in pulledFromDb) {
+          _items.removeWhere((i) => i.epc == pItem.epc);
+          _items.add(pItem);
+        }
+      }
+    }
+
+    // 3. Nếu trên thiết bị PDA chưa có trong SQLite nội bộ, tra cứu Realtime từ Supabase Cloud
+    if (matchedItems.isEmpty && SupabaseSyncService().isOnline) {
+      try {
+        final supa = Supabase.instance.client;
+        final supaItems = await supa.from('items').select().or('sku.eq.$cleanBarcode,pallet_id.eq.$cleanBarcode,order_no.eq.$cleanBarcode,epc.eq.$cleanBarcode');
+        if (supaItems.isNotEmpty) {
+          final pulled = <Item>[];
+          for (var row in supaItems) {
+            final item = Item(
+              itemId: row['item_id'] ?? '',
+              productId: row['product_id'] ?? '',
+              sku: row['sku'] ?? '',
+              productName: row['product_name'] ?? '',
+              serialNumber: row['serial_number'] ?? '',
+              epc: row['epc'] ?? '',
+              status: ItemStatus.values.firstWhere((s) => s.code == row['status'], orElse: () => ItemStatus.inStock),
+              orderNo: row['order_no'],
+              palletId: row['pallet_id'],
+              locationId: row['location_id'],
+              inboundTime: row['inbound_time'] != null ? DateTime.tryParse(row['inbound_time']) : null,
+            );
+            pulled.add(item);
+            _items.removeWhere((i) => i.epc == item.epc);
+            _items.add(item);
+            await _dbService.insertItem(item);
+          }
+          matchedItems = pulled;
+        } else {
+          final supaOrders = await supa.from('inbound_orders').select().or('order_no.eq.$cleanBarcode,inbound_order_id.eq.$cleanBarcode');
+          if (supaOrders.isNotEmpty) {
+            for (var oRow in supaOrders) {
+              final oNo = oRow['order_no'] ?? '';
+              final relatedItems = await supa.from('items').select().eq('order_no', oNo);
+              for (var row in relatedItems) {
+                final item = Item(
+                  itemId: row['item_id'] ?? '',
+                  productId: row['product_id'] ?? '',
+                  sku: row['sku'] ?? '',
+                  productName: row['product_name'] ?? '',
+                  serialNumber: row['serial_number'] ?? '',
+                  epc: row['epc'] ?? '',
+                  status: ItemStatus.values.firstWhere((s) => s.code == row['status'], orElse: () => ItemStatus.inStock),
+                  orderNo: row['order_no'],
+                  palletId: row['pallet_id'],
+                  locationId: row['location_id'],
+                  inboundTime: row['inbound_time'] != null ? DateTime.tryParse(row['inbound_time']) : null,
+                );
+                matchedItems.add(item);
+                _items.removeWhere((i) => i.epc == item.epc);
+                _items.add(item);
+                await _dbService.insertItem(item);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Cloud fallback putaway search error: $e');
       }
     }
 
