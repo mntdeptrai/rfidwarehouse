@@ -548,6 +548,9 @@ class DesktopUhfTcpService extends ChangeNotifier {
   Future<bool> stopInventory() async {
     _isScanning = false;
     _readRate = 0.0;
+    _recentReads = 0;
+    _rateTimer?.cancel();
+    _rateTimer = null;
     _log('ĐÃ DỪNG QUÉT THẺ.');
     notifyListeners();
 

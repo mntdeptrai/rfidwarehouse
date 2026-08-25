@@ -784,19 +784,27 @@ class DatabaseService {
     final List<InventorySession> list = [];
     for (final m in maps) {
       final sId = m['session_id'] as String;
+      final zoneStr = (m['zone'] as String? ?? '').trim();
+      final isAllWh = zoneStr.toLowerCase().contains('toàn bộ') || zoneStr.toUpperCase() == 'ALL' || zoneStr.isEmpty;
       final detMaps = await db.query('inventory_session_details', where: 'session_id = ?', whereArgs: [sId]);
-      final results = detMaps.map((d) => InventoryItemResult(
-        epc: d['epc'] as String,
-        sku: d['sku'] as String?,
-        productName: d['product_name'] as String?,
-        expectedLocation: d['expected_location'] as String?,
-        actualLocation: d['actual_location'] as String?,
-        resultType: InventoryVarianceType.values.firstWhere(
+      final results = detMaps.map((d) {
+        var resType = InventoryVarianceType.values.firstWhere(
           (v) => v.code == d['result_type'],
           orElse: () => InventoryVarianceType.match,
-        ),
-        readAt: d['read_at'] != null ? DateTime.tryParse(d['read_at'].toString()) ?? DateTime.now() : DateTime.now(),
-      )).toList();
+        );
+        if (isAllWh && resType == InventoryVarianceType.wrongLocation) {
+          resType = InventoryVarianceType.match;
+        }
+        return InventoryItemResult(
+          epc: d['epc'] as String,
+          sku: d['sku'] as String?,
+          productName: d['product_name'] as String?,
+          expectedLocation: d['expected_location'] as String?,
+          actualLocation: d['actual_location'] as String?,
+          resultType: resType,
+          readAt: d['read_at'] != null ? DateTime.tryParse(d['read_at'].toString()) ?? DateTime.now() : DateTime.now(),
+        );
+      }).toList();
 
       list.add(InventorySession(
         sessionId: sId,

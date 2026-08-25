@@ -1922,13 +1922,19 @@ class WarehouseRepository extends ChangeNotifier {
 
     final uniqueScannedEpcs = scannedEpcs.toSet();
 
+    final isAllWarehouse = session.zone.trim().toLowerCase().contains('toàn bộ') ||
+        session.zone.trim().toUpperCase() == 'ALL' ||
+        (session.locationCode == null && session.zone.isEmpty);
+
     final expectedItems = _items.where((it) {
       if (it.status != ItemStatus.inStock) return false;
+      if (isAllWarehouse) return true;
       final loc = _locations.firstWhere((l) => l.locationId == it.locationId, orElse: () => Location(locationId: '', locationCode: '', zone: '', shelf: '', level: ''));
       if (session.locationCode != null && session.locationCode!.isNotEmpty) {
-        return loc.locationCode == session.locationCode;
+        return loc.locationCode.trim().toUpperCase() == session.locationCode!.trim().toUpperCase();
       }
-      return loc.zone == session.zone;
+      return loc.zone.trim().toUpperCase() == session.zone.trim().toUpperCase() ||
+             loc.locationCode.trim().toUpperCase().startsWith(session.zone.trim().toUpperCase());
     }).toList();
 
     final expectedEpcs = expectedItems.map((e) => e.epc).toSet();
@@ -1939,7 +1945,7 @@ class WarehouseRepository extends ChangeNotifier {
         orElse: () => Item(itemId: '', productId: '', sku: 'UNKNOWN', productName: 'Thẻ chưa khai báo', serialNumber: '', epc: epc),
       );
 
-      if (item.sku == 'UNKNOWN') {
+      if (item.sku == 'UNKNOWN' || item.itemId.isEmpty) {
         session.results.add(
           InventoryItemResult(
             epc: epc,
@@ -1947,20 +1953,21 @@ class WarehouseRepository extends ChangeNotifier {
             readAt: DateTime.now(),
           ),
         );
-      } else if (expectedEpcs.contains(epc)) {
+      } else if (isAllWarehouse || expectedEpcs.contains(epc)) {
+        final actualLoc = _locations.firstWhere((l) => l.locationId == item.locationId, orElse: () => Location(locationId: '', locationCode: item.locationId ?? 'Chưa gán kệ', zone: '', shelf: '', level: ''));
         session.results.add(
           InventoryItemResult(
             epc: epc,
             sku: item.sku,
             productName: item.productName,
-            expectedLocation: session.locationCode ?? session.zone,
-            actualLocation: session.locationCode ?? session.zone,
+            expectedLocation: actualLoc.locationCode,
+            actualLocation: actualLoc.locationCode,
             resultType: InventoryVarianceType.match,
             readAt: DateTime.now(),
           ),
         );
       } else {
-        final actualLoc = _locations.firstWhere((l) => l.locationId == item.locationId, orElse: () => Location(locationId: '', locationCode: 'Chưa rõ', zone: '', shelf: '', level: ''));
+        final actualLoc = _locations.firstWhere((l) => l.locationId == item.locationId, orElse: () => Location(locationId: '', locationCode: item.locationId ?? 'Chưa rõ', zone: '', shelf: '', level: ''));
         session.results.add(
           InventoryItemResult(
             epc: epc,
@@ -1977,12 +1984,13 @@ class WarehouseRepository extends ChangeNotifier {
 
     for (var expItem in expectedItems) {
       if (!uniqueScannedEpcs.contains(expItem.epc)) {
+        final actualLoc = _locations.firstWhere((l) => l.locationId == expItem.locationId, orElse: () => Location(locationId: '', locationCode: expItem.locationId ?? 'Chưa gán kệ', zone: '', shelf: '', level: ''));
         session.results.add(
           InventoryItemResult(
             epc: expItem.epc,
             sku: expItem.sku,
             productName: expItem.productName,
-            expectedLocation: session.locationCode ?? session.zone,
+            expectedLocation: actualLoc.locationCode,
             actualLocation: 'Không thấy',
             resultType: InventoryVarianceType.missing,
             readAt: DateTime.now(),

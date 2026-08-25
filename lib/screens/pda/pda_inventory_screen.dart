@@ -695,6 +695,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   @override
   void dispose() {
     _uhf.stopInventory();
+    _uhf.clearTags();
     _uiRefreshTimer?.cancel();
     _tagSub?.cancel();
     _triggerSub?.cancel();
@@ -735,6 +736,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               _tagSub?.cancel();
               _triggerSub?.cancel();
               await _uhf.stopInventory();
+              _uhf.clearTags();
 
               // 2. Chốt số liệu chính xác với danh sách chip hiện tại trước khi đóng
               _repo.processAuditScan(
@@ -781,7 +783,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
           onPressed: () async {
+            _uiRefreshTimer?.cancel();
+            _tagSub?.cancel();
+            _triggerSub?.cancel();
             await _uhf.stopInventory();
+            _uhf.clearTags();
             widget.onBack();
           },
         ),
