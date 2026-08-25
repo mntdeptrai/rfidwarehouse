@@ -1005,6 +1005,7 @@ class WarehouseRepository extends ChangeNotifier {
       it.locationId = loc.locationId;
       it.inboundTime ??= now;
 
+      await _dbService.insertItem(it);
       await _dbService.updateItemLocationAndPallet(it.epc, loc.locationId, it.palletId);
       await _dbService.updateItemStatus(it.epc, ItemStatus.inStock);
 
@@ -1013,10 +1014,11 @@ class WarehouseRepository extends ChangeNotifier {
         recordId: it.itemId,
         action: 'UPDATE',
         payload: {
-          'itemId': it.itemId,
+          'item_id': it.itemId,
           'status': ItemStatus.inStock.code,
-          'locationId': loc.locationId,
-          'updatedAt': now.toIso8601String(),
+          'location_id': loc.locationId,
+          'pallet_id': it.palletId,
+          'updated_at': now.toIso8601String(),
         },
       );
 
@@ -1054,10 +1056,9 @@ class WarehouseRepository extends ChangeNotifier {
         recordId: order.inboundOrderId,
         action: 'UPDATE',
         payload: {
-          'inboundOrderId': order.inboundOrderId,
+          'inbound_order_id': order.inboundOrderId,
           'status': InboundOrderStatus.completed.code,
-          'locationId': loc.locationId,
-          'updatedAt': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
         },
       );
     }

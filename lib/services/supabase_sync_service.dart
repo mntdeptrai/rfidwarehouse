@@ -454,7 +454,7 @@ class SupabaseSyncService extends ChangeNotifier {
     if (_isOnline && _isInitialized) {
       try {
         final supa = Supabase.instance.client;
-        if (action == 'INSERT' || action == 'UPDATE' || action.contains('CONFIRM')) {
+        if (action == 'INSERT' || action.contains('CONFIRM')) {
           if (targetTable == 'sync_logs') {
             await supa.from(targetTable).insert({
               'log_id': recordId,
@@ -465,6 +465,13 @@ class SupabaseSyncService extends ChangeNotifier {
               'message': jsonEncode(payload),
             });
           } else {
+            await supa.from(targetTable).upsert(normalized);
+          }
+        } else if (action == 'UPDATE') {
+          final pkCol = _getPrimaryKeyColumn(targetTable);
+          try {
+            await supa.from(targetTable).update(normalized).eq(pkCol, recordId);
+          } catch (_) {
             await supa.from(targetTable).upsert(normalized);
           }
         } else if (action == 'DELETE') {
@@ -557,8 +564,16 @@ class SupabaseSyncService extends ChangeNotifier {
 
           try {
             final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
-            if (action == 'INSERT' || action == 'UPDATE') {
+            if (action == 'INSERT' || action.contains('CONFIRM')) {
               await supa.from(tableName).upsert(payload);
+            } else if (action == 'UPDATE') {
+              final pkCol = _getPrimaryKeyColumn(tableName);
+              final recId = item['record_id'] as String;
+              try {
+                await supa.from(tableName).update(payload).eq(pkCol, recId);
+              } catch (_) {
+                await supa.from(tableName).upsert(payload);
+              }
             } else if (action == 'DELETE') {
               final pkCol = _getPrimaryKeyColumn(tableName);
               final recId = item['record_id'] as String;

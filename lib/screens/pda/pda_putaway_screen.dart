@@ -200,10 +200,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   @override
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
-    final waitingOrders = _repo.inboundOrders.where((o) =>
-        o.status == InboundOrderStatus.waitingPutaway ||
-        o.status == InboundOrderStatus.newOrder ||
-        o.status == InboundOrderStatus.processing).toList();
 
     return Scaffold(
       backgroundColor: c.bgDeep,
@@ -225,10 +221,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
             // BƯỚC 2: QUÉT BARCODE TRÊN THÙNG HÀNG
             _buildStep2CartonBarcodeCard(c),
-            const SizedBox(height: 16),
-
-            // DANH SÁCH CÁC THÙNG ĐANG CHỜ XẾP KHO
-            _buildWaitingOrdersList(waitingOrders, c),
           ],
         ),
       ),
@@ -478,180 +470,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           ),
         ],
       ),
-    );
-  }
-
-
-  Widget _buildWaitingOrdersList(List<InboundOrder> orders, EyeCareColors c) {
-    // Thu thập tất cả các thùng / kiện đang ở trạng thái chờ xếp kho
-    final Map<String, List<Item>> waitingCartonsMap = {};
-    for (var it in _repo.items) {
-      if (it.status == ItemStatus.waitingPutaway) {
-        final key = (it.palletId != null && it.palletId!.isNotEmpty)
-            ? it.palletId!
-            : (it.orderNo != null && it.orderNo!.isNotEmpty ? it.orderNo! : 'KIỆN CHỜ XẾP');
-        waitingCartonsMap.putIfAbsent(key, () => []).add(it);
-      }
-    }
-
-    if (orders.isEmpty && waitingCartonsMap.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: c.bgCard,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.border),
-        ),
-        child: Center(
-          child: Text(
-            'Hiện không có kiện hàng nào đang chờ xếp kho.',
-            style: TextStyle(color: c.textMuted, fontSize: 12),
-          ),
-        ),
-      );
-    }
-
-    final List<Map<String, dynamic>> displayCartons = [];
-
-    // Nạp từ waitingCartonsMap
-    for (var entry in waitingCartonsMap.entries) {
-      final key = entry.key;
-      final items = entry.value;
-      final sampleProd = items.first.productName;
-      displayCartons.add({
-        'code': key,
-        'orderNo': items.first.orderNo ?? key,
-        'count': items.length,
-        'sampleProd': sampleProd,
-      });
-    }
-
-    // Nạp thêm các InboundOrder chờ xếp nếu chưa có trong map
-    for (var o in orders) {
-      final alreadyInList = displayCartons.any((d) => d['code'] == o.orderNo);
-      if (!alreadyInList) {
-        final totalReq = o.details.fold(0, (sum, d) => sum + d.requiredQty);
-        displayCartons.add({
-          'code': o.orderNo,
-          'orderNo': o.orderNo,
-          'count': totalReq,
-          'sampleProd': o.details.isNotEmpty ? o.details.first.productName : '',
-        });
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '📦 KIỆN HÀNG ĐANG CHỜ XẾP KHO',
-              style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
-            ),
-            Text(
-              '${displayCartons.length} kiện',
-              style: TextStyle(color: c.textMuted, fontSize: 11),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: displayCartons.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
-          itemBuilder: (context, idx) {
-            final carton = displayCartons[idx];
-            final code = carton['code'] as String;
-            final count = carton['count'] as int;
-            final sampleProd = carton['sampleProd'] as String;
-
-            return InkWell(
-              onTap: () => _processPutawayCarton(code),
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: c.bgCard,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: c.border),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: c.rfidCyan.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(Icons.inventory_2, color: c.rfidCyan, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  code,
-                                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: c.warningAmber.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'Chờ xếp',
-                                  style: TextStyle(color: c.warningAmber, fontSize: 9.5, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Mã Barcode quét: $code • $count SP',
-                            style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.w600, fontSize: 11),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (sampleProd.isNotEmpty) ...[
-                            const SizedBox(height: 1),
-                            Text(
-                              sampleProd,
-                              style: TextStyle(color: c.textSecondary, fontSize: 10.5),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: c.rfidCyan,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      ),
-                      onPressed: () => _processPutawayCarton(code),
-                      child: const Text('Cất vị trí này', style: TextStyle(color: Color(0xFF2C251E), fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
     );
   }
 }
