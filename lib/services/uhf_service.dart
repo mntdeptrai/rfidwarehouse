@@ -160,6 +160,10 @@ class UhfService extends ChangeNotifier {
       final bool pressed = args?['pressed'] ?? false;
       _isTriggerPressed = pressed;
       _isScanning = pressed;
+      if (!pressed) {
+        // Tắt ngay lập tức khi nhả cò súng
+        stopInventory();
+      }
       debugPrint('UhfService: Hardware Trigger ${pressed ? "Pressed" : "Released"}');
       _triggerStreamController.add(pressed);
       _notifyThrottleTimer?.cancel();

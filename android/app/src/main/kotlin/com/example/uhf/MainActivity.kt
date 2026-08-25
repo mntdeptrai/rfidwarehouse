@@ -918,10 +918,10 @@ class MainActivity : FlutterActivity() {
 
     private fun sendTriggerEvent(pressed: Boolean, keyCode: Int) {
         if (pressed) {
-            if (!isTriggerActive.compareAndSet(false, true)) return
             val now = System.currentTimeMillis()
             if (now - lastTriggerDown < TRIGGER_DEBOUNCE_MS) return
             lastTriggerDown = now
+            if (!isTriggerActive.compareAndSet(false, true)) return
 
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
@@ -934,11 +934,12 @@ class MainActivity : FlutterActivity() {
 
             notifyFlutterTrigger(true, keyCode, mode)
         } else {
-            if (!isTriggerActive.compareAndSet(true, false)) return
+            isTriggerActive.set(false)
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 stopBarcodeBroadcast()
             } else {
+                stopInventory()
                 bgHandler.post { stopInventory() }
             }
             notifyFlutterTrigger(false, keyCode, mode)

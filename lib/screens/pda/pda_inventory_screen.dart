@@ -604,13 +604,21 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   @override
   void initState() {
     super.initState();
-    _subscribeScanner();
+    // Nạp sẵn danh sách EPC nếu phiên đã từng quét trước đó
+    for (final r in widget.session.results) {
+      if (r.epc.isNotEmpty) _scannedEpcs.add(r.epc);
+    }
+    // Chỉ kích hoạt bộ đọc nếu phiên kiểm kê ĐANG MỞ (chưa hoàn tất)
+    if (!widget.session.isCompleted) {
+      _subscribeScanner();
+    }
   }
 
   void _scheduleUiRefresh() {
+    if (widget.session.isCompleted) return;
     if (_uiRefreshTimer?.isActive ?? false) return;
     _uiRefreshTimer = Timer(const Duration(milliseconds: 50), () {
-      if (mounted) {
+      if (mounted && !widget.session.isCompleted) {
         setState(() {
           _repo.processAuditScan(
             sessionId: widget.session.sessionId,
@@ -622,7 +630,9 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   }
 
   void _subscribeScanner() {
+    if (widget.session.isCompleted) return;
     _tagSub = _uhf.onTagRead.listen((tag) {
+      if (widget.session.isCompleted) return;
       if (mounted && tag.epc.isNotEmpty) {
         if (_uhf.filterDuplicates && _scannedEpcs.contains(tag.epc)) return;
         _scannedEpcs.add(tag.epc);
@@ -630,6 +640,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       }
     });
     _triggerSub = _uhf.onTriggerStateChanged.listen((isPressed) {
+      if (widget.session.isCompleted) return;
       if (mounted) {
         setState(() => _isScanning = isPressed);
       }
@@ -637,17 +648,19 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   }
 
   void _toggleScanning() async {
+    if (widget.session.isCompleted) return;
     if (_isScanning) {
       await _uhf.stopInventory();
-      setState(() => _isScanning = false);
+      if (mounted) setState(() => _isScanning = false);
     } else {
       await _uhf.startInventory();
-      setState(() => _isScanning = true);
+      if (mounted) setState(() => _isScanning = true);
     }
   }
 
   @override
   void dispose() {
+    _uhf.stopInventory();
     _uiRefreshTimer?.cancel();
     _tagSub?.cancel();
     _triggerSub?.cancel();
@@ -671,7 +684,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
           ],
         ),
         content: Text(
-          'Bạn có chắc chắn muốn chốt số liệu kiểm kê này (${_scannedEpcs.length} chip đã đọc)? Kết quả kiểm kê sẽ được lưu vào hệ thống.',
+          'Bạn có chắc chắn muốn chốt số liệu kiểm kê này (${_scannedEpcs.length} chip đã đọc)? Kết quả kiểm kê sẽ được lưu vào hệ thống và tắt đầu đọc RFID.',
           style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 13.5, height: 1.3),
         ),
         actions: [
@@ -683,6 +696,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
             onPressed: () async {
+              // 1. Tắt ngay lập tức đầu đọc RFID phần cứng
+              await _uhf.stopInventory();
+              if (mounted) setState(() => _isScanning = false);
+
+              // 2. Chốt số liệu và lưu SQLite + Supabase
               await _repo.completeInventorySession(widget.session.sessionId, 'Thủ kho PDA');
               if (ctx.mounted) Navigator.pop(ctx);
               widget.onBack();
@@ -705,6 +723,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   @override
   Widget build(BuildContext context) {
     final s = widget.session;
+    final isDone = s.isCompleted;
     final totalScanned = _scannedEpcs.length;
     final totalExpected = s.matchCount + s.missingCount;
 
@@ -715,14 +734,33 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
-          onPressed: widget.onBack,
+          onPressed: () async {
+            await _uhf.stopInventory();
+            widget.onBack();
+          },
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              s.sessionCode,
-              style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14.5),
+            Row(
+              children: [
+                Text(
+                  s.sessionCode,
+                  style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14.5),
+                ),
+                if (isDone) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF10B981), width: 0.8),
+                    ),
+                    child: const Text('ĐÃ HOÀN TẤT', style: TextStyle(color: Color(0xFF059669), fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ],
             ),
             Text(
               'Khu vực: ${s.zone}',
@@ -731,15 +769,39 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 26),
-            tooltip: 'Hoàn tất kiểm kê',
-            onPressed: _confirmComplete,
-          ),
+          if (!isDone)
+            IconButton(
+              icon: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 26),
+              tooltip: 'Hoàn tất kiểm kê',
+              onPressed: _confirmComplete,
+            ),
         ],
       ),
       body: Column(
         children: [
+          if (isDone)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.lock_outline, color: Color(0xFF059669), size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Phiếu kiểm kê này ĐÃ ĐƯỢC CHỐT SỐ LIỆU. Đầu đọc RFID đã tắt để bảo toàn số liệu.',
+                      style: TextStyle(color: Color(0xFF065F46), fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // 4 Chỉ số KPI thống kê lớn
           Container(
             padding: const EdgeInsets.all(12),
@@ -804,14 +866,14 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Danh sách Chip đọc được (${_scannedEpcs.length}):',
+                  'Danh sách Chip ghi nhận (${_scannedEpcs.length}):',
                   style: const TextStyle(
                     color: Color(0xFF2C251E),
                     fontWeight: FontWeight.bold,
                     fontSize: 12.5,
                   ),
                 ),
-                if (_scannedEpcs.isNotEmpty)
+                if (!isDone && _scannedEpcs.isNotEmpty)
                   InkWell(
                     onTap: () => setState(() => _scannedEpcs.clear()),
                     child: const Text(
@@ -837,9 +899,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          _isScanning
-                              ? 'Đang phát sóng đọc thẻ RFID...'
-                              : 'Bấm nút "BẮT ĐẦU QUÉT" hoặc bóp cò súng PDA',
+                          isDone
+                              ? 'Không có chip nào trong phiên kiểm kê này'
+                              : (_isScanning
+                                  ? 'Đang phát sóng đọc thẻ RFID...'
+                                  : 'Bấm nút "BẮT ĐẦU QUÉT" hoặc bóp cò súng PDA'),
                           style: TextStyle(
                             color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
                             fontSize: 12.5,
@@ -940,46 +1004,64 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               color: Color(0xFFE9E2D5),
               border: Border(top: BorderSide(color: Color(0xFFD1C7BA))),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: SizedBox(
+            child: isDone
+                ? SizedBox(
+                    width: double.infinity,
                     height: 48,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF059669),
+                        side: const BorderSide(color: Color(0xFF059669), width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      icon: Icon(_isScanning ? Icons.stop : Icons.sensors, color: Colors.white, size: 20),
-                      label: Text(
-                        _isScanning ? 'DỪNG QUÉT' : 'BẮT ĐẦU QUÉT',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      onPressed: _toggleScanning,
+                      icon: const Icon(Icons.arrow_back, size: 18),
+                      label: const Text('QUAY LẠI DANH SÁCH (ĐÃ HOÀN TẤT)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      onPressed: () async {
+                        await _uhf.stopInventory();
+                        widget.onBack();
+                      },
                     ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: Icon(_isScanning ? Icons.stop : Icons.sensors, color: Colors.white, size: 20),
+                            label: Text(
+                              _isScanning ? 'DỪNG QUÉT' : 'BẮT ĐẦU QUÉT',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            onPressed: _toggleScanning,
+                          ),
+                        ),
                       ),
-                      onPressed: _confirmComplete,
-                      child: const Text(
-                        'HOÀN TẤT',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 2,
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: _confirmComplete,
+                            child: const Text(
+                              'HOÀN TẤT',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ),

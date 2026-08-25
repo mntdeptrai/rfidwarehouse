@@ -1615,7 +1615,8 @@ class WarehouseRepository extends ChangeNotifier {
     required String sessionId,
     required List<String> scannedEpcs,
   }) {
-    final session = _inventorySessions.firstWhere((s) => s.sessionId == sessionId);
+    final session = _inventorySessions.where((s) => s.sessionId == sessionId).firstOrNull;
+    if (session == null || session.isCompleted) return;
     session.results.clear();
 
     final uniqueScannedEpcs = scannedEpcs.toSet();
