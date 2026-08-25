@@ -374,7 +374,7 @@ class InventorySession {
 
   int get actualScannedCount => results.where((r) => r.resultType != InventoryVarianceType.missing).length;
   int get knownInDbCount => results.where((r) => r.resultType != InventoryVarianceType.missing && r.resultType != InventoryVarianceType.unknownEpc).length;
-  int get varianceOrUnknownCount => results.where((r) => r.resultType == InventoryVarianceType.unknownEpc || r.resultType == InventoryVarianceType.wrongLocation).length;
+  int get varianceOrUnknownCount => (actualScannedCount - knownInDbCount) > 0 ? (actualScannedCount - knownInDbCount) : 0;
 }
 
 /// Chi tiết đối chiếu Gate theo từng SKU

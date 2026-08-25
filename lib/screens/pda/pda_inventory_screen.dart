@@ -730,14 +730,23 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
             onPressed: () async {
-              // 1. Đóng hộp thoại và chuyển màn hình ngay lập tức (0ms lag)
-              Navigator.pop(ctx);
+              // 1. Tắt ngay lập tức đầu đọc RFID & hủy toàn bộ listener/timer
+              _uiRefreshTimer?.cancel();
+              _tagSub?.cancel();
+              _triggerSub?.cancel();
+              await _uhf.stopInventory();
+
+              // 2. Chốt số liệu chính xác với danh sách chip hiện tại trước khi đóng
+              _repo.processAuditScan(
+                sessionId: widget.session.sessionId,
+                scannedEpcs: _scannedEpcs.toList(),
+              );
+
+              // 3. Đóng hộp thoại và chuyển màn hình
+              if (ctx.mounted) Navigator.pop(ctx);
               widget.onBack();
 
-              // 2. Tắt ngay đầu đọc RFID phần cứng
-              _uhf.stopInventory();
-
-              // 3. Chốt số liệu và lưu SQLite + Đồng bộ nền
+              // 4. Chốt số liệu và lưu SQLite + Đồng bộ nền
               await _repo.completeInventorySession(widget.session.sessionId, 'Thủ kho PDA');
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
