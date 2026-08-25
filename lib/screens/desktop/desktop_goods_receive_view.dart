@@ -13,7 +13,8 @@ import '../../models/tag_info.dart';
 import '../../theme/eye_care_theme.dart';
 
 class DesktopGoodsReceiveView extends StatefulWidget {
-  const DesktopGoodsReceiveView({super.key});
+  final bool isActive;
+  const DesktopGoodsReceiveView({super.key, this.isActive = true});
 
   @override
   State<DesktopGoodsReceiveView> createState() => _DesktopGoodsReceiveViewState();
@@ -58,6 +59,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final List<Map<String, dynamic>> _receiptCartons = [];
 
   @override
+  void didUpdateWidget(DesktopGoodsReceiveView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive && !widget.isActive) {
+      if (_isScanning) {
+        _stopLiveScan(triggerEvaluation: false);
+      }
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     _resetForm();
@@ -100,7 +111,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final cleanEpc = epc.trim().toUpperCase();
     final item = _repo.items.where((i) => i.epc.toUpperCase() == cleanEpc).firstOrNull;
     if (item != null && item.orderNo != null && item.orderNo!.isNotEmpty) {
-      final order = _repo.inboundOrders.where((o) => o.orderNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase() || o.inboundOrderId.trim().toUpperCase() == item.orderNo!.trim().toUpperCase()).firstOrNull;
+      // Chỉ nhận diện các chip đang ở trạng thái Chờ nhập kho (pendingInbound)
+      if (item.status != ItemStatus.pendingInbound) {
+        return null;
+      }
+      final order = _repo.inboundOrders.where((o) =>
+        (o.orderNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase() ||
+         o.inboundOrderId.trim().toUpperCase() == item.orderNo!.trim().toUpperCase()) &&
+        o.status == InboundOrderStatus.newOrder
+      ).firstOrNull;
       if (order != null) return order;
       return InboundOrder(
         inboundOrderId: item.orderNo!,
@@ -238,7 +257,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   }
 
   void _onDesktopUhfUpdate() {
-    if (!mounted) return;
+    if (!mounted || !widget.isActive) return;
     setState(() {
       _isScanning = _desktopUhf.isScanning;
       if (_desktopUhf.tags.isEmpty) {
@@ -248,6 +267,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _scanErrorMessage = null;
       } else {
         for (final tag in _desktopUhf.tags) {
+          final cleanEpc = tag.epc.trim().toUpperCase();
+          final item = _repo.items.where((i) => i.epc.toUpperCase() == cleanEpc).firstOrNull;
+          if (item != null && item.status != ItemStatus.pendingInbound) {
+            continue;
+          }
           if (_selectedLiveOrder == null) {
             final detected = _findOrderForEpc(tag.epc);
             if (detected != null) {
@@ -344,7 +368,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   }
 
   void _handleIncomingTag(TagInfo tag) {
-    if (!_isScanning) return;
+    if (!widget.isActive || !_isScanning) return;
+
+    final cleanEpc = tag.epc.trim().toUpperCase();
+    final item = _repo.items.where((i) => i.epc.toUpperCase() == cleanEpc).firstOrNull;
+    if (item != null && item.status != ItemStatus.pendingInbound) {
+      // Chip này đã nhập kho hoặc đã qua cổng rồi -> Bỏ qua không quét nhận lại
+      return;
+    }
 
     // 1. Tự động nhận diện đơn hàng ngay khi bắt được sóng chip đầu tiên
     if (_selectedLiveOrder == null) {
@@ -497,7 +528,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
   }
 
-  Future<void> _stopLiveScan({bool autoFinished = false}) async {
+  Future<void> _stopLiveScan({bool autoFinished = false, bool triggerEvaluation = true}) async {
     _countdownTimer?.cancel();
     _uhf.stopInventory();
     await _desktopUhf.stopInventory();
@@ -508,6 +539,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _scanCountdown = _scanDurationSeconds;
       });
     }
+
+    if (!triggerEvaluation) return;
 
     // Đánh giá kết quả cuối cùng sau khi kết thúc đợt quét:
     final expectedItems = _getExpectedItemsForOrder(_selectedLiveOrder?.orderNo);
@@ -614,15 +647,18 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       setState(() {
         _scannedTags.clear();
+        _invalidTags.clear();
+        _hasScanError = false;
+        _scanErrorMessage = null;
         _uhf.clearTags();
+        _desktopUhf.clearTags();
         // Chuyển sang đơn mới tiếp theo (bỏ qua đơn đã xác nhận)
         final nextOrder = _repo.inboundOrders.where((o) =>
-          o.status == InboundOrderStatus.newOrder ||
-          o.status == InboundOrderStatus.processing
+          o.status == InboundOrderStatus.newOrder
         ).firstOrNull;
         _selectedLiveOrder = nextOrder;
       });
-      _desktopUhf.clearTags();
+      _towerLight.turnOffAll();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2767,7 +2803,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
                     itemBuilder: (itemCtx, index) {
                       final order = inboundOrders[index];
-                      final isCompleted = order.status == InboundOrderStatus.completed;
                       final barcodeDisplay = _getOrEnsureOrderBarcode(order);
                       final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
                       final orderItemCount = orderItems.isNotEmpty ? orderItems.length : order.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
@@ -2875,13 +2910,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: isCompleted ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                              color: order.status == InboundOrderStatus.completed
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.2)
+                                  : (order.status == InboundOrderStatus.waitingPutaway
+                                      ? const Color(0xFF0284C7).withValues(alpha: 0.2)
+                                      : const Color(0xFFF59E0B).withValues(alpha: 0.2)),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              isCompleted ? 'Completed' : 'Draft',
+                              order.status == InboundOrderStatus.completed
+                                  ? 'Completed'
+                                  : (order.status == InboundOrderStatus.waitingPutaway ? 'Chờ xếp kệ' : 'Draft'),
                               style: TextStyle(
-                                color: isCompleted ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                color: order.status == InboundOrderStatus.completed
+                                    ? const Color(0xFF10B981)
+                                    : (order.status == InboundOrderStatus.waitingPutaway ? const Color(0xFF0284C7) : const Color(0xFFF59E0B)),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 11,
                               ),

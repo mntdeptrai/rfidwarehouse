@@ -5,6 +5,8 @@ import 'desktop_inventory_view.dart';
 import 'desktop_lookup_view.dart';
 import 'desktop_uhf_studio_view.dart';
 import '../storage_screen.dart';
+import '../../services/desktop_uhf_tcp_service.dart';
+import '../../services/uhf_service.dart';
 import '../../theme/eye_care_theme.dart';
 
 class DesktopMainLayout extends StatefulWidget {
@@ -18,13 +20,13 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   int _selectedMenuIndex = 0;
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
-  final List<Widget> _views = const [
-    DesktopGoodsReceiveView(), // 0: Goods Receive
-    DesktopGoodsDeliveryView(), // 1: Goods Delivery
-    StorageScreen(), // 2: Goods Transfer / Storage
-    DesktopInventoryView(), // 3: Inventory
-    DesktopLookupView(), // 4: Lookup
-    DesktopUhfStudioView(), // 5: UHF Reader Studio (Hopeland SDK & Fixed Reader)
+  List<Widget> _buildViews() => [
+    DesktopGoodsReceiveView(isActive: _selectedMenuIndex == 0), // 0: Goods Receive
+    DesktopGoodsDeliveryView(isActive: _selectedMenuIndex == 1), // 1: Goods Delivery
+    const StorageScreen(), // 2: Goods Transfer / Storage
+    const DesktopInventoryView(), // 3: Inventory
+    const DesktopLookupView(), // 4: Lookup
+    const DesktopUhfStudioView(), // 5: UHF Reader Studio (Hopeland SDK & Fixed Reader)
   ];
 
   @override
@@ -70,7 +72,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       Expanded(
                         child: IndexedStack(
                           index: _selectedMenuIndex,
-                          children: _views,
+                          children: _buildViews(),
                         ),
                       ),
                     ],
@@ -216,7 +218,13 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: () => setState(() => _selectedMenuIndex = index),
+          onTap: () {
+            if (_selectedMenuIndex != index) {
+              DesktopUhfTcpService().stopInventory();
+              UhfService().stopInventory();
+              setState(() => _selectedMenuIndex = index);
+            }
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(

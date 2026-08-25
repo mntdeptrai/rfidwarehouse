@@ -9,7 +9,8 @@ import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
 
 class DesktopGoodsDeliveryView extends StatefulWidget {
-  const DesktopGoodsDeliveryView({super.key});
+  final bool isActive;
+  const DesktopGoodsDeliveryView({super.key, this.isActive = true});
 
   @override
   State<DesktopGoodsDeliveryView> createState() => _DesktopGoodsDeliveryViewState();
@@ -62,6 +63,16 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   bool _isAutoConfirming = false;
 
   @override
+  void didUpdateWidget(DesktopGoodsDeliveryView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive && !widget.isActive) {
+      if (_isScanning) {
+        _stopLiveScan(triggerEvaluation: false);
+      }
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
     _resetForm();
@@ -87,7 +98,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   }
 
   void _onDesktopUhfUpdate() {
-    if (!mounted) return;
+    if (!mounted || !widget.isActive) return;
     setState(() {
       _isScanning = _desktopUhf.isScanning;
       if (_desktopUhf.tags.isEmpty) {
@@ -113,6 +124,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   }
 
   void _handleIncomingTag(TagInfo tag) {
+    if (!widget.isActive) return;
+
     if (_isCreating) {
       final epc = tag.epc.trim().toUpperCase();
       if (_createOutboundTab == 0) {
@@ -325,7 +338,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     }
   }
 
-  Future<void> _stopLiveScan({bool autoFinished = false}) async {
+  Future<void> _stopLiveScan({bool autoFinished = false, bool triggerEvaluation = true}) async {
     _countdownTimer?.cancel();
     _uhf.stopInventory();
     await _desktopUhf.stopInventory();
@@ -336,6 +349,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
         _scanCountdown = _scanDurationSeconds;
       });
     }
+
+    if (!triggerEvaluation) return;
 
     final liveOrder = _effectiveLiveOrder;
     if (liveOrder != null) {
