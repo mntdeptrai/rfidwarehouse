@@ -716,7 +716,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Cấu trúc tệp Excel gồm 4 cột: CARTON CODE (Mã thùng), EPC (Mã chip RFID sản phẩm), BARCODE (Mã vạch ngoài thùng để quét cất vị trí kho khi Putaway), NAME (Tên sản phẩm). Khi nạp file, hệ thống sẽ lưu đúng mã EPC của từng sản phẩm ở trạng thái CHƯA NHẬP KHO.',
+                          'Cấu trúc tệp Excel gồm 3 cột chuẩn: CARTON CODE (Mã thùng/kiện), EPC (Mã chip RFID sản phẩm), NAME (Tên sản phẩm). Khi nạp file, hệ thống sẽ lưu đúng mã EPC của từng sản phẩm ở trạng thái CHƯA NHẬP KHO.',
                           style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                         ),
                       ),
@@ -727,10 +727,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 Table(
                   border: TableBorder.all(color: c.border),
                   columnWidths: const {
-                    0: FlexColumnWidth(2),
-                    1: FlexColumnWidth(3.2),
-                    2: FlexColumnWidth(2),
-                    3: FlexColumnWidth(2.2),
+                    0: FlexColumnWidth(2.2),
+                    1: FlexColumnWidth(3.8),
+                    2: FlexColumnWidth(2.5),
                   },
                   children: [
                     TableRow(
@@ -738,7 +737,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       children: [
                         Padding(padding: const EdgeInsets.all(8), child: Text('CARTON CODE', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('BARCODE (NGOÀI THÙNG)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('NAME', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                       ],
                     ),
@@ -746,23 +744,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       children: [
                         Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000001', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('Product Test 01', style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('áo hồng', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                     TableRow(
                       children: [
                         Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000002', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('Product Test 02', style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('áo tím', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                     TableRow(
                       children: [
                         Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('...', style: TextStyle(color: c.textMuted, fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('...', style: TextStyle(color: c.textMuted, fontSize: 11))),
                       ],
                     ),
@@ -770,8 +765,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       children: [
                         Padding(padding: const EdgeInsets.all(8), child: Text('CARTONTEST0001', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                         Padding(padding: const EdgeInsets.all(8), child: Text('ABCDEF000000000000000010', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('8930000000001', style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
-                        Padding(padding: const EdgeInsets.all(8), child: Text('Product Test 10', style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                        Padding(padding: const EdgeInsets.all(8), child: Text('quần kakak', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                       ],
                     ),
                   ],

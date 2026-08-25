@@ -153,6 +153,7 @@ void main() {
       await repo.confirmGateReceiveToWaitingPutaway(
         orderNo: cartonCode,
         scannedEpcs: [epc1, epc2, epc3],
+        cartonCode: outerCartonBarcode,
         performedBy: 'Trạm Cổng RFID Desktop',
       );
 

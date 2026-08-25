@@ -873,27 +873,57 @@ class WarehouseRepository extends ChangeNotifier {
 
     for (var it in matchedItems) {
       it.status = ItemStatus.waitingPutaway;
-      // Gán mã thùng Barcode 128 vào palletId (hoặc giữ mã thùng đã khai báo trước đó nếu có)
-      it.palletId = (cartonCode != null && cartonCode.trim().isNotEmpty)
-          ? effectiveCartonCode
-          : (it.palletId != null && it.palletId!.trim().isNotEmpty ? it.palletId : effectiveCartonCode);
+      // Barcode của hàng hóa được gắn theo barcode của thùng được sinh lúc nhập kho qua cổng
+      it.palletId = effectiveCartonCode;
+      it.sku = effectiveCartonCode;
+      it.productId = effectiveCartonCode;
       it.locationId = null;
       it.inboundTime = now;
       if (it.orderNo == null || it.orderNo!.isEmpty) {
         it.orderNo = cleanOrderNo;
       }
+
+      // Đảm bảo có bản ghi Product tương ứng cho mã Barcode mới sinh
+      final existingProd = _products.where((p) => p.sku == effectiveCartonCode || p.productId == effectiveCartonCode).firstOrNull;
+      if (existingProd == null) {
+        final newProd = Product(
+          productId: effectiveCartonCode,
+          sku: effectiveCartonCode,
+          productName: it.productName.isNotEmpty ? it.productName : 'Kiện hàng $effectiveCartonCode',
+          unit: 'Cái',
+          category: 'Hàng nhập qua cổng RFID',
+        );
+        _products.add(newProd);
+        await _dbService.insertProduct(newProd);
+        await _syncDirectOrQueue(
+          tableName: 'products',
+          recordId: newProd.productId,
+          action: 'INSERT',
+          payload: {
+            'product_id': newProd.productId,
+            'sku': newProd.sku,
+            'product_name': newProd.productName,
+            'unit': newProd.unit,
+            'category': newProd.category,
+          },
+        );
+      }
+
       await _dbService.insertItem(it);
       await _syncDirectOrQueue(
         tableName: 'items',
         recordId: it.itemId,
         action: 'UPDATE',
         payload: {
-          'itemId': it.itemId,
+          'item_id': it.itemId,
+          'product_id': it.productId,
+          'sku': it.sku,
           'status': ItemStatus.waitingPutaway.code,
-          'locationId': null,
-          'palletId': it.palletId,
-          'orderNo': it.orderNo,
-          'inboundTime': now.toIso8601String(),
+          'location_id': null,
+          'pallet_id': it.palletId,
+          'order_no': it.orderNo,
+          'inbound_time': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
         },
       );
     }
@@ -909,9 +939,9 @@ class WarehouseRepository extends ChangeNotifier {
         recordId: order.inboundOrderId,
         action: 'UPDATE',
         payload: {
-          'inboundOrderId': order.inboundOrderId,
+          'inbound_order_id': order.inboundOrderId,
           'status': InboundOrderStatus.waitingPutaway.code,
-          'updatedAt': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
         },
       );
     }

@@ -126,8 +126,8 @@ class ExcelImportService {
 
     int cartonCol = 0;
     int serialCol = 1;
-    int barcodeCol = 2;
-    int nameCol = 3;
+    int? barcodeCol;
+    int nameCol = 2;
     int startRow = 0;
 
     // Kiểm tra dòng tiêu đề
@@ -136,17 +136,17 @@ class ExcelImportService {
 
     bool hasHeader = false;
     for (int i = 0; i < headers.length; i++) {
-      final h = headers[i];
+      final h = headers[i].trim();
       if (h.contains('carton') || h.contains('thung') || h.contains('thùng') || h.contains('box') || h.contains('pallet')) {
         cartonCol = i;
         hasHeader = true;
       } else if (h.contains('serial') || h.contains('epc') || h.contains('chip')) {
         serialCol = i;
         hasHeader = true;
-      } else if (h.contains('barcode') || h.contains('sku') || h.contains('mã sp') || h.contains('mã hàng') || h.contains('code')) {
+      } else if (h.contains('barcode') || h.contains('sku') || h.contains('mã sp') || h.contains('mã hàng')) {
         barcodeCol = i;
         hasHeader = true;
-      } else if (h.contains('name') || h.contains('tên') || h.contains('ten') || h.contains('product')) {
+      } else if (h.contains('name') || h.contains('tên') || h.contains('ten') || h.contains('product') || h.contains('sản phẩm')) {
         nameCol = i;
         hasHeader = true;
       }
@@ -165,7 +165,7 @@ class ExcelImportService {
 
       final carton = cartonCol < row.length ? _cellToString(row[cartonCol]?.value).trim() : '';
       final serial = serialCol < row.length ? _cellToString(row[serialCol]?.value).trim() : '';
-      final barcode = barcodeCol < row.length ? _cellToString(row[barcodeCol]?.value).trim() : '';
+      final barcode = (barcodeCol != null && barcodeCol < row.length) ? _cellToString(row[barcodeCol]?.value).trim() : '';
       final name = nameCol < row.length ? _cellToString(row[nameCol]?.value).trim() : '';
 
       if (carton.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
@@ -175,10 +175,10 @@ class ExcelImportService {
       validDataRows++;
 
       final effectiveCarton = carton.isNotEmpty ? carton : 'CARTON-DEFAULT';
-      final effectiveBarcode = barcode.isNotEmpty ? barcode : (serial.isNotEmpty ? 'SKU-${serial.substring(0, (serial.length > 8 ? 8 : serial.length))}' : 'SKU-001');
-      final effectiveName = name.isNotEmpty ? name : 'Sản phẩm $effectiveBarcode';
+      final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
+      final effectiveBarcode = barcode.isNotEmpty ? barcode : effectiveCarton;
 
-      final groupKey = '$effectiveCarton||$effectiveBarcode';
+      final groupKey = effectiveCarton;
 
       if (!cartonMap.containsKey(groupKey)) {
         cartonMap[groupKey] = {
@@ -225,8 +225,8 @@ class ExcelImportService {
 
     int cartonCol = 0;
     int serialCol = 1;
-    int barcodeCol = 2;
-    int nameCol = 3;
+    int? barcodeCol;
+    int nameCol = 2;
     int startRow = 0;
 
     final firstLine = lines.first.split(RegExp(r',|\t|;'));
@@ -234,17 +234,17 @@ class ExcelImportService {
 
     bool hasHeader = false;
     for (int i = 0; i < headers.length; i++) {
-      final h = headers[i];
+      final h = headers[i].trim();
       if (h.contains('carton') || h.contains('thung') || h.contains('thùng') || h.contains('box') || h.contains('pallet')) {
         cartonCol = i;
         hasHeader = true;
       } else if (h.contains('serial') || h.contains('epc') || h.contains('chip')) {
         serialCol = i;
         hasHeader = true;
-      } else if (h.contains('barcode') || h.contains('sku') || h.contains('mã sp') || h.contains('mã hàng') || h.contains('code')) {
+      } else if (h.contains('barcode') || h.contains('sku') || h.contains('mã sp') || h.contains('mã hàng')) {
         barcodeCol = i;
         hasHeader = true;
-      } else if (h.contains('name') || h.contains('tên') || h.contains('ten') || h.contains('product')) {
+      } else if (h.contains('name') || h.contains('tên') || h.contains('ten') || h.contains('product') || h.contains('sản phẩm')) {
         nameCol = i;
         hasHeader = true;
       }
@@ -260,22 +260,24 @@ class ExcelImportService {
     for (int r = startRow; r < lines.length; r++) {
       final line = lines[r].trim();
       if (line.isEmpty) continue;
+      final row = line.split(RegExp(r',|\t|;'));
 
-      final cols = line.split(RegExp(r',|\t|;')).map((s) => s.trim().replaceAll('"', '')).toList();
-      final carton = cartonCol < cols.length ? cols[cartonCol] : '';
-      final serial = serialCol < cols.length ? cols[serialCol] : '';
-      final barcode = barcodeCol < cols.length ? cols[barcodeCol] : '';
-      final name = nameCol < cols.length ? cols[nameCol] : '';
+      final carton = cartonCol < row.length ? row[cartonCol].trim() : '';
+      final serial = serialCol < row.length ? row[serialCol].trim() : '';
+      final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
+      final name = nameCol < row.length ? row[nameCol].trim() : '';
 
-      if (carton.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) continue;
+      if (carton.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
+        continue;
+      }
 
       validDataRows++;
 
       final effectiveCarton = carton.isNotEmpty ? carton : 'CARTON-DEFAULT';
-      final effectiveBarcode = barcode.isNotEmpty ? barcode : (serial.isNotEmpty ? 'SKU-${serial.substring(0, (serial.length > 8 ? 8 : serial.length))}' : 'SKU-001');
-      final effectiveName = name.isNotEmpty ? name : 'Sản phẩm $effectiveBarcode';
+      final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
+      final effectiveBarcode = barcode.isNotEmpty ? barcode : effectiveCarton;
 
-      final groupKey = '$effectiveCarton||$effectiveBarcode';
+      final groupKey = effectiveCarton;
 
       if (!cartonMap.containsKey(groupKey)) {
         cartonMap[groupKey] = {
@@ -326,11 +328,6 @@ class ExcelImportService {
 
       final file = files.first;
       final bytes = await file.readAsBytes();
-
-      if (bytes.isEmpty) {
-        throw Exception('Không thể đọc nội dung tệp.');
-      }
-
       final excel = Excel.decodeBytes(bytes);
       if (excel.tables.isEmpty) throw Exception('Tệp Excel rỗng.');
 
@@ -432,30 +429,30 @@ class ExcelImportService {
     }
   }
 
-  /// Xuất file Excel mẫu chuẩn 4 cột: Template-Goods-Receive.xlsx
+  /// Xuất file Excel mẫu chuẩn 3 cột: Template-Goods-Receive.xlsx
   Future<String> exportGoodsReceiveTemplate() async {
     final excel = Excel.createExcel();
     final sheetName = excel.getDefaultSheet() ?? 'Sheet1';
     final sheet = excel[sheetName];
 
-    final headers = ['CARTON CODE', 'EPC', 'BARCODE', 'NAME'];
+    final headers = ['CARTON CODE', 'EPC', 'NAME'];
     for (int col = 0; col < headers.length; col++) {
       final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0));
       cell.value = TextCellValue(headers[col]);
     }
 
-    // Sample Data
+    // Sample Data chuẩn 3 cột: Mã thùng, Mã chip EPC RFID, Tên sản phẩm
     final sampleData = [
-      ['CARTONTEST0001', 'ABCDEF000000000000000001', '8930000000001', 'Product Test 01'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000002', '8930000000001', 'Product Test 02'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000003', '8930000000001', 'Product Test 03'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000004', '8930000000001', 'Product Test 04'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000005', '8930000000001', 'Product Test 05'],
-      ['CARTONTEST0002', 'ABCDEF000000000000000011', '8930000000002', 'Product Test 11'],
-      ['CARTONTEST0002', 'ABCDEF000000000000000012', '8930000000002', 'Product Test 12'],
-      ['CARTONTEST0002', 'ABCDEF000000000000000013', '8930000000002', 'Product Test 13'],
-      ['CARTONTEST0002', 'ABCDEF000000000000000014', '8930000000002', 'Product Test 14'],
-      ['CARTONTEST0002', 'ABCDEF000000000000000015', '8930000000002', 'Product Test 15'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000001', 'áo hồng'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000002', 'áo tím'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000003', 'sịp siêu nhân'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000004', 'quần doraemon'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000005', 'áo siêu nhân'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000006', 'váy người mẫu'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000007', 'mũ len'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000008', 'nón lá'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000009', 'áo khoác'],
+      ['CARTONTEST0001', 'ABCDEF000000000000000010', 'quần kakak'],
     ];
 
     for (int r = 0; r < sampleData.length; r++) {

@@ -117,8 +117,8 @@ class Product {
 /// Sản phẩm vật lý cụ thể (Item)
 class Item {
   final String itemId;
-  final String productId;
-  final String sku;
+  String productId;
+  String sku;
   final String productName;
   final String serialNumber;
   final String epc;
