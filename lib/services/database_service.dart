@@ -282,6 +282,38 @@ class DatabaseService {
         FOREIGN KEY (session_id) REFERENCES inventory_sessions (session_id) ON DELETE CASCADE
       )
     ''');
+
+    // 17. B-Tree Indexes siêu tốc cho truy vấn quy mô lớn
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_items_epc ON items(epc);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_order_status ON items(order_no, status);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_sku ON items(sku);');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_location ON items(location_id);');
+  }
+
+  /// Kiểm tra nhanh danh sách mã EPC xem đã tồn tại trong CSDL SQLite chưa (Chunked Batch Query theo B-Tree Index)
+  Future<Set<String>> checkExistingEpcs(List<String> epcs) async {
+    if (epcs.isEmpty) return {};
+    final db = await database;
+    final Set<String> existing = {};
+    const int chunkSize = 500;
+
+    for (int i = 0; i < epcs.length; i += chunkSize) {
+      final end = (i + chunkSize < epcs.length) ? i + chunkSize : epcs.length;
+      final chunk = epcs.sublist(i, end).map((e) => e.trim().toUpperCase()).where((e) => e.isNotEmpty).toList();
+      if (chunk.isEmpty) continue;
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final res = await db.rawQuery(
+        'SELECT epc FROM items WHERE UPPER(epc) IN ($placeholders)',
+        chunk,
+      );
+      for (final row in res) {
+        final epc = row['epc'] as String?;
+        if (epc != null && epc.isNotEmpty) {
+          existing.add(epc.toUpperCase());
+        }
+      }
+    }
+    return existing;
   }
 
   Future<String?> getSystemConfig(String key) async {

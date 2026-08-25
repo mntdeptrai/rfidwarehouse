@@ -146,6 +146,22 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> refreshFromDatabase() => _loadFromSqlite();
 
+  /// Kiểm tra siêu tốc danh sách EPC đã tồn tại (kết hợp RAM HashSet O(1) và SQLite B-Tree Index)
+  Future<Set<String>> checkExistingEpcs(List<String> epcs) async {
+    if (epcs.isEmpty) return {};
+    final cleanEpcs = epcs.map((e) => e.trim().toUpperCase()).where((e) => e.isNotEmpty).toList();
+
+    // 1. So khớp siêu tốc trong RAM (Hash Set O(1))
+    final inMemorySet = _items.map((i) => i.epc.toUpperCase()).toSet();
+    final Set<String> matched = cleanEpcs.where((e) => inMemorySet.contains(e)).toSet();
+
+    // 2. So khớp trực tiếp CSDL SQLite qua B-Tree Index
+    final dbMatched = await _dbService.checkExistingEpcs(cleanEpcs);
+    matched.addAll(dbMatched);
+
+    return matched;
+  }
+
   Future<void> deleteInboundOrder(String orderId) async {
     final cleanId = orderId.trim();
     final targetOrder = _inboundOrders.where((o) => o.inboundOrderId == cleanId || o.orderNo == cleanId).firstOrNull;
