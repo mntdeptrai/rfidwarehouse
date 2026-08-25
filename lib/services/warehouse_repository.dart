@@ -1484,11 +1484,11 @@ class WarehouseRepository extends ChangeNotifier {
     );
   }
 
-  bool confirmOutboundCompletion({
+  Future<bool> confirmOutboundCompletion({
     required String poNo,
     required List<String> shippedEpcs,
     required String performedBy,
-  }) {
+  }) async {
     final order = _outboundOrders.firstWhere((o) => o.poNo == poNo);
 
     final unstocked = shippedEpcs.where((epc) {
@@ -1501,16 +1501,23 @@ class WarehouseRepository extends ChangeNotifier {
       throw Exception('Không thể xuất kho: Có ${unstocked.length} sản phẩm chưa được xếp vào kệ nào trong kho (Đang chờ xếp kệ hoặc chưa gán vị trí)!');
     }
 
+    final now = DateTime.now();
+
     for (var epc in shippedEpcs) {
       final item = _items.firstWhere((it) => it.epc == epc);
       item.status = ItemStatus.out;
+      item.locationId = null;
       if (item.palletId != null) {
-        final pal = _pallets.firstWhere((p) => p.palletId == item.palletId);
-        pal.itemIds.remove(item.itemId);
+        final pal = _pallets.where((p) => p.palletId == item.palletId).firstOrNull;
+        pal?.itemIds.remove(item.itemId);
       }
+      await _dbService.updateItemStatus(epc, ItemStatus.out);
+      await _dbService.updateItemLocationAndPallet(epc, null, item.palletId);
+      await _dbService.insertItem(item);
     }
 
     order.status = OutboundOrderStatus.shipped;
+    await _dbService.updateOutboundOrderStatus(order.outboundOrderId, OutboundOrderStatus.shipped);
 
     for (var d in order.details) {
       _transactions.insert(
@@ -1533,7 +1540,7 @@ class WarehouseRepository extends ChangeNotifier {
 
     ErpBravoService().pushOutboundCompleted(poNo, shippedEpcs.length);
 
-    _syncDirectOrQueue(
+    await _syncDirectOrQueue(
       tableName: 'outbound_transactions',
       recordId: poNo,
       action: 'OUTBOUND_CONFIRM',
@@ -1573,11 +1580,14 @@ class WarehouseRepository extends ChangeNotifier {
       final item = _items.where((it) => it.epc == epc).firstOrNull;
       if (item != null) {
         item.status = ItemStatus.out;
+        item.locationId = null;
         if (item.palletId != null) {
           final pal = _pallets.where((p) => p.palletId == item.palletId).firstOrNull;
           pal?.itemIds.remove(item.itemId);
         }
         await _dbService.updateItemStatus(epc, ItemStatus.out);
+        await _dbService.updateItemLocationAndPallet(epc, null, item.palletId);
+        await _dbService.insertItem(item);
       }
     }
 

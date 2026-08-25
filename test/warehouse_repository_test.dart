@@ -143,7 +143,7 @@ void main() {
       expect(gatePass.isPass, isTrue);
 
       // Xác nhận xuất kho
-      final outboundConfirmed = repo.confirmOutboundCompletion(
+      final outboundConfirmed = await repo.confirmOutboundCompletion(
         poNo: po.poNo,
         shippedEpcs: allTargetEpcs,
         performedBy: 'Tester',

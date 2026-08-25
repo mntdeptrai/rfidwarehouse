@@ -43,6 +43,15 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   StreamSubscription<TagInfo>? _desktopTagSub;
   final List<Map<String, dynamic>> _deliveryItems = [];
 
+  // Creation Mode State: 0 = Xuất Lẻ (theo EPC), 1 = Xuất Theo Thùng (theo Barcode Thùng)
+  int _createOutboundTab = 0;
+  final Set<String> _selectedEpcSet = {};
+  final Set<String> _selectedCartonSet = {};
+  final Map<String, int> _cartonCustomQty = {};
+  final TextEditingController _epcSearchFilterController = TextEditingController();
+  final TextEditingController _cartonSearchFilterController = TextEditingController();
+  final TextEditingController _scanDesktopController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -72,7 +81,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     if (mounted) setState(() {});
   }
 
-
   void _onDesktopUhfUpdate() {
     if (!mounted) return;
     setState(() {
@@ -96,6 +104,21 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   }
 
   void _handleIncomingTag(TagInfo tag) {
+    if (_isCreating) {
+      final epc = tag.epc.trim().toUpperCase();
+      if (_createOutboundTab == 0) {
+        _selectedEpcSet.add(epc);
+      } else {
+        final item = _repo.items.where((i) => i.epc.toUpperCase() == epc).firstOrNull;
+        final cartonCode = item?.palletId ?? item?.sku;
+        if (cartonCode != null && cartonCode.isNotEmpty) {
+          _selectedCartonSet.add(cartonCode.toUpperCase());
+        }
+      }
+      if (mounted) setState(() {});
+      return;
+    }
+
     if (!_isScanning) return;
 
     if (_uhf.filterDuplicates && _scannedTags.containsKey(tag.epc)) {
@@ -150,6 +173,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _dateController.dispose();
     _customerController.dispose();
     _noteController.dispose();
+    _epcSearchFilterController.dispose();
+    _cartonSearchFilterController.dispose();
+    _scanDesktopController.dispose();
     super.dispose();
   }
 
@@ -159,6 +185,13 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _dateController.text = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     _customerController.text = '';
     _noteController.text = '';
+    _selectedEpcSet.clear();
+    _selectedCartonSet.clear();
+    _cartonCustomQty.clear();
+    _deliveryItems.clear();
+    _epcSearchFilterController.clear();
+    _cartonSearchFilterController.clear();
+    _scanDesktopController.clear();
   }
 
   void _toggleLiveScan() async {
@@ -255,7 +288,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     setState(() => _isSaving = true);
     try {
       if (_selectedLiveOrder != null) {
-        final ok = _repo.confirmOutboundCompletion(
+        final ok = await _repo.confirmOutboundCompletion(
           poNo: _selectedLiveOrder!.poNo,
           shippedEpcs: epcs,
           performedBy: 'Thủ kho Desktop Station',
@@ -305,37 +338,98 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   void _saveAndProceedToScan() async {
     final code = _deliveryNoController.text.trim();
-    if (code.isEmpty) return;
+    if (code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng nhập mã phiếu xuất (PO No)!')),
+      );
+      return;
+    }
+
+    final List<OutboundOrderDetail> details = [];
+
+    if (_createOutboundTab == 0) {
+      // 🏷️ XUẤT LẺ TỪNG SẢN PHẨM THEO MÃ EPC
+      if (_selectedEpcSet.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng tích chọn ít nhất 1 sản phẩm theo mã EPC cần xuất!')),
+        );
+        return;
+      }
+
+      final Map<String, List<Item>> epcBySku = {};
+      for (var epc in _selectedEpcSet) {
+        final item = _repo.items.where((i) => i.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+        final sku = item?.sku ?? epc;
+        epcBySku.putIfAbsent(sku, () => []).add(
+          item ?? Item(itemId: epc, productId: sku, sku: sku, productName: 'Sản phẩm $sku', serialNumber: epc, epc: epc, status: ItemStatus.inStock),
+        );
+      }
+
+      for (var entry in epcBySku.entries) {
+        final firstItem = entry.value.first;
+        details.add(OutboundOrderDetail(
+          productId: firstItem.productId,
+          sku: entry.key,
+          productName: firstItem.productName,
+          requiredQty: entry.value.length,
+          pickedQty: 0,
+          epcList: entry.value.map((i) => i.epc).toList(),
+        ));
+      }
+    } else {
+      // 📦 XUẤT THEO THÙNG THEO BARCODE THÙNG
+      if (_selectedCartonSet.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng tích chọn ít nhất 1 thùng hàng theo mã Barcode cần xuất!')),
+        );
+        return;
+      }
+
+      for (var cartonBarcode in _selectedCartonSet) {
+        final cartonItems = _repo.items.where((i) =>
+          (i.palletId != null && i.palletId!.toUpperCase() == cartonBarcode.toUpperCase()) ||
+          i.sku.toUpperCase() == cartonBarcode.toUpperCase() ||
+          i.productId.toUpperCase() == cartonBarcode.toUpperCase()
+        ).toList();
+
+        final firstItem = cartonItems.firstOrNull;
+        final prod = _repo.products.where((p) => p.sku.toUpperCase() == cartonBarcode.toUpperCase() || p.productId.toUpperCase() == cartonBarcode.toUpperCase()).firstOrNull;
+        final name = firstItem?.productName ?? prod?.productName ?? 'Kiện hàng $cartonBarcode';
+        final qty = _cartonCustomQty[cartonBarcode] ?? (cartonItems.isNotEmpty ? cartonItems.length : 1);
+
+        details.add(OutboundOrderDetail(
+          productId: cartonBarcode,
+          sku: cartonBarcode,
+          productName: name,
+          requiredQty: qty,
+          pickedQty: 0,
+          epcList: cartonItems.map((i) => i.epc).toList(),
+        ));
+      }
+    }
+
+    final totalChips = details.fold<int>(0, (sum, d) => sum + d.requiredQty);
 
     final newOrder = OutboundOrder(
       outboundOrderId: 'OUT-${DateTime.now().millisecondsSinceEpoch}',
       poNo: code,
-      customer: _customerController.text.trim(),
+      customer: _customerController.text.trim().isNotEmpty ? _customerController.text.trim() : 'Khách mua lẻ',
       createdAt: DateTime.now(),
       status: OutboundOrderStatus.processing,
-      details: [
-        for (var item in _deliveryItems)
-          OutboundOrderDetail(
-            productId: item['productCode'],
-            sku: item['productCode'],
-            productName: item['productName'],
-            requiredQty: item['quantity'],
-            pickedQty: 0,
-          ),
-      ],
+      details: details,
     );
 
     await _repo.addOutboundOrder(newOrder);
     setState(() {
       _isCreating = false;
       _selectedLiveOrder = newOrder;
-      _currentMode = 0; // Chuyển ngay sang trạm quét live
+      _currentMode = 0; // Chuyển sang trạm quét live
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF10B981),
-          content: Text('Đã tạo phiếu xuất $code. Mời đưa hàng qua trạm quét RFID!'),
+          content: Text('Đã tạo phiếu xuất $code ($totalChips SP). Mời đưa hàng qua trạm quét RFID!'),
         ),
       );
     }
@@ -1141,14 +1235,55 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       const SizedBox(width: 16),
                       Expanded(
                         flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(order.poNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                            const SizedBox(height: 2),
-                            Text('Khách hàng: ${order.customer} | Số lượng: $totalQty sản phẩm', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                          ],
-                        ),
+                        child: Builder(
+                            builder: (context) {
+                              final cartonCount = order.details.map((d) => d.sku).toSet().length;
+                              final String orderTypeLabel;
+                              final Color orderTypeColor;
+
+                              if (totalQty == 1) {
+                                orderTypeLabel = '🏷️ Xuất Lẻ (1 SP)';
+                                orderTypeColor = const Color(0xFF0284C7);
+                              } else if (cartonCount == 1) {
+                                orderTypeLabel = '📦 Xuất 1 Thùng ($totalQty SP)';
+                                orderTypeColor = const Color(0xFF10B981);
+                              } else {
+                                orderTypeLabel = '🚚 Đơn Lớn ($cartonCount Thùng · $totalQty SP)';
+                                orderTypeColor = const Color(0xFF8B5CF6);
+                              }
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Wrap(
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    spacing: 8,
+                                    runSpacing: 4,
+                                    children: [
+                                      Text(order.poNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: orderTypeColor.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: orderTypeColor.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Text(
+                                          orderTypeLabel,
+                                          style: TextStyle(color: orderTypeColor, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Khách hàng: ${order.customer.isNotEmpty ? order.customer : "Khách mua"} | Tổng: $totalQty sản phẩm',
+                                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1173,73 +1308,80 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     );
   }
 
-  final TextEditingController _scanDesktopController = TextEditingController();
-
   void _handleFormScannedCode(String rawCode) {
     final code = rawCode.trim();
     if (code.isEmpty) return;
     final upperCode = code.toUpperCase();
-    _scanDesktopController.text = code;
 
-    // 1. Tìm trong Items
-    final item = _repo.items.where((i) =>
-      i.epc.toUpperCase() == upperCode ||
-      i.sku.toUpperCase() == upperCode ||
-      i.productId.toUpperCase() == upperCode ||
-      (i.palletId != null && i.palletId!.toUpperCase() == upperCode)
-    ).firstOrNull;
-
-    // 2. Tìm trong Products
-    final prod = _repo.products.where((p) =>
-      p.sku.toUpperCase() == upperCode ||
-      p.productId.toUpperCase() == upperCode ||
-      p.productName.toUpperCase() == upperCode
-    ).firstOrNull;
-
-    // 3. Tìm trong Pallets
-    final pallet = _repo.pallets.where((p) =>
-      p.palletCode.toUpperCase() == upperCode ||
-      p.palletId.toUpperCase() == upperCode
-    ).firstOrNull;
-
-    final targetSku = item?.sku ?? prod?.sku ?? pallet?.palletCode ?? code;
-    final targetName = item?.productName ?? prod?.productName ?? (pallet != null ? 'Pallet ${pallet.palletCode}' : 'Sản phẩm $code');
-
-    // Tồn kho khả dụng
-    final inStock = _repo.items.where((i) =>
-      (i.sku.toUpperCase() == targetSku.toUpperCase() || i.productId.toUpperCase() == targetSku.toUpperCase()) &&
-      _repo.isItemStockedInLocation(i)
-    ).length;
-
-    final locs = _repo.items
-      .where((i) => (i.sku.toUpperCase() == targetSku.toUpperCase() || i.productId.toUpperCase() == targetSku.toUpperCase()) && i.status == ItemStatus.inStock)
-      .map((i) => i.locationId)
-      .where((l) => l != null && l.isNotEmpty)
-      .toSet()
-      .join(', ');
-
-    final existingIdx = _deliveryItems.indexWhere((it) => it['productCode'].toString().toUpperCase() == targetSku.toUpperCase());
-    if (existingIdx >= 0) {
-      final currentQ = _deliveryItems[existingIdx]['quantity'] as int;
-      final maxStock = (_deliveryItems[existingIdx]['inStock'] as int?) ?? 0;
-      if (maxStock == 0 || currentQ < maxStock) {
-        _deliveryItems[existingIdx]['quantity'] = currentQ + 1;
+    if (_createOutboundTab == 0) {
+      // Xuất lẻ: Tìm theo EPC hoặc SKU/Barcode
+      final item = _repo.items.where((i) => i.epc.toUpperCase() == upperCode).firstOrNull;
+      if (item != null) {
+        _selectedEpcSet.add(item.epc.toUpperCase());
+      } else {
+        final matchedItems = _repo.items.where((i) =>
+          i.sku.toUpperCase() == upperCode ||
+          i.productId.toUpperCase() == upperCode ||
+          (i.palletId != null && i.palletId!.toUpperCase() == upperCode)
+        ).toList();
+        for (var mi in matchedItems) {
+          _selectedEpcSet.add(mi.epc.toUpperCase());
+        }
       }
     } else {
-      _deliveryItems.add({
-        'productCode': targetSku,
-        'productName': targetName,
-        'quantity': inStock > 0 ? inStock : 1, // Mặc định tự động điền toàn bộ số lượng tồn khả dụng (ví dụ 10 SP của kiện)
-        'inStock': inStock,
-        'location': locs.isNotEmpty ? locs : 'Chưa xếp kệ',
-      });
+      // Xuất thùng: Tìm thùng theo Barcode hoặc EPC
+      final carton = _repo.items.where((i) =>
+        (i.palletId != null && i.palletId!.toUpperCase() == upperCode) ||
+        i.sku.toUpperCase() == upperCode ||
+        i.epc.toUpperCase() == upperCode
+      ).firstOrNull;
+      final cCode = carton?.palletId ?? carton?.sku ?? upperCode;
+      _selectedCartonSet.add(cCode.toUpperCase());
     }
 
     if (mounted) setState(() {});
   }
 
   Widget _buildCreateDeliveryForm(EyeCareColors c) {
-    final products = _repo.products;
+    // Lấy toàn bộ danh sách mặt hàng có sẵn trong kho
+    final stockItems = _repo.items.where((i) => _repo.isItemStockedInLocation(i) || i.status == ItemStatus.inStock).toList();
+
+    // Lọc cho Tab 0 (Xuất Lẻ theo mã EPC)
+    final epcQuery = _epcSearchFilterController.text.trim().toUpperCase();
+    final filteredEpcItems = stockItems.where((i) {
+      if (epcQuery.isEmpty) return true;
+      return i.epc.toUpperCase().contains(epcQuery) ||
+             i.productName.toUpperCase().contains(epcQuery) ||
+             i.sku.toUpperCase().contains(epcQuery) ||
+             (i.palletId != null && i.palletId!.toUpperCase().contains(epcQuery)) ||
+             (i.locationId != null && i.locationId!.toUpperCase().contains(epcQuery));
+    }).toList();
+
+    // Gom nhóm cho Tab 1 (Xuất theo Thùng theo Barcode Thùng)
+    final Map<String, List<Item>> cartonGroups = {};
+    for (var it in stockItems) {
+      final cCode = (it.palletId != null && it.palletId!.isNotEmpty) ? it.palletId! : it.sku;
+      cartonGroups.putIfAbsent(cCode, () => []).add(it);
+    }
+
+    final cartonQuery = _cartonSearchFilterController.text.trim().toUpperCase();
+    final filteredCartonEntries = cartonGroups.entries.where((entry) {
+      if (cartonQuery.isEmpty) return true;
+      final cCode = entry.key.toUpperCase();
+      final pName = entry.value.firstOrNull?.productName.toUpperCase() ?? '';
+      final loc = entry.value.firstOrNull?.locationId?.toUpperCase() ?? '';
+      return cCode.contains(cartonQuery) || pName.contains(cartonQuery) || loc.contains(cartonQuery);
+    }).toList();
+
+    final totalSelectedEpc = _selectedEpcSet.length;
+    final totalSelectedCartons = _selectedCartonSet.length;
+    final totalSelectedCartonChips = _selectedCartonSet.fold<int>(0, (sum, cCode) {
+      final cItems = cartonGroups[cCode] ?? [];
+      final customQ = _cartonCustomQty[cCode] ?? (cItems.isNotEmpty ? cItems.length : 1);
+      return sum + customQ;
+    });
+
+    final totalItemsToDeliver = _createOutboundTab == 0 ? totalSelectedEpc : totalSelectedCartonChips;
 
     return Container(
       color: c.bgDeep,
@@ -1247,6 +1389,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Top Header Bar
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1260,40 +1403,47 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Tạo Phiếu Xuất Hàng Lẻ / PO (Máy để bàn ZK-105)', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
-                      Text('Đặt sản phẩm lên đầu đọc để bàn ZK-RFID105 hoặc quét barcode để tự động nhận diện', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                      Text(
+                        'Tạo Phiếu Xuất Kho',
+                        style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        _createOutboundTab == 0
+                            ? 'Chế độ Xuất Lẻ: Tích chọn từng sản phẩm theo Mã EPC RFID (quét ZK-105 để tự chọn)'
+                            : 'Chế độ Xuất Thùng: Tích chọn từng kiện hàng theo Mã Barcode 128 Thùng',
+                        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                      ),
                     ],
                   ),
                 ],
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  backgroundColor: totalItemsToDeliver > 0 ? const Color(0xFF10B981) : c.bgCardElevated,
+                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.check, size: 18, color: Color(0xFF2C251E)),
-                label: const Text('LƯU & CHUYỂN SANG TRẠM QUÉT', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  if (_deliveryItems.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng quét hoặc thêm ít nhất một mặt hàng cần xuất!')),
-                    );
-                    return;
-                  }
-                  _saveAndProceedToScan();
-                },
+                icon: Icon(Icons.check_circle, size: 18, color: totalItemsToDeliver > 0 ? const Color(0xFF2C251E) : c.textMuted),
+                label: Text(
+                  'LƯU & CHUYỂN SANG TRẠM QUÉT ($totalItemsToDeliver SP)',
+                  style: TextStyle(
+                    color: totalItemsToDeliver > 0 ? const Color(0xFF2C251E) : c.textMuted,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                onPressed: () => _saveAndProceedToScan(),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
+
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Cột trái: Thông tin đơn xuất
+                // Cột trái: Thông tin PO & Tóm tắt
                 SizedBox(
-                  width: 320,
+                  width: 300,
                   child: Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
@@ -1315,7 +1465,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         TextField(
                           controller: _customerController,
                           style: TextStyle(color: c.textPrimary, fontSize: 13),
-                          decoration: InputDecoration(labelText: 'Khách hàng', hintText: 'Khách mua lẻ...', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
+                          decoration: InputDecoration(labelText: 'Khách hàng', hintText: 'Khách mua lẻ / Đại lý...', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -1327,32 +1477,16 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         TextField(
                           controller: _noteController,
                           style: TextStyle(color: c.textPrimary, fontSize: 13),
-                          decoration: InputDecoration(labelText: 'Ghi chú', hintText: 'Xuất hàng lẻ...', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
+                          decoration: InputDecoration(labelText: 'Ghi chú', hintText: 'Xuất hàng lẻ / sỉ...', labelStyle: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 18),
-
-                // Cột phải: Quét nhận diện bằng máy để bàn ZK-105 & Danh sách mặt hàng
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: c.bgCard,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Thanh công cụ quét máy để bàn
+                        const Divider(height: 28),
+                        Text('TỔNG QUAN ĐƠN XUẤT', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.bold, fontSize: 11)),
+                        const SizedBox(height: 8),
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: c.bgCardElevated,
-                            borderRadius: BorderRadius.circular(10),
+                            color: c.bgDeep,
+                            borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: c.border),
                           ),
                           child: Column(
@@ -1361,277 +1495,513 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Icon(Icons.desktop_windows, color: c.rfidCyan, size: 16),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'TRẠM QUÉT ĐỂ BÀN ZK-RFID105 (USB/COM)',
-                                        style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.5),
-                                      ),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: _desktopUhf.isConnected ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFEF4444).withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      _desktopUhf.isConnected ? '🟢 ZK-105 Sẵn Sàng' : '🔴 Chưa kết nối ZK-105',
-                                      style: TextStyle(color: _desktopUhf.isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
+                                  Text('Hình thức:', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+                                  Text(
+                                    _createOutboundTab == 0 ? 'Xuất Lẻ (EPC)' : 'Xuất Thùng (Barcode)',
+                                    style: TextStyle(color: _createOutboundTab == 0 ? const Color(0xFF0284C7) : const Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11.5),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 6),
                               Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _scanDesktopController,
-                                      style: TextStyle(color: c.textPrimary, fontSize: 12.5),
-                                      decoration: InputDecoration(
-                                        hintText: 'Quét hoặc nhập mã Barcode/EPC/SKU...',
-                                        hintStyle: TextStyle(color: c.textMuted, fontSize: 11),
-                                        filled: true,
-                                        fillColor: c.bgDeep,
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
-                                      ),
-                                      onSubmitted: _handleFormScannedCode,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _desktopUhf.isScanning ? const Color(0xFFEF4444) : c.rfidCyan,
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    icon: Icon(_desktopUhf.isScanning ? Icons.stop : Icons.sensors, size: 16, color: const Color(0xFF2C251E)),
-                                    label: Text(
-                                      _desktopUhf.isScanning ? 'DỪNG ĐỌC' : 'BẬT QUÉT ZK-105',
-                                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 11.5),
-                                    ),
-                                    onPressed: () async {
-                                      if (_desktopUhf.isScanning) {
-                                        await _desktopUhf.stopInventory();
-                                      } else {
-                                        if (!_desktopUhf.isConnected) {
-                                          await _desktopUhf.connectSerial('COM3', 115200);
-                                        }
-                                        await _desktopUhf.startInventory();
-                                      }
-                                      setState(() {});
-                                    },
+                                  Text('Số lượng chọn:', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+                                  Text(
+                                    _createOutboundTab == 0
+                                        ? '$totalSelectedEpc SP lẻ'
+                                        : '$totalSelectedCartons thùng ($totalSelectedCartonChips SP)',
+                                    style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12),
                                   ),
                                 ],
                               ),
-                              if (products.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                DropdownButtonFormField<Product>(
-                                  isExpanded: true,
-                                  dropdownColor: c.bgCardElevated,
-                                  style: TextStyle(color: c.textPrimary, fontSize: 12),
-                                  decoration: InputDecoration(
-                                    hintText: 'Hoặc chọn nhanh từ danh mục kho...',
-                                    hintStyle: TextStyle(color: c.textMuted, fontSize: 11),
-                                    filled: true,
-                                    fillColor: c.bgDeep,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
-                                  ),
-                                  items: products.map((p) => DropdownMenuItem(
-                                    value: p,
-                                    child: Text('${p.sku} - ${p.productName}', overflow: TextOverflow.ellipsis),
-                                  )).toList(),
-                                  onChanged: (val) {
-                                    if (val != null) _handleFormScannedCode(val.sku);
-                                  },
-                                ),
-                              ],
                             ],
                           ),
                         ),
-                        const SizedBox(height: 14),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
 
-                        // Bảng mặt hàng cần xuất
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('DANH SÁCH MẶT HÀNG CẦN XUẤT (${_deliveryItems.length})', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12.5)),
-                            if (_deliveryItems.isNotEmpty)
-                              TextButton(
-                                onPressed: () => setState(() => _deliveryItems.clear()),
-                                child: const Text('Xóa tất cả', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11)),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: _deliveryItems.isEmpty
-                              ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.inventory_2_outlined, size: 42, color: c.textMuted),
-                                      const SizedBox(height: 8),
-                                      Text('Chưa có mặt hàng nào được thêm.', style: TextStyle(color: c.textSecondary, fontSize: 12)),
-                                      const SizedBox(height: 4),
-                                      Text('Đặt sản phẩm lên máy đọc ZK-105 hoặc chọn sản phẩm ở trên.', style: TextStyle(color: c.textMuted, fontSize: 11)),
-                                    ],
-                                  ),
-                                )
-                              : SingleChildScrollView(
-                                  child: Table(
-                                    border: TableBorder.all(color: c.border),
-                                    columnWidths: const {
-                                      0: FlexColumnWidth(2.2),
-                                      1: FlexColumnWidth(3.0),
-                                      2: FlexColumnWidth(1.8),
-                                      3: FlexColumnWidth(1.4),
-                                      4: FlexColumnWidth(3.0),
-                                    },
-                                    children: [
-                                      TableRow(
-                                        decoration: BoxDecoration(color: c.bgCardElevated),
-                                        children: [
-                                          Padding(padding: const EdgeInsets.all(8), child: Text('Mã SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                                          Padding(padding: const EdgeInsets.all(8), child: Text('Tên Sản Phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                                          Padding(padding: const EdgeInsets.all(8), child: Text('Vị Trí Kệ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                                          Padding(padding: const EdgeInsets.all(8), child: Text('Tồn Kho', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                                          Padding(padding: const EdgeInsets.all(8), child: Text('Số Lượng Xuất', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                                        ],
-                                      ),
-                                      for (int i = 0; i < _deliveryItems.length; i++)
-                                        TableRow(
-                                          children: [
-                                            Padding(padding: const EdgeInsets.all(8), child: Text(_deliveryItems[i]['productCode'] ?? '', style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold))),
-                                            Padding(padding: const EdgeInsets.all(8), child: Text(_deliveryItems[i]['productName'] ?? '', style: TextStyle(color: c.textPrimary, fontSize: 11.5))),
-                                            Padding(padding: const EdgeInsets.all(8), child: Text(_deliveryItems[i]['location'] ?? 'Chưa xếp kệ', style: TextStyle(color: c.textSecondary, fontSize: 11))),
-                                            Padding(
-                                              padding: const EdgeInsets.all(8),
-                                              child: Text(
-                                                '${_deliveryItems[i]['inStock'] ?? 0} SP',
-                                                style: TextStyle(color: ((_deliveryItems[i]['inStock'] ?? 0) as int) > 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11),
-                                              ),
+                // Cột phải: 2 Tab Chọn Hàng (Xuất Lẻ theo EPC vs Xuất Thùng theo Barcode)
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: c.bgCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Tab Selector
+                        Container(
+                          decoration: BoxDecoration(
+                            color: c.bgDeep,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: c.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => setState(() => _createOutboundTab = 0),
+                                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                                    decoration: BoxDecoration(
+                                      color: _createOutboundTab == 0 ? c.rfidCyan.withValues(alpha: 0.2) : Colors.transparent,
+                                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
+                                      border: _createOutboundTab == 0 ? Border.all(color: c.rfidCyan) : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.qr_code_2, size: 16, color: _createOutboundTab == 0 ? c.rfidCyan : c.textSecondary),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            '🏷️ Xuất Lẻ (Mã EPC) · $totalSelectedEpc SP',
+                                            style: TextStyle(
+                                              color: _createOutboundTab == 0 ? c.rfidCyan : c.textSecondary,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11.5,
                                             ),
-                                            Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                                              child: Wrap(
-                                                crossAxisAlignment: WrapCrossAlignment.center,
-                                                spacing: 4,
-                                                runSpacing: 4,
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(Icons.remove_circle_outline, size: 18),
-                                                    color: c.rfidCyan,
-                                                    padding: EdgeInsets.zero,
-                                                    constraints: const BoxConstraints(),
-                                                    onPressed: () {
-                                                      final q = _deliveryItems[i]['quantity'] as int;
-                                                      if (q > 1) {
-                                                        setState(() => _deliveryItems[i]['quantity'] = q - 1);
-                                                      } else {
-                                                        setState(() => _deliveryItems.removeAt(i));
-                                                      }
-                                                    },
-                                                  ),
-                                                  InkWell(
-                                                    onTap: () async {
-                                                      final curQ = _deliveryItems[i]['quantity'] as int;
-                                                      final maxStock = (_deliveryItems[i]['inStock'] as int?) ?? 1;
-                                                      final numCtrl = TextEditingController(text: '$curQ');
-                                                      final res = await showDialog<int>(
-                                                        context: context,
-                                                        builder: (ctx) => AlertDialog(
-                                                          backgroundColor: c.bgCard,
-                                                          title: Text('Nhập số lượng xuất', style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
-                                                          content: TextField(
-                                                            controller: numCtrl,
-                                                            autofocus: true,
-                                                            keyboardType: TextInputType.number,
-                                                            style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                                                            decoration: InputDecoration(
-                                                              labelText: 'Số lượng (Tồn kho: $maxStock SP)',
-                                                              labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
-                                                            ),
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () => Navigator.pop(ctx),
-                                                              child: Text('HỦY', style: TextStyle(color: c.textMuted)),
-                                                            ),
-                                                            ElevatedButton(
-                                                              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
-                                                              onPressed: () {
-                                                                final val = int.tryParse(numCtrl.text.trim());
-                                                                Navigator.pop(ctx, val);
-                                                              },
-                                                              child: const Text('XÁC NHẬN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      );
-                                                      if (res != null && res > 0) {
-                                                        setState(() => _deliveryItems[i]['quantity'] = res);
-                                                      }
-                                                    },
-                                                    child: Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: c.bgDeep,
-                                                        borderRadius: BorderRadius.circular(4),
-                                                        border: Border.all(color: c.border),
-                                                      ),
-                                                      child: Text(
-                                                        '${_deliveryItems[i]['quantity']}',
-                                                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.add_circle_outline, size: 18),
-                                                    color: c.rfidCyan,
-                                                    padding: EdgeInsets.zero,
-                                                    constraints: const BoxConstraints(),
-                                                    onPressed: () {
-                                                      final q = _deliveryItems[i]['quantity'] as int;
-                                                      final maxStock = (_deliveryItems[i]['inStock'] as int?) ?? 0;
-                                                      if (maxStock == 0 || q < maxStock) {
-                                                        setState(() => _deliveryItems[i]['quantity'] = q + 1);
-                                                      }
-                                                    },
-                                                  ),
-                                                  if (((_deliveryItems[i]['inStock'] ?? 0) as int) > 1 && (_deliveryItems[i]['quantity'] as int) != ((_deliveryItems[i]['inStock'] ?? 0) as int)) ...[
-                                                    InkWell(
-                                                      onTap: () {
-                                                        setState(() => _deliveryItems[i]['quantity'] = _deliveryItems[i]['inStock']);
-                                                      },
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                        decoration: BoxDecoration(
-                                                          color: const Color(0xFF10B981).withValues(alpha: 0.2),
-                                                          borderRadius: BorderRadius.circular(4),
-                                                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
-                                                        ),
-                                                        child: Text(
-                                                          'Tất cả (${_deliveryItems[i]['inStock']})',
-                                                          style: const TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ],
-                                              ),
-                                            ),
-                                          ],
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
+                              ),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => setState(() => _createOutboundTab = 1),
+                                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                                    decoration: BoxDecoration(
+                                      color: _createOutboundTab == 1 ? const Color(0xFF10B981).withValues(alpha: 0.2) : Colors.transparent,
+                                      borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
+                                      border: _createOutboundTab == 1 ? Border.all(color: const Color(0xFF10B981)) : null,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.inventory_2, size: 16, color: _createOutboundTab == 1 ? const Color(0xFF10B981) : c.textSecondary),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            '📦 Xuất Thùng (Barcode) · $totalSelectedCartons Thùng',
+                                            style: TextStyle(
+                                              color: _createOutboundTab == 1 ? const Color(0xFF10B981) : c.textSecondary,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 11.5,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(height: 12),
+
+                        // TAB CONTENT
+                        if (_createOutboundTab == 0) ...[
+                          // ================= TAB 0: XUẤT LẺ THEO MÃ EPC =================
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _epcSearchFilterController,
+                                  style: TextStyle(color: c.textPrimary, fontSize: 12),
+                                  decoration: InputDecoration(
+                                    hintText: 'Tìm kiếm mã EPC RFID, Tên SP, Thùng, Vị trí kệ...',
+                                    hintStyle: TextStyle(color: c.textMuted, fontSize: 11),
+                                    prefixIcon: Icon(Icons.search, size: 16, color: c.textMuted),
+                                    filled: true,
+                                    fillColor: c.bgDeep,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                                  ),
+                                  onChanged: (_) => setState(() {}),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _desktopUhf.isScanning ? const Color(0xFFEF4444) : c.rfidCyan,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: Icon(_desktopUhf.isScanning ? Icons.stop : Icons.sensors, size: 16, color: const Color(0xFF2C251E)),
+                                label: Text(
+                                  _desktopUhf.isScanning ? 'DỪNG ĐỌC' : 'BẬT QUÉT ZK-105',
+                                  style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 11),
+                                ),
+                                onPressed: () async {
+                                  if (_desktopUhf.isScanning) {
+                                    await _desktopUhf.stopInventory();
+                                  } else {
+                                    if (!_desktopUhf.isConnected) {
+                                      await _desktopUhf.connectSerial('COM3', 115200);
+                                    }
+                                    await _desktopUhf.startInventory();
+                                  }
+                                  setState(() {});
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: c.textPrimary,
+                                  side: BorderSide(color: c.border),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    for (var it in filteredEpcItems) {
+                                      _selectedEpcSet.add(it.epc.toUpperCase());
+                                    }
+                                  });
+                                },
+                                child: const Text('Chọn tất cả', style: TextStyle(fontSize: 11)),
+                              ),
+                              const SizedBox(width: 6),
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: c.errorCoral,
+                                  side: BorderSide(color: c.border),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                ),
+                                onPressed: () => setState(() => _selectedEpcSet.clear()),
+                                child: const Text('Bỏ chọn', style: TextStyle(fontSize: 11)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+
+                          Expanded(
+                            child: filteredEpcItems.isEmpty
+                                ? Center(
+                                    child: Text('Không có sản phẩm nào trong kho khớp bộ lọc.', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                                  )
+                                : Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: c.border),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: ListView.separated(
+                                      itemCount: filteredEpcItems.length,
+                                      separatorBuilder: (_, __) => Divider(color: c.border, height: 1),
+                                      itemBuilder: (context, idx) {
+                                        final it = filteredEpcItems[idx];
+                                        final isChecked = _selectedEpcSet.contains(it.epc.toUpperCase());
+
+                                        return InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              if (isChecked) {
+                                                _selectedEpcSet.remove(it.epc.toUpperCase());
+                                              } else {
+                                                _selectedEpcSet.add(it.epc.toUpperCase());
+                                              }
+                                            });
+                                          },
+                                          child: Container(
+                                            color: isChecked ? c.rfidCyan.withValues(alpha: 0.1) : Colors.transparent,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                            child: Row(
+                                              children: [
+                                                Checkbox(
+                                                  value: isChecked,
+                                                  activeColor: c.rfidCyan,
+                                                  checkColor: const Color(0xFF2C251E),
+                                                  onChanged: (val) {
+                                                    setState(() {
+                                                      if (val == true) {
+                                                        _selectedEpcSet.add(it.epc.toUpperCase());
+                                                      } else {
+                                                        _selectedEpcSet.remove(it.epc.toUpperCase());
+                                                      }
+                                                    });
+                                                  },
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        it.epc,
+                                                        style: TextStyle(
+                                                          color: isChecked ? c.rfidCyan : c.textPrimary,
+                                                          fontFamily: 'Courier',
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        it.productName,
+                                                        style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(
+                                                    it.palletId ?? it.sku,
+                                                    style: TextStyle(color: c.textMuted, fontSize: 11, fontFamily: 'Courier'),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: c.bgDeep,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: c.border),
+                                                  ),
+                                                  child: Text(
+                                                    it.locationId ?? 'Chưa xếp kệ',
+                                                    style: TextStyle(color: c.textSecondary, fontSize: 10.5),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                          ),
+                        ] else ...[
+                          // ================= TAB 1: XUẤT THEO THÙNG THEO BARCODE =================
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _cartonSearchFilterController,
+                                  style: TextStyle(color: c.textPrimary, fontSize: 12),
+                                  decoration: InputDecoration(
+                                    hintText: 'Tìm hoặc quét mã Barcode Thùng (16 ký tự Hex)...',
+                                    hintStyle: TextStyle(color: c.textMuted, fontSize: 11),
+                                    prefixIcon: Icon(Icons.search, size: 16, color: c.textMuted),
+                                    filled: true,
+                                    fillColor: c.bgDeep,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                                  ),
+                                  onChanged: (val) {
+                                    if (val.trim().length == 16) {
+                                      final match = cartonGroups.keys.where((k) => k.toUpperCase() == val.trim().toUpperCase()).firstOrNull;
+                                      if (match != null) {
+                                        _selectedCartonSet.add(match.toUpperCase());
+                                      }
+                                    }
+                                    setState(() {});
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _desktopUhf.isScanning ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: Icon(_desktopUhf.isScanning ? Icons.stop : Icons.sensors, size: 16, color: const Color(0xFF2C251E)),
+                                label: Text(
+                                  _desktopUhf.isScanning ? 'DỪNG ĐỌC' : 'BẬT QUÉT ZK-105',
+                                  style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 11),
+                                ),
+                                onPressed: () async {
+                                  if (_desktopUhf.isScanning) {
+                                    await _desktopUhf.stopInventory();
+                                  } else {
+                                    if (!_desktopUhf.isConnected) {
+                                      await _desktopUhf.connectSerial('COM3', 115200);
+                                    }
+                                    await _desktopUhf.startInventory();
+                                  }
+                                  setState(() {});
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: c.textPrimary,
+                                  side: BorderSide(color: c.border),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    for (var entry in filteredCartonEntries) {
+                                      _selectedCartonSet.add(entry.key.toUpperCase());
+                                    }
+                                  });
+                                },
+                                child: const Text('Chọn tất cả thùng', style: TextStyle(fontSize: 11)),
+                              ),
+                              const SizedBox(width: 6),
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: c.errorCoral,
+                                  side: BorderSide(color: c.border),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                ),
+                                onPressed: () => setState(() => _selectedCartonSet.clear()),
+                                child: const Text('Bỏ chọn', style: TextStyle(fontSize: 11)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+
+                          Expanded(
+                            child: filteredCartonEntries.isEmpty
+                                ? Center(
+                                    child: Text('Không có thùng hàng nào trong kho khớp bộ lọc.', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                                  )
+                                : Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: c.border),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: ListView.separated(
+                                      itemCount: filteredCartonEntries.length,
+                                      separatorBuilder: (_, __) => Divider(color: c.border, height: 1),
+                                      itemBuilder: (context, idx) {
+                                        final entry = filteredCartonEntries[idx];
+                                        final cartonCode = entry.key;
+                                        final cItems = entry.value;
+                                        final isChecked = _selectedCartonSet.contains(cartonCode.toUpperCase());
+                                        final firstItem = cItems.firstOrNull;
+                                        final prod = _repo.products.where((p) => p.sku.toUpperCase() == cartonCode.toUpperCase()).firstOrNull;
+                                        final pName = firstItem?.productName ?? prod?.productName ?? 'Kiện hàng $cartonCode';
+                                        final loc = firstItem?.locationId ?? 'Chưa xếp kệ';
+                                        final totalInCarton = cItems.length;
+                                        final deliverQty = _cartonCustomQty[cartonCode] ?? totalInCarton;
+
+                                        return InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              if (isChecked) {
+                                                _selectedCartonSet.remove(cartonCode.toUpperCase());
+                                              } else {
+                                                _selectedCartonSet.add(cartonCode.toUpperCase());
+                                              }
+                                            });
+                                          },
+                                          child: Container(
+                                            color: isChecked ? const Color(0xFF10B981).withValues(alpha: 0.1) : Colors.transparent,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                            child: Row(
+                                              children: [
+                                                Checkbox(
+                                                  value: isChecked,
+                                                  activeColor: const Color(0xFF10B981),
+                                                  checkColor: const Color(0xFF2C251E),
+                                                  onChanged: (val) {
+                                                    setState(() {
+                                                      if (val == true) {
+                                                        _selectedCartonSet.add(cartonCode.toUpperCase());
+                                                      } else {
+                                                        _selectedCartonSet.remove(cartonCode.toUpperCase());
+                                                      }
+                                                    });
+                                                  },
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          Text(
+                                                            cartonCode,
+                                                            style: TextStyle(
+                                                              color: isChecked ? const Color(0xFF10B981) : c.textPrimary,
+                                                              fontFamily: 'Courier',
+                                                              fontSize: 13,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 6),
+                                                          Container(
+                                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                                              borderRadius: BorderRadius.circular(4),
+                                                            ),
+                                                            child: Text('Tồn: $totalInCarton SP', style: const TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      Text(pName, style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: c.bgDeep,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: c.border),
+                                                  ),
+                                                  child: Text(loc, style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                                                ),
+                                                const SizedBox(width: 16),
+                                                Row(
+                                                  children: [
+                                                    IconButton(
+                                                      icon: const Icon(Icons.remove_circle_outline, size: 18),
+                                                      color: const Color(0xFF10B981),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints: const BoxConstraints(),
+                                                      onPressed: () {
+                                                        if (deliverQty > 1) {
+                                                          setState(() => _cartonCustomQty[cartonCode] = deliverQty - 1);
+                                                        }
+                                                      },
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Text('$deliverQty', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13)),
+                                                    const SizedBox(width: 6),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.add_circle_outline, size: 18),
+                                                      color: const Color(0xFF10B981),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints: const BoxConstraints(),
+                                                      onPressed: () {
+                                                        if (deliverQty < totalInCarton) {
+                                                          setState(() => _cartonCustomQty[cartonCode] = deliverQty + 1);
+                                                        }
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1644,4 +2014,5 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     );
   }
 }
+
 

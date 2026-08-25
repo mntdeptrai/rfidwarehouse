@@ -238,6 +238,7 @@ class OutboundOrderDetail {
   final String productName;
   final int requiredQty;
   int pickedQty;
+  final List<String>? epcList; // Danh sách mã EPC cụ thể nếu là đơn xuất lẻ
 
   OutboundOrderDetail({
     required this.productId,
@@ -245,6 +246,7 @@ class OutboundOrderDetail {
     required this.productName,
     required this.requiredQty,
     this.pickedQty = 0,
+    this.epcList,
   });
 }
 

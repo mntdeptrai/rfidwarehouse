@@ -195,7 +195,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
 
     setState(() => _isSaving = true);
     try {
-      final success = _repo.confirmOutboundCompletion(
+      final success = await _repo.confirmOutboundCompletion(
         poNo: _selectedOrder!.poNo,
         shippedEpcs: scannedEpcs,
         performedBy: 'Thủ kho PDA / RFID Station',
