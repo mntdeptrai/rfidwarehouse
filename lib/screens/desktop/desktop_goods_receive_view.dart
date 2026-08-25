@@ -826,6 +826,28 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           final totalItems = previewRows.fold<int>(0, (sum, r) => sum + (r['quantity'] as int));
           final bool hasExplicitEpcs = previewRows.any((r) => (r['epc'] as String?)?.isNotEmpty ?? false);
 
+          final List<String> explicitEpcs = previewRows
+              .map((r) => (r['epc'] as String?)?.trim().toUpperCase())
+              .where((epc) => epc != null && epc.isNotEmpty)
+              .cast<String>()
+              .toList();
+
+          final Map<String, int> epcOccurrences = {};
+          for (var epc in explicitEpcs) {
+            epcOccurrences[epc] = (epcOccurrences[epc] ?? 0) + 1;
+          }
+          final Set<String> internalDuplicateEpcs = epcOccurrences.entries
+              .where((e) => e.value > 1)
+              .map((e) => e.key)
+              .toSet();
+
+          final Set<String> existingDbEpcs = _repo.items.map((i) => i.epc.toUpperCase()).toSet();
+          final Set<String> dbDuplicateEpcs = explicitEpcs
+              .where((epc) => existingDbEpcs.contains(epc))
+              .toSet();
+
+          final bool hasEpcDuplicates = internalDuplicateEpcs.isNotEmpty || dbDuplicateEpcs.isNotEmpty;
+
           return AlertDialog(
             backgroundColor: c.bgCard,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -840,7 +862,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Text('Import Danh Sách Nhiều Đơn Hàng', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                       Text(
                         hasExplicitEpcs
-                            ? 'Tự động tạo đơn & dùng trực tiếp mã EPC từ file Excel'
+                            ? 'Tự động tạo đơn, đối soát so sánh mã EPC với CSDL & kiểm tra trùng'
                             : 'Tự động tạo đơn & sinh toàn bộ mã EPC ở trạng thái CHƯA NHẬP KHO',
                         style: TextStyle(color: hasExplicitEpcs ? const Color(0xFF10B981) : c.rfidCyan, fontSize: 12),
                       ),
@@ -851,7 +873,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             ),
             content: SizedBox(
               width: 840,
-              height: 480,
+              height: 500,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -920,7 +942,33 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  if (hasEpcDuplicates) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFEF4444)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'CẢNH BÁO TRÙNG MÃ EPC: ' +
+                              (internalDuplicateEpcs.isNotEmpty ? '${internalDuplicateEpcs.length} mã bị lặp trong file. ' : '') +
+                              (dbDuplicateEpcs.isNotEmpty ? '${dbDuplicateEpcs.length} mã đã tồn tại trong CSDL kho. ' : '') +
+                              'Vui lòng kiểm tra lại file trước khi nạp!',
+                              style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                   Expanded(
                     child: previewRows.isEmpty
                         ? Center(
@@ -930,13 +978,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 Icon(Icons.upload_file_outlined, size: 56, color: c.textMuted),
                                 const SizedBox(height: 12),
                                 Text(
-                                  'Chưa có dữ liệu đơn hàng nào được nạp.',
-                                  style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                                  'Chưa có dữ liệu đơn hàng.',
+                                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 4),
                                 Text(
-                                  'Bấm "Chọn File Excel Từ Máy" để nạp file của bạn.',
-                                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                                  'Bấm "Chọn File Excel Từ Máy" để tải lên file Excel chứa danh sách các đơn hàng.',
+                                  style: TextStyle(color: c.textSecondary, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -945,8 +993,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             child: Table(
                               border: TableBorder.all(color: c.border),
                               columnWidths: const {
-                                0: FlexColumnWidth(2),
-                                1: FlexColumnWidth(3),
+                                0: FlexColumnWidth(1.8),
+                                1: FlexColumnWidth(2.8),
                                 2: FlexColumnWidth(1.8),
                                 3: FlexColumnWidth(2.5),
                                 4: FlexColumnWidth(1.0),
@@ -964,14 +1012,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                     Padding(padding: const EdgeInsets.all(8), child: Text(hasExplicitEpcs ? 'Trạng Thái EPC' : 'EPC Sẽ Sinh', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                                   ],
                                 ),
-                                for (var row in previewRows)
-                                  TableRow(
+                                ...previewRows.map((row) {
+                                  final epcVal = (row['epc'] as String?)?.trim().toUpperCase() ?? '';
+                                  final bool isInternalDup = epcVal.isNotEmpty && internalDuplicateEpcs.contains(epcVal);
+                                  final bool isDbDup = epcVal.isNotEmpty && dbDuplicateEpcs.contains(epcVal);
+                                  final bool isDup = isInternalDup || isDbDup;
+
+                                  return TableRow(
+                                    decoration: isDup ? BoxDecoration(color: const Color(0xFFEF4444).withValues(alpha: 0.1)) : null,
                                     children: [
                                       Padding(padding: const EdgeInsets.all(8), child: Text(row['orderNo'], style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
                                       Padding(
                                         padding: const EdgeInsets.all(8),
                                         child: (row['epc'] != null && (row['epc'] as String).isNotEmpty)
-                                            ? Text(row['epc'], style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11))
+                                            ? Text(row['epc'], style: TextStyle(color: isDup ? const Color(0xFFEF4444) : c.rfidCyan, fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11))
                                             : Text(row['supplier'], style: TextStyle(color: c.textSecondary, fontSize: 11)),
                                       ),
                                       Padding(padding: const EdgeInsets.all(8), child: Text(row['sku'], style: TextStyle(color: c.textPrimary, fontFamily: 'Courier', fontSize: 11))),
@@ -980,18 +1034,31 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                       Padding(
                                         padding: const EdgeInsets.all(4),
                                         child: (row['epc'] != null && (row['epc'] as String).isNotEmpty)
-                                            ? Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
-                                                ),
-                                                child: const Text(
-                                                  '✓ Dùng EPC từ file',
-                                                  style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
-                                                ),
-                                              )
+                                            ? (isDup
+                                                ? Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(color: const Color(0xFFEF4444)),
+                                                    ),
+                                                    child: Text(
+                                                      isInternalDup ? '⛔ Trùng trong file' : '⛔ Đã có trong CSDL',
+                                                      style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  )
+                                                : Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                      border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                                                    ),
+                                                    child: const Text(
+                                                      '✓ Hợp lệ (Mới)',
+                                                      style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ))
                                             : Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                                 decoration: BoxDecoration(
@@ -1005,7 +1072,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                               ),
                                       ),
                                     ],
-                                  ),
+                                  );
+                                }),
                               ],
                             ),
                           ),
@@ -1020,7 +1088,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: previewRows.isNotEmpty ? const Color(0xFF10B981) : Colors.grey.shade600,
+                  backgroundColor: (previewRows.isNotEmpty && !hasEpcDuplicates) ? const Color(0xFF10B981) : Colors.grey.shade600,
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
                 icon: Icon(hasExplicitEpcs ? Icons.verified : Icons.check_circle, color: const Color(0xFF2C251E), size: 18),
@@ -1510,6 +1578,55 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
     }
 
+    final c = _eyeCare.colors;
+
+    // 1. So sánh kiểm tra trùng mã EPC trong danh sách nạp
+    final List<String> serials = explicitItems.map((e) => e.epc.trim().toUpperCase()).toList();
+    final Map<String, int> counts = {};
+    for (var s in serials) {
+      counts[s] = (counts[s] ?? 0) + 1;
+    }
+    final internalDups = counts.entries.where((e) => e.value > 1).map((e) => e.key).toList();
+    final existingDbEpcs = _repo.items.map((i) => i.epc.toUpperCase()).toSet();
+    final dbDups = serials.where((s) => existingDbEpcs.contains(s)).toSet().toList();
+
+    if (internalDups.isNotEmpty || dbDups.isNotEmpty) {
+      setState(() => _isCreating = false);
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: c.bgCard,
+          title: Row(
+            children: const [
+              Icon(Icons.error_outline, color: Color(0xFFEF4444)),
+              SizedBox(width: 8),
+              Text('Phát Hiện Trùng Mã EPC/Serial', style: TextStyle(color: Color(0xFFEF4444), fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (internalDups.isNotEmpty)
+                Text('• Có ${internalDups.length} mã bị lặp lại trong danh sách:\n  ${internalDups.take(5).join(", ")}${internalDups.length > 5 ? "..." : ""}', style: TextStyle(color: c.textPrimary, fontSize: 12)),
+              if (dbDups.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text('• Có ${dbDups.length} mã đã tồn tại trong CSDL kho:\n  ${dbDups.take(5).join(", ")}${dbDups.length > 5 ? "..." : ""}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12)),
+              ],
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('ĐÃ HIỂU - KIỂM TRA LẠI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     List<Item> generatedItems = [];
     final bool hasExplicitSerials = explicitItems.isNotEmpty;
     if (hasExplicitSerials) {
@@ -1734,23 +1851,26 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 ),
                               ),
                             ),
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _uhf.filterDuplicates = !_uhf.filterDuplicates;
-                                  _desktopUhf.ignoreAlreadyScanned = _uhf.filterDuplicates;
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.border),
-                                ),
-                                child: Text(
-                                  _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
-                                  style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+                            Tooltip(
+                              message: 'Chống đọc đè lặp lại 1 chip nhiều lần từ sóng anten RFID',
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _uhf.filterDuplicates = !_uhf.filterDuplicates;
+                                    _desktopUhf.ignoreAlreadyScanned = _uhf.filterDuplicates;
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.border),
+                                  ),
+                                  child: Text(
+                                    _uhf.filterDuplicates ? 'Lọc trùng sóng RF: BẬT' : 'Lọc trùng sóng RF: TẮT',
+                                    style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
                                 ),
                               ),
                             ),
