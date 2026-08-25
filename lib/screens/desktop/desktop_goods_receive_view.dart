@@ -293,7 +293,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       final orderNo = _selectedLiveOrder?.orderNo ?? (_scannedTags.isNotEmpty ? _findOrderForEpc(_scannedTags.keys.first)?.orderNo : null);
 
       if (orderNo != null && orderNo.isNotEmpty) {
-        final hexBarcode = _selectedLiveOrder?.orderNo ?? _repo.generateHexBarcode128();
+        final hexBarcode = _repo.generateHexBarcode128();
         final saved = await _repo.confirmGateReceiveToWaitingPutaway(
           orderNo: orderNo,
           scannedEpcs: _scannedTags.keys.toList(),
@@ -301,7 +301,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           performedBy: 'Trạm Cổng RFID Desktop',
         );
 
-        debugPrint('⚡ [ZERO-TOUCH AUTO] Cổng RFID đã tiếp nhận kiện $orderNo ($saved chip) -> CHUYỂN SANG CHỜ XẾP KHO');
+        debugPrint('⚡ [ZERO-TOUCH AUTO] Cổng RFID đã tiếp nhận kiện $orderNo ($saved chip) -> CHUYỂN SANG CHỜ XẾP KHO (Mã Barcode: $hexBarcode)');
 
         if (mounted) {
           PutawayBarcodeModal.show(
@@ -581,7 +581,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     setState(() => _isSaving = true);
     try {
       final currentOrderNo = _selectedLiveOrder!.orderNo;
-      final hexBarcode = currentOrderNo.isNotEmpty ? currentOrderNo : _repo.generateHexBarcode128();
+      final hexBarcode = _repo.generateHexBarcode128();
       final saved = await _repo.confirmGateReceiveToWaitingPutaway(
         orderNo: currentOrderNo,
         scannedEpcs: _scannedTags.keys.toList(),
