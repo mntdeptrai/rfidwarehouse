@@ -202,16 +202,43 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                             ),
                             Row(
                               children: [
-                                const Icon(Icons.nfc, size: 14, color: Color(0xFF0284C7)),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Đã quét: ${s.results.length} chip',
-                                  style: const TextStyle(
-                                    color: Color(0xFF0284C7),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 11.5,
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Quét: ${s.actualScannedCount}',
+                                    style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11),
                                   ),
                                 ),
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Hệ thống: ${s.knownInDbCount}',
+                                    style: const TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.bold, fontSize: 11),
+                                  ),
+                                ),
+                                if (s.varianceOrUnknownCount > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      'Lệch/Lạ: ${s.varianceOrUnknownCount}',
+                                      style: const TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ],
@@ -604,9 +631,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   @override
   void initState() {
     super.initState();
-    // Nạp sẵn danh sách EPC nếu phiên đã từng quét trước đó
+    // Nạp sẵn danh sách EPC thực tế đã quét
     for (final r in widget.session.results) {
-      if (r.epc.isNotEmpty) _scannedEpcs.add(r.epc);
+      if (r.epc.isNotEmpty && r.resultType != InventoryVarianceType.missing) {
+        _scannedEpcs.add(r.epc);
+      }
     }
     // Chỉ kích hoạt bộ đọc nếu phiên kiểm kê ĐANG MỞ (chưa hoàn tất)
     if (!widget.session.isCompleted) {

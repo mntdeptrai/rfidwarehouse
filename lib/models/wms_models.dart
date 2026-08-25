@@ -371,6 +371,10 @@ class InventorySession {
   int get missingCount => results.where((r) => r.resultType == InventoryVarianceType.missing).length;
   int get wrongLocationCount => results.where((r) => r.resultType == InventoryVarianceType.wrongLocation).length;
   int get unknownEpcCount => results.where((r) => r.resultType == InventoryVarianceType.unknownEpc).length;
+
+  int get actualScannedCount => results.where((r) => r.resultType != InventoryVarianceType.missing).length;
+  int get knownInDbCount => results.where((r) => r.resultType != InventoryVarianceType.missing && r.resultType != InventoryVarianceType.unknownEpc).length;
+  int get varianceOrUnknownCount => results.where((r) => r.resultType == InventoryVarianceType.unknownEpc || r.resultType == InventoryVarianceType.wrongLocation).length;
 }
 
 /// Chi tiết đối chiếu Gate theo từng SKU

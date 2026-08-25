@@ -163,8 +163,8 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                 child: Text('Khu vực: ${s.zone}', style: TextStyle(color: c.textSecondary, fontSize: 13)),
                               ),
                               Expanded(
-                                flex: 2,
-                                child: Text('Khớp: ${s.matchCount} / ${s.matchCount + s.missingCount}', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13)),
+                                flex: 3,
+                                child: Text('Đã quét: ${s.actualScannedCount} chip (Hệ thống: ${s.knownInDbCount})', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13)),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
