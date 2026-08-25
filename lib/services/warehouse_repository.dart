@@ -570,21 +570,38 @@ class WarehouseRepository extends ChangeNotifier {
   Future<void> saveInventorySession(InventorySession session) async {
     await _dbService.insertInventorySession(session);
     _inventorySessions.removeWhere((s) => s.sessionId == session.sessionId || s.sessionCode == session.sessionCode);
-    _inventorySessions.add(session);
+    _inventorySessions.insert(0, session);
     await _syncDirectOrQueue(
       tableName: 'inventory_sessions',
       recordId: session.sessionId,
       action: 'INSERT',
       payload: {
-        'sessionId': session.sessionId,
-        'sessionCode': session.sessionCode,
+        'session_id': session.sessionId,
+        'session_code': session.sessionCode,
         'zone': session.zone,
-        'locationCode': session.locationCode,
-        'startedAt': session.startedAt.toIso8601String(),
-        'completedAt': session.completedAt?.toIso8601String(),
-        'isCompleted': session.isCompleted,
+        'location_code': session.locationCode,
+        'started_at': session.startedAt.toIso8601String(),
+        'completed_at': session.completedAt?.toIso8601String(),
+        'is_completed': session.isCompleted ? 1 : 0,
       },
     );
+    for (final r in session.results) {
+      await _syncDirectOrQueue(
+        tableName: 'inventory_session_details',
+        recordId: '${session.sessionId}-${r.epc}',
+        action: 'INSERT',
+        payload: {
+          'session_id': session.sessionId,
+          'epc': r.epc,
+          'sku': r.sku,
+          'product_name': r.productName,
+          'expected_location': r.expectedLocation,
+          'actual_location': r.actualLocation,
+          'result_type': r.resultType.code,
+          'read_at': r.readAt.toIso8601String(),
+        },
+      );
+    }
     _triggerBackgroundSync();
     notifyListeners();
   }
@@ -1574,6 +1591,22 @@ class WarehouseRepository extends ChangeNotifier {
       startedAt: DateTime.now(),
     );
     _inventorySessions.insert(0, session);
+    _dbService.insertInventorySession(session);
+    _syncDirectOrQueue(
+      tableName: 'inventory_sessions',
+      recordId: session.sessionId,
+      action: 'INSERT',
+      payload: {
+        'session_id': session.sessionId,
+        'session_code': session.sessionCode,
+        'zone': session.zone,
+        'location_code': session.locationCode,
+        'started_at': session.startedAt.toIso8601String(),
+        'completed_at': null,
+        'is_completed': 0,
+      },
+    );
+    _triggerBackgroundSync();
     notifyListeners();
     return session;
   }
@@ -1656,13 +1689,17 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
+    _dbService.insertInventorySession(session);
     notifyListeners();
   }
 
-  void completeInventorySession(String sessionId, String approvedBy) {
+  Future<void> completeInventorySession(String sessionId, String approvedBy) async {
     final session = _inventorySessions.firstWhere((s) => s.sessionId == sessionId);
     session.isCompleted = true;
     session.completedAt = DateTime.now();
+
+    // 1. Lưu SQLite
+    await _dbService.insertInventorySession(session);
 
     _transactions.insert(
       0,
@@ -1681,25 +1718,42 @@ class WarehouseRepository extends ChangeNotifier {
       ),
     );
 
-    _syncDirectOrQueue(
+    // 2. Đồng bộ Supabase
+    await _syncDirectOrQueue(
       tableName: 'inventory_sessions',
       recordId: session.sessionId,
-      action: 'AUDIT_COMPLETE',
+      action: 'INSERT',
       payload: {
-        'sessionId': session.sessionId,
-        'sessionCode': session.sessionCode,
+        'session_id': session.sessionId,
+        'session_code': session.sessionCode,
         'zone': session.zone,
-        'locationCode': session.locationCode,
-        'matchCount': session.matchCount,
-        'missingCount': session.missingCount,
-        'wrongLocationCount': session.wrongLocationCount,
-        'unknownEpcCount': session.unknownEpcCount,
-        'approvedBy': approvedBy,
-        'completedAt': session.completedAt?.toIso8601String(),
+        'location_code': session.locationCode,
+        'started_at': session.startedAt.toIso8601String(),
+        'completed_at': session.completedAt?.toIso8601String(),
+        'is_completed': 1,
+        'created_by': approvedBy,
       },
     );
-    _triggerBackgroundSync();
 
+    for (final r in session.results) {
+      await _syncDirectOrQueue(
+        tableName: 'inventory_session_details',
+        recordId: '${session.sessionId}-${r.epc}',
+        action: 'INSERT',
+        payload: {
+          'session_id': session.sessionId,
+          'epc': r.epc,
+          'sku': r.sku,
+          'product_name': r.productName,
+          'expected_location': r.expectedLocation,
+          'actual_location': r.actualLocation,
+          'result_type': r.resultType.code,
+          'read_at': r.readAt.toIso8601String(),
+        },
+      );
+    }
+
+    _triggerBackgroundSync();
     notifyListeners();
   }
 

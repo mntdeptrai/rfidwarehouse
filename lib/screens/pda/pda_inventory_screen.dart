@@ -682,16 +682,18 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-            onPressed: () {
-              _repo.completeInventorySession(widget.session.sessionId, 'Thủ kho PDA');
-              Navigator.pop(ctx);
+            onPressed: () async {
+              await _repo.completeInventorySession(widget.session.sessionId, 'Thủ kho PDA');
+              if (ctx.mounted) Navigator.pop(ctx);
               widget.onBack();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  backgroundColor: Color(0xFF10B981),
-                  content: Text('Đã hoàn tất và lưu số liệu phiếu kiểm kê!'),
-                ),
-              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Color(0xFF10B981),
+                    content: Text('Đã hoàn tất và lưu số liệu phiếu kiểm kê!'),
+                  ),
+                );
+              }
             },
             child: const Text('HOÀN TẤT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),

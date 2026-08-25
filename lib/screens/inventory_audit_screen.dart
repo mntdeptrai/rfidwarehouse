@@ -85,19 +85,21 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
     });
   }
 
-  void _completeSession() {
+  Future<void> _completeSession() async {
     if (_activeSession == null) return;
-    _repo.completeInventorySession(_activeSession!.sessionId, 'Quản lý kho Trần Văn B');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Color(0xFF10B981),
-        content: Text('🎉 Đã chốt và duyệt sai lệch phiên kiểm kê thành công!'),
-      ),
-    );
-    setState(() {
-      _activeSession = null;
-      _scannedEpcs.clear();
-    });
+    await _repo.completeInventorySession(_activeSession!.sessionId, 'Quản lý kho Trần Văn B');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF10B981),
+          content: Text('🎉 Đã chốt và duyệt sai lệch phiên kiểm kê thành công!'),
+        ),
+      );
+      setState(() {
+        _activeSession = null;
+        _scannedEpcs.clear();
+      });
+    }
   }
 
   @override

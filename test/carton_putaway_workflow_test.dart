@@ -259,6 +259,28 @@ void main() {
 
       await repo.clearAllData(alsoClearCloud: false);
     });
+
+    test('Inventory Session created, scanned, and completed is persisted in SQLite and survives reloadFromSqlite', () async {
+      final repo = WarehouseRepository();
+      await repo.clearAllData(alsoClearCloud: false);
+
+      final session = repo.startInventorySession(zone: 'KHO_A', locationCode: 'LOC-A-01');
+      expect(repo.inventorySessions.length, equals(1));
+
+      repo.processAuditScan(sessionId: session.sessionId, scannedEpcs: ['ABCDEF000000000000000001']);
+      await repo.completeInventorySession(session.sessionId, 'Thủ kho PDA');
+
+      expect(repo.inventorySessions.first.isCompleted, isTrue);
+
+      // Giả lập làm mới từ SQLite
+      await repo.reloadFromSqlite();
+
+      expect(repo.inventorySessions.length, equals(1));
+      expect(repo.inventorySessions.first.sessionId, equals(session.sessionId));
+      expect(repo.inventorySessions.first.isCompleted, isTrue);
+
+      await repo.clearAllData(alsoClearCloud: false);
+    });
   });
 }
 

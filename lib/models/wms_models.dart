@@ -679,4 +679,3 @@ class DeliveryNote {
     details: details,
   );
 }
-

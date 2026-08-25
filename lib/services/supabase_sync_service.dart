@@ -508,6 +508,14 @@ class SupabaseSyncService extends ChangeNotifier {
         return 'inbound_order_id';
       case 'outbound_orders':
         return 'outbound_order_id';
+      case 'delivery_notes':
+        return 'delivery_id';
+      case 'inventory_sessions':
+        return 'session_id';
+      case 'users':
+        return 'user_id';
+      case 'customers':
+        return 'customer_id';
       case 'system_config':
         return 'config_key';
       default:
