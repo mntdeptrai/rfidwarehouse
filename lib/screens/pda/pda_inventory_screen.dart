@@ -725,7 +725,9 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     final s = widget.session;
     final isDone = s.isCompleted;
     final totalScanned = _scannedEpcs.length;
-    final totalExpected = s.matchCount + s.missingCount;
+    final scannedList = _scannedEpcs.toList();
+    final knownItemsCount = scannedList.where((epc) => _repo.items.any((i) => i.epc.toUpperCase() == epc.toUpperCase())).length;
+    final unknownItemsCount = scannedList.length - knownItemsCount;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4EFE6),
@@ -802,7 +804,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               ),
             ),
 
-          // 4 Chỉ số KPI thống kê lớn
+          // Chỉ số KPI thống kê trực tiếp theo thời gian thực
           Container(
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.all(12),
@@ -818,42 +820,27 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 ),
               ],
             ),
-            child: Column(
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    _buildKpiBox(
-                      title: 'Kỳ vọng (CSDL)',
-                      value: '$totalExpected',
-                      color: const Color(0xFF2C251E),
-                      bg: const Color(0xFFF4EFE6),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildKpiBox(
-                      title: 'Đã quét thực tế',
-                      value: '$totalScanned',
-                      color: const Color(0xFF0284C7),
-                      bg: const Color(0xFFE0F2FE),
-                    ),
-                  ],
+                _buildKpiBox(
+                  title: 'Đã quét thực tế',
+                  value: '$totalScanned',
+                  color: const Color(0xFF0284C7),
+                  bg: const Color(0xFFE0F2FE),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _buildKpiBox(
-                      title: '🟢 Đúng vị trí',
-                      value: '${s.matchCount}',
-                      color: const Color(0xFF059669),
-                      bg: const Color(0xFFECFDF5),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildKpiBox(
-                      title: '🔴 Lệch / Lạ',
-                      value: '${s.wrongLocationCount + s.unknownEpcCount}',
-                      color: const Color(0xFFDC2626),
-                      bg: const Color(0xFFFEF2F2),
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                _buildKpiBox(
+                  title: 'Trong hệ thống',
+                  value: '$knownItemsCount',
+                  color: const Color(0xFF059669),
+                  bg: const Color(0xFFECFDF5),
+                ),
+                const SizedBox(width: 8),
+                _buildKpiBox(
+                  title: '🔴 Lệch / Chip lạ',
+                  value: '$unknownItemsCount',
+                  color: const Color(0xFFDC2626),
+                  bg: const Color(0xFFFEF2F2),
                 ),
               ],
             ),
