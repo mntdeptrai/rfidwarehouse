@@ -211,10 +211,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Banner tóm tắt ca làm việc
-            _buildSessionSummaryBanner(c),
-            const SizedBox(height: 14),
-
             // BƯỚC 1: CHỌN / QUÉT VỊ TRÍ KỆ
             _buildStep1LocationCard(c),
             const SizedBox(height: 14),
@@ -223,56 +219,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             _buildStep2CartonBarcodeCard(c),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSessionSummaryBanner(EyeCareColors c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.bgCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.border),
-      ),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 10,
-        runSpacing: 8,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.shelves, color: c.rfidCyan, size: 20),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('TIẾN ĐỘ CA XẾP KHO', style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
-                  Text(
-                    'Đã cất: $_sessionPutawayCount kiện hàng',
-                    style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (_lastConfirmedCarton != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: c.successEmerald.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: c.successEmerald),
-              ),
-              child: Text(
-                'Vừa cất: $_lastConfirmedCarton',
-                style: TextStyle(color: c.successEmerald, fontSize: 10.5, fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
       ),
     );
   }
