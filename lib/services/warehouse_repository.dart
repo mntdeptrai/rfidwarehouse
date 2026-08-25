@@ -211,6 +211,18 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sinh mã Barcode 128 chuẩn Hex (chỉ chứa các ký tự 0-9 và A-F)
+  String generateHexBarcode128({int length = 16}) {
+    const chars = '0123456789ABCDEF';
+    final rnd = Random();
+    final now = DateTime.now();
+    // 8 ký tự hex từ timestamp mili-giây (0-9, A-F)
+    final timeHex = (now.millisecondsSinceEpoch % 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
+    final remaining = (length > 8) ? length - 8 : 4;
+    final randomHex = List.generate(remaining, (_) => chars[rnd.nextInt(chars.length)]).join();
+    return '$timeHex$randomHex'.toUpperCase();
+  }
+
   String generateUniqueEpc({String? sku, int sequence = 1}) {
     final existingEpcs = _items.map((i) => i.epc.toUpperCase()).toSet();
     final timeHex = (DateTime.now().millisecondsSinceEpoch % 0xFFFFFFFF).toRadixString(16).padLeft(8, '0').toUpperCase();
@@ -842,6 +854,11 @@ class WarehouseRepository extends ChangeNotifier {
     final uniqueEpcs = scannedEpcs.toSet().toList();
     final now = DateTime.now();
 
+    // Sinh mã Barcode 128 chuẩn Hex (A-F và 0-9) nếu chưa có mã thùng cụ thể
+    final effectiveCartonCode = (cartonCode != null && cartonCode.trim().isNotEmpty)
+        ? cartonCode.trim().toUpperCase()
+        : generateHexBarcode128();
+
     final order = _inboundOrders.where((o) =>
       o.orderNo.trim().toUpperCase() == cleanOrderNo ||
       o.inboundOrderId.trim().toUpperCase() == cleanOrderNo
@@ -850,12 +867,16 @@ class WarehouseRepository extends ChangeNotifier {
     final matchedItems = _items.where((it) {
       if (uniqueEpcs.contains(it.epc)) return true;
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanOrderNo) return true;
+      if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanOrderNo) return true;
       return false;
     }).toList();
 
     for (var it in matchedItems) {
       it.status = ItemStatus.waitingPutaway;
-      it.palletId = null;
+      // Gán mã thùng Barcode 128 vào palletId (hoặc giữ mã thùng đã khai báo trước đó nếu có)
+      it.palletId = (cartonCode != null && cartonCode.trim().isNotEmpty)
+          ? effectiveCartonCode
+          : (it.palletId != null && it.palletId!.trim().isNotEmpty ? it.palletId : effectiveCartonCode);
       it.locationId = null;
       it.inboundTime = now;
       if (it.orderNo == null || it.orderNo!.isEmpty) {
@@ -870,7 +891,7 @@ class WarehouseRepository extends ChangeNotifier {
           'itemId': it.itemId,
           'status': ItemStatus.waitingPutaway.code,
           'locationId': null,
-          'palletId': null,
+          'palletId': it.palletId,
           'orderNo': it.orderNo,
           'inboundTime': now.toIso8601String(),
         },
@@ -901,7 +922,7 @@ class WarehouseRepository extends ChangeNotifier {
       action: 'GATE_RECEIVE_WAITING_PUTAWAY',
       payload: {
         'orderNo': cleanOrderNo,
-        'cartonCode': cartonCode ?? cleanOrderNo,
+        'cartonCode': effectiveCartonCode,
         'itemCount': matchedItems.length,
         'performedBy': performedBy,
         'timestamp': now.toIso8601String(),
@@ -958,6 +979,21 @@ class WarehouseRepository extends ChangeNotifier {
 
       return false;
     }).toList();
+
+    // Nếu không khớp trực tiếp, tìm theo InboundOrder tương ứng
+    if (matchedItems.isEmpty) {
+      final matchedOrder = _inboundOrders.where((o) =>
+        o.orderNo.trim().toUpperCase() == cleanBarcode ||
+        o.inboundOrderId.trim().toUpperCase() == cleanBarcode
+      ).firstOrNull;
+      if (matchedOrder != null) {
+        matchedItems = _items.where((it) =>
+          it.orderNo != null &&
+          (it.orderNo!.trim().toUpperCase() == matchedOrder.orderNo.trim().toUpperCase() ||
+           it.orderNo!.trim().toUpperCase() == matchedOrder.inboundOrderId.trim().toUpperCase())
+        ).toList();
+      }
+    }
 
     if (matchedItems.isEmpty) {
       return 0;

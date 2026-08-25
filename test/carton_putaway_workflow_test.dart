@@ -47,12 +47,12 @@ void main() {
 
       expect(gateReceivedCount, equals(5));
 
-      // Kiểm tra trạng thái sau khi qua cổng: Chờ xếp kho (WAITING_PUTAWAY), chưa có vị trí hay pallet
+      // Kiểm tra trạng thái sau khi qua cổng: Chờ xếp kho (WAITING_PUTAWAY), đã được gán mã Barcode thùng/pallet
       final itemsAfterGate = repo.getItemsByOrderNo(testOrderNo);
       expect(itemsAfterGate.length, equals(5));
       expect(itemsAfterGate.every((i) => i.status == ItemStatus.waitingPutaway), isTrue);
       expect(itemsAfterGate.every((i) => i.locationId == null), isTrue);
-      expect(itemsAfterGate.every((i) => i.palletId == null), isTrue);
+      expect(itemsAfterGate.every((i) => i.palletId != null && i.palletId!.isNotEmpty), isTrue);
 
       final orderAfterGate = repo.inboundOrders.where((o) => o.orderNo == testOrderNo).first;
       expect(orderAfterGate.status, equals(InboundOrderStatus.waitingPutaway));
@@ -173,6 +173,92 @@ void main() {
 
       await repo.clearAllData(alsoClearCloud: false);
     });
+
+    test('generateHexBarcode128 generates valid Code 128 Hex strings (0-9 and A-F only) and PDA putaway works seamlessly', () async {
+      final repo = WarehouseRepository();
+      
+      // 1. Kiểm tra định dạng Barcode 128 Hex
+      for (int i = 0; i < 50; i++) {
+        final hexBarcode = repo.generateHexBarcode128(length: 16);
+        expect(hexBarcode.length, equals(16));
+        expect(RegExp(r'^[0-9A-F]+$').hasMatch(hexBarcode), isTrue, reason: 'Barcode phải chỉ chứa các ký tự 0-9 và A-F');
+      }
+
+      // 2. Kiểm tra quy trình quét cất kho bằng mã Barcode Hex 128 vừa sinh
+      const orderNo = 'ORD-HEX-2026';
+      const epc1 = 'E2801160HEX0001';
+      const epc2 = 'E2801160HEX0002';
+      const locationId = 'LOC-A01-01';
+
+      await repo.addInboundOrder(InboundOrder(
+        inboundOrderId: 'INB-HEX-01',
+        orderNo: orderNo,
+        sourceSupplier: 'Nhà cung cấp Hex',
+        createdAt: DateTime.now(),
+        details: [
+          InboundOrderDetail(
+            productId: 'SKU-HEX-01',
+            sku: 'SKU-HEX-01',
+            productName: 'Sản phẩm Test Hex',
+            requiredQty: 2,
+          ),
+        ],
+      ), autoGenerateEpcs: false);
+
+      await repo.insertDirectItem(Item(
+        itemId: 'ITEM-HEX-1',
+        productId: 'SKU-HEX-01',
+        sku: 'SKU-HEX-01',
+        productName: 'Sản phẩm Test Hex',
+        serialNumber: epc1,
+        epc: epc1,
+        status: ItemStatus.pendingInbound,
+        orderNo: orderNo,
+      ));
+
+      await repo.insertDirectItem(Item(
+        itemId: 'ITEM-HEX-2',
+        productId: 'SKU-HEX-01',
+        sku: 'SKU-HEX-01',
+        productName: 'Sản phẩm Test Hex',
+        serialNumber: epc2,
+        epc: epc2,
+        status: ItemStatus.pendingInbound,
+        orderNo: orderNo,
+      ));
+
+      final hexBarcode = repo.generateHexBarcode128(length: 16);
+
+      // Đi qua cổng quét và gán mã Barcode 128 Hex
+      await repo.confirmGateReceiveToWaitingPutaway(
+        orderNo: orderNo,
+        scannedEpcs: [epc1, epc2],
+        cartonCode: hexBarcode,
+        performedBy: 'Trạm Cổng RFID Desktop',
+      );
+
+      // Xác nhận các item đã được gán palletId = hexBarcode và chuyển sang WAITING_PUTAWAY
+      final itemsWaiting = repo.items.where((i) => i.palletId == hexBarcode).toList();
+      expect(itemsWaiting.length, equals(2));
+      expect(itemsWaiting.every((i) => i.status == ItemStatus.waitingPutaway), isTrue);
+
+      // Thủ kho PDA quét trực tiếp mã Barcode 128 Hex để cất hàng vào kệ
+      final putawayCount = await repo.confirmPdaPutawayByCarton(
+        cartonOrOrderBarcode: hexBarcode,
+        locationId: locationId,
+        performedBy: 'Thủ kho PDA',
+      );
+
+      expect(putawayCount, equals(2));
+
+      // Kiểm tra trạng thái đã chuyển sang IN_STOCK tại đúng locationId
+      final itemsInStock = repo.items.where((i) => i.palletId == hexBarcode).toList();
+      expect(itemsInStock.every((i) => i.status == ItemStatus.inStock), isTrue);
+      expect(itemsInStock.every((i) => i.locationId == locationId), isTrue);
+
+      await repo.clearAllData(alsoClearCloud: false);
+    });
   });
 }
+
 

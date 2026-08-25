@@ -483,7 +483,18 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
 
   Widget _buildWaitingOrdersList(List<InboundOrder> orders, EyeCareColors c) {
-    if (orders.isEmpty) {
+    // Thu thập tất cả các thùng / kiện đang ở trạng thái chờ xếp kho
+    final Map<String, List<Item>> waitingCartonsMap = {};
+    for (var it in _repo.items) {
+      if (it.status == ItemStatus.waitingPutaway) {
+        final key = (it.palletId != null && it.palletId!.isNotEmpty)
+            ? it.palletId!
+            : (it.orderNo != null && it.orderNo!.isNotEmpty ? it.orderNo! : 'KIỆN CHỜ XẾP');
+        waitingCartonsMap.putIfAbsent(key, () => []).add(it);
+      }
+    }
+
+    if (orders.isEmpty && waitingCartonsMap.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -500,6 +511,35 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       );
     }
 
+    final List<Map<String, dynamic>> displayCartons = [];
+
+    // Nạp từ waitingCartonsMap
+    for (var entry in waitingCartonsMap.entries) {
+      final key = entry.key;
+      final items = entry.value;
+      final sampleProd = items.first.productName;
+      displayCartons.add({
+        'code': key,
+        'orderNo': items.first.orderNo ?? key,
+        'count': items.length,
+        'sampleProd': sampleProd,
+      });
+    }
+
+    // Nạp thêm các InboundOrder chờ xếp nếu chưa có trong map
+    for (var o in orders) {
+      final alreadyInList = displayCartons.any((d) => d['code'] == o.orderNo);
+      if (!alreadyInList) {
+        final totalReq = o.details.fold(0, (sum, d) => sum + d.requiredQty);
+        displayCartons.add({
+          'code': o.orderNo,
+          'orderNo': o.orderNo,
+          'count': totalReq,
+          'sampleProd': o.details.isNotEmpty ? o.details.first.productName : '',
+        });
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -511,7 +551,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
             ),
             Text(
-              '${orders.length} kiện',
+              '${displayCartons.length} kiện',
               style: TextStyle(color: c.textMuted, fontSize: 11),
             ),
           ],
@@ -520,14 +560,16 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: orders.length,
+          itemCount: displayCartons.length,
           separatorBuilder: (context, index) => const SizedBox(height: 8),
           itemBuilder: (context, idx) {
-            final o = orders[idx];
-            final totalReq = o.details.fold(0, (sum, d) => sum + d.requiredQty);
+            final carton = displayCartons[idx];
+            final code = carton['code'] as String;
+            final count = carton['count'] as int;
+            final sampleProd = carton['sampleProd'] as String;
 
             return InkWell(
-              onTap: () => _processPutawayCarton(o.orderNo),
+              onTap: () => _processPutawayCarton(code),
               borderRadius: BorderRadius.circular(10),
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -555,7 +597,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  o.orderNo,
+                                  code,
                                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -576,15 +618,15 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Mã Barcode quét: ${o.orderNo} • $totalReq SP',
+                            'Mã Barcode quét: $code • $count SP',
                             style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.w600, fontSize: 11),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (o.details.isNotEmpty && o.details.first.productName.isNotEmpty) ...[
+                          if (sampleProd.isNotEmpty) ...[
                             const SizedBox(height: 1),
                             Text(
-                              o.details.first.productName,
+                              sampleProd,
                               style: TextStyle(color: c.textSecondary, fontSize: 10.5),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -600,7 +642,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
-                      onPressed: () => _processPutawayCarton(o.orderNo),
+                      onPressed: () => _processPutawayCarton(code),
                       child: const Text('Cất vị trí này', style: TextStyle(color: Color(0xFF2C251E), fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],

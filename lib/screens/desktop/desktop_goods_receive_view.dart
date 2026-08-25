@@ -293,9 +293,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       final orderNo = _selectedLiveOrder?.orderNo ?? (_scannedTags.isNotEmpty ? _findOrderForEpc(_scannedTags.keys.first)?.orderNo : null);
 
       if (orderNo != null && orderNo.isNotEmpty) {
+        final hexBarcode = _selectedLiveOrder?.orderNo ?? _repo.generateHexBarcode128();
         final saved = await _repo.confirmGateReceiveToWaitingPutaway(
           orderNo: orderNo,
           scannedEpcs: _scannedTags.keys.toList(),
+          cartonCode: hexBarcode,
           performedBy: 'Trạm Cổng RFID Desktop',
         );
 
@@ -304,7 +306,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         if (mounted) {
           PutawayBarcodeModal.show(
             context,
-            barcode: orderNo,
+            barcode: hexBarcode,
             orderNo: orderNo,
             itemCount: saved,
             performedBy: 'Trạm Cổng RFID Desktop',
@@ -579,9 +581,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     setState(() => _isSaving = true);
     try {
       final currentOrderNo = _selectedLiveOrder!.orderNo;
+      final hexBarcode = currentOrderNo.isNotEmpty ? currentOrderNo : _repo.generateHexBarcode128();
       final saved = await _repo.confirmGateReceiveToWaitingPutaway(
         orderNo: currentOrderNo,
         scannedEpcs: _scannedTags.keys.toList(),
+        cartonCode: hexBarcode,
         performedBy: 'Thủ kho Desktop',
       );
 
@@ -589,7 +593,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       PutawayBarcodeModal.show(
         context,
-        barcode: currentOrderNo,
+        barcode: hexBarcode,
         orderNo: currentOrderNo,
         itemCount: saved,
         performedBy: 'Thủ kho Desktop',
@@ -1609,6 +1613,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final now = DateTime.now();
     int itemSeq = 1;
     for (var c in _receiptCartons) {
+      final cartonBox = c['cartonBox']?.toString().trim();
       final serialItems = (c['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
       if (serialItems != null && serialItems.isNotEmpty) {
         for (var sItem in serialItems) {
@@ -1624,6 +1629,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             epc: sSerial, // Cột SERIAL chính là mã EPC RFID, dùng trực tiếp 100%, không sinh mã mới
             status: ItemStatus.pendingInbound,
             orderNo: code,
+            palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
           ));
           itemSeq++;
         }
@@ -1639,6 +1645,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             epc: serial, // Cột SERIAL chính là mã EPC RFID, dùng trực tiếp 100%, không sinh mã mới
             status: ItemStatus.pendingInbound,
             orderNo: code,
+            palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
           ));
           itemSeq++;
         }
