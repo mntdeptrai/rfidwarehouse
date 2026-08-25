@@ -895,11 +895,6 @@ class WarehouseRepository extends ChangeNotifier {
     final uniqueEpcs = scannedEpcs.toSet().toList();
     final now = DateTime.now();
 
-    // Sinh mã Barcode 128 chuẩn Hex (A-F và 0-9) nếu chưa có mã thùng cụ thể
-    final effectiveCartonCode = (cartonCode != null && cartonCode.trim().isNotEmpty)
-        ? cartonCode.trim().toUpperCase()
-        : generateHexBarcode128();
-
     final order = _inboundOrders.where((o) =>
       o.orderNo.trim().toUpperCase() == cleanOrderNo ||
       o.inboundOrderId.trim().toUpperCase() == cleanOrderNo
@@ -911,6 +906,17 @@ class WarehouseRepository extends ChangeNotifier {
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanOrderNo) return true;
       return false;
     }).toList();
+
+    // Nếu các mặt hàng này đã có mã Barcode Hex sinh sẵn lúc nạp danh sách nhập hàng, giữ nguyên mã đó
+    final existingItemBarcode = matchedItems
+        .map((i) => i.sku)
+        .where((s) => s.isNotEmpty && s != cleanOrderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
+        .firstOrNull;
+
+    // Sinh mã Barcode 128 chuẩn Hex (A-F và 0-9) nếu chưa có mã thùng cụ thể
+    final effectiveCartonCode = (cartonCode != null && cartonCode.trim().isNotEmpty)
+        ? cartonCode.trim().toUpperCase()
+        : (existingItemBarcode ?? generateHexBarcode128());
 
     for (var it in matchedItems) {
       it.status = ItemStatus.waitingPutaway;

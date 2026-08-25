@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
+import 'warehouse_repository.dart';
 
 class ExcelImportResult {
   final String fileName;
@@ -58,7 +59,7 @@ class ExcelImportService {
   }
 
   /// Mở hộp thoại chọn file Excel/CSV và parse danh sách Thùng hàng + Serial/EPC
-  /// Cấu trúc chuẩn 4 cột: CARTON CODE, SERIAL/EPC, BARCODE/SKU, NAME
+  /// Cấu trúc chuẩn: CARTON CODE, SERIAL/EPC, NAME (hoặc BARCODE)
   Future<ExcelImportResult?> pickAndParseGoodsReceiveExcel() async {
     try {
       final files = await FilePicker.pickFiles(
@@ -176,14 +177,18 @@ class ExcelImportService {
 
       final effectiveCarton = carton.isNotEmpty ? carton : 'CARTON-DEFAULT';
       final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
-      final effectiveBarcode = barcode.isNotEmpty ? barcode : effectiveCarton;
 
       final groupKey = effectiveCarton;
 
       if (!cartonMap.containsKey(groupKey)) {
+        // Tự động sinh mã Barcode 128 Hex chuẩn 16 ký tự ngay khi nạp danh sách
+        final generatedBarcode = (barcode.isNotEmpty && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(barcode))
+            ? barcode.toUpperCase()
+            : WarehouseRepository().generateHexBarcode128();
+
         cartonMap[groupKey] = {
           'cartonBox': effectiveCarton,
-          'productCode': effectiveBarcode,
+          'productCode': generatedBarcode,
           'productName': effectiveName,
           'quantity': 0,
           'serials': <String>[],
@@ -192,6 +197,8 @@ class ExcelImportService {
       }
 
       final entry = cartonMap[groupKey]!;
+      final effectiveBarcode = entry['productCode'] as String;
+
       if (serial.isNotEmpty) {
         final serialsList = entry['serials'] as List<String>;
         if (!serialsList.contains(serial)) {
@@ -275,14 +282,17 @@ class ExcelImportService {
 
       final effectiveCarton = carton.isNotEmpty ? carton : 'CARTON-DEFAULT';
       final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
-      final effectiveBarcode = barcode.isNotEmpty ? barcode : effectiveCarton;
 
       final groupKey = effectiveCarton;
 
       if (!cartonMap.containsKey(groupKey)) {
+        final generatedBarcode = (barcode.isNotEmpty && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(barcode))
+            ? barcode.toUpperCase()
+            : WarehouseRepository().generateHexBarcode128();
+
         cartonMap[groupKey] = {
           'cartonBox': effectiveCarton,
-          'productCode': effectiveBarcode,
+          'productCode': generatedBarcode,
           'productName': effectiveName,
           'quantity': 0,
           'serials': <String>[],
@@ -291,6 +301,8 @@ class ExcelImportService {
       }
 
       final entry = cartonMap[groupKey]!;
+      final effectiveBarcode = entry['productCode'] as String;
+
       if (serial.isNotEmpty) {
         final serialsList = entry['serials'] as List<String>;
         if (!serialsList.contains(serial)) {

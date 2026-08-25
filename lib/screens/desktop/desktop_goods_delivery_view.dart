@@ -1220,12 +1220,16 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
     final existingIdx = _deliveryItems.indexWhere((it) => it['productCode'].toString().toUpperCase() == targetSku.toUpperCase());
     if (existingIdx >= 0) {
-      _deliveryItems[existingIdx]['quantity'] = (_deliveryItems[existingIdx]['quantity'] as int) + 1;
+      final currentQ = _deliveryItems[existingIdx]['quantity'] as int;
+      final maxStock = (_deliveryItems[existingIdx]['inStock'] as int?) ?? 0;
+      if (maxStock == 0 || currentQ < maxStock) {
+        _deliveryItems[existingIdx]['quantity'] = currentQ + 1;
+      }
     } else {
       _deliveryItems.add({
         'productCode': targetSku,
         'productName': targetName,
-        'quantity': 1,
+        'quantity': inStock > 0 ? inStock : 1, // Mặc định tự động điền toàn bộ số lượng tồn khả dụng (ví dụ 10 SP của kiện)
         'inStock': inStock,
         'location': locs.isNotEmpty ? locs : 'Chưa xếp kệ',
       });
@@ -1483,11 +1487,11 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   child: Table(
                                     border: TableBorder.all(color: c.border),
                                     columnWidths: const {
-                                      0: FlexColumnWidth(2.5),
-                                      1: FlexColumnWidth(3.5),
-                                      2: FlexColumnWidth(2),
-                                      3: FlexColumnWidth(1.8),
-                                      4: FlexColumnWidth(2.2),
+                                      0: FlexColumnWidth(2.2),
+                                      1: FlexColumnWidth(3.0),
+                                      2: FlexColumnWidth(1.8),
+                                      3: FlexColumnWidth(1.4),
+                                      4: FlexColumnWidth(3.0),
                                     },
                                     children: [
                                       TableRow(
@@ -1514,8 +1518,11 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                               ),
                                             ),
                                             Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                              child: Row(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                              child: Wrap(
+                                                crossAxisAlignment: WrapCrossAlignment.center,
+                                                spacing: 4,
+                                                runSpacing: 4,
                                                 children: [
                                                   IconButton(
                                                     icon: const Icon(Icons.remove_circle_outline, size: 18),
@@ -1531,18 +1538,91 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                                       }
                                                     },
                                                   ),
-                                                  const SizedBox(width: 6),
-                                                  Text('${_deliveryItems[i]['quantity']}', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13)),
-                                                  const SizedBox(width: 6),
+                                                  InkWell(
+                                                    onTap: () async {
+                                                      final curQ = _deliveryItems[i]['quantity'] as int;
+                                                      final maxStock = (_deliveryItems[i]['inStock'] as int?) ?? 1;
+                                                      final numCtrl = TextEditingController(text: '$curQ');
+                                                      final res = await showDialog<int>(
+                                                        context: context,
+                                                        builder: (ctx) => AlertDialog(
+                                                          backgroundColor: c.bgCard,
+                                                          title: Text('Nhập số lượng xuất', style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
+                                                          content: TextField(
+                                                            controller: numCtrl,
+                                                            autofocus: true,
+                                                            keyboardType: TextInputType.number,
+                                                            style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                                                            decoration: InputDecoration(
+                                                              labelText: 'Số lượng (Tồn kho: $maxStock SP)',
+                                                              labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
+                                                            ),
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () => Navigator.pop(ctx),
+                                                              child: Text('HỦY', style: TextStyle(color: c.textMuted)),
+                                                            ),
+                                                            ElevatedButton(
+                                                              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+                                                              onPressed: () {
+                                                                final val = int.tryParse(numCtrl.text.trim());
+                                                                Navigator.pop(ctx, val);
+                                                              },
+                                                              child: const Text('XÁC NHẬN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                      if (res != null && res > 0) {
+                                                        setState(() => _deliveryItems[i]['quantity'] = res);
+                                                      }
+                                                    },
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: c.bgDeep,
+                                                        borderRadius: BorderRadius.circular(4),
+                                                        border: Border.all(color: c.border),
+                                                      ),
+                                                      child: Text(
+                                                        '${_deliveryItems[i]['quantity']}',
+                                                        style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13),
+                                                      ),
+                                                    ),
+                                                  ),
                                                   IconButton(
                                                     icon: const Icon(Icons.add_circle_outline, size: 18),
                                                     color: c.rfidCyan,
                                                     padding: EdgeInsets.zero,
                                                     constraints: const BoxConstraints(),
                                                     onPressed: () {
-                                                      setState(() => _deliveryItems[i]['quantity'] = (_deliveryItems[i]['quantity'] as int) + 1);
+                                                      final q = _deliveryItems[i]['quantity'] as int;
+                                                      final maxStock = (_deliveryItems[i]['inStock'] as int?) ?? 0;
+                                                      if (maxStock == 0 || q < maxStock) {
+                                                        setState(() => _deliveryItems[i]['quantity'] = q + 1);
+                                                      }
                                                     },
                                                   ),
+                                                  if (((_deliveryItems[i]['inStock'] ?? 0) as int) > 1 && (_deliveryItems[i]['quantity'] as int) != ((_deliveryItems[i]['inStock'] ?? 0) as int)) ...[
+                                                    InkWell(
+                                                      onTap: () {
+                                                        setState(() => _deliveryItems[i]['quantity'] = _deliveryItems[i]['inStock']);
+                                                      },
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                                          borderRadius: BorderRadius.circular(4),
+                                                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                                                        ),
+                                                        child: Text(
+                                                          'Tất cả (${_deliveryItems[i]['inStock']})',
+                                                          style: const TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ],
                                               ),
                                             ),

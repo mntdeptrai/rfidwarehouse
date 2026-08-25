@@ -581,7 +581,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     setState(() => _isSaving = true);
     try {
       final currentOrderNo = _selectedLiveOrder!.orderNo;
-      final hexBarcode = _repo.generateHexBarcode128();
+      // Tái sử dụng mã Barcode 128 Hex đã được sinh ngay lúc nạp danh sách nhập hàng
+      final existingItems = _repo.items.where((i) => i.orderNo == currentOrderNo).toList();
+      final existingBarcode = existingItems
+          .map((i) => i.sku)
+          .where((s) => s.isNotEmpty && s != currentOrderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
+          .firstOrNull;
+
+      final hexBarcode = existingBarcode ?? _repo.generateHexBarcode128();
       final saved = await _repo.confirmGateReceiveToWaitingPutaway(
         orderNo: currentOrderNo,
         scannedEpcs: _scannedTags.keys.toList(),
@@ -1707,6 +1714,24 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       generatedItems = await _repo.addInboundOrder(order, autoGenerateEpcs: true);
     }
 
+    // Tự động khởi tạo bản ghi Sản phẩm (SKU/Product) trong CSDL theo mã Barcode vừa sinh
+    for (var c in _receiptCartons) {
+      final bCode = c['productCode']?.toString().trim() ?? '';
+      final pName = c['productName']?.toString().trim() ?? 'Kiện hàng $bCode';
+      if (bCode.isNotEmpty) {
+        final existing = _repo.products.where((p) => p.sku == bCode || p.productId == bCode).firstOrNull;
+        if (existing == null) {
+          await _repo.addProduct(Product(
+            productId: bCode,
+            sku: bCode,
+            productName: pName,
+            category: 'Hàng nhập qua cổng RFID',
+            unit: 'Cái',
+          ));
+        }
+      }
+    }
+
     setState(() => _isCreating = false);
 
     if (mounted) {
@@ -2704,20 +2729,100 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         child: Icon(Icons.article, color: c.rfidCyan, size: 20),
                       ),
                       const SizedBox(width: 16),
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(order.orderNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                            const SizedBox(height: 2),
-                            Text('Ngày tạo: ${order.createdAt.toString().substring(0, 10)} | NCC: ${order.sourceSupplier}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                          ],
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
+                          final barcodes = orderItems
+                              .map((i) => i.sku)
+                              .where((s) => s.isNotEmpty && s != order.orderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
+                              .toSet()
+                              .toList();
+                          final barcodeDisplay = barcodes.isNotEmpty
+                              ? barcodes.join(', ')
+                              : (order.details.isNotEmpty ? order.details.map((d) => d.sku).where((s) => RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s)).toSet().join(', ') : '');
+
+                          return Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    Text(order.orderNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                                    if (barcodeDisplay.isNotEmpty)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: c.rfidCyan.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.qr_code, size: 12, color: c.rfidCyan),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Barcode 128: $barcodeDisplay',
+                                              style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold, fontFamily: 'Courier'),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text('Ngày tạo: ${order.createdAt.toString().substring(0, 10)} | NCC: ${order.sourceSupplier}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          Builder(
+                            builder: (context) {
+                              final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
+                              final barcodes = orderItems
+                                  .map((i) => i.sku)
+                                  .where((s) => s.isNotEmpty && s != order.orderNo && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s))
+                                  .toSet()
+                                  .toList();
+                              final barcodeDisplay = barcodes.isNotEmpty
+                                  ? barcodes.first
+                                  : (order.details.isNotEmpty ? order.details.map((d) => d.sku).where((s) => RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(s)).firstOrNull : null);
+
+                              if (barcodeDisplay != null && barcodeDisplay.isNotEmpty) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF10B981),
+                                      side: BorderSide(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    ),
+                                    icon: const Icon(Icons.print, size: 15),
+                                    label: const Text('In Tem Thùng', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    onPressed: () {
+                                      final orderItemCount = orderItems.isNotEmpty ? orderItems.length : order.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
+                                      PutawayBarcodeModal.show(
+                                        context,
+                                        barcode: barcodeDisplay,
+                                        orderNo: order.orderNo,
+                                        itemCount: orderItemCount,
+                                        performedBy: 'In Tem Nhập Kho',
+                                      );
+                                    },
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: c.rfidCyan,
