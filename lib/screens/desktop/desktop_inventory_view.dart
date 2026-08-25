@@ -19,10 +19,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   void initState() {
     super.initState();
     _eyeCare.addListener(_onThemeChanged);
+    _repo.addListener(_onThemeChanged);
   }
 
   @override
   void dispose() {
+    _repo.removeListener(_onThemeChanged);
     _eyeCare.removeListener(_onThemeChanged);
     super.dispose();
   }

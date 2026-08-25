@@ -26,10 +26,10 @@ class DatabaseService {
       databaseFactory = databaseFactoryFfi;
     }
 
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'c72e_wms_clean_v3.db');
+    final isTest = Platform.environment.containsKey('FLUTTER_TEST');
+    final path = isTest ? inMemoryDatabasePath : p.join(await getDatabasesPath(), 'c72e_wms_clean_v3.db');
 
-    debugPrint('Initializing 100% Clean SQLite Database at: $path');
+    debugPrint('Initializing SQLite Database (isTest=$isTest) at: $path');
 
     return await openDatabase(
       path,
@@ -38,8 +38,10 @@ class DatabaseService {
       onUpgrade: (db, oldVersion, newVersion) => _createTables(db),
       onOpen: (db) async {
         try {
-          await db.execute('PRAGMA journal_mode=WAL;');
-          await db.execute('PRAGMA busy_timeout=5000;');
+          if (!isTest) {
+            await db.execute('PRAGMA journal_mode=WAL;');
+            await db.execute('PRAGMA busy_timeout=5000;');
+          }
         } catch (_) {}
         await _createTables(db);
       },
@@ -80,7 +82,8 @@ class DatabaseService {
         pallet_code TEXT NOT NULL UNIQUE,
         location_id TEXT,
         inbound_time TEXT NOT NULL,
-        is_multi_sku INTEGER DEFAULT 0
+        is_multi_sku INTEGER DEFAULT 0,
+        FOREIGN KEY (location_id) REFERENCES locations (location_id)
       )
     ''');
 
@@ -99,7 +102,9 @@ class DatabaseService {
         location_id TEXT,
         inbound_time TEXT,
         allocated_time TEXT,
-        FOREIGN KEY (product_id) REFERENCES products (product_id)
+        FOREIGN KEY (product_id) REFERENCES products (product_id),
+        FOREIGN KEY (pallet_id) REFERENCES pallets (pallet_id),
+        FOREIGN KEY (location_id) REFERENCES locations (location_id)
       )
     ''');
     try {
@@ -127,7 +132,8 @@ class DatabaseService {
         product_name TEXT NOT NULL,
         required_qty INTEGER NOT NULL,
         received_qty INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY (order_id) REFERENCES inbound_orders (inbound_order_id)
+        FOREIGN KEY (order_id) REFERENCES inbound_orders (inbound_order_id),
+        FOREIGN KEY (product_id) REFERENCES products (product_id)
       )
     ''');
 
@@ -152,7 +158,8 @@ class DatabaseService {
         product_name TEXT NOT NULL,
         required_qty INTEGER NOT NULL,
         picked_qty INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY (order_id) REFERENCES outbound_orders (outbound_order_id)
+        FOREIGN KEY (order_id) REFERENCES outbound_orders (outbound_order_id),
+        FOREIGN KEY (product_id) REFERENCES products (product_id)
       )
     ''');
 
@@ -178,6 +185,103 @@ class DatabaseService {
         config_val TEXT
       )
     ''');
+
+    // 11. Bảng Người dùng / Nhân viên (users)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        full_name TEXT NOT NULL,
+        email TEXT,
+        phone TEXT,
+        role TEXT NOT NULL DEFAULT 'operator',
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT
+      )
+    ''');
+
+    // 12. Bảng Khách Hàng (customers)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS customers (
+        customer_id TEXT PRIMARY KEY,
+        customer_code TEXT NOT NULL UNIQUE,
+        customer_name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        address TEXT,
+        tax_code TEXT,
+        contact_person TEXT,
+        notes TEXT,
+        created_at TEXT
+      )
+    ''');
+
+    // 13. Bảng Phiếu Xuất Hàng / Vận Đơn (delivery_notes)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS delivery_notes (
+        delivery_id TEXT PRIMARY KEY,
+        delivery_no TEXT NOT NULL UNIQUE,
+        po_no TEXT,
+        customer_id TEXT,
+        customer_name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'DRAFT',
+        carrier TEXT,
+        tracking_no TEXT,
+        total_cartons INTEGER DEFAULT 0,
+        total_qty INTEGER DEFAULT 0,
+        created_by TEXT,
+        shipped_at TEXT,
+        notes TEXT,
+        created_at TEXT,
+        FOREIGN KEY (customer_id) REFERENCES customers (customer_id)
+      )
+    ''');
+
+    // 14. Bảng Chi tiết Phiếu Xuất Hàng (delivery_note_details)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS delivery_note_details (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        delivery_id TEXT NOT NULL,
+        product_id TEXT NOT NULL,
+        sku TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        carton_code TEXT,
+        FOREIGN KEY (delivery_id) REFERENCES delivery_notes (delivery_id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products (product_id)
+      )
+    ''');
+
+    // 15. Bảng Phiên Kiểm Kê Kho (inventory_sessions)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS inventory_sessions (
+        session_id TEXT PRIMARY KEY,
+        session_code TEXT NOT NULL UNIQUE,
+        zone TEXT NOT NULL,
+        location_code TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        is_completed INTEGER DEFAULT 0,
+        created_by TEXT,
+        created_at TEXT
+      )
+    ''');
+
+    // 16. Bảng Chi tiết Sai lệch Kiểm Kê (inventory_session_details)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS inventory_session_details (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        epc TEXT NOT NULL,
+        sku TEXT,
+        product_name TEXT,
+        expected_location TEXT,
+        actual_location TEXT,
+        result_type TEXT NOT NULL,
+        read_at TEXT,
+        FOREIGN KEY (session_id) REFERENCES inventory_sessions (session_id) ON DELETE CASCADE
+      )
+    ''');
   }
 
   Future<String?> getSystemConfig(String key) async {
@@ -200,6 +304,10 @@ class DatabaseService {
   Future<void> clearAllData() async {
     final db = await database;
     await db.delete('sync_queue');
+    await db.delete('inventory_session_details');
+    await db.delete('inventory_sessions');
+    await db.delete('delivery_note_details');
+    await db.delete('delivery_notes');
     await db.delete('outbound_order_details');
     await db.delete('outbound_orders');
     await db.delete('inbound_order_details');
@@ -208,6 +316,8 @@ class DatabaseService {
     await db.delete('pallets');
     await db.delete('locations');
     await db.delete('products');
+    await db.delete('customers');
+    await db.delete('users');
   }
 
   // --- CRUD QUERIES ---
@@ -568,5 +678,140 @@ class DatabaseService {
     await db.delete('inbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
     await db.delete('inbound_orders', where: 'inbound_order_id = ?', whereArgs: [orderId]);
     await db.delete('items', where: 'order_no = ?', whereArgs: [orderId]);
+  }
+
+  // --- USER QUERIES ---
+  Future<List<WmsUser>> getUsers() async {
+    final db = await database;
+    final maps = await db.query('users');
+    return maps.map((m) => WmsUser.fromMap(m)).toList();
+  }
+
+  Future<void> insertUser(WmsUser user) async {
+    final db = await database;
+    await db.insert('users', user.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<int> deleteUser(String userId) async {
+    final db = await database;
+    return await db.delete('users', where: 'user_id = ? OR username = ?', whereArgs: [userId, userId]);
+  }
+
+  // --- CUSTOMER QUERIES ---
+  Future<List<Customer>> getCustomers() async {
+    final db = await database;
+    final maps = await db.query('customers');
+    return maps.map((m) => Customer.fromMap(m)).toList();
+  }
+
+  Future<void> insertCustomer(Customer customer) async {
+    final db = await database;
+    await db.insert('customers', customer.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<int> deleteCustomer(String customerId) async {
+    final db = await database;
+    return await db.delete('customers', where: 'customer_id = ? OR customer_code = ?', whereArgs: [customerId, customerId]);
+  }
+
+  // --- DELIVERY NOTE QUERIES ---
+  Future<List<DeliveryNote>> getDeliveryNotes() async {
+    final db = await database;
+    final maps = await db.query('delivery_notes');
+    final List<DeliveryNote> list = [];
+    for (final m in maps) {
+      final id = m['delivery_id'] as String;
+      final detMaps = await db.query('delivery_note_details', where: 'delivery_id = ?', whereArgs: [id]);
+      final details = detMaps.map((d) => DeliveryNoteDetail.fromMap(d)).toList();
+      list.add(DeliveryNote.fromMap(m, details: details));
+    }
+    return list;
+  }
+
+  Future<void> insertDeliveryNote(DeliveryNote note) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.insert('delivery_notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      await txn.delete('delivery_note_details', where: 'delivery_id = ?', whereArgs: [note.deliveryId]);
+      for (final det in note.details) {
+        await txn.insert('delivery_note_details', det.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
+  Future<int> deleteDeliveryNote(String deliveryId) async {
+    final db = await database;
+    await db.delete('delivery_note_details', where: 'delivery_id = ?', whereArgs: [deliveryId]);
+    return await db.delete('delivery_notes', where: 'delivery_id = ? OR delivery_no = ?', whereArgs: [deliveryId, deliveryId]);
+  }
+
+  // --- INVENTORY SESSION QUERIES ---
+  Future<List<InventorySession>> getInventorySessions() async {
+    final db = await database;
+    final maps = await db.query('inventory_sessions');
+    final List<InventorySession> list = [];
+    for (final m in maps) {
+      final sId = m['session_id'] as String;
+      final detMaps = await db.query('inventory_session_details', where: 'session_id = ?', whereArgs: [sId]);
+      final results = detMaps.map((d) => InventoryItemResult(
+        epc: d['epc'] as String,
+        sku: d['sku'] as String?,
+        productName: d['product_name'] as String?,
+        expectedLocation: d['expected_location'] as String?,
+        actualLocation: d['actual_location'] as String?,
+        resultType: InventoryVarianceType.values.firstWhere(
+          (v) => v.code == d['result_type'],
+          orElse: () => InventoryVarianceType.match,
+        ),
+        readAt: d['read_at'] != null ? DateTime.tryParse(d['read_at'].toString()) ?? DateTime.now() : DateTime.now(),
+      )).toList();
+
+      list.add(InventorySession(
+        sessionId: sId,
+        sessionCode: m['session_code'] as String,
+        zone: m['zone'] as String,
+        locationCode: m['location_code'] as String?,
+        startedAt: DateTime.tryParse(m['started_at'].toString()) ?? DateTime.now(),
+        completedAt: m['completed_at'] != null ? DateTime.tryParse(m['completed_at'].toString()) : null,
+        isCompleted: m['is_completed'] == 1 || m['is_completed'] == true,
+        results: results,
+      ));
+    }
+    return list;
+  }
+
+  Future<void> insertInventorySession(InventorySession session) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.insert('inventory_sessions', {
+        'session_id': session.sessionId,
+        'session_code': session.sessionCode,
+        'zone': session.zone,
+        'location_code': session.locationCode,
+        'started_at': session.startedAt.toIso8601String(),
+        'completed_at': session.completedAt?.toIso8601String(),
+        'is_completed': session.isCompleted ? 1 : 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      await txn.delete('inventory_session_details', where: 'session_id = ?', whereArgs: [session.sessionId]);
+      for (final r in session.results) {
+        await txn.insert('inventory_session_details', {
+          'session_id': session.sessionId,
+          'epc': r.epc,
+          'sku': r.sku,
+          'product_name': r.productName,
+          'expected_location': r.expectedLocation,
+          'actual_location': r.actualLocation,
+          'result_type': r.resultType.code,
+          'read_at': r.readAt.toIso8601String(),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
+  Future<int> deleteInventorySession(String sessionId) async {
+    final db = await database;
+    await db.delete('inventory_session_details', where: 'session_id = ?', whereArgs: [sessionId]);
+    return await db.delete('inventory_sessions', where: 'session_id = ?', whereArgs: [sessionId]);
   }
 }

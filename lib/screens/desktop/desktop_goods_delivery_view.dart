@@ -49,6 +49,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _resetForm();
 
     _eyeCare.addListener(_onThemeChanged);
+    _repo.addListener(_onThemeChanged);
 
     if (_repo.outboundOrders.isNotEmpty) {
       _selectedLiveOrder = _repo.outboundOrders.firstWhere(
@@ -138,6 +139,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   @override
   void dispose() {
+    _repo.removeListener(_onThemeChanged);
     _eyeCare.removeListener(_onThemeChanged);
     _desktopUhf.removeListener(_onDesktopUhfUpdate);
     _uiRefreshTimer?.cancel();
@@ -528,16 +530,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('📋 ĐƠN XUẤT KHO', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
-                        InkWell(
-                          onTap: _generateFifo,
-                          child: const Text('Tính FIFO', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11)),
-                        ),
-                      ],
-                    ),
+                    Text('📋 ĐƠN XUẤT KHO', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(height: 10),
                     if (orders.isNotEmpty) ...[
                       DropdownButtonFormField<String?>(
@@ -591,28 +584,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         ),
                       ),
                     ],
-                    if (_activeFifoPlan != null) ...[
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: c.bgCardElevated,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('✅ Kế hoạch Lấy hàng (FIFO)', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11)),
-                            const SizedBox(height: 4),
-                            ..._activeFifoPlan!.lines.map((l) => Text(
-                              '• ${l.productName} (${l.sku}): Lấy ${l.quantityToPick} cái tại Pallet ${l.palletCode} (Vị trí: ${l.locationCode})',
-                              style: TextStyle(color: c.textSecondary, fontSize: 10),
-                            )),
-                          ],
-                        ),
-                      ),
-                    ],
+
                   ],
                 ),
               ),

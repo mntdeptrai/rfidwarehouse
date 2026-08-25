@@ -82,6 +82,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
     _desktopUhf.addListener(_onDesktopUhfUpdate);
     _eyeCare.addListener(_onThemeUpdate);
+    _repo.addListener(_onThemeUpdate);
 
     _initTagListener();
   }
@@ -290,7 +291,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           reason: 'ĐỦ HÀNG THÔNG QUA: $matchedCount/$expectedCount chip khớp 100% (Đơn ${_selectedLiveOrder!.orderNo})',
         );
 
-        // ⚡ TỰ ĐỘNG XÁC NHẬN NHẬP KHO & ĐỒNG BỘ SUPABASE CLOUD (Zero-Touch)
+        // ⚡ TỰ ĐỘNG XÁC NHẬN QUA CỔNG (Zero-Touch - Không cần bấm tay)
         _triggerAutoConfirmInbound();
       }
     } else {
@@ -315,6 +316,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   @override
   void dispose() {
+    _repo.removeListener(_onThemeUpdate);
     _desktopUhf.removeListener(_onDesktopUhfUpdate);
     _eyeCare.removeListener(_onThemeUpdate);
     _uiRefreshTimer?.cancel();
@@ -401,27 +403,34 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _towerLight.triggerPass(
           reason: 'HOÀN TẤT ĐỐI SOÁT ($_scanDurationSeconds GIÂY): ĐỦ HÀNG THÔNG QUA ($matchedCount/$expectedCount chip khớp 100%)',
         );
+        _triggerAutoConfirmInbound();
       } else {
         _towerLight.triggerWarningRed(
           withBuzzer: true,
           reason: 'KẾT THÚC QUÉT ($_scanDurationSeconds GIÂY): THIẾU HÀNG! Đã quét $matchedCount/$expectedCount chip (Còn thiếu ${expectedCount - matchedCount})',
         );
       }
+    } else if (autoFinished && _scannedTags.isNotEmpty && _selectedLiveOrder != null) {
+      _triggerAutoConfirmInbound();
     }
   }
 
-  Future<void> _saveLiveInbound() async {
+  Future<void> _saveLiveInbound({bool isAuto = false}) async {
     if (_scannedTags.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Chưa có thẻ RFID nào được quét!')),
-      );
+      if (!isAuto) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Chưa có thẻ RFID nào được quét!')),
+        );
+      }
       return;
     }
 
     if (_selectedLiveOrder == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(backgroundColor: Color(0xFFF59E0B), content: Text('Chưa chọn đơn nhập kho để đối soát!')),
-      );
+      if (!isAuto) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(backgroundColor: Color(0xFFF59E0B), content: Text('Chưa chọn đơn nhập kho để đối soát!')),
+        );
+      }
       return;
     }
 
@@ -712,7 +721,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
 
   void _exportAllPendingEpcs() {
-    final pendingItems = _repo.items.where((i) => i.status == ItemStatus.pendingInbound).toList();
+    final activeOrderNos = _repo.inboundOrders.map((o) => o.orderNo.trim().toUpperCase()).toSet();
+    final pendingItems = _repo.items.where((i) => i.status == ItemStatus.pendingInbound && i.orderNo != null && activeOrderNos.contains(i.orderNo!.trim().toUpperCase())).toList();
     if (pendingItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Hiện không có mã EPC nào ở trạng thái Chưa nhập kho.')),
@@ -1523,7 +1533,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           const SnackBar(
                             backgroundColor: Color(0xFF10B981),
                             duration: Duration(seconds: 2),
-                            content: Text('Đã làm mới và đồng bộ danh sách phiếu nhập từ Supabase Cloud!'),
+                            content: Text('Đã làm mới và đồng bộ danh sách phiếu nhập thành công!'),
                           ),
                         );
                       }
@@ -1884,8 +1894,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     _isSaving
                         ? 'Đang lưu...'
                         : (_selectedLiveOrder != null
-                            ? 'XÁC NHẬN NHẬP ĐƠN · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP'
-                            : 'XÁC NHẬN NHẬP KHO · $scannedCount CHIP'),
+                            ? 'XÁC NHẬN QUA CỔNG · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP (CHỜ XẾP KHO)'
+                            : 'XÁC NHẬN QUA CỔNG · $scannedCount CHIP (CHỜ XẾP KHO)'),
                     style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12.5),
                   ),
                   onPressed: (_isSaving || scannedCount == 0) ? null : _saveLiveInbound,
@@ -2141,7 +2151,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   Widget _buildReceiptsList(EyeCareColors c) {
     final inboundOrders = _repo.inboundOrders;
-    final pendingCount = _repo.items.where((i) => i.status == ItemStatus.pendingInbound).length;
+    final activeOrderNos = inboundOrders.map((o) => o.orderNo.trim().toUpperCase()).toSet();
+    final pendingCount = _repo.items.where((i) => i.status == ItemStatus.pendingInbound && i.orderNo != null && activeOrderNos.contains(i.orderNo!.trim().toUpperCase())).length;
 
     return Container(
       decoration: BoxDecoration(
@@ -2214,7 +2225,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       label: const Text('Làm Mới & Đồng Bộ Cloud', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                       onPressed: () async {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Đang làm mới & đồng bộ dữ liệu từ Supabase Cloud...'), duration: Duration(seconds: 1)),
+                          const SnackBar(content: Text('Đang làm mới & đồng bộ dữ liệu...'), duration: Duration(seconds: 1)),
                         );
                         await _supabaseSync.syncNow();
                         await _repo.reloadFromSqlite();
@@ -2226,45 +2237,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         }
                       },
                     ),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: c.errorCoral,
-                        side: BorderSide(color: c.errorCoral),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      ),
-                      icon: const Icon(Icons.delete_sweep, size: 15),
-                      label: const Text('Xóa Sạch Dữ Liệu Test', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: c.bgCard,
-                            title: Text('XÁC NHẬN XÓA SẠCH DỮ LIỆU', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold)),
-                            content: Text('Bạn có chắc muốn xóa sạch toàn bộ đơn hàng, chip RFID và pallet thử nghiệm cả trên SQLite và Supabase Cloud không?', style: TextStyle(color: c.textPrimary)),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: const Text('XÓA SẠCH', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (confirm == true) {
-                          await _repo.clearAllData();
-                          setState(() {
-                            _scannedTags.clear();
-                            _selectedLiveOrder = null;
-                          });
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('✅ Đã xóa sạch toàn bộ dữ liệu thử nghiệm!')),
-                            );
-                          }
-                        }
-                      },
-                    ),
+
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: c.rfidCyan,

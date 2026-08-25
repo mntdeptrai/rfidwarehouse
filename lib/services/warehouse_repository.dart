@@ -61,6 +61,10 @@ class WarehouseRepository extends ChangeNotifier {
 
       final cleanProducts = await _dbService.getProducts();
       final cleanItems = await _dbService.getItems();
+      final dbUsers = await _dbService.getUsers();
+      final dbCustomers = await _dbService.getCustomers();
+      final dbDeliveryNotes = await _dbService.getDeliveryNotes();
+      final dbInventorySessions = await _dbService.getInventorySessions();
 
       _products.clear();
       _products.addAll(cleanProducts.where((p) => !bogusCommandNames.contains(p.productId.toUpperCase()) && !bogusCommandNames.contains(p.sku.toUpperCase())));
@@ -84,6 +88,26 @@ class WarehouseRepository extends ChangeNotifier {
       _outboundOrders.clear();
       _outboundOrders.addAll(dbOutboundOrders);
 
+      // Tự động dọn dẹp thẻ mồ côi chưa nhập kho không thuộc bất kỳ đơn nhập nào
+      final activeInboundOrderNos = _inboundOrders.map((o) => o.orderNo.toUpperCase()).toSet();
+      final orphanPending = _items.where((i) => i.status == ItemStatus.pendingInbound && (i.orderNo == null || !activeInboundOrderNos.contains(i.orderNo!.toUpperCase()))).toList();
+      for (final orphan in orphanPending) {
+        _items.remove(orphan);
+        await _dbService.deleteItem(orphan.epc);
+      }
+
+      _users.clear();
+      _users.addAll(dbUsers);
+
+      _customers.clear();
+      _customers.addAll(dbCustomers);
+
+      _deliveryNotes.clear();
+      _deliveryNotes.addAll(dbDeliveryNotes);
+
+      _inventorySessions.clear();
+      _inventorySessions.addAll(dbInventorySessions);
+
       notifyListeners();
     } catch (e) {
       debugPrint('WarehouseRepository: SQLite load error: $e');
@@ -94,15 +118,35 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> deleteInboundOrder(String orderId) async {
     final cleanId = orderId.trim();
-    await _dbService.deleteInboundOrder(cleanId);
-    _inboundOrders.removeWhere((o) => o.inboundOrderId == cleanId || o.orderNo == cleanId);
-    _items.removeWhere((i) => i.orderNo == cleanId);
+    final targetOrder = _inboundOrders.where((o) => o.inboundOrderId == cleanId || o.orderNo == cleanId).firstOrNull;
+    final orderNo = targetOrder?.orderNo ?? cleanId;
+    final orderIdVal = targetOrder?.inboundOrderId ?? cleanId;
+
+    await _dbService.deleteInboundOrder(orderIdVal);
+    _inboundOrders.removeWhere((o) => o.inboundOrderId == orderIdVal || o.orderNo == orderNo);
+    _items.removeWhere((i) => i.orderNo == orderNo || i.orderNo == orderIdVal || i.orderNo == cleanId);
 
     await _syncDirectOrQueue(
       tableName: 'inbound_orders',
+      recordId: orderIdVal,
+      action: 'DELETE',
+      payload: {'orderId': orderIdVal},
+    );
+
+    notifyListeners();
+  }
+
+  Future<void> deleteProduct(String productId) async {
+    final cleanId = productId.trim();
+    await _dbService.deleteProduct(cleanId);
+    _products.removeWhere((p) => p.productId == cleanId || p.sku == cleanId);
+    _items.removeWhere((i) => i.productId == cleanId || i.sku == cleanId);
+
+    await _syncDirectOrQueue(
+      tableName: 'products',
       recordId: cleanId,
       action: 'DELETE',
-      payload: {'orderId': cleanId},
+      payload: {'productId': cleanId},
     );
 
     notifyListeners();
@@ -119,6 +163,9 @@ class WarehouseRepository extends ChangeNotifier {
     _pickingPlans.clear();
     _inventorySessions.clear();
     _transactions.clear();
+    _users.clear();
+    _customers.clear();
+    _deliveryNotes.clear();
 
     if (alsoClearCloud) {
       await SupabaseSyncService().clearAllSupabaseData();
@@ -375,6 +422,9 @@ class WarehouseRepository extends ChangeNotifier {
   final List<InventorySession> _inventorySessions = [];
   final List<InventoryTransaction> _transactions = [];
   final List<RfidDevice> _devices = [];
+  final List<WmsUser> _users = [];
+  final List<Customer> _customers = [];
+  final List<DeliveryNote> _deliveryNotes = [];
 
   List<Product> get products => List.unmodifiable(_products);
   List<Location> get locations => List.unmodifiable(_locations);
@@ -386,6 +436,157 @@ class WarehouseRepository extends ChangeNotifier {
   List<InventorySession> get inventorySessions => List.unmodifiable(_inventorySessions);
   List<InventoryTransaction> get transactions => List.unmodifiable(_transactions);
   List<RfidDevice> get devices => List.unmodifiable(_devices);
+  List<WmsUser> get users => List.unmodifiable(_users);
+  List<Customer> get customers => List.unmodifiable(_customers);
+  List<DeliveryNote> get deliveryNotes => List.unmodifiable(_deliveryNotes);
+
+  Future<void> addCustomer(Customer customer) async {
+    await _dbService.insertCustomer(customer);
+    _customers.removeWhere((c) => c.customerId == customer.customerId || c.customerCode == customer.customerCode);
+    _customers.add(customer);
+    await _syncDirectOrQueue(
+      tableName: 'customers',
+      recordId: customer.customerId,
+      action: 'INSERT',
+      payload: {
+        'customerId': customer.customerId,
+        'customerCode': customer.customerCode,
+        'customerName': customer.customerName,
+        'phone': customer.phone,
+        'email': customer.email,
+        'address': customer.address,
+        'taxCode': customer.taxCode,
+        'contactPerson': customer.contactPerson,
+        'notes': customer.notes,
+      },
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<void> deleteCustomer(String customerId) async {
+    final cleanId = customerId.trim();
+    await _dbService.deleteCustomer(cleanId);
+    _customers.removeWhere((c) => c.customerId == cleanId || c.customerCode == cleanId);
+    await _syncDirectOrQueue(
+      tableName: 'customers',
+      recordId: cleanId,
+      action: 'DELETE',
+      payload: {'customerId': cleanId},
+    );
+    notifyListeners();
+  }
+
+  Future<void> addDeliveryNote(DeliveryNote note) async {
+    await _dbService.insertDeliveryNote(note);
+    _deliveryNotes.removeWhere((d) => d.deliveryId == note.deliveryId || d.deliveryNo == note.deliveryNo);
+    _deliveryNotes.add(note);
+    await _syncDirectOrQueue(
+      tableName: 'delivery_notes',
+      recordId: note.deliveryId,
+      action: 'INSERT',
+      payload: {
+        'deliveryId': note.deliveryId,
+        'deliveryNo': note.deliveryNo,
+        'poNo': note.poNo,
+        'customerId': note.customerId,
+        'customerName': note.customerName,
+        'status': note.status,
+        'carrier': note.carrier,
+        'trackingNo': note.trackingNo,
+        'totalCartons': note.totalCartons,
+        'totalQty': note.totalQty,
+        'createdBy': note.createdBy,
+        'shippedAt': note.shippedAt?.toIso8601String(),
+        'notes': note.notes,
+      },
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<void> deleteDeliveryNote(String deliveryId) async {
+    final cleanId = deliveryId.trim();
+    await _dbService.deleteDeliveryNote(cleanId);
+    _deliveryNotes.removeWhere((d) => d.deliveryId == cleanId || d.deliveryNo == cleanId);
+    await _syncDirectOrQueue(
+      tableName: 'delivery_notes',
+      recordId: cleanId,
+      action: 'DELETE',
+      payload: {'deliveryId': cleanId},
+    );
+    notifyListeners();
+  }
+
+  Future<void> saveInventorySession(InventorySession session) async {
+    await _dbService.insertInventorySession(session);
+    _inventorySessions.removeWhere((s) => s.sessionId == session.sessionId || s.sessionCode == session.sessionCode);
+    _inventorySessions.add(session);
+    await _syncDirectOrQueue(
+      tableName: 'inventory_sessions',
+      recordId: session.sessionId,
+      action: 'INSERT',
+      payload: {
+        'sessionId': session.sessionId,
+        'sessionCode': session.sessionCode,
+        'zone': session.zone,
+        'locationCode': session.locationCode,
+        'startedAt': session.startedAt.toIso8601String(),
+        'completedAt': session.completedAt?.toIso8601String(),
+        'isCompleted': session.isCompleted,
+      },
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<void> deleteInventorySession(String sessionId) async {
+    final cleanId = sessionId.trim();
+    await _dbService.deleteInventorySession(cleanId);
+    _inventorySessions.removeWhere((s) => s.sessionId == cleanId || s.sessionCode == cleanId);
+    await _syncDirectOrQueue(
+      tableName: 'inventory_sessions',
+      recordId: cleanId,
+      action: 'DELETE',
+      payload: {'sessionId': cleanId},
+    );
+    notifyListeners();
+  }
+
+  Future<void> addUser(WmsUser user) async {
+    await _dbService.insertUser(user);
+    _users.removeWhere((u) => u.userId == user.userId);
+    _users.add(user);
+    await _syncDirectOrQueue(
+      tableName: 'users',
+      recordId: user.userId,
+      action: 'INSERT',
+      payload: {
+        'userId': user.userId,
+        'username': user.username,
+        'fullName': user.fullName,
+        'email': user.email,
+        'phone': user.phone,
+        'role': user.role,
+        'isActive': user.isActive,
+      },
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<void> deleteUser(String userId) async {
+    final cleanId = userId.trim();
+    await _dbService.deleteUser(cleanId);
+    _users.removeWhere((u) => u.userId == cleanId || u.username == cleanId);
+    await _syncDirectOrQueue(
+      tableName: 'users',
+      recordId: cleanId,
+      action: 'DELETE',
+      payload: {'userId': cleanId},
+    );
+    notifyListeners();
+  }
 
   List<Item> generateItemsForInbound(InboundOrder order) {
     final existing = _items.where((i) => i.orderNo == order.orderNo).toList();

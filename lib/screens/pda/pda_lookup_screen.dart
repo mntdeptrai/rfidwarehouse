@@ -213,7 +213,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Mã thẻ/Serial này chưa có trong CSDL SQLite hoặc chưa được nhập kho.',
+                'Mã thẻ/Serial này chưa có trong hệ thống hoặc chưa được nhập kho.',
                 style: TextStyle(color: c.textMuted, fontSize: 12),
                 textAlign: TextAlign.center,
               ),

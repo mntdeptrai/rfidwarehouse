@@ -59,7 +59,7 @@ class PdaDrawer extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Danh mục hàng hóa đã đồng bộ SQLite')),
+                    const SnackBar(content: Text('Danh mục hàng hóa đã được đồng bộ')),
                   );
                 },
               ),
@@ -85,7 +85,7 @@ class PdaDrawer extends StatelessWidget {
               Divider(color: c.border),
               ListTile(
                 leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
-                title: Text('Xóa Sạch Dữ Liệu SQLite', style: TextStyle(color: c.errorCoral, fontSize: 14)),
+                title: Text('Xóa Sạch Dữ Liệu', style: TextStyle(color: c.errorCoral, fontSize: 14)),
                 onTap: () async {
                   Navigator.pop(context);
                   final confirm = await showDialog<bool>(
@@ -93,7 +93,7 @@ class PdaDrawer extends StatelessWidget {
                     builder: (ctx) => AlertDialog(
                       backgroundColor: c.bgCard,
                       title: Text('Xác nhận xóa sạch dữ liệu?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
-                      content: Text('Toàn bộ đơn hàng và chip RFID thử nghiệm (trên cả Supabase Cloud và PDA) sẽ được xóa sạch 100% để bạn bắt đầu tạo dữ liệu thực tế.', style: TextStyle(color: c.textSecondary)),
+                      content: Text('Toàn bộ đơn hàng và chip RFID thử nghiệm sẽ được xóa sạch 100% để bạn bắt đầu tạo dữ liệu thực tế.', style: TextStyle(color: c.textSecondary)),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
                         ElevatedButton(
@@ -108,7 +108,7 @@ class PdaDrawer extends StatelessWidget {
                     await WarehouseRepository().clearAllData();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả PDA & Supabase Cloud!')),
+                        SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
                       );
                     }
                   }

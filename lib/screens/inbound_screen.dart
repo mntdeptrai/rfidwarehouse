@@ -490,7 +490,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   ),
                   child: Column(
                     children: [
-                      const Text('Chưa có đơn nhập nào trong CSDL SQLite.', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
+                      const Text('Chưa có đơn nhập nào trong hệ thống.', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12)),
                       const SizedBox(height: 8),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),

@@ -312,42 +312,106 @@ class SupabaseSyncService extends ChangeNotifier {
       _realtimeChannel?.unsubscribe();
 
       final supa = Supabase.instance.client;
-      _realtimeChannel = supa.channel('public:db_changes')
-        ..onPostgresChanges(
+      final channel = supa.channel('public:db_changes');
+
+      const tables = [
+        'items',
+        'products',
+        'locations',
+        'pallets',
+        'customers',
+        'inbound_orders',
+        'inbound_order_details',
+        'outbound_orders',
+        'outbound_order_details',
+        'delivery_notes',
+        'delivery_note_details',
+        'inventory_sessions',
+        'inventory_session_details',
+        'users',
+      ];
+
+      for (final tbl in tables) {
+        channel.onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
-          table: 'items',
-          callback: (payload) {
-            debugPrint('Realtime change on items: ${payload.eventType}');
-            _addLog(
-              action: 'REALTIME',
-              tableName: 'items',
-              recordCount: 1,
-              isSuccess: true,
-              message: 'Nhận sự kiện Realtime thay đổi từ items (${payload.eventType})',
-            );
-            WarehouseRepository().reloadFromSqlite();
-          },
-        )
-        ..onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'inbound_orders',
-          callback: (payload) {
-            WarehouseRepository().reloadFromSqlite();
-          },
-        )
-        ..onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'outbound_orders',
-          callback: (payload) {
-            WarehouseRepository().reloadFromSqlite();
-          },
-        )
-        ..subscribe();
+          table: tbl,
+          callback: (payload) => _handleRealtimeTableChange(tbl, payload),
+        );
+      }
+
+      channel.subscribe();
+      _realtimeChannel = channel;
+      debugPrint('✓ Supabase Realtime channel subscribed to all tables.');
     } catch (e) {
       debugPrint('Realtime subscription error: $e');
+    }
+  }
+
+  Future<void> _handleRealtimeTableChange(String tableName, PostgresChangePayload payload) async {
+    try {
+      debugPrint('⚡ Supabase Realtime event on $tableName: ${payload.eventType}');
+      final db = await _dbService.database;
+
+      if (payload.eventType == PostgresChangeEvent.delete) {
+        final oldRecord = payload.oldRecord;
+        if (oldRecord.isNotEmpty) {
+          if (tableName == 'items' && oldRecord['item_id'] != null) {
+            await db.delete('items', where: 'item_id = ?', whereArgs: [oldRecord['item_id']]);
+          } else if (tableName == 'products' && oldRecord['product_id'] != null) {
+            await db.delete('products', where: 'product_id = ?', whereArgs: [oldRecord['product_id']]);
+          } else if (tableName == 'locations' && oldRecord['location_id'] != null) {
+            await db.delete('locations', where: 'location_id = ?', whereArgs: [oldRecord['location_id']]);
+          } else if (tableName == 'pallets' && oldRecord['pallet_id'] != null) {
+            await db.delete('pallets', where: 'pallet_id = ?', whereArgs: [oldRecord['pallet_id']]);
+          } else if (tableName == 'customers' && oldRecord['customer_id'] != null) {
+            await db.delete('customers', where: 'customer_id = ?', whereArgs: [oldRecord['customer_id']]);
+          } else if (tableName == 'inbound_orders' && oldRecord['inbound_order_id'] != null) {
+            await db.delete('inbound_orders', where: 'inbound_order_id = ?', whereArgs: [oldRecord['inbound_order_id']]);
+          } else if (tableName == 'outbound_orders' && oldRecord['outbound_order_id'] != null) {
+            await db.delete('outbound_orders', where: 'outbound_order_id = ?', whereArgs: [oldRecord['outbound_order_id']]);
+          } else if (tableName == 'delivery_notes' && oldRecord['delivery_id'] != null) {
+            await db.delete('delivery_notes', where: 'delivery_id = ?', whereArgs: [oldRecord['delivery_id']]);
+          } else if (tableName == 'inventory_sessions' && oldRecord['session_id'] != null) {
+            await db.delete('inventory_sessions', where: 'session_id = ?', whereArgs: [oldRecord['session_id']]);
+          } else if (tableName == 'users' && oldRecord['user_id'] != null) {
+            await db.delete('users', where: 'user_id = ?', whereArgs: [oldRecord['user_id']]);
+          }
+        } else {
+          await _pullTableFromSupabase(tableName);
+        }
+      } else {
+        final newRecord = payload.newRecord;
+        if (newRecord.isNotEmpty) {
+          final map = Map<String, dynamic>.from(newRecord);
+          map.remove('updated_at');
+          if (tableName == 'pallets' && map['is_multi_sku'] is bool) {
+            map['is_multi_sku'] = (map['is_multi_sku'] == true) ? 1 : 0;
+          }
+          if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
+            map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
+          }
+          if (tableName == 'users' && map['is_active'] is bool) {
+            map['is_active'] = (map['is_active'] == true) ? 1 : 0;
+          }
+          await db.insert(tableName, map, conflictAlgorithm: ConflictAlgorithm.replace);
+        } else {
+          await _pullTableFromSupabase(tableName);
+        }
+      }
+
+      _addLog(
+        action: 'REALTIME',
+        tableName: tableName,
+        recordCount: 1,
+        isSuccess: true,
+        message: 'Nhận sự kiện Realtime thay đổi từ $tableName (${payload.eventType})',
+      );
+      await WarehouseRepository().reloadFromSqlite();
+    } catch (e) {
+      debugPrint('Realtime handling error on $tableName: $e');
+      await _pullTableFromSupabase(tableName);
+      await WarehouseRepository().reloadFromSqlite();
     }
   }
 
@@ -577,15 +641,21 @@ class SupabaseSyncService extends ChangeNotifier {
         debugPrint('Master data cloud push error: $e');
       }
 
-      // 2. PULL DỮ LIỆU TỪ SUPABASE VỀ SQLITE (DANH MỤC SẢN PHẨM, VỊ TRÍ, LỆNH NHẬP/XUẤT)
+      // 2. PULL DỮ LIỆU TỪ SUPABASE VỀ SQLITE (DANH MỤC SẢN PHẨM, VỊ TRÍ, LỆNH NHẬP/XUẤT, NGƯỜI DÙNG, KHÁCH HÀNG, PHIẾU XUẤT, KIỂM KÊ)
       await _pullTableFromSupabase('locations');
       await _pullTableFromSupabase('products');
       await _pullTableFromSupabase('pallets');
       await _pullTableFromSupabase('items');
+      await _pullTableFromSupabase('customers');
       await _pullTableFromSupabase('inbound_orders');
       await _pullTableFromSupabase('inbound_order_details');
       await _pullTableFromSupabase('outbound_orders');
       await _pullTableFromSupabase('outbound_order_details');
+      await _pullTableFromSupabase('delivery_notes');
+      await _pullTableFromSupabase('delivery_note_details');
+      await _pullTableFromSupabase('inventory_sessions');
+      await _pullTableFromSupabase('inventory_session_details');
+      await _pullTableFromSupabase('users');
 
       _lastSyncTime = DateTime.now();
       await _refreshPendingCount();
@@ -626,8 +696,16 @@ class SupabaseSyncService extends ChangeNotifier {
 
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
-        // Loại bỏ cột updated_at nếu SQLite không có
         map.remove('updated_at');
+        if (tableName == 'pallets' && map['is_multi_sku'] is bool) {
+          map['is_multi_sku'] = (map['is_multi_sku'] == true) ? 1 : 0;
+        }
+        if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
+          map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
+        }
+        if (tableName == 'users' && map['is_active'] is bool) {
+          map['is_active'] = (map['is_active'] == true) ? 1 : 0;
+        }
         batch.insert(tableName, map, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
@@ -641,6 +719,10 @@ class SupabaseSyncService extends ChangeNotifier {
     if (Platform.environment.containsKey('FLUTTER_TEST')) return;
     try {
       final supa = Supabase.instance.client;
+      await supa.from('inventory_session_details').delete().neq('id', 0);
+      await supa.from('inventory_sessions').delete().neq('session_id', '');
+      await supa.from('delivery_note_details').delete().neq('id', 0);
+      await supa.from('delivery_notes').delete().neq('delivery_id', '');
       await supa.from('outbound_order_details').delete().neq('id', 0);
       await supa.from('inbound_order_details').delete().neq('id', 0);
       await supa.from('outbound_orders').delete().neq('outbound_order_id', '');
@@ -649,6 +731,8 @@ class SupabaseSyncService extends ChangeNotifier {
       await supa.from('pallets').delete().neq('pallet_id', '');
       await supa.from('locations').delete().neq('location_id', '');
       await supa.from('products').delete().neq('product_id', '');
+      await supa.from('customers').delete().neq('customer_id', '');
+      await supa.from('users').delete().neq('user_id', '');
       await supa.from('sync_logs').delete().neq('id', 0);
 
       _addLog(

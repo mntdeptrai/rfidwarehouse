@@ -255,7 +255,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
                     Icon(Icons.sync_alt, color: Color(0xFF0284C7), size: 16),
                     SizedBox(width: 6),
                     Expanded(
-                      child: Text('Đã trừ tồn kho SQLite & đồng bộ ERP Bravo', style: TextStyle(color: Color(0xFF0284C7), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      child: Text('Đã trừ tồn kho & đồng bộ hệ thống', style: TextStyle(color: Color(0xFF0284C7), fontSize: 11.5, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

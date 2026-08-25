@@ -19,10 +19,12 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
   void initState() {
     super.initState();
     _eyeCare.addListener(_onThemeChanged);
+    _repo.addListener(_onThemeChanged);
   }
 
   @override
   void dispose() {
+    _repo.removeListener(_onThemeChanged);
     _eyeCare.removeListener(_onThemeChanged);
     _queryController.dispose();
     super.dispose();

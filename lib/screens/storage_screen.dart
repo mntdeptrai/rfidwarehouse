@@ -21,19 +21,25 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _eyeCare.addListener(_onThemeChanged);
+    _repo.addListener(_onRepoChanged);
     UhfService().setScanMode(PdaScanMode.rfid);
   }
 
   @override
   void dispose() {
+    _repo.removeListener(_onRepoChanged);
     _eyeCare.removeListener(_onThemeChanged);
     _tabController.dispose();
     super.dispose();
   }
 
   void _onThemeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _onRepoChanged() {
     if (mounted) setState(() {});
   }
 
@@ -239,7 +245,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           ],
         ),
         content: Text(
-          'Thao tác này sẽ xóa sạch 100% toàn bộ đơn hàng và chip RFID thử nghiệm trong CSDL SQLite trên máy cầm tay và cả trên Supabase Cloud, đưa về trạng thái sạch hoàn toàn để bạn nhập dữ liệu thực tế.',
+          'Thao tác này sẽ xóa sạch 100% toàn bộ đơn hàng và chip RFID thử nghiệm trong hệ thống, đưa về trạng thái sạch hoàn toàn để bạn bắt đầu tạo dữ liệu thực tế.',
           style: TextStyle(color: c.textSecondary, fontSize: 13),
         ),
         actions: [
@@ -251,7 +257,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trên cả SQLite & Supabase Cloud!')),
+                  SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
                 );
               }
             },
@@ -346,7 +352,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           ),
           IconButton(
             icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
-            tooltip: 'Xóa sạch CSDL SQLite',
+            tooltip: 'Xóa sạch dữ liệu',
             onPressed: _confirmClearAllData,
           ),
         ],
@@ -365,7 +371,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               tabs: const [
                 Tab(icon: Icon(Icons.inventory_2, size: 18), text: 'Tồn Kho SKU'),
                 Tab(icon: Icon(Icons.pallet, size: 18), text: 'Quản Lý Pallet'),
-                Tab(icon: Icon(Icons.grid_view, size: 18), text: 'Sơ Đồ Location'),
               ],
             ),
           ),
@@ -380,7 +385,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                   children: [
                     _buildSkuStockTab(c),
                     _buildPalletManagementTab(c),
-                    _buildLocationGridTab(c),
                   ],
                 );
               },
@@ -404,7 +408,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               Icon(Icons.inventory_2_outlined, size: 56, color: c.textMuted),
               const SizedBox(height: 14),
               Text(
-                'Chưa có tồn kho sản phẩm nào trong SQLite.',
+                'Chưa có tồn kho sản phẩm nào trong kho.',
                 style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
@@ -466,16 +470,49 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: c.bgCardElevated,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      prod.category,
-                      style: TextStyle(color: c.textSecondary, fontSize: 11),
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: c.bgCardElevated,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          prod.category,
+                          style: TextStyle(color: c.textSecondary, fontSize: 11),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, color: c.textMuted, size: 18),
+                        tooltip: 'Xóa sản phẩm',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: c.bgCard,
+                              title: Text('Xác nhận xóa SKU', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                              content: Text('Bạn có chắc chắn muốn xóa sản phẩm ${prod.sku} (${prod.productName}) không?', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('XÓA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await _repo.deleteProduct(prod.productId);
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -535,7 +572,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               Icon(Icons.pallet, size: 56, color: c.textMuted),
               const SizedBox(height: 14),
               Text(
-                'Chưa có Pallet nào trong kho SQLite.',
+                'Chưa có Pallet nào trong kho.',
                 style: TextStyle(color: c.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
@@ -646,105 +683,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLocationGridTab(EyeCareColors c) {
-    if (_repo.locations.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.grid_view_outlined, size: 56, color: c.textMuted),
-              const SizedBox(height: 14),
-              Text(
-                'Chưa có Vị trí kho nào trong SQLite.',
-                style: TextStyle(color: c.textSecondary, fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
-                onPressed: _showAddLocationDialog,
-                child: const Text('+ THÊM VỊ TRÍ MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: _repo.locations.length,
-      itemBuilder: (context, index) {
-        final loc = _repo.locations[index];
-        final bool hasPallet = loc.currentPallets > 0;
-        final palletsAtLoc = _repo.pallets.where((p) => p.locationId == loc.locationId).toList();
-
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: c.bgCard,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: hasPallet ? c.rfidCyan.withValues(alpha: 0.5) : c.border,
-              width: hasPallet ? 1.5 : 1.0,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    loc.locationCode,
-                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: hasPallet ? const Color(0xFF10B981) : c.textMuted,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ),
-              Text(
-                '${loc.zone} • ${loc.shelf}',
-                style: TextStyle(color: c.textSecondary, fontSize: 11),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: c.bgCardElevated,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  hasPallet ? palletsAtLoc.map((e) => e.palletCode).join(', ') : 'Vị trí trống',
-                  style: TextStyle(
-                    color: hasPallet ? c.rfidCyan : c.textMuted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
             ],
           ),
         );
