@@ -748,7 +748,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
 
               // 4. Chốt số liệu và lưu SQLite + Đồng bộ nền
               await _repo.completeInventorySession(widget.session.sessionId, 'Thủ kho PDA');
-              if (context.mounted) {
+              if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     backgroundColor: Color(0xFF10B981),

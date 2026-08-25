@@ -1412,6 +1412,59 @@ class WarehouseRepository extends ChangeNotifier {
     return true;
   }
 
+  /// Tự động tìm đơn xuất kho (Outbound Order) đang chờ xuất khớp với danh sách EPC quét được tại cổng
+  OutboundOrder? findMatchingOutboundOrder(List<String> scannedEpcs) {
+    if (scannedEpcs.isEmpty) return null;
+
+    final pendingOrders = _outboundOrders.where((o) =>
+      o.status != OutboundOrderStatus.shipped
+    ).toList();
+
+    if (pendingOrders.isEmpty) return null;
+
+    final cleanScanned = scannedEpcs.map((e) => e.toUpperCase()).toSet();
+
+    // 1. Ưu tiên cao nhất: Đơn xuất lẻ có chứa chính xác mã EPC trong danh sách epcList
+    for (var order in pendingOrders) {
+      for (var d in order.details) {
+        if (d.epcList != null && d.epcList!.isNotEmpty) {
+          final orderEpcs = d.epcList!.map((e) => e.toUpperCase()).toSet();
+          if (cleanScanned.any((epc) => orderEpcs.contains(epc))) {
+            return order;
+          }
+        }
+      }
+    }
+
+    // 2. Tìm theo SKU / Mã sản phẩm / Thùng Pallet của các chip quét được
+    final scannedItems = _items.where((it) => cleanScanned.contains(it.epc.toUpperCase())).toList();
+    if (scannedItems.isEmpty) return null;
+
+    final scannedSkus = scannedItems.map((it) => it.sku.toUpperCase()).toSet();
+    final scannedProductIds = scannedItems.map((it) => it.productId.toUpperCase()).toSet();
+    final scannedPalletIds = scannedItems.where((it) => it.palletId != null).map((it) => it.palletId!.toUpperCase()).toSet();
+
+    OutboundOrder? bestOrder;
+    int bestScore = 0;
+
+    for (var order in pendingOrders) {
+      int score = 0;
+      for (var d in order.details) {
+        final dSku = d.sku.toUpperCase();
+        final dProd = d.productId.toUpperCase();
+        if (scannedSkus.contains(dSku) || scannedProductIds.contains(dProd) || scannedPalletIds.contains(dSku)) {
+          score += d.requiredQty;
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestOrder = order;
+      }
+    }
+
+    return bestOrder;
+  }
+
   GateVerificationResult verifyGateOutbound({
     required String poNo,
     required List<String> scannedEpcs,
@@ -1423,29 +1476,42 @@ class WarehouseRepository extends ChangeNotifier {
     final List<String> unexpectedEpcs = [];
     final List<String> unstockedEpcs = [];
 
+    // Kiểm tra xem đơn có gán danh sách EPC cụ thể không (đơn xuất lẻ)
+    final Set<String> explicitExpectedEpcs = {};
+    for (var d in order.details) {
+      if (d.epcList != null && d.epcList!.isNotEmpty) {
+        explicitExpectedEpcs.addAll(d.epcList!.map((e) => e.toUpperCase()));
+      }
+    }
+
+    final allowedSkus = order.details.map((d) => d.sku.toUpperCase()).toSet();
+
     final List<SkuVerificationBreakdown> breakdowns = [];
     bool allMatched = true;
 
     for (var epc in uniqueEpcs) {
-      final item = _items.firstWhere(
-        (it) => it.epc == epc,
-        orElse: () => Item(
-          itemId: 'UNKNOWN',
-          productId: '',
-          sku: 'UNKNOWN',
-          productName: 'Thẻ chưa khai báo',
-          serialNumber: '',
-          epc: epc,
-        ),
-      );
+      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
 
-      if (item.sku == 'UNKNOWN') {
+      if (item == null) {
+        unexpectedEpcs.add(epc);
+      } else if (explicitExpectedEpcs.isNotEmpty && !explicitExpectedEpcs.contains(epc.toUpperCase())) {
+        // Sai mã EPC lẻ
+        unexpectedEpcs.add(epc);
+      } else if (explicitExpectedEpcs.isEmpty && !allowedSkus.contains(item.sku.toUpperCase()) && !allowedSkus.contains(item.productId.toUpperCase()) && !(item.palletId != null && allowedSkus.contains(item.palletId!.toUpperCase()))) {
+        // Sai SKU/Thùng
         unexpectedEpcs.add(epc);
       } else if (!isItemStockedInLocation(item)) {
         unstockedEpcs.add(epc);
         allMatched = false;
       } else {
-        actualSkuCounts[item.sku] = (actualSkuCounts[item.sku] ?? 0) + 1;
+        final matchedSku = order.details.where((d) =>
+          d.sku.toUpperCase() == item.sku.toUpperCase() ||
+          d.sku.toUpperCase() == item.productId.toUpperCase() ||
+          (item.palletId != null && d.sku.toUpperCase() == item.palletId!.toUpperCase()) ||
+          (d.epcList != null && d.epcList!.map((e) => e.toUpperCase()).contains(epc.toUpperCase()))
+        ).firstOrNull?.sku ?? item.sku;
+
+        actualSkuCounts[matchedSku] = (actualSkuCounts[matchedSku] ?? 0) + 1;
       }
     }
 
@@ -1523,7 +1589,7 @@ class WarehouseRepository extends ChangeNotifier {
       _transactions.insert(
         0,
         InventoryTransaction(
-          transactionId: 'TX-${DateTime.now().millisecondsSinceEpoch}-${d.sku}',
+          transactionId: 'TX-${now.millisecondsSinceEpoch}-${d.sku}',
           type: TransactionType.outbound,
           documentNo: poNo,
           sku: d.sku,
@@ -1532,7 +1598,7 @@ class WarehouseRepository extends ChangeNotifier {
           fromLocation: 'KHO_TONG',
           toLocation: 'KHACH_HANG: ${order.customer}',
           performedBy: performedBy,
-          timestamp: DateTime.now(),
+          timestamp: now,
           notes: 'Xuất kho thành công, Gate OUTBOUND PASS',
         ),
       );
@@ -1548,7 +1614,7 @@ class WarehouseRepository extends ChangeNotifier {
         'poNo': poNo,
         'shippedEpcs': shippedEpcs,
         'performedBy': performedBy,
-        'timestamp': DateTime.now().toIso8601String(),
+        'timestamp': now.toIso8601String(),
       },
     );
     _triggerBackgroundSync();

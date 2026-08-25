@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/tag_info.dart';
-import '../../models/wms_models.dart';
 import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
 import '../../theme/eye_care_theme.dart';
@@ -31,9 +30,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   final TextEditingController _cartonInputController = TextEditingController();
   final FocusNode _cartonFocusNode = FocusNode();
-
-  int _sessionPutawayCount = 0;
-  String? _lastConfirmedCarton;
 
 
   @override
@@ -155,8 +151,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       final locName = loc != null ? loc.locationCode : _selectedLocationId!;
 
       setState(() {
-        _sessionPutawayCount++;
-        _lastConfirmedCarton = clean;
         _cartonInputController.clear();
       });
 

@@ -1029,10 +1029,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'CẢNH BÁO TRÙNG MÃ EPC: ' +
-                              (internalDuplicateEpcs.isNotEmpty ? '${internalDuplicateEpcs.length} mã bị lặp trong file. ' : '') +
-                              (dbDuplicateEpcs.isNotEmpty ? '${dbDuplicateEpcs.length} mã đã tồn tại trong CSDL kho. ' : '') +
-                              'Vui lòng kiểm tra lại file trước khi nạp!',
+                              'CẢNH BÁO TRÙNG MÃ EPC: ${internalDuplicateEpcs.isNotEmpty ? "${internalDuplicateEpcs.length} mã bị lặp trong file. " : ""}${dbDuplicateEpcs.isNotEmpty ? "${dbDuplicateEpcs.length} mã đã tồn tại trong CSDL kho. " : ""}Vui lòng kiểm tra lại file trước khi nạp!',
                               style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11.5),
                             ),
                           ),

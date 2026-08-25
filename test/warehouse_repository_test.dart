@@ -360,5 +360,144 @@ void main() {
         throwsA(isA<Exception>()),
       );
     });
+
+    test('Outbound Validation: Detects Excess items and fails gate check when scanned > required', () async {
+      final repo = WarehouseRepository();
+      final now = DateTime.now();
+
+      final items = List.generate(
+        10,
+        (i) => Item(
+          itemId: 'EXCESS-ITEM-$i',
+          productId: 'PROD-EXCESS',
+          sku: 'SKU-EXCESS',
+          productName: 'Áo khoác gió',
+          serialNumber: 'SN-EXCESS-$i',
+          epc: 'EXCESS_EPC_${i.toString().padLeft(4, '0')}',
+          locationId: 'LOC-A01-01',
+          status: ItemStatus.inStock,
+        ),
+      );
+
+      repo.createOrAssignPallet(palletCode: 'PL-EXCESS', locationId: 'LOC-A01-01', newItems: items);
+
+      // Đơn xuất chỉ yêu cầu 3 cái
+      final po = OutboundOrder(
+        outboundOrderId: 'OUT-EXCESS-01',
+        poNo: 'PO-EXCESS-01',
+        customer: 'Khách mua lẻ 3 cái',
+        status: OutboundOrderStatus.newOrder,
+        createdAt: now,
+        details: [
+          OutboundOrderDetail(
+            productId: 'PROD-EXCESS',
+            sku: 'SKU-EXCESS',
+            productName: 'Áo khoác gió',
+            requiredQty: 3,
+          ),
+        ],
+      );
+      await repo.addOutboundOrder(po);
+
+      // Quét tất cả 10 chip qua cổng -> Phải phát hiện thừa 7 chip và isPass = false
+      final scannedEpcs = items.map((e) => e.epc).toList();
+      final gateResult = repo.verifyGateOutbound(poNo: po.poNo, scannedEpcs: scannedEpcs);
+
+      expect(gateResult.isPass, isFalse);
+      expect(gateResult.totalRequiredQty, 3);
+      expect(gateResult.totalActualQty, 10);
+      expect(gateResult.skuBreakdowns.first.isMatched, isFalse);
+      expect(gateResult.skuBreakdowns.first.actualQty, 10);
+      expect(gateResult.skuBreakdowns.first.requiredQty, 3);
+    });
+
+    test('Auto-detect Outbound Order: Automatically identifies matching order when RFID tags pass through gate', () async {
+      final repo = WarehouseRepository();
+      final now = DateTime.now();
+
+      final itemA = Item(
+        itemId: 'ITEM-AUTO-A',
+        productId: 'PROD-A',
+        sku: 'SKU-A',
+        productName: 'Giày Thể Thao',
+        serialNumber: 'SN-A',
+        epc: 'AUTO_EPC_AAA',
+        locationId: 'LOC-A01-01',
+        status: ItemStatus.inStock,
+      );
+
+      final itemB = Item(
+        itemId: 'ITEM-AUTO-B',
+        productId: 'PROD-B',
+        sku: 'SKU-B',
+        productName: 'Túi Xách',
+        serialNumber: 'SN-B',
+        epc: 'AUTO_EPC_BBB',
+        locationId: 'LOC-A01-01',
+        status: ItemStatus.inStock,
+      );
+
+      repo.createOrAssignPallet(palletCode: 'PL-AUTO', locationId: 'LOC-A01-01', newItems: [itemA, itemB]);
+
+      // Đơn 1: Yêu cầu Giày (SKU-A) có danh sách EPC cụ thể
+      final po1 = OutboundOrder(
+        outboundOrderId: 'OUT-AUTO-01',
+        poNo: 'PO-AUTO-01',
+        customer: 'Khách mua Giày',
+        status: OutboundOrderStatus.newOrder,
+        createdAt: now,
+        details: [
+          OutboundOrderDetail(
+            productId: 'PROD-A',
+            sku: 'SKU-A',
+            productName: 'Giày Thể Thao',
+            requiredQty: 1,
+            epcList: ['AUTO_EPC_AAA'],
+          ),
+        ],
+      );
+
+      // Đơn 2: Yêu cầu Túi (SKU-B)
+      final po2 = OutboundOrder(
+        outboundOrderId: 'OUT-AUTO-02',
+        poNo: 'PO-AUTO-02',
+        customer: 'Khách mua Túi',
+        status: OutboundOrderStatus.newOrder,
+        createdAt: now,
+        details: [
+          OutboundOrderDetail(
+            productId: 'PROD-B',
+            sku: 'SKU-B',
+            productName: 'Túi Xách',
+            requiredQty: 1,
+            epcList: ['AUTO_EPC_BBB'],
+          ),
+        ],
+      );
+
+      await repo.addOutboundOrder(po1);
+      await repo.addOutboundOrder(po2);
+
+      // 1. Quét chip của Giày (AUTO_EPC_AAA) -> Tự động nhận diện Đơn 1 (PO-AUTO-01)
+      final detected1 = repo.findMatchingOutboundOrder(['AUTO_EPC_AAA']);
+      expect(detected1, isNotNull);
+      expect(detected1!.poNo, 'PO-AUTO-01');
+      expect(detected1.customer, 'Khách mua Giày');
+
+      // 2. Quét chip của Túi (AUTO_EPC_BBB) -> Tự động nhận diện Đơn 2 (PO-AUTO-02)
+      final detected2 = repo.findMatchingOutboundOrder(['AUTO_EPC_BBB']);
+      expect(detected2, isNotNull);
+      expect(detected2!.poNo, 'PO-AUTO-02');
+      expect(detected2.customer, 'Khách mua Túi');
+
+      // 3. Đơn đã shipped -> Không nhận diện lại đơn đã hoàn tất
+      await repo.confirmOutboundCompletion(
+        poNo: po1.poNo,
+        shippedEpcs: ['AUTO_EPC_AAA'],
+        performedBy: 'Gate Test',
+      );
+      final detectedAfterShipped = repo.findMatchingOutboundOrder(['AUTO_EPC_AAA']);
+      expect(detectedAfterShipped, isNull);
+    });
   });
 }
