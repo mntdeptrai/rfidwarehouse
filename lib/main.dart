@@ -207,15 +207,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             title: '7. Thiết Bị & ERP Bravo Hub',
             subtitle: 'Quản lý Gate HF340, PDA RFID, Đồng bộ Bravo',
           ),
-          const Divider(color: Color(0xFFC7BDAF)),
-          const ListTile(
-            leading: Icon(Icons.menu_book, color: Color(0xFF0284C7)),
-            title: Text('Giao Diện Kho', style: TextStyle(color: Color(0xFF2C251E), fontSize: 13.5, fontWeight: FontWeight.bold)),
-            subtitle: Text(
-              'Giấy Mộc Dịu Mắt',
-              style: TextStyle(color: Color(0xFF0284C7), fontSize: 11),
-            ),
-          ),
         ],
       ),
     );

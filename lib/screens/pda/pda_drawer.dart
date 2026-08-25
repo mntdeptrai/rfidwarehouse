@@ -74,14 +74,6 @@ class PdaDrawer extends StatelessWidget {
                   );
                 },
               ),
-              ListTile(
-                leading: Icon(Icons.menu_book, color: c.rfidCyan),
-                title: Text('Giao Diện Kho', style: TextStyle(color: c.textPrimary, fontSize: 14)),
-                trailing: Text(
-                  'Giấy Mộc Dịu Mắt',
-                  style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              ),
               Divider(color: c.border),
               ListTile(
                 leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
