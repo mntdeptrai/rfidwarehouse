@@ -787,7 +787,9 @@ class DatabaseService {
       final zoneStr = (m['zone'] as String? ?? '').trim();
       final isAllWh = zoneStr.toLowerCase().contains('toàn bộ') || zoneStr.toUpperCase() == 'ALL' || zoneStr.isEmpty;
       final detMaps = await db.query('inventory_session_details', where: 'session_id = ?', whereArgs: [sId]);
-      final results = detMaps.map((d) {
+      final seenEpcs = <String>{};
+      final uniqueDetMaps = detMaps.where((d) => seenEpcs.add((d['epc'] as String).toUpperCase())).toList();
+      final results = uniqueDetMaps.map((d) {
         var resType = InventoryVarianceType.values.firstWhere(
           (v) => v.code == d['result_type'],
           orElse: () => InventoryVarianceType.match,
