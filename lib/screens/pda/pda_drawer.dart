@@ -4,6 +4,7 @@ import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
 import 'pda_putaway_screen.dart';
+import '../radar_locate_screen.dart';
 
 class PdaDrawer extends StatelessWidget {
   const PdaDrawer({super.key});
@@ -90,12 +91,13 @@ class PdaDrawer extends StatelessWidget {
                 },
               ),
               ListTile(
-                leading: Icon(Icons.inventory_2, color: c.rfidCyan),
-                title: Text('Danh Mục Hàng Hóa', style: TextStyle(color: c.textPrimary, fontSize: 14)),
+                leading: Icon(Icons.radar_rounded, color: c.rfidCyan),
+                title: Text('Định Vị Thẻ RFID (Radar)', style: TextStyle(color: c.textPrimary, fontSize: 14)),
                 onTap: () {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Danh mục hàng hóa đã được đồng bộ')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RadarLocateScreen()),
                   );
                 },
               ),
