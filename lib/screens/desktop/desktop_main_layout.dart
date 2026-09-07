@@ -7,6 +7,7 @@ import 'desktop_uhf_studio_view.dart';
 import '../storage_screen.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/eye_care_theme.dart';
 
 class DesktopMainLayout extends StatefulWidget {
@@ -19,6 +20,7 @@ class DesktopMainLayout extends StatefulWidget {
 class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   int _selectedMenuIndex = 0;
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
+  final AuthService _auth = AuthService();
 
   List<Widget> _buildViews() => [
     DesktopGoodsReceiveView(isActive: _selectedMenuIndex == 0), // 0: Goods Receive
@@ -33,6 +35,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   void initState() {
     super.initState();
     _eyeCare.addListener(_onThemeUpdate);
+    _auth.addListener(_onThemeUpdate);
   }
 
   void _onThemeUpdate() {
@@ -42,7 +45,34 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   @override
   void dispose() {
     _eyeCare.removeListener(_onThemeUpdate);
+    _auth.removeListener(_onThemeUpdate);
     super.dispose();
+  }
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    final user = _auth.currentUser;
+    final c = _eyeCare.colors;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.bgCard,
+        title: Text('Xác nhận đăng xuất?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text('Bạn có chắc chắn muốn đăng xuất khỏi tài khoản "${user?.fullName ?? user?.username ?? "người dùng"}"?', style: TextStyle(color: c.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('ĐĂNG XUẤT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _auth.logout();
+    }
   }
 
   @override
@@ -177,31 +207,61 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
           ),
 
           // User Profile Footer
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: c.bgCardElevated,
-              border: Border(top: BorderSide(color: c.border, width: 1)),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: c.rfidCyan,
-                  radius: 18,
-                  child: const Icon(Icons.desktop_windows_rounded, color: Color(0xFF2C251E), size: 20),
+          Builder(
+            builder: (context) {
+              final user = _auth.currentUser;
+              final roleLabel = switch (user?.role.toLowerCase()) {
+                'admin' => 'Quản Trị Viên',
+                'manager' => 'Quản Lý Kho',
+                'forklift' => 'Lái Xe Nâng',
+                _ => 'Thủ Kho',
+              };
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: c.bgCardElevated,
+                  border: Border(top: BorderSide(color: c.border, width: 1)),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Trạm RFID Desktop', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text('RFID Warehouse WMS', style: TextStyle(color: c.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: c.rfidCyan.withValues(alpha: 0.2),
+                      radius: 17,
+                      child: Text(
+                        user?.fullName.isNotEmpty == true ? user!.fullName.substring(0, 1).toUpperCase() : 'U',
+                        style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user?.fullName ?? 'Người Dùng WMS',
+                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            '@${user?.username ?? "user"} • $roleLabel',
+                            style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                      tooltip: 'Đăng xuất',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                      onPressed: () => _confirmLogout(context),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ],
       ),
@@ -292,18 +352,59 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
             ),
           ),
 
-          // Actions
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.notifications_none, color: c.textSecondary),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: Icon(Icons.grid_view, color: c.textSecondary),
-                onPressed: () {},
-              ),
-            ],
+          // Actions & Profile
+          Builder(
+            builder: (context) {
+              final user = _auth.currentUser;
+              final roleLabel = switch (user?.role.toLowerCase()) {
+                'admin' => 'Quản Trị Viên',
+                'manager' => 'Quản Lý Kho',
+                'forklift' => 'Lái Xe Nâng',
+                _ => 'Thủ Kho',
+              };
+
+              return Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: c.bgCardElevated,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.account_circle_rounded, color: c.rfidCyan, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          user?.fullName ?? 'Thủ kho',
+                          style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: c.rfidCyan.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            roleLabel,
+                            style: TextStyle(color: c.rfidCyan, fontSize: 9.5, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                    tooltip: 'Đăng xuất tài khoản',
+                    onPressed: () => _confirmLogout(context),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),

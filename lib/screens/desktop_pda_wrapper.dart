@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
+import 'auth/login_screen.dart';
 import 'desktop/desktop_main_layout.dart';
 import 'pda/pda_home_screen.dart';
 
@@ -9,30 +11,41 @@ class DesktopPdaWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Tự động nhận diện thiết bị 100% không cần nút chuyển mode:
-        // 1. Nếu chạy trên Windows / macOS / Linux -> Tự động vào giao diện Desktop Quản Trị
-        // 2. Nếu chạy trên Android / iOS (Tay cầm PDA C72e / Cruise2) -> Tự động vào giao diện Tay Cầm Mobile
-        // 3. Nếu chạy trên Web -> Tự động theo độ phân giải màn hình (>= 850px là Desktop, < 850px là Mobile)
-        bool isDesktopPlatform = false;
+    final auth = AuthService();
 
-        if (kIsWeb) {
-          isDesktopPlatform = constraints.maxWidth >= 850;
-        } else {
-          if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-            isDesktopPlatform = true;
-          } else {
-            // Android / iOS
-            isDesktopPlatform = false;
-          }
+    return ListenableBuilder(
+      listenable: auth,
+      builder: (context, _) {
+        if (!auth.isLoggedIn) {
+          return const LoginScreen();
         }
 
-        if (isDesktopPlatform) {
-          return const DesktopMainLayout();
-        }
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // Tự động nhận diện thiết bị 100% không cần nút chuyển mode:
+            // 1. Nếu chạy trên Windows / macOS / Linux -> Tự động vào giao diện Desktop Quản Trị
+            // 2. Nếu chạy trên Android / iOS (Tay cầm PDA C72e / Cruise2) -> Tự động vào giao diện Tay Cầm Mobile
+            // 3. Nếu chạy trên Web -> Tự động theo độ phân giải màn hình (>= 850px là Desktop, < 850px là Mobile)
+            bool isDesktopPlatform = false;
 
-        return const PdaHomeScreen();
+            if (kIsWeb) {
+              isDesktopPlatform = constraints.maxWidth >= 850;
+            } else {
+              if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+                isDesktopPlatform = true;
+              } else {
+                // Android / iOS
+                isDesktopPlatform = false;
+              }
+            }
+
+            if (isDesktopPlatform) {
+              return const DesktopMainLayout();
+            }
+
+            return const PdaHomeScreen();
+          },
+        );
       },
     );
   }

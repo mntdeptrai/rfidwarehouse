@@ -196,9 +196,13 @@ class DatabaseService {
         phone TEXT,
         role TEXT NOT NULL DEFAULT 'operator',
         is_active INTEGER DEFAULT 1,
+        password_hash TEXT,
         created_at TEXT
       )
     ''');
+    try {
+      await db.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
+    } catch (_) {}
 
     // 12. Bảng Khách Hàng (customers)
     await db.execute('''
@@ -722,6 +726,38 @@ class DatabaseService {
   Future<void> insertUser(WmsUser user) async {
     final db = await database;
     await db.insert('users', user.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> insertUserWithPassword(WmsUser user, String passwordHash) async {
+    final db = await database;
+    final map = user.toMap();
+    map['password_hash'] = passwordHash;
+    await db.insert('users', map, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<Map<String, dynamic>?> getUserAuth(String username) async {
+    final db = await database;
+    final clean = username.trim().toLowerCase();
+    final maps = await db.query(
+      'users',
+      where: 'LOWER(username) = ? OR LOWER(email) = ?',
+      whereArgs: [clean, clean],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return maps.first;
+  }
+
+  Future<WmsUser?> getUserById(String userId) async {
+    final db = await database;
+    final maps = await db.query(
+      'users',
+      where: 'user_id = ?',
+      whereArgs: [userId.trim()],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return WmsUser.fromMap(maps.first);
   }
 
   Future<int> deleteUser(String userId) async {

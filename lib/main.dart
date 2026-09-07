@@ -11,6 +11,7 @@ import 'screens/desktop_pda_wrapper.dart';
 import 'services/uhf_service.dart';
 import 'services/supabase_sync_service.dart';
 import 'services/api_service.dart';
+import 'services/auth_service.dart';
 
 import 'theme/eye_care_theme.dart';
 
@@ -27,6 +28,8 @@ void main() async {
   // Khởi tạo Supabase Cloud Sync & Realtime APIs
   SupabaseSyncService();
   ApiService().init();
+  // Khởi tạo Auth service (phiên làm việc & tài khoản offline)
+  await AuthService().init();
   runApp(const RfidWmsApp());
 }
 
