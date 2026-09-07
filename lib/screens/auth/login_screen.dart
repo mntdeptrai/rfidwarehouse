@@ -275,7 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '⚡ ĐĂNG NHẬP NHANH TÀI KHOẢN MẪU:',
+                              'ĐĂNG NHẬP NHANH TÀI KHOẢN MẪU:',
                               style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
@@ -285,14 +285,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
                                       side: BorderSide(color: c.border),
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      padding: const EdgeInsets.symmetric(vertical: 7),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                     ),
                                     onPressed: () => _fillCredentials('admin', 'admin123'),
                                     child: Column(
                                       children: [
-                                        Text('Admin', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5)),
-                                        Text('admin123', style: TextStyle(color: c.textMuted, fontSize: 10)),
+                                        Text('Admin', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+                                        Text('admin123', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
                                       ],
                                     ),
                                   ),
@@ -302,14 +302,52 @@ class _LoginScreenState extends State<LoginScreen> {
                                   child: OutlinedButton(
                                     style: OutlinedButton.styleFrom(
                                       side: BorderSide(color: c.border),
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      padding: const EdgeInsets.symmetric(vertical: 7),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                     ),
                                     onPressed: () => _fillCredentials('thukho', '123456'),
                                     child: Column(
                                       children: [
-                                        Text('Thủ kho', style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 11.5)),
-                                        Text('123456', style: TextStyle(color: c.textMuted, fontSize: 10)),
+                                        Text('Thủ kho', style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 11)),
+                                        Text('123456', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: c.border),
+                                      padding: const EdgeInsets.symmetric(vertical: 7),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
+                                    onPressed: () => _fillCredentials('camtay', '123456'),
+                                    child: Column(
+                                      children: [
+                                        Text('Máy cầm tay', style: TextStyle(color: const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
+                                        Text('123456', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: c.border),
+                                      padding: const EdgeInsets.symmetric(vertical: 7),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
+                                    onPressed: () => _fillCredentials('seller', '123456'),
+                                    child: Column(
+                                      children: [
+                                        Text('Seller', style: TextStyle(color: const Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 11)),
+                                        Text('123456', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
                                       ],
                                     ),
                                   ),

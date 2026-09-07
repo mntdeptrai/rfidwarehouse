@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/wms_models.dart';
-import '../services/warehouse_repository.dart';
 import '../services/erp_bravo_service.dart';
+import '../services/uhf_service.dart';
+import '../services/desktop_uhf_tcp_service.dart';
+import '../services/tower_light_service.dart';
 import '../widgets/hardware_status_appbar.dart';
 
 class DevicesErpScreen extends StatefulWidget {
@@ -13,19 +15,63 @@ class DevicesErpScreen extends StatefulWidget {
 
 class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final WarehouseRepository _repo = WarehouseRepository();
   final ErpBravoService _bravo = ErpBravoService();
+  final UhfService _uhf = UhfService();
+  final DesktopUhfTcpService _tcp = DesktopUhfTcpService();
+  final TowerLightService _tower = TowerLightService();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _uhf.addListener(_onServiceUpdate);
+    _tcp.addListener(_onServiceUpdate);
+    _tower.addListener(_onServiceUpdate);
+  }
+
+  void _onServiceUpdate() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _uhf.removeListener(_onServiceUpdate);
+    _tcp.removeListener(_onServiceUpdate);
+    _tower.removeListener(_onServiceUpdate);
     _tabController.dispose();
     super.dispose();
+  }
+
+  List<RfidDevice> _getLiveDevices() {
+    return [
+      RfidDevice(
+        deviceId: 'DEV-PDA-01',
+        type: DeviceType.handheldUtouch2,
+        name: 'Máy Quét Cầm Tay PDA (UHF / Barcode)',
+        ipOrPort: 'Internal Hardware Module (Android)',
+        isConnected: _uhf.isInitialized,
+        statusMessage: _uhf.isInitialized ? 'Đã khởi tạo module UHF' : 'Chưa kết nối phần cứng',
+        lastHeartbeat: DateTime.now(),
+      ),
+      RfidDevice(
+        deviceId: 'DEV-TCP-01',
+        type: DeviceType.desktopLjyzn105,
+        name: 'Đầu Đọc RFID Cố Định (LJYZN-105 / Gate)',
+        ipOrPort: _tcp.currentConnId.isNotEmpty ? _tcp.currentConnId : 'TCP Reader (Port: 9090)',
+        isConnected: _tcp.isConnected,
+        statusMessage: _tcp.isConnected ? 'Kết nối mạng TCP/IP thông suốt' : 'Chưa kết nối mạng TCP',
+        lastHeartbeat: DateTime.now(),
+      ),
+      RfidDevice(
+        deviceId: 'DEV-TOWER-01',
+        type: DeviceType.gateHf340,
+        name: 'Tháp Đèn Cảnh Báo 3 Màu (CTP50-3T-D-J)',
+        ipOrPort: 'Điều khiển qua GPO Đầu Đọc TCP',
+        isConnected: _tower.isHardwareControlEnabled && _tcp.isConnected,
+        statusMessage: _tower.currentStatus.reason,
+        lastHeartbeat: DateTime.now(),
+      ),
+    ];
   }
 
   @override
@@ -66,11 +112,12 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
   }
 
   Widget _buildDevicesTab() {
+    final liveDevices = _getLiveDevices();
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _repo.devices.length,
+      itemCount: liveDevices.length,
       itemBuilder: (context, index) {
-        final dev = _repo.devices[index];
+        final dev = liveDevices[index];
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),

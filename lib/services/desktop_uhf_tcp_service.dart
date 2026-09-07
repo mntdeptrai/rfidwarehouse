@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/tag_info.dart';
+import 'auth_service.dart';
 
 class DiscoveredLanReader {
   final String ip;
@@ -55,6 +56,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
   bool _ignoreAlreadyScanned = true;
   bool get ignoreAlreadyScanned => _ignoreAlreadyScanned;
   set ignoreAlreadyScanned(bool val) {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép sửa cấu hình lọc trùng!');
+      return;
+    }
     _ignoreAlreadyScanned = val;
     _log('Cấu hình lọc trùng: ${val ? "BỎ QUA THẺ ĐÃ QUÉT (Chỉ đọc thẻ mới)" : "ĐỌC TẤT CẢ (Bao gồm thẻ quét lại)"}');
     notifyListeners();
@@ -75,6 +81,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
   Set<int> get activeAntennas => Set.unmodifiable(_activeAntennas);
 
   void setAntenna(int ant, bool enable) {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép sửa cấu hình Anten!');
+      return;
+    }
     if (enable) {
       _activeAntennas.add(ant);
     } else {
@@ -604,6 +615,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
   // ==================== RF POWER & FREQUENCY ====================
 
   Future<void> setAntennaPower(Map<int, int> powers) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép sửa công suất phát RF!');
+      return;
+    }
     powers.forEach((k, v) => _antennaPower[k] = v);
     _log('Đã cấu hình công suất phát Anten: $powers dBm');
 
@@ -648,6 +664,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
     String password = '00000000',
     String matchEpc = '',
   }) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép ghi dữ liệu chip RFID!');
+      return false;
+    }
     _log('Gửi lệnh Ghi dữ liệu Hex [$hexData] vào Bank $bank, Offset $offset...');
     if (_isBridgeConnected) {
       _sendBridgeCommand({
@@ -666,6 +687,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
   }
 
   Future<bool> fastWriteEpc(String newEpc, {String oldEpc = ''}) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép ghi đè EPC!');
+      return false;
+    }
     _log('Ghi đè mã EPC mới [$newEpc]...');
     if (_isBridgeConnected) {
       _sendBridgeCommand({
@@ -688,6 +714,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
     String password = '00000000',
     String matchEpc = '',
   }) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép khóa vùng nhớ RFID!');
+      return false;
+    }
     _log('Gửi lệnh Khóa vùng nhớ (Area $area, Type $lockType)...');
     if (_isBridgeConnected) {
       _sendBridgeCommand({
@@ -708,6 +739,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
     required String killPassword,
     String matchEpc = '',
   }) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép hủy thẻ chip RFID (Kill)!');
+      return false;
+    }
     _log('⚠️ GỬI LỆNH HỦY THẺ VĨNH VIỄN (KILL)...');
     if (_isBridgeConnected) {
       _sendBridgeCommand({
@@ -751,6 +787,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
   }
 
   Future<void> resetReader() async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      _log('❌ LỖI BẢO MẬT: Quyền bị từ chối. Vai trò "${user.rolePermission.name}" không được phép khởi động lại đầu đọc!');
+      return;
+    }
     _log('Đã gửi lệnh Khởi động lại đầu đọc từ xa.');
   }
 

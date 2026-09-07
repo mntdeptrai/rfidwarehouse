@@ -327,7 +327,137 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               }
             },
           ),
+
+          // Hiển thị trạng thái kệ & 3 nút cập nhật nhanh (Đầy / Sắp hết / Trống nhiều)
+          Builder(builder: (_) {
+            final selectedLoc = locations.where((l) => l.locationId == _selectedLocationId).firstOrNull;
+            if (selectedLoc == null) return const SizedBox.shrink();
+
+            Color statusColor = const Color(0xFF10B981);
+            String statusLabel = 'CÒN TRỐNG NHIỀU';
+            if (selectedLoc.status == 'FULL') {
+              statusColor = const Color(0xFFEF4444);
+              statusLabel = 'KỆ ĐẦY (FULL)';
+            } else if (selectedLoc.status == 'NEAR_FULL') {
+              statusColor = const Color(0xFFF59E0B);
+              statusLabel = 'SẮP HẾT CHỖ';
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Trạng thái kệ: ',
+                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: statusColor),
+                            ),
+                            child: Text(
+                              statusLabel,
+                              style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        'Chạm nút dưới để đổi',
+                        style: TextStyle(color: c.textMuted, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildQuickStatusButton(
+                          label: 'KỆ ĐẦY',
+                          color: const Color(0xFFEF4444),
+                          isSelected: selectedLoc.status == 'FULL',
+                          onTap: () async {
+                            HapticFeedback.heavyImpact();
+                            await _repo.updateLocationStatus(selectedLoc.locationId, 'FULL');
+                            setState(() => selectedLoc.status = 'FULL');
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _buildQuickStatusButton(
+                          label: 'SẮP HẾT',
+                          color: const Color(0xFFF59E0B),
+                          isSelected: selectedLoc.status == 'NEAR_FULL',
+                          onTap: () async {
+                            HapticFeedback.mediumImpact();
+                            await _repo.updateLocationStatus(selectedLoc.locationId, 'NEAR_FULL');
+                            setState(() => selectedLoc.status = 'NEAR_FULL');
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _buildQuickStatusButton(
+                          label: 'TRỐNG NHIỀU',
+                          color: const Color(0xFF10B981),
+                          isSelected: selectedLoc.status == 'AVAILABLE',
+                          onTap: () async {
+                            HapticFeedback.lightImpact();
+                            await _repo.updateLocationStatus(selectedLoc.locationId, 'AVAILABLE');
+                            setState(() => selectedLoc.status = 'AVAILABLE');
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStatusButton({
+    required String label,
+    required Color color,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: isSelected ? color : color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color, width: isSelected ? 1.8 : 1),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF2C251E) : color,
+                fontWeight: FontWeight.bold,
+                fontSize: 10.5,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

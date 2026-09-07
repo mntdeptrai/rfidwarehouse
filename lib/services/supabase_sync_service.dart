@@ -350,7 +350,7 @@ class SupabaseSyncService extends ChangeNotifier {
 
   Future<void> _handleRealtimeTableChange(String tableName, PostgresChangePayload payload) async {
     try {
-      debugPrint('⚡ Supabase Realtime event on $tableName: ${payload.eventType}');
+      debugPrint('Supabase Realtime event on $tableName: ${payload.eventType}');
       final db = await _dbService.database;
 
       if (payload.eventType == PostgresChangeEvent.delete) {
@@ -660,6 +660,34 @@ class SupabaseSyncService extends ChangeNotifier {
             'inbound_time': it.inboundTime?.toIso8601String(),
           });
         }
+
+        final localUsers = await _dbService.getUsers();
+        for (final u in localUsers) {
+          final authRecord = await _dbService.getUserAuth(u.username);
+          final passHash = authRecord?['password_hash'] as String?;
+          final userMap = <String, dynamic>{
+            'user_id': u.userId,
+            'username': u.username,
+            'full_name': u.fullName,
+            'email': u.email,
+            'phone': u.phone,
+            'role': u.role,
+            'is_active': u.isActive,
+            'created_at': u.createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
+          };
+          try {
+            if (passHash != null) {
+              await supa.from('users').upsert({
+                ...userMap,
+                'password_hash': passHash,
+              });
+            } else {
+              await supa.from('users').upsert(userMap);
+            }
+          } catch (_) {
+            await supa.from('users').upsert(userMap);
+          }
+        }
       } catch (e) {
         debugPrint('Master data cloud push error: $e');
       }
@@ -726,8 +754,16 @@ class SupabaseSyncService extends ChangeNotifier {
         if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
           map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
         }
-        if (tableName == 'users' && map['is_active'] is bool) {
-          map['is_active'] = (map['is_active'] == true) ? 1 : 0;
+        if (tableName == 'users') {
+          if (map['is_active'] is bool) {
+            map['is_active'] = (map['is_active'] == true) ? 1 : 0;
+          }
+          if (map['password_hash'] == null) {
+            final localUsers = await db.query('users', columns: ['password_hash'], where: 'user_id = ?', whereArgs: [map['user_id']], limit: 1);
+            if (localUsers.isNotEmpty && localUsers.first['password_hash'] != null) {
+              map['password_hash'] = localUsers.first['password_hash'];
+            }
+          }
         }
         batch.insert(tableName, map, conflictAlgorithm: ConflictAlgorithm.replace);
       }

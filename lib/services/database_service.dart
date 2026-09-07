@@ -71,9 +71,17 @@ class DatabaseService {
         zone TEXT NOT NULL,
         shelf TEXT NOT NULL,
         level TEXT NOT NULL,
-        current_pallets INTEGER DEFAULT 0
+        current_pallets INTEGER DEFAULT 0,
+        max_pallet_capacity INTEGER DEFAULT 50,
+        status TEXT DEFAULT 'AVAILABLE'
       )
     ''');
+    try {
+      await db.execute('ALTER TABLE locations ADD COLUMN max_pallet_capacity INTEGER DEFAULT 50');
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE locations ADD COLUMN status TEXT DEFAULT 'AVAILABLE'");
+    } catch (_) {}
 
     // 3. Bảng Pallet lưu kho (pallets)
     await db.execute('''
@@ -395,14 +403,19 @@ class DatabaseService {
 
   Future<List<Location>> getLocations() async {
     final db = await database;
-    final maps = await db.query('locations');
+    final maps = await db.query(
+      'locations',
+      orderBy: 'zone ASC, shelf ASC, level ASC, location_code ASC',
+    );
     return maps.map((m) => Location(
       locationId: m['location_id'] as String,
       locationCode: m['location_code'] as String,
       zone: m['zone'] as String,
       shelf: m['shelf'] as String,
       level: m['level'] as String,
+      maxPalletCapacity: (m['max_pallet_capacity'] as int?) ?? 50,
       currentPallets: (m['current_pallets'] as int?) ?? 0,
+      status: (m['status'] as String?) ?? 'AVAILABLE',
     )).toList();
   }
 
@@ -414,8 +427,20 @@ class DatabaseService {
       'zone': l.zone,
       'shelf': l.shelf,
       'level': l.level,
+      'max_pallet_capacity': l.maxPalletCapacity,
       'current_pallets': l.currentPallets,
+      'status': l.status,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> updateLocationStatus(String locationId, String status) async {
+    final db = await database;
+    await db.update(
+      'locations',
+      {'status': status},
+      where: 'location_id = ? OR location_code = ?',
+      whereArgs: [locationId, locationId],
+    );
   }
 
   Future<void> deleteLocation(String locationId) async {
@@ -453,6 +478,15 @@ class DatabaseService {
       {'location_id': locationId},
       where: 'pallet_id = ?',
       whereArgs: [palletId],
+    );
+  }
+
+  Future<void> deletePallet(String palletId) async {
+    final db = await database;
+    await db.delete(
+      'pallets',
+      where: 'pallet_id = ? OR pallet_code = ?',
+      whereArgs: [palletId, palletId],
     );
   }
 
@@ -725,7 +759,12 @@ class DatabaseService {
 
   Future<void> insertUser(WmsUser user) async {
     final db = await database;
-    await db.insert('users', user.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final map = user.toMap();
+    final existing = await db.query('users', columns: ['password_hash'], where: 'user_id = ?', whereArgs: [user.userId], limit: 1);
+    if (existing.isNotEmpty && existing.first['password_hash'] != null) {
+      map['password_hash'] = existing.first['password_hash'];
+    }
+    await db.insert('users', map, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> insertUserWithPassword(WmsUser user, String passwordHash) async {

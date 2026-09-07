@@ -33,22 +33,30 @@ void main() {
       expect(hash1.length, equals(64)); // SHA-256 hex length
     });
 
-    test('AuthService.init() auto-seeds default admin and thukho demo accounts', () async {
+    test('AuthService.init() auto-seeds default 4 demo accounts for all roles', () async {
       final initialUsers = await dbService.getUsers();
       expect(initialUsers.isEmpty, isTrue);
 
       await authService.init(force: true);
 
       final seededUsers = await dbService.getUsers();
-      expect(seededUsers.length, equals(2));
+      expect(seededUsers.length, equals(4));
 
       final admin = seededUsers.firstWhere((u) => u.username == 'admin');
       expect(admin.role, equals('admin'));
       expect(admin.fullName, contains('Quản Trị Viên'));
 
       final thukho = seededUsers.firstWhere((u) => u.username == 'thukho');
-      expect(thukho.role, equals('operator'));
+      expect(thukho.role, equals('thukho'));
       expect(thukho.fullName, contains('Thủ Kho'));
+
+      final camtay = seededUsers.firstWhere((u) => u.username == 'camtay');
+      expect(camtay.role, equals('handheld'));
+      expect(camtay.fullName, contains('Cầm Tay'));
+
+      final seller = seededUsers.firstWhere((u) => u.username == 'seller');
+      expect(seller.role, equals('seller'));
+      expect(seller.fullName, contains('Bán Hàng'));
     });
 
     test('Login with valid credentials succeeds for admin', () async {
@@ -82,7 +90,7 @@ void main() {
       expect(success, isTrue);
       expect(authService.isLoggedIn, isTrue);
       expect(authService.currentUser?.username, equals('thukho'));
-      expect(authService.currentUser?.role, equals('operator'));
+      expect(authService.currentUser?.role, equals('thukho'));
     });
 
     test('Login with incorrect password fails with error message', () async {

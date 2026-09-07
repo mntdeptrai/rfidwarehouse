@@ -597,7 +597,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
                             ),
                             TableRow(
                               children: [
-                                Padding(padding: const EdgeInsets.all(6), child: Text('⚡ Dây COM / Nguồn', style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                                Padding(padding: const EdgeInsets.all(6), child: Text('Dây COM / Nguồn', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                                 Padding(padding: const EdgeInsets.all(6), child: Text('COM / +24VDC', style: TextStyle(color: c.textPrimary, fontSize: 11))),
                                 Padding(padding: const EdgeInsets.all(6), child: Text('Nguồn cấp nuôi tháp đèn CTP50', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                               ],

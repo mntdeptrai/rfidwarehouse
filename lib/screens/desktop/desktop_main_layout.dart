@@ -78,55 +78,66 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   @override
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
+    final user = _auth.currentUser;
+    final perm = user?.rolePermission;
+    final canConfig = perm?.canConfigureHardware ?? false;
+    final canIn = perm?.canInbound ?? true;
+    final canTrans = perm?.canTransfer ?? true;
+    final canAud = perm?.canAudit ?? true;
+
+    // Tự động chuyển sang màn hình được phép nếu màn hình hiện tại bị ẩn
+    int effectiveIndex = _selectedMenuIndex;
+    if (effectiveIndex == 0 && !canIn) effectiveIndex = 1;
+    if (effectiveIndex == 2 && !canTrans) effectiveIndex = 1;
+    if (effectiveIndex == 3 && !canAud) effectiveIndex = 1;
+    if (effectiveIndex == 5 && !canConfig) effectiveIndex = 1;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 900;
-          final content = SizedBox(
-            width: isNarrow ? 960 : constraints.maxWidth,
-            child: Row(
-              children: [
-                // Sidebar matching PDF Page 6 & 8
-                _buildSidebar(c),
+          final isCompactSidebar = constraints.maxWidth < 1050;
 
-                // Main View Content
-                Expanded(
-                  child: Column(
-                    children: [
-                      // Top Header Bar
-                      _buildTopHeader(c),
+          return Row(
+            children: [
+              // Sidebar: Tự động co giãn thanh điều hướng theo kích thước cửa sổ
+              _buildSidebar(c, isCompact: isCompactSidebar),
 
-                      // Active View
-                      Expanded(
-                        child: IndexedStack(
-                          index: _selectedMenuIndex,
-                          children: _buildViews(),
-                        ),
+              // Main View Content: Tự động co giãn toàn bộ diện tích còn lại
+              Expanded(
+                child: Column(
+                  children: [
+                    // Top Header Bar
+                    _buildTopHeader(c, isCompact: isCompactSidebar),
+
+                    // Active View
+                    Expanded(
+                      child: IndexedStack(
+                        index: effectiveIndex,
+                        children: _buildViews(),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           );
-
-          if (isNarrow) {
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: content,
-            );
-          }
-          return content;
         },
       ),
     );
   }
 
-  Widget _buildSidebar(EyeCareColors c) {
-    return Container(
-      width: 260,
+  Widget _buildSidebar(EyeCareColors c, {bool isCompact = false}) {
+    final user = _auth.currentUser;
+    final perm = user?.rolePermission;
+    final canConfig = perm?.canConfigureHardware ?? false;
+    final canIn = perm?.canInbound ?? true;
+    final canTrans = perm?.canTransfer ?? true;
+    final canAud = perm?.canAudit ?? true;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: isCompact ? 68 : 250,
       decoration: BoxDecoration(
         color: c.bgCard,
         border: Border(right: BorderSide(color: c.border, width: 1)),
@@ -134,88 +145,152 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
       child: Column(
         children: [
           // Company Brand Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: c.border, width: 1)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: c.rfidCyan.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.warehouse, color: c.rfidCyan, size: 26),
+          if (isCompact)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: c.border, width: 1)),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'RFIDwarehouse',
-                        style: TextStyle(
-                          color: c.rfidCyan,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          letterSpacing: 1.1,
+                child: Icon(Icons.warehouse, color: c.rfidCyan, size: 24),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: c.border, width: 1)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: c.rfidCyan.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.warehouse, color: c.rfidCyan, size: 26),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'RFIDwarehouse',
+                          style: TextStyle(
+                            color: c.rfidCyan,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            letterSpacing: 1.1,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'Hệ Thống Quản Lý Kho WMS',
-                        style: TextStyle(color: c.textSecondary, fontSize: 11),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                        Text(
+                          'Hệ Thống Quản Lý Kho WMS',
+                          style: TextStyle(color: c.textSecondary, fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
           // Menu Items
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+              padding: EdgeInsets.symmetric(vertical: 12, horizontal: isCompact ? 6 : 12),
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Text(
-                    'QUẢN LÝ KHO HÀNG',
-                    style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                if (!isCompact)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Text(
+                      'QUẢN LÝ KHO HÀNG',
+                      style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    ),
                   ),
-                ),
-                _buildMenuItem(0, Icons.input, 'Nhập Kho', 'Nhập hàng vào kho', c),
-                _buildMenuItem(1, Icons.output, 'Xuất Kho', 'Xuất hàng xuất bán', c),
-                _buildMenuItem(2, Icons.swap_horiz, 'Chuyển Kho', 'Điều chuyển / Vị trí', c),
-                _buildMenuItem(3, Icons.inventory_2, 'Kiểm Kê Kho', 'Kiểm đếm & quét RFID', c),
-                _buildMenuItem(4, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Text(
-                    'HỆ THỐNG & ĐẦU ĐỌC',
-                    style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                if (canIn)
+                  _buildMenuItem(
+                    0,
+                    Icons.input,
+                    'Nhập Kho',
+                    'Nhập hàng vào kho',
+                    c,
+                    isCompact: isCompact,
                   ),
-                ),
-                _buildMenuItem(5, Icons.radar, 'Đầu Đọc UHF (Studio)', 'Hopeland SDK 4.42 & Fixed Reader', c),
+                _buildMenuItem(1, Icons.output, 'Xuất Kho', 'Xuất hàng xuất bán', c, isCompact: isCompact),
+                if (canTrans)
+                  _buildMenuItem(
+                    2,
+                    Icons.swap_horiz,
+                    'Chuyển Kho',
+                    'Điều chuyển / Vị trí',
+                    c,
+                    isCompact: isCompact,
+                  ),
+                if (canAud)
+                  _buildMenuItem(
+                    3,
+                    Icons.inventory_2,
+                    'Kiểm Kê Kho',
+                    'Kiểm đếm & quét RFID',
+                    c,
+                    isCompact: isCompact,
+                  ),
+                _buildMenuItem(4, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
+                if (canConfig) ...[
+                  const SizedBox(height: 8),
+                  if (!isCompact)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Text(
+                        'HỆ THỐNG & ĐẦU ĐỌC',
+                        style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      ),
+                    ),
+                  _buildMenuItem(
+                    5,
+                    Icons.radar,
+                    'Đầu Đọc UHF (Studio)',
+                    'Hopeland SDK 4.42 & Fixed Reader',
+                    c,
+                    badge: 'ADMIN',
+                    isCompact: isCompact,
+                  ),
+                ],
               ],
             ),
           ),
 
-          // User Profile Footer
+          // User Profile Footer (Tự động thích ứng compact)
           Builder(
             builder: (context) {
               final user = _auth.currentUser;
-              final roleLabel = switch (user?.role.toLowerCase()) {
-                'admin' => 'Quản Trị Viên',
-                'manager' => 'Quản Lý Kho',
-                'forklift' => 'Lái Xe Nâng',
-                _ => 'Thủ Kho',
-              };
+              final roleLabel = user?.rolePermission.name ?? 'Thủ Kho';
+
+              if (isCompact) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: c.bgCardElevated,
+                    border: Border(top: BorderSide(color: c.border, width: 1)),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 20),
+                    tooltip: 'Đăng xuất (@${user?.username ?? ""})',
+                    onPressed: () => _confirmLogout(context),
+                  ),
+                );
+              }
 
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -268,8 +343,65 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     );
   }
 
-  Widget _buildMenuItem(int index, IconData icon, String title, String subTitle, EyeCareColors c) {
+  Widget _buildMenuItem(
+    int index,
+    IconData icon,
+    String title,
+    String subTitle,
+    EyeCareColors c, {
+    bool isLocked = false,
+    bool isCompact = false,
+    String? badge,
+    String? lockMessage,
+  }) {
     final isSelected = _selectedMenuIndex == index;
+
+    if (isCompact) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Tooltip(
+          message: title,
+          waitDuration: const Duration(milliseconds: 300),
+          child: Material(
+            color: isSelected ? c.rfidCyan.withValues(alpha: 0.2) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () {
+                if (isLocked) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFFEF4444),
+                      content: Text(lockMessage ?? 'Tài khoản của bạn không có quyền truy cập chức năng này.'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                  return;
+                }
+                if (_selectedMenuIndex != index) {
+                  DesktopUhfTcpService().stopInventory();
+                  UhfService().stopInventory();
+                  setState(() => _selectedMenuIndex = index);
+                }
+              },
+              child: Container(
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: isSelected ? Border.all(color: c.rfidCyan, width: 1.5) : null,
+                ),
+                child: Icon(
+                  icon,
+                  color: isSelected ? c.rfidCyan : (isLocked ? c.textMuted : c.textSecondary),
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -279,6 +411,16 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () {
+            if (isLocked) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFFEF4444),
+                  content: Text(lockMessage ?? 'Tài khoản của bạn không có quyền truy cập chức năng này.'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+              return;
+            }
             if (_selectedMenuIndex != index) {
               DesktopUhfTcpService().stopInventory();
               UhfService().stopInventory();
@@ -293,19 +435,49 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
             ),
             child: Row(
               children: [
-                Icon(icon, color: isSelected ? c.rfidCyan : c.textMuted, size: 20),
+                Icon(
+                  isLocked ? Icons.lock_rounded : icon,
+                  color: isSelected ? c.rfidCyan : (isLocked ? c.textMuted : c.textMuted),
+                  size: 20,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     title,
                     style: TextStyle(
-                      color: isSelected ? c.rfidCyan : c.textSecondary,
+                      color: isSelected
+                          ? c.rfidCyan
+                          : (isLocked ? c.textMuted : c.textSecondary),
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                       fontSize: 13,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (badge != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isLocked
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                          : c.rfidCyan.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: isLocked
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                            : c.rfidCyan.withValues(alpha: 0.4),
+                        width: 0.7,
+                      ),
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        color: isLocked ? const Color(0xFFEF4444) : c.rfidCyan,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -314,10 +486,10 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     );
   }
 
-  Widget _buildTopHeader(EyeCareColors c) {
+  Widget _buildTopHeader(EyeCareColors c, {bool isCompact = false}) {
     return Container(
       height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 24),
       decoration: BoxDecoration(
         color: c.bgCard,
         border: Border(bottom: BorderSide(color: c.border, width: 1)),
@@ -334,7 +506,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                 style: TextStyle(color: c.textPrimary, fontSize: 13),
                 decoration: InputDecoration(
                   prefixIcon: Icon(Icons.search, color: c.textMuted, size: 18),
-                  hintText: 'Tìm kiếm phiếu, hàng hóa, serial, EPC...',
+                  hintText: isCompact ? 'Tìm...' : 'Tìm kiếm phiếu, hàng hóa, serial, EPC...',
                   hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                   filled: true,
                   fillColor: c.bgCardElevated,
@@ -350,61 +522,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                 ),
               ),
             ),
-          ),
-
-          // Actions & Profile
-          Builder(
-            builder: (context) {
-              final user = _auth.currentUser;
-              final roleLabel = switch (user?.role.toLowerCase()) {
-                'admin' => 'Quản Trị Viên',
-                'manager' => 'Quản Lý Kho',
-                'forklift' => 'Lái Xe Nâng',
-                _ => 'Thủ Kho',
-              };
-
-              return Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: c.bgCardElevated,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.account_circle_rounded, color: c.rfidCyan, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          user?.fullName ?? 'Thủ kho',
-                          style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 5),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: c.rfidCyan.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            roleLabel,
-                            style: TextStyle(color: c.rfidCyan, fontSize: 9.5, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
-                    tooltip: 'Đăng xuất tài khoản',
-                    onPressed: () => _confirmLogout(context),
-                  ),
-                ],
-              );
-            },
           ),
         ],
       ),

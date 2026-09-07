@@ -327,7 +327,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFF10B981),
-              content: Text('🎉 Đã tạo đơn xuất ${newOrder.poNo}. Mời đưa hàng qua quét RFID!'),
+              content: Text('Đã tạo đơn xuất ${newOrder.poNo}. Mời đưa hàng qua quét RFID!'),
             ),
           );
         },
@@ -475,35 +475,35 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.receipt, color: Color(0xFF0284C7), size: 16),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text(
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    const Icon(Icons.receipt, color: Color(0xFF0284C7), size: 16),
+                    const SizedBox(width: 6),
+                    const Text(
                       'ĐƠN HÀNG XUẤT KHO',
                       style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: _showCreateOutboundDialog,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF0284C7)),
-                      ),
-                      child: const Text(
-                        '+ Tạo Phiếu Xuất',
-                        style: TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.bold),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: _showCreateOutboundDialog,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF0284C7)),
+                        ),
+                        child: const Text(
+                          '+ Tạo Phiếu Xuất',
+                          style: TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               if (orders.isEmpty) ...[
@@ -606,112 +606,108 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
       ),
       child: Column(
         children: [
-          // Status bar (Responsive Wrap to prevent overflow)
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 9,
-                    height: 9,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _isScanning ? const Color(0xFF10B981) : Colors.orange,
-                      boxShadow: _isScanning ? [const BoxShadow(color: Color(0xFF10B981), blurRadius: 8, spreadRadius: 2)] : [],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _isScanning ? 'ĐANG QUÉT XUẤT HÀNG' : 'SẴN SÀNG QUÉT (CÒ PDA)',
-                    style: TextStyle(
-                      color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11.5,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _uhf.filterDuplicates = !_uhf.filterDuplicates;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.orange,
-                          content: Text(_uhf.filterDuplicates ? 'Đã bật: Bỏ qua thẻ đã đọc (Lọc trùng)' : 'Đã tắt: Đọc liên tục tất cả lượt'),
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          // Status bar (SingleChildScrollView to prevent overflow at narrow widths)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
                       decoration: BoxDecoration(
-                        color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFF4EFE6),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFFC7BDAF)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _uhf.filterDuplicates ? Icons.filter_alt : Icons.filter_alt_off,
-                            color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
-                            size: 11,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
-                            style: TextStyle(
-                              color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                        shape: BoxShape.circle,
+                        color: _isScanning ? const Color(0xFF10B981) : Colors.orange,
+                        boxShadow: _isScanning ? [const BoxShadow(color: Color(0xFF10B981), blurRadius: 8, spreadRadius: 2)] : [],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
+                    const SizedBox(width: 6),
+                    Text(
+                      _isScanning ? 'ĐANG QUÉT XUẤT HÀNG' : 'SẴN SÀNG QUÉT (CÒ PDA)',
+                      style: TextStyle(
+                        color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11.5,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _uhf.filterDuplicates = !_uhf.filterDuplicates;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.orange,
+                        content: Text(_uhf.filterDuplicates ? 'Đã bật: Bỏ qua thẻ đã đọc (Lọc trùng)' : 'Đã tắt: Đọc liên tục tất cả lượt'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF4EFE6),
+                      color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFF4EFE6),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFC7BDAF)),
+                      border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFFC7BDAF)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.flash_on, color: Color(0xFFF59E0B), size: 11),
+                        Icon(
+                          _uhf.filterDuplicates ? Icons.filter_alt : Icons.filter_alt_off,
+                          color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
+                          size: 11,
+                        ),
                         const SizedBox(width: 3),
                         Text(
-                          '${_uhf.rfPower} dBm',
-                          style: const TextStyle(color: Color(0xFF0284C7), fontSize: 10.5, fontWeight: FontWeight.bold),
+                          _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
+                          style: TextStyle(
+                            color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4EFE6),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFC7BDAF)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.flash_on, color: Color(0xFFF59E0B), size: 11),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${_uhf.rfPower} dBm',
+                        style: const TextStyle(color: Color(0xFF0284C7), fontSize: 10.5, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
 
-          // Big Counter & Match Status
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+          // Big Counter & Match Status (Responsive Wrap)
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Text(
                 '$totalMatched',
@@ -730,9 +726,9 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(width: 8),
               const Text(
                 'Đã khớp lệnh',
+                textAlign: TextAlign.center,
                 style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ],
@@ -743,18 +739,29 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
           SizedBox(
             width: double.infinity,
             height: 48,
-            child: ElevatedButton.icon(
+            child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
                 elevation: 4,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: Icon(_isScanning ? Icons.stop : Icons.play_arrow, color: const Color(0xFF2C251E), size: 20),
-              label: Text(
-                _isScanning ? 'DỪNG QUÉT XUẤT' : 'BẮT ĐẦU QUÉT XUẤT KHO',
-                style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-              ),
               onPressed: _toggleScan,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_isScanning ? Icons.stop : Icons.play_arrow, color: const Color(0xFF2C251E), size: 20),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _isScanning ? 'DỪNG QUÉT XUẤT' : 'BẮT ĐẦU QUÉT XUẤT KHO',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -868,25 +875,25 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.nfc, color: Color(0xFF0284C7), size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'GIÁM SÁT SO KHỚP CHIP RFID',
-                    style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                const Icon(Icons.nfc, color: Color(0xFF0284C7), size: 16),
+                const SizedBox(width: 6),
+                const Text(
+                  'GIÁM SÁT SO KHỚP CHIP RFID',
+                  style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+                ),
+                if (_scannedTags.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: _clearScannedList,
+                    child: const Text('Xóa dữ liệu', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                   ),
                 ],
-              ),
-              if (_scannedTags.isNotEmpty)
-                InkWell(
-                  onTap: _clearScannedList,
-                  child: const Text('Xóa dữ liệu', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 10),
 
@@ -956,8 +963,16 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('CHIP VỪA ĐỌC TRÚNG GẦN NHẤT', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10, fontWeight: FontWeight.bold)),
-                    if (latestTag != null)
+                    const Flexible(
+                      child: Text(
+                        'CHIP VỪA ĐỌC TRÚNG GẦN NHẤT',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (latestTag != null) ...[
+                      const SizedBox(width: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -966,6 +981,7 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
                         ),
                         child: Text('${latestTag.rssi} dBm', style: const TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -1014,16 +1030,21 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.local_shipping, color: Color(0xFF2C251E), size: 20),
                   const SizedBox(width: 8),
-                  Text(
-                    unstockedCount > 0
-                        ? 'CÓ $unstockedCount CHIP CHƯA XẾP KHO (LỖI)'
-                        : (unexpectedCount > 0
-                            ? 'CÒN THẺ LẠ CHƯA ĐỐI SOÁT'
-                            : (totalMatched > 0 ? 'XÁC NHẬN XUẤT KHO ($totalMatched CHIP)' : 'CHƯA CÓ HÀNG HỢP LỆ')),
-                    style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                  Flexible(
+                    child: Text(
+                      unstockedCount > 0
+                          ? 'CÓ $unstockedCount CHIP CHƯA XẾP KHO (LỖI)'
+                          : (unexpectedCount > 0
+                              ? 'CÒN THẺ LẠ CHƯA ĐỐI SOÁT'
+                              : (totalMatched > 0 ? 'XÁC NHẬN XUẤT KHO ($totalMatched CHIP)' : 'CHƯA CÓ HÀNG HỢP LỆ')),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    ),
                   ),
                 ],
               ),
@@ -1222,31 +1243,31 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.route, color: Color(0xFF0284C7), size: 16),
-                    const SizedBox(width: 6),
-                    const Expanded(
-                      child: Text(
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.route, color: Color(0xFF0284C7), size: 16),
+                      const SizedBox(width: 6),
+                      const Text(
                         'KẾ HOẠCH FIFO (XUẤT TRƯỚC)',
                         style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0284C7),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        icon: const Icon(Icons.calculate, size: 13, color: Color(0xFF2C251E)),
+                        label: const Text('TÍNH FIFO', style: TextStyle(color: Color(0xFF2C251E), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        onPressed: _generateFifoPlan,
                       ),
-                      icon: const Icon(Icons.calculate, size: 13, color: Color(0xFF2C251E)),
-                      label: const Text('TÍNH FIFO', style: TextStyle(color: Color(0xFF2C251E), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                      onPressed: _generateFifoPlan,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 if (_activePickingPlan == null) ...[
@@ -1310,31 +1331,31 @@ class _OutboundScreenState extends State<OutboundScreen> with SingleTickerProvid
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.meeting_room, color: Color(0xFF0284C7), size: 16),
-                    const SizedBox(width: 6),
-                    const Expanded(
-                      child: Text(
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.meeting_room, color: Color(0xFF0284C7), size: 16),
+                      const SizedBox(width: 6),
+                      const Text(
                         'CỔNG GATE (OUTBOUND)',
                         style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0284C7),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        icon: const Icon(Icons.rule, size: 13, color: Color(0xFF2C251E)),
+                        label: const Text('ĐỐI SOÁT', style: TextStyle(color: Color(0xFF2C251E), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        onPressed: _runGateAudit,
                       ),
-                      icon: const Icon(Icons.rule, size: 13, color: Color(0xFF2C251E)),
-                      label: const Text('ĐỐI SOÁT', style: TextStyle(color: Color(0xFF2C251E), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                      onPressed: _runGateAudit,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
                 if (_gateResult == null) ...[

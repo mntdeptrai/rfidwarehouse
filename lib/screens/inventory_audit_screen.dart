@@ -92,7 +92,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFF10B981),
-          content: Text('🎉 Đã chốt và duyệt sai lệch phiên kiểm kê thành công!'),
+          content: Text('Đã chốt và duyệt sai lệch phiên kiểm kê thành công!'),
         ),
       );
       setState(() {
@@ -106,7 +106,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4EFE6),
-      appBar: const HardwareStatusAppBar(title: '📋 Kiểm Kê Kho (Utouch 2)'),
+      appBar: const HardwareStatusAppBar(title: 'Kiểm Kê Kho (Utouch 2)'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(

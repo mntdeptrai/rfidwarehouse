@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/auth_service.dart';
 import '../../services/warehouse_repository.dart';
 import '../../services/uhf_service.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
@@ -28,6 +29,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final TowerLightService _towerLight = TowerLightService();
   final SupabaseSyncService _supabaseSync = SupabaseSyncService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
+  final AuthService _auth = AuthService();
 
   int _currentMode = 0; // 0: Live RFID Station, 1: Orders List & Excel
   bool _isCreating = false;
@@ -97,6 +99,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _desktopUhf.addListener(_onDesktopUhfUpdate);
     _eyeCare.addListener(_onThemeUpdate);
     _repo.addListener(_onThemeUpdate);
+    _auth.addListener(_onThemeUpdate);
 
     _initTagListener();
   }
@@ -104,6 +107,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   void _onThemeUpdate() {
     if (mounted) setState(() {});
   }
+
 
 
   /// Tự động tìm kiếm Đơn nhập / Thùng tương ứng với mã EPC được quét
@@ -331,7 +335,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           performedBy: 'Trạm Cổng RFID Desktop',
         );
 
-        debugPrint('⚡ [ZERO-TOUCH AUTO] Cổng RFID đã tiếp nhận kiện $orderNo ($saved chip) -> CHUYỂN SANG CHỜ XẾP KHO (Mã Barcode: $hexBarcode)');
+        debugPrint('[ZERO-TOUCH AUTO] Cổng RFID đã tiếp nhận kiện $orderNo ($saved chip) -> CHUYỂN SANG CHỜ XẾP KHO (Mã Barcode: $hexBarcode)');
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -438,7 +442,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           reason: 'ĐỦ HÀNG THÔNG QUA: $matchedCount/$expectedCount chip khớp 100% (Đơn ${_selectedLiveOrder!.orderNo})',
         );
 
-        // ⚡ TỰ ĐỘNG XÁC NHẬN QUA CỔNG (Zero-Touch - Không cần bấm tay)
+        // TỰ ĐỘNG XÁC NHẬN QUA CỔNG (Zero-Touch - Không cần bấm tay)
         _triggerAutoConfirmInbound();
       }
     } else {
@@ -463,6 +467,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   @override
   void dispose() {
+    _auth.removeListener(_onThemeUpdate);
     _repo.removeListener(_onThemeUpdate);
     _desktopUhf.removeListener(_onDesktopUhfUpdate);
     _eyeCare.removeListener(_onThemeUpdate);
@@ -1185,7 +1190,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                                       border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
                                                     ),
                                                     child: const Text(
-                                                      '✓ Hợp lệ (Mới)',
+                                                      'Hợp lệ (Mới)',
                                                       style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
                                                     ),
                                                   ))
@@ -1196,7 +1201,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                                   borderRadius: BorderRadius.circular(4),
                                                 ),
                                                 child: Text(
-                                                  '⚡ ${row['quantity']} EPC (Chưa nhập)',
+                                                  '${row['quantity']} EPC (Chưa nhập)',
                                                   style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 10, fontWeight: FontWeight.bold),
                                                 ),
                                               ),
@@ -1813,108 +1818,120 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       return _buildCreateReceiptForm(c);
     }
 
-    return Container(
-      color: c.bgDeep,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Mode Switcher Header
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
+    return LayoutBuilder(
+      builder: (context, outerConstraints) {
+        final screenW = outerConstraints.maxWidth;
+        final isNarrow = screenW < 600;
+        final edgePad = isNarrow ? 10.0 : 24.0;
+
+        return Container(
+          color: c.bgDeep,
+          padding: EdgeInsets.all(edgePad),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // Mode Switcher Header
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text(
-                    'GOODS RECEIVE & RFID INBOUND STATION',
-                    style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Quản Lý Nhập Kho',
-                        style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
+                        isNarrow ? 'NHẬP KHO & RFID' : 'GOODS RECEIVE & RFID INBOUND STATION',
+                        style: TextStyle(color: c.textSecondary, fontSize: isNarrow ? 10 : 11, fontWeight: FontWeight.bold, letterSpacing: isNarrow ? 0.5 : 1),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: c.bgCard,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: c.border),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            'Quản Lý Nhập Kho',
+                            style: TextStyle(color: c.textPrimary, fontSize: isNarrow ? 18 : 22, fontWeight: FontWeight.bold),
+                          ),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: c.bgCard,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: c.border),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildModeTab(0, isNarrow ? 'Trạm Quét RFID' : 'Trạm Quét RFID Live', Icons.sensors, c),
+                                  _buildModeTab(1, isNarrow ? 'Phiếu Nhập' : 'Danh Sách Phiếu Nhập', Icons.list_alt, c),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: c.textPrimary,
+                          side: BorderSide(color: c.border),
+                          padding: EdgeInsets.symmetric(horizontal: isNarrow ? 10 : 16, vertical: isNarrow ? 10 : 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildModeTab(0, 'Trạm Quét RFID Live', Icons.sensors, c),
-                            _buildModeTab(1, 'Danh Sách Phiếu Nhập', Icons.list_alt, c),
-                          ],
+                        icon: Icon(Icons.refresh, size: 18, color: c.textPrimary),
+                        label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: isNarrow ? 11 : 14)),
+                        onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          await _supabaseSync.syncNow();
+                          await _repo.reloadFromSqlite();
+                          if (mounted) {
+                            setState(() {});
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                backgroundColor: Color(0xFF10B981),
+                                duration: Duration(seconds: 2),
+                                content: Text('Đã làm mới và đồng bộ danh sách phiếu nhập thành công!'),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: c.rfidCyan,
+                          padding: EdgeInsets.symmetric(horizontal: isNarrow ? 12 : 18, vertical: isNarrow ? 10 : 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
+                        icon: const Icon(Icons.add, color: Color(0xFF2C251E), size: 18),
+                        label: Text(isNarrow ? 'TẠO PHIẾU' : 'TẠO PHIẾU EXCEL', style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: () {
+                          _resetForm();
+                          setState(() => _isCreating = true);
+                        },
                       ),
                     ],
                   ),
                 ],
               ),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: c.textPrimary,
-                      side: BorderSide(color: c.border),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: Icon(Icons.refresh, size: 18, color: c.textPrimary),
-                    label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
-                    onPressed: () async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      await _supabaseSync.syncNow();
-                      await _repo.reloadFromSqlite();
-                      if (mounted) {
-                        setState(() {});
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            backgroundColor: Color(0xFF10B981),
-                            duration: Duration(seconds: 2),
-                            content: Text('Đã làm mới và đồng bộ danh sách phiếu nhập thành công!'),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: c.rfidCyan,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: const Icon(Icons.add, color: Color(0xFF2C251E), size: 18),
-                    label: const Text('TẠO PHIẾU EXCEL', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      _resetForm();
-                      setState(() => _isCreating = true);
-                    },
-                  ),
-                ],
+              const SizedBox(height: 16),
+
+              // Main View Body
+              Expanded(
+                child: _currentMode == 0 ? _buildLiveRfidStationView(c) : _buildReceiptsList(c),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-
-          // Main View Body
-          Expanded(
-            child: _currentMode == 0 ? _buildLiveRfidStationView(c) : _buildReceiptsList(c),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1960,13 +1977,17 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final matchedCount = matchedTags.length;
     final unscannedItems = expectedOrderItems.where((it) => !_scannedTags.containsKey(it.epc)).toList();
     final double progress = expectedCount > 0 ? (matchedCount / expectedCount).clamp(0.0, 1.0) : 0.0;
+    final canConfigure = _auth.currentUser?.canConfigureHardware ?? false;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Left Column: Configuration & Controls
-        SizedBox(
-          width: 380,
+    return LayoutBuilder(
+      builder: (context, stationConstraints) {
+        final stationW = stationConstraints.maxWidth;
+        final useVerticalLayout = stationW < 700;
+        final leftW = useVerticalLayout ? stationW : (stationW < 900 ? 300.0 : 380.0);
+        final isCompactPad = stationW < 500;
+
+        Widget leftColumn = SizedBox(
+          width: useVerticalLayout ? double.infinity : leftW,
           child: SingleChildScrollView(
             child: Column(
               children: [
@@ -1986,109 +2007,123 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       alignment: WrapAlignment.spaceBetween,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(_isScanning ? 'ĐẦU ĐỌC RFID ĐANG BẬT' : 'ĐẦU ĐỌC SẴN SÀNG', style: TextStyle(color: _isScanning ? c.rfidCyan : c.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
-                        Wrap(
-                          spacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _filterOnlyOrderEpcs = !_filterOnlyOrderEpcs;
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: _filterOnlyOrderEpcs ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : c.border),
-                                ),
-                                child: Text(
-                                  _filterOnlyOrderEpcs ? 'Lọc theo file: BẬT' : 'Lọc theo file: TẮT',
-                                  style: TextStyle(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                            Tooltip(
-                              message: 'Chống đọc đè lặp lại 1 chip nhiều lần từ sóng anten RFID',
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _uhf.filterDuplicates = !_uhf.filterDuplicates;
-                                    _desktopUhf.ignoreAlreadyScanned = _uhf.filterDuplicates;
-                                  });
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.border),
-                                  ),
-                                  child: Text(
-                                    _uhf.filterDuplicates ? 'Lọc trùng sóng RF: BẬT' : 'Lọc trùng sóng RF: TẮT',
-                                    style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          _isScanning ? 'ĐẦU ĐỌC RFID ĐANG BẬT' : 'ĐẦU ĐỌC SẴN SÀNG',
+                          style: TextStyle(
+                            color: _isScanning ? c.rfidCyan : c.textSecondary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
+                        if (canConfigure)
+                          Wrap(
+                            spacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Tooltip(
+                                message: 'Chỉ nhận diện các mã EPC nằm trong đơn nhập kho hiện tại',
+                                child: InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _filterOnlyOrderEpcs = !_filterOnlyOrderEpcs;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _filterOnlyOrderEpcs ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : c.border),
+                                    ),
+                                    child: Text(
+                                      _filterOnlyOrderEpcs ? 'Lọc theo file: BẬT' : 'Lọc theo file: TẮT',
+                                      style: TextStyle(color: _filterOnlyOrderEpcs ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Tooltip(
+                                message: 'Chống đọc đè lặp lại 1 chip nhiều lần từ sóng anten RFID',
+                                child: InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _uhf.filterDuplicates = !_uhf.filterDuplicates;
+                                      _desktopUhf.ignoreAlreadyScanned = _uhf.filterDuplicates;
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgCardElevated,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.border),
+                                    ),
+                                    child: Text(
+                                      _uhf.filterDuplicates ? 'Lọc trùng sóng RF: BẬT' : 'Lọc trùng sóng RF: TẮT',
+                                      style: TextStyle(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 10),
 
-                    // Antenna Dual Selector Row (2 Anten cho cổng/trạm nhập kho)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: c.bgCardElevated,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: c.border),
-                      ),
-                      child: Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text('Anten Cổng:', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 4),
-                          for (int ant = 1; ant <= 4; ant++) ...[
-                            Builder(builder: (context) {
-                              final isSelected = _desktopUhf.activeAntennas.contains(ant);
-                              return InkWell(
-                                onTap: () => _desktopUhf.toggleAntenna(ant),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? c.rfidCyan.withValues(alpha: 0.25)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
+                    // Antenna Dual Selector Row (Chỉ hiển thị cho Quản trị viên cấu hình máy)
+                    if (canConfigure) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: c.bgCardElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'Anten Cổng:',
+                              style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 4),
+                            for (int ant = 1; ant <= 4; ant++) ...[
+                              Builder(builder: (context) {
+                                final isSelected = _desktopUhf.activeAntennas.contains(ant);
+                                return InkWell(
+                                  onTap: () => _desktopUhf.toggleAntenna(ant),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
                                       color: isSelected
-                                          ? c.rfidCyan
-                                          : c.border,
+                                          ? c.rfidCyan.withValues(alpha: 0.25)
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: isSelected ? c.rfidCyan : c.border,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'ANT $ant',
+                                      style: TextStyle(
+                                        color: isSelected ? c.rfidCyan : c.textMuted,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
-                                  child: Text(
-                                    'ANT $ant',
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? c.rfidCyan
-                                          : c.textMuted,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
+                                );
+                              }),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 10),
 
                     Text('$scannedCount', style: TextStyle(color: c.textPrimary, fontSize: 46, fontWeight: FontWeight.w900)),
@@ -2112,13 +2147,25 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('TIẾN ĐỘ ĐỐI SOÁT FILE', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
-                                Text(
-                                  '$matchedCount / $expectedCount chip (${(progress * 100).toStringAsFixed(0)}%)',
-                                  style: TextStyle(
-                                    color: matchedCount == expectedCount && expectedCount > 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+                                Flexible(
+                                  child: Text(
+                                    'TIẾN ĐỘ ĐỐI SOÁT FILE',
+                                    style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    '$matchedCount / $expectedCount chip (${(progress * 100).toStringAsFixed(0)}%)',
+                                    style: TextStyle(
+                                      color: matchedCount == expectedCount && expectedCount > 0 ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
                                   ),
                                 ),
                               ],
@@ -2140,73 +2187,91 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       ),
                     ],
 
-                    // Duration Selector & Scan Button
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: c.bgCardElevated,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: c.border),
+                    // Duration Selector (Chỉ hiển thị cho Quản trị viên cấu hình máy)
+                    if (canConfigure) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: c.bgCardElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.timer_outlined, size: 14, color: c.rfidCyan),
+                                const SizedBox(width: 6),
+                                Text('Thời gian quét:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                              ],
+                            ),
+                            DropdownButton<int>(
+                              value: _scanDurationSeconds,
+                              dropdownColor: c.bgCardElevated,
+                              underline: const SizedBox(),
+                              isDense: true,
+                              style: TextStyle(
+                                color: c.rfidCyan,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: 3, child: Text('3 Giây')),
+                                DropdownMenuItem(value: 5, child: Text('5 Giây - Chuẩn')),
+                                DropdownMenuItem(value: 10, child: Text('10 Giây')),
+                                DropdownMenuItem(value: 0, child: Text('Quét liên tục')),
+                              ],
+                              onChanged: _isScanning
+                                  ? null
+                                  : (val) {
+                                      if (val != null) {
+                                        setState(() {
+                                          _scanDurationSeconds = val;
+                                          _scanCountdown = val;
+                                        });
+                                      }
+                                    },
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.timer_outlined, size: 14, color: c.rfidCyan),
-                              const SizedBox(width: 6),
-                              Text('Thời gian quét:', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                            ],
-                          ),
-                          DropdownButton<int>(
-                            value: _scanDurationSeconds,
-                            dropdownColor: c.bgCardElevated,
-                            underline: const SizedBox(),
-                            isDense: true,
-                            style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
-                            items: const [
-                              DropdownMenuItem(value: 3, child: Text('⚡ 3 Giây')),
-                              DropdownMenuItem(value: 5, child: Text('⏱️ 5 Giây - Chuẩn')),
-                              DropdownMenuItem(value: 10, child: Text('⏱️ 10 Giây')),
-                              DropdownMenuItem(value: 0, child: Text('♾️ Quét liên tục')),
-                            ],
-                            onChanged: _isScanning
-                                ? null
-                                : (val) {
-                                    if (val != null) {
-                                      setState(() {
-                                        _scanDurationSeconds = val;
-                                        _scanCountdown = val;
-                                      });
-                                    }
-                                  },
-                          ),
-                        ],
-                      ),
-                    ),
+                    ],
                     const SizedBox(height: 10),
 
                     Row(
                       children: [
                         Expanded(
-                          child: ElevatedButton.icon(
+                          child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _isScanning ? const Color(0xFFEF4444) : c.rfidCyan,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            icon: Icon(_isScanning ? Icons.stop_circle_outlined : Icons.sensors, color: const Color(0xFF2C251E), size: 18),
-                            label: Text(
-                              _isScanning
-                                  ? (_scanDurationSeconds > 0 ? 'ĐANG QUÉT · ${_scanCountdown}s - DỪNG' : 'ĐANG QUÉT - BẤM DỪNG')
-                                  : (_scanDurationSeconds > 0 ? 'BẮT ĐẦU QUÉT · ${_scanDurationSeconds}s' : 'BẮT ĐẦU QUÉT RFID'),
-                              style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
                             onPressed: _toggleLiveScan,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(_isScanning ? Icons.stop_circle_outlined : Icons.sensors, color: const Color(0xFF2C251E), size: 18),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    _isScanning
+                                        ? (_scanDurationSeconds > 0 ? 'ĐANG QUÉT · ${_scanCountdown}s - DỪNG' : 'ĐANG QUÉT - DỪNG')
+                                        : (_scanDurationSeconds > 0 ? 'QUÉT · ${_scanDurationSeconds}s' : 'QUÉT RFID'),
+                                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -2214,7 +2279,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.redAccent,
                             side: BorderSide(color: c.border),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
                           ),
                           onPressed: () {
                             _stopLiveScan();
@@ -2238,44 +2303,54 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               SizedBox(
                 width: double.infinity,
                 height: 48,
-                child: ElevatedButton.icon(
+                child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _hasScanError
                         ? const Color(0xFFEF4444)
                         : (scannedCount > 0 ? const Color(0xFF10B981) : c.border),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: Icon(
-                    _hasScanError ? Icons.block : Icons.check_circle,
-                    color: _hasScanError ? Colors.white : const Color(0xFF2C251E),
-                  ),
-                  label: Text(
-                    _isSaving
-                        ? 'Đang lưu...'
-                        : (_hasScanError
-                            ? '⛔ BỊ KHÓA: SAI TEM HOẶC THỪA HÀNG'
-                            : (_selectedLiveOrder != null
-                                ? 'XÁC NHẬN QUA CỔNG · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP (CHỜ XẾP KHO)'
-                                : 'XÁC NHẬN QUA CỔNG · $scannedCount CHIP (CHỜ XẾP KHO)')),
-                    style: TextStyle(
-                      color: _hasScanError ? Colors.white : const Color(0xFF2C251E),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onPressed: (_isSaving || scannedCount == 0 || _hasScanError) ? null : _saveLiveInbound,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _hasScanError ? Icons.block : Icons.check_circle,
+                        color: _hasScanError ? Colors.white : const Color(0xFF2C251E),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          _isSaving
+                              ? 'Đang lưu...'
+                              : (_hasScanError
+                                  ? 'BỊ KHÓA: SAI TEM HOẶC THỪA HÀNG'
+                                  : (_selectedLiveOrder != null
+                                      ? 'XÁC NHẬN QUA CỔNG · ${_selectedLiveOrder!.orderNo}: $scannedCount CHIP'
+                                      : 'XÁC NHẬN QUA CỔNG · $scannedCount CHIP')),
+                          style: TextStyle(
+                            color: _hasScanError ? Colors.white : const Color(0xFF2C251E),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
-      ),
-      const SizedBox(width: 20),
+      );
 
         // Right Column: Live RFID Scanned Tags Table with Tabs
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(18),
+        Widget rightColumn = Container(
+            padding: EdgeInsets.all(isCompactPad ? 10 : 18),
             decoration: BoxDecoration(
               color: c.bgCard,
               borderRadius: BorderRadius.circular(14),
@@ -2345,7 +2420,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 border: Border.all(color: const Color(0xFFEF4444)),
                               ),
                               child: Text(
-                                '🔴 Sai tem / Lạ · ${_invalidTags.length}',
+                                'Sai tem / Lạ · ${_invalidTags.length}',
                                 style: TextStyle(
                                   color: _stationTab == 2 ? Colors.white : const Color(0xFFEF4444),
                                   fontWeight: FontWeight.bold,
@@ -2365,7 +2440,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
                         ),
                         child: Text(
-                          '⚡ Đang lọc theo file đơn ${_selectedLiveOrder!.orderNo}',
+                          'Đang lọc theo file đơn ${_selectedLiveOrder!.orderNo}',
                           style: const TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -2386,7 +2461,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '🔴 CẢNH BÁO: $_scanErrorMessage - ĐÃ KHÓA NHẬP KHO!',
+                            'CẢNH BÁO: $_scanErrorMessage - ĐÃ KHÓA NHẬP KHO!',
                             style: const TextStyle(
                               color: Color(0xFFEF4444),
                               fontWeight: FontWeight.bold,
@@ -2458,7 +2533,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                             borderRadius: BorderRadius.circular(4),
                                             border: Border.all(color: const Color(0xFF10B981)),
                                           ),
-                                          child: const Text('✓ Khớp file', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                                          child: const Text('Khớp file', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
                                         ),
                                         const SizedBox(width: 8),
                                       ],
@@ -2544,7 +2619,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                               borderRadius: BorderRadius.circular(4),
                                               border: Border.all(color: const Color(0xFFF59E0B)),
                                             ),
-                                            child: const Text('⚡ Chưa quét', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
+                                            child: const Text('Chưa quét', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
                                           ),
                                         ],
                                       ),
@@ -2586,7 +2661,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                                 ),
                                                 const SizedBox(height: 2),
                                                 const Text(
-                                                  '⚠️ CHIP KHÔNG CÓ TRONG ĐƠN / SAI TEM ĐỐI SOÁT',
+                                                  'CHIP KHÔNG CÓ TRONG ĐƠN / SAI TEM ĐỐI SOÁT',
                                                   style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
                                                 ),
                                               ],
@@ -2600,7 +2675,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                               borderRadius: BorderRadius.circular(4),
                                               border: Border.all(color: const Color(0xFFEF4444)),
                                             ),
-                                            child: const Text('⛔ SAI TEM', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                                            child: const Text('SAI TEM', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
                                           ),
                                         ],
                                       ),
@@ -2610,9 +2685,32 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 ),
               ],
             ),
-          ),
-        ),
-      ],
+          );
+
+        if (useVerticalLayout) {
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                leftColumn,
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 400,
+                  child: rightColumn,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            leftColumn,
+            const SizedBox(width: 16),
+            Expanded(child: rightColumn),
+          ],
+        );
+      },
     );
   }
 
@@ -2722,7 +2820,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         setState(() {});
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('✅ Đã làm mới & đồng bộ thành công!'), duration: Duration(seconds: 2)),
+                            const SnackBar(content: Text('Đã làm mới & đồng bộ thành công!'), duration: Duration(seconds: 2)),
                           );
                         }
                       },
@@ -2960,7 +3058,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 });
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('✅ Đã xóa đơn ${order.orderNo}!')),
+                                    SnackBar(content: Text('Đã xóa đơn ${order.orderNo}!')),
                                   );
                                 }
                               }
@@ -3214,7 +3312,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                                         border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
                                                       ),
                                                       child: Text(
-                                                        '⚡ Tự động sinh ${_receiptCartons[i]['quantity']} mã EPC',
+                                                        'Tự động sinh ${_receiptCartons[i]['quantity']} mã EPC',
                                                         style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold),
                                                       ),
                                                     ),

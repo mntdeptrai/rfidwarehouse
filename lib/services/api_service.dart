@@ -161,7 +161,7 @@ class ApiService extends ChangeNotifier {
   }
 
   // ===========================================================================
-  // ⚡ 1. REALTIME BROADCAST APIS (Độ trễ mili-giây giữa Desktop & PDA)
+  // 1. REALTIME BROADCAST APIS (Độ trễ mili-giây giữa Desktop & PDA)
   // ===========================================================================
 
   /// Cổng RFID phát tín hiệu kiện hàng vừa đi qua
