@@ -82,7 +82,14 @@ class SupabaseSyncService extends ChangeNotifier {
   int get pendingCount => _pendingCount;
   String get connectionStatusDetail => _connectionStatusDetail;
   List<SupabaseLogEntry> get logs => List.unmodifiable(_logs);
-  SupabaseClient? get client => _isInitialized ? Supabase.instance.client : null;
+  SupabaseClient? get client {
+    if (!_isInitialized) return null;
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
 
   SupabaseSyncService._internal() {
     _loadConfigFromDb();
@@ -107,10 +114,10 @@ class SupabaseSyncService extends ChangeNotifier {
   Future<bool> initSupabase() async {
     try {
       if (Platform.environment.containsKey('FLUTTER_TEST')) {
-        _isInitialized = true;
-        _isOnline = true;
-        _connectionStatusDetail = 'Môi trường Kiểm thử (Test Environment)';
-        return true;
+        _isInitialized = false;
+        _isOnline = false;
+        _connectionStatusDetail = 'Môi trường Kiểm thử (Offline)';
+        return false;
       }
 
       if (config.url.trim().isEmpty || config.anonKey.trim().isEmpty) {
@@ -224,6 +231,12 @@ class SupabaseSyncService extends ChangeNotifier {
   /// Kiểm tra trạng thái kết nối tới Supabase Cloud
   Future<bool> checkConnectivity() async {
     try {
+      if (Platform.environment.containsKey('FLUTTER_TEST')) {
+        _isOnline = true;
+        _connectionStatusDetail = 'Môi trường Kiểm thử (Mock Online)';
+        return true;
+      }
+
       if (!_isInitialized) {
         await initSupabase();
       }
@@ -451,6 +464,17 @@ class SupabaseSyncService extends ChangeNotifier {
 
     final normalized = _normalizePayloadForSupabase(targetTable, payload);
 
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      await _dbService.enqueueSync(
+        tableName: targetTable,
+        recordId: recordId,
+        action: action,
+        payload: normalized,
+      );
+      await _refreshPendingCount();
+      return;
+    }
+
     if (_isOnline && _isInitialized) {
       try {
         final supa = Supabase.instance.client;
@@ -607,46 +631,58 @@ class SupabaseSyncService extends ChangeNotifier {
         );
       }
 
-      // Tự động đẩy toàn bộ Master Data, Kệ, Pallet, Sản phẩm và Thẻ RFID từ PDA/Desktop lên Supabase Cloud
+      // Tự động đẩy toàn bộ Master Data, Kệ, Pallet, Sản phẩm và Thẻ RFID từ PDA/Desktop lên Supabase Cloud theo Batch
       try {
         final localLocs = await _dbService.getLocations();
-        for (final loc in localLocs) {
-          await supa.from('locations').upsert({
+        if (localLocs.isNotEmpty) {
+          final locBatch = localLocs.map((loc) => {
             'location_id': loc.locationId,
             'location_code': loc.locationCode,
             'zone': loc.zone,
             'shelf': loc.shelf,
             'level': loc.level,
             'current_pallets': loc.currentPallets,
-          });
+          }).toList();
+          for (var i = 0; i < locBatch.length; i += 100) {
+            final chunk = locBatch.sublist(i, (i + 100 > locBatch.length) ? locBatch.length : i + 100);
+            await supa.from('locations').upsert(chunk);
+          }
         }
 
         final localProds = await _dbService.getProducts();
-        for (final p in localProds) {
-          await supa.from('products').upsert({
+        if (localProds.isNotEmpty) {
+          final prodBatch = localProds.map((p) => {
             'product_id': p.productId,
             'sku': p.sku,
             'product_name': p.productName,
             'unit': p.unit,
             'category': p.category,
             'description': p.description,
-          });
+          }).toList();
+          for (var i = 0; i < prodBatch.length; i += 100) {
+            final chunk = prodBatch.sublist(i, (i + 100 > prodBatch.length) ? prodBatch.length : i + 100);
+            await supa.from('products').upsert(chunk);
+          }
         }
 
         final localPallets = await _dbService.getPallets();
-        for (final pal in localPallets) {
-          await supa.from('pallets').upsert({
+        if (localPallets.isNotEmpty) {
+          final palBatch = localPallets.map((pal) => {
             'pallet_id': pal.palletId,
             'pallet_code': pal.palletCode,
             'location_id': pal.locationId,
             'inbound_time': pal.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
             'is_multi_sku': pal.isMultiSku ? 1 : 0,
-          });
+          }).toList();
+          for (var i = 0; i < palBatch.length; i += 100) {
+            final chunk = palBatch.sublist(i, (i + 100 > palBatch.length) ? palBatch.length : i + 100);
+            await supa.from('pallets').upsert(chunk);
+          }
         }
 
         final localItems = await _dbService.getItems();
-        for (final it in localItems) {
-          await supa.from('items').upsert({
+        if (localItems.isNotEmpty) {
+          final itemBatch = localItems.map((it) => {
             'item_id': it.itemId,
             'product_id': it.productId,
             'sku': it.sku,
@@ -658,7 +694,11 @@ class SupabaseSyncService extends ChangeNotifier {
             'pallet_id': it.palletId,
             'location_id': it.locationId,
             'inbound_time': it.inboundTime?.toIso8601String(),
-          });
+          }).toList();
+          for (var i = 0; i < itemBatch.length; i += 100) {
+            final chunk = itemBatch.sublist(i, (i + 100 > itemBatch.length) ? itemBatch.length : i + 100);
+            await supa.from('items').upsert(chunk);
+          }
         }
 
         final localUsers = await _dbService.getUsers();

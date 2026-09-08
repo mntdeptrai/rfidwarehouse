@@ -93,6 +93,11 @@ class DatabaseService {
     return await openDatabase(
       path,
       version: 2,
+      onConfigure: (db) async {
+        try {
+          await db.execute('PRAGMA foreign_keys = ON;');
+        } catch (_) {}
+      },
       onCreate: (db, version) => _createTables(db),
       onUpgrade: (db, oldVersion, newVersion) => _createTables(db),
       onOpen: (db) async {
@@ -101,6 +106,7 @@ class DatabaseService {
             await db.execute('PRAGMA journal_mode=WAL;');
             await db.execute('PRAGMA busy_timeout=5000;');
           }
+          await db.execute('PRAGMA foreign_keys = ON;');
         } catch (_) {}
         await _createTables(db);
       },

@@ -32,8 +32,6 @@ class WarehouseRepository extends ChangeNotifier {
       final dbProducts = await _dbService.getProducts();
       final dbLocations = await _dbService.getLocations();
       final dbItems = await _dbService.getItems();
-      final dbInboundOrders = await _dbService.getInboundOrders();
-      final dbOutboundOrders = await _dbService.getOutboundOrders();
       const bogusCommandNames = {
         'ACTION_SCAN',
         'ACTION_STOP_SCAN',
@@ -48,83 +46,30 @@ class WarehouseRepository extends ChangeNotifier {
         'FALSE',
       };
 
-      // Dọn dẹp triệt để dữ liệu rác, lệnh scanner và các dữ liệu mẫu kiểm thử cũ
-      bool isTestProduct(Product p) {
+      // Lọc bỏ lệnh scanner vô tình bị quét nhầm thành sản phẩm/hàng hóa
+      bool isBogusCommandProduct(Product p) {
         final pSku = p.sku.toUpperCase();
         final pId = p.productId.toUpperCase();
-        final pName = p.productName.toUpperCase();
-        return bogusCommandNames.contains(pId) ||
-            bogusCommandNames.contains(pSku) ||
-            pSku == '7A0B5FD0B4F31DD5' ||
-            pSku.startsWith('SKU-POLO') ||
-            pSku.startsWith('SKU-JEAN') ||
-            pSku.startsWith('SKU-SNEAKER') ||
-            pSku.startsWith('SKU-ELEC-') ||
-            pSku.startsWith('SKU-TEXT-') ||
-            pSku.startsWith('SKU-PHARM-') ||
-            pSku.contains('SAMPLE') ||
-            pSku.contains('TEST') ||
-            pId == 'PROD-001' ||
-            pId == 'PROD-002' ||
-            pId.startsWith('PROD-') ||
-            pName.contains('ÁO POLO RFID') ||
-            pName.contains('SAMPLE') ||
-            pName.contains('TEST') ||
-            pName.contains('MẪU');
+        return bogusCommandNames.contains(pId) || bogusCommandNames.contains(pSku);
       }
 
-      bool isTestItem(Item i) {
+      bool isBogusCommandItem(Item i) {
         final epc = i.epc.toUpperCase();
         final sku = i.sku.toUpperCase();
         final orderNo = (i.orderNo ?? '').toUpperCase();
-        final itemId = i.itemId.toUpperCase();
-        final pName = i.productName.toUpperCase();
-        return epc == 'E28011600000000000099888' ||
-            epc == 'E28032F9666D00012F50' ||
-            epc == 'E2803295B8FA00017846' ||
-            epc.startsWith('ABCDEF') ||
-            epc.startsWith('E280119120000000000000') ||
-            itemId.startsWith('ITEM-SAMPLE-') ||
-            itemId.startsWith('ITEM-TEST-') ||
-            itemId.startsWith('ITEM-00') ||
-            orderNo == 'CARTONTEST0001' ||
-            orderNo.startsWith('THUNG-') ||
-            orderNo.startsWith('INB-2026-') ||
-            orderNo == 'INB-001' ||
-            pName.contains('ÁO POLO RFID') ||
-            pName.contains('SAMPLE') ||
-            pName.contains('TEST') ||
-            pName.contains('MẪU') ||
-            sku.contains('SAMPLE') ||
-            sku.contains('TEST') ||
+        return bogusCommandNames.contains(epc) ||
             bogusCommandNames.contains(sku) ||
             bogusCommandNames.contains(orderNo);
       }
 
       for (final p in dbProducts) {
-        if (isTestProduct(p)) {
+        if (isBogusCommandProduct(p)) {
           await _dbService.deleteProduct(p.productId);
         }
       }
       for (final i in dbItems) {
-        if (isTestItem(i)) {
+        if (isBogusCommandItem(i)) {
           await _dbService.deleteItem(i.epc);
-        }
-      }
-      for (final o in dbInboundOrders) {
-        if (o.orderNo == 'CARTONTEST0001' ||
-            o.orderNo.startsWith('THUNG-') ||
-            o.orderNo.startsWith('INB-2026-') ||
-            o.orderNo == 'INB-001') {
-          await _dbService.deleteInboundOrder(o.inboundOrderId);
-        }
-      }
-      for (final o in dbOutboundOrders) {
-        if (o.poNo == 'PO-2026-001' ||
-            o.poNo == 'PO-2026-002' ||
-            o.poNo == 'PO-2026-003' ||
-            o.poNo == 'OUT-001') {
-          await _dbService.deleteOutboundOrder(o.outboundOrderId);
         }
       }
 
@@ -179,31 +124,18 @@ class WarehouseRepository extends ChangeNotifier {
       _pallets.addAll(mergedPallets.values);
       await _dbService.savePalletsBackup(_pallets);
 
-      // Xóa tất cả các thẻ pendingInbound cũ còn sót lại từ các lần test trước
-      for (final orphan in cleanItems.where((i) => i.status == ItemStatus.pendingInbound || isTestItem(i))) {
-        await _dbService.deleteItem(orphan.epc);
-      }
-
       _items.clear();
-      _items.addAll(cleanItems.where((i) => !isTestItem(i) && i.status != ItemStatus.pendingInbound));
+      _items.addAll(cleanItems.where((i) => !isBogusCommandItem(i)));
       for (final p in _pallets) {
         p.itemIds.clear();
         p.itemIds.addAll(_items.where((i) => i.palletId == p.palletId).map((i) => i.itemId));
       }
 
       _inboundOrders.clear();
-      _inboundOrders.addAll(cleanInboundOrders.where((o) =>
-          o.orderNo != 'CARTONTEST0001' &&
-          !o.orderNo.startsWith('THUNG-') &&
-          !o.orderNo.startsWith('INB-2026-') &&
-          o.orderNo != 'INB-001'));
+      _inboundOrders.addAll(cleanInboundOrders);
 
       _outboundOrders.clear();
-      _outboundOrders.addAll(cleanOutboundOrders.where((o) =>
-          o.poNo != 'PO-2026-001' &&
-          o.poNo != 'PO-2026-002' &&
-          o.poNo != 'PO-2026-003' &&
-          o.poNo != 'OUT-001'));
+      _outboundOrders.addAll(cleanOutboundOrders);
 
       _users.clear();
       _users.addAll(dbUsers);
@@ -1554,34 +1486,32 @@ class WarehouseRepository extends ChangeNotifier {
 
     for (var it in matchedItems) {
       it.status = ItemStatus.waitingPutaway;
-      // Barcode của hàng hóa được gắn theo barcode của thùng được sinh lúc nhập kho qua cổng
+      // Gán mã Barcode thùng/kiện vào palletId để PDA có thể quét cất hàng theo thùng
       it.palletId = effectiveCartonCode;
-      it.sku = effectiveCartonCode;
-      it.productId = effectiveCartonCode;
+      // Chỉ gán fallback nếu item chưa có SKU hoặc ProductId
+      if (it.sku.trim().isEmpty) {
+        it.sku = effectiveCartonCode;
+      }
+      if (it.productId.trim().isEmpty) {
+        it.productId = it.sku;
+      }
       it.locationId = null;
       it.inboundTime = now;
       if (it.orderNo == null || it.orderNo!.isEmpty) {
         it.orderNo = cleanOrderNo;
       }
 
-      // Đảm bảo có bản ghi Product tương ứng cho mã Barcode mới sinh
-      final existingProd = _products.where((p) => p.sku == effectiveCartonCode || p.productId == effectiveCartonCode).firstOrNull;
+      // Đảm bảo có bản ghi Product tương ứng
+      final existingProd = _products.where((p) => p.sku == it.sku || p.productId == it.productId).firstOrNull;
       if (existingProd == null) {
-        // Tìm tên sản phẩm chuẩn hóa cho thùng hàng: Nếu tất cả item cùng 1 tên thì lấy tên đó, nếu nhiều tên khác nhau thì đặt 'Kiện hàng $effectiveCartonCode'
-        final distinctNames = matchedItems
-            .map((i) => i.productName.trim())
-            .where((n) => n.isNotEmpty && n != 'Sản phẩm mẫu' && n != 'Item')
-            .toSet()
-            .toList();
-
-        final String cartonProductName = distinctNames.length == 1
-            ? distinctNames.first
-            : 'Kiện hàng $effectiveCartonCode';
+        final productName = it.productName.isNotEmpty && it.productName != 'Sản phẩm mẫu' && it.productName != 'Item'
+            ? it.productName
+            : 'Sản phẩm ${it.sku}';
 
         final newProd = Product(
-          productId: effectiveCartonCode,
-          sku: effectiveCartonCode,
-          productName: cartonProductName,
+          productId: it.productId,
+          sku: it.sku,
+          productName: productName,
           unit: 'Cái',
           category: 'Hàng nhập qua cổng RFID',
         );
@@ -1693,11 +1623,8 @@ class WarehouseRepository extends ChangeNotifier {
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.sku.trim().toUpperCase() == cleanBarcode) return true;
+      if (it.productId.trim().toUpperCase() == cleanBarcode) return true;
       if (it.epc.trim().toUpperCase() == cleanBarcode || it.serialNumber.trim().toUpperCase() == cleanBarcode) return true;
-
-      final itSkuNorm = it.sku.toUpperCase().replaceAll(RegExp(r'0+'), '0');
-      final cBNorm = cleanBarcode.toUpperCase().replaceAll(RegExp(r'0+'), '0');
-      if (itSkuNorm == cBNorm) return true;
 
       return false;
     }).toList();
@@ -2660,6 +2587,7 @@ class WarehouseRepository extends ChangeNotifier {
     final cleanId = palletId.trim().toUpperCase();
     _pallets.removeWhere((p) => p.palletId.toUpperCase() == cleanId || p.palletCode.toUpperCase() == cleanId);
     await _dbService.deletePallet(cleanId);
+    await _dbService.savePalletsBackup(_pallets);
     await _syncDirectOrQueue(
       tableName: 'pallets',
       recordId: cleanId,
@@ -2756,6 +2684,7 @@ class WarehouseRepository extends ChangeNotifier {
     if (deleteSourcePallet) {
       _pallets.removeWhere((p) => p.palletId == sourcePallet.palletId);
       await _dbService.deletePallet(sourcePallet.palletId);
+      await _dbService.savePalletsBackup(_pallets);
       await _syncDirectOrQueue(
         tableName: 'pallets',
         recordId: sourcePallet.palletId,

@@ -669,5 +669,98 @@ void main() {
       final mergeTx = repo.transactions.firstWhere((tx) => tx.sku == 'PALLET_MERGE');
       expect(mergeTx.notes, contains('Nhập gộp 2 sản phẩm từ Pallet PL-MERGE-A vào Pallet PL-MERGE-B'));
     });
+
+    test('Gate Receive preserves item original SKU and assigns carton handling unit to palletId', () async {
+      final testOrder = InboundOrder(
+        inboundOrderId: 'INB-GT-01',
+        orderNo: 'INB-GT-2026',
+        sourceSupplier: 'Gate Supplier',
+        status: InboundOrderStatus.newOrder,
+        createdAt: DateTime.now(),
+        details: [
+          InboundOrderDetail(
+            productId: 'PROD-001',
+            sku: 'SKU-ELEC-01',
+            productName: 'Bo mạch IoT',
+            requiredQty: 2,
+          ),
+        ],
+      );
+      final newItems = await repo.addInboundOrder(testOrder, autoGenerateEpcs: true);
+      expect(newItems.length, 2);
+
+      final epcs = newItems.map((e) => e.epc).toList();
+      final count = await repo.confirmGateReceiveToWaitingPutaway(
+        orderNo: testOrder.orderNo,
+        scannedEpcs: epcs,
+        cartonCode: 'CARTON-XYZ-999',
+      );
+
+      expect(count, 2);
+      final receivedItems = repo.items.where((i) => epcs.contains(i.epc)).toList();
+      for (final it in receivedItems) {
+        expect(it.palletId, 'CARTON-XYZ-999');
+        // Original SKU and productId must NOT be overwritten by carton code
+        expect(it.sku, 'SKU-ELEC-01');
+        expect(it.productId, 'PROD-001');
+        expect(it.status, ItemStatus.waitingPutaway);
+      }
+    });
+
+    test('PDA Putaway exact matching distinguishes PROD-10 from PROD-100 without regex conflation', () async {
+      await repo.addProduct(const Product(productId: 'PROD-10', sku: 'PROD-10', productName: 'Item 10', unit: 'Cái', category: 'Thiết bị'));
+      await repo.addProduct(const Product(productId: 'PROD-100', sku: 'PROD-100', productName: 'Item 100', unit: 'Cái', category: 'Thiết bị'));
+
+      final item10 = Item(
+        itemId: 'IT-PROD-10',
+        productId: 'PROD-10',
+        sku: 'PROD-10',
+        productName: 'Item 10',
+        serialNumber: 'SN-10',
+        epc: 'EPC-PROD-10',
+        status: ItemStatus.waitingPutaway,
+      );
+      final item100 = Item(
+        itemId: 'IT-PROD-100',
+        productId: 'PROD-100',
+        sku: 'PROD-100',
+        productName: 'Item 100',
+        serialNumber: 'SN-100',
+        epc: 'EPC-PROD-100',
+        status: ItemStatus.waitingPutaway,
+      );
+      await repo.addItem(item10);
+      await repo.addItem(item100);
+
+      // Putaway specifically PROD-10 to location A-01-01
+      final count = await repo.confirmPdaPutawayByCarton(
+        cartonOrOrderBarcode: 'PROD-10',
+        locationId: 'LOC-A01-01',
+        performedBy: 'PDA Tester',
+      );
+
+      expect(count, 1);
+      // Item 10 is in stock at LOC-A01-01
+      expect(repo.items.firstWhere((i) => i.itemId == 'IT-PROD-10').locationId, 'LOC-A01-01');
+      // Item 100 was NOT affected or mistakenly put away
+      expect(repo.items.firstWhere((i) => i.itemId == 'IT-PROD-100').locationId, isNull);
+    });
+
+    test('Pallet Deletion updates both SQLite and permanent backup so deleted pallets do not resurrect', () async {
+      final dbService = DatabaseService();
+      repo.createOrAssignPallet(
+        palletCode: 'PAL-TO-DELETE',
+        locationId: 'LOC-A01-01',
+        newItems: [],
+      );
+      expect(repo.pallets.any((p) => p.palletCode == 'PAL-TO-DELETE'), isTrue);
+
+      await repo.deletePallet('PAL-TO-DELETE');
+      expect(repo.pallets.any((p) => p.palletCode == 'PAL-TO-DELETE'), isFalse);
+
+      // Verify permanent backup file does not contain deleted pallet
+      final backup = await dbService.loadPalletsBackup();
+      expect(backup.any((p) => p.palletCode == 'PAL-TO-DELETE'), isFalse);
+    });
   });
 }

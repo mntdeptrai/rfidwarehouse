@@ -329,13 +329,33 @@ app.post('/api/pda/putaway', async (req, res) => {
 
     const affectedItems = updateResult.affectedRows;
 
-    // 3. Cập nhật trạng thái đơn hàng sang COMPLETED (Hoàn tất nhập kho)
-    await connection.query(
-      `UPDATE inbound_orders 
-       SET status = 'COMPLETED', updated_at = NOW() 
-       WHERE order_no = ? OR inbound_order_id = ?`,
-      [carton_barcode, carton_barcode]
+    // 3. Cập nhật trạng thái đơn hàng (nếu tất cả items của đơn đã hoàn tất xếp kho -> COMPLETED)
+    const [orderRows] = await connection.query(
+      `SELECT DISTINCT order_no FROM items 
+       WHERE (order_no = ? OR pallet_id = ? OR epc = ? OR serial_number = ?) AND order_no IS NOT NULL`,
+      [carton_barcode, carton_barcode, carton_barcode, carton_barcode]
     );
+
+    for (const r of orderRows) {
+      if (!r.order_no) continue;
+      const [remaining] = await connection.query(
+        `SELECT COUNT(*) as count FROM items WHERE order_no = ? AND status != 'IN_STOCK'`,
+        [r.order_no]
+      );
+      if (remaining[0].count === 0) {
+        await connection.query(
+          `UPDATE inbound_orders SET status = 'COMPLETED', updated_at = NOW() 
+           WHERE order_no = ? OR inbound_order_id = ?`,
+          [r.order_no, r.order_no]
+        );
+      } else {
+        await connection.query(
+          `UPDATE inbound_orders SET status = 'WAITING_PUTAWAY', updated_at = NOW() 
+           WHERE (order_no = ? OR inbound_order_id = ?) AND status != 'COMPLETED'`,
+          [r.order_no, r.order_no]
+        );
+      }
+    }
 
     // 4. Ghi log lịch sử Putaway
     await connection.query(
