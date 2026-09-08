@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/wms_models.dart';
 
@@ -19,6 +20,31 @@ class DatabaseService {
     return _db!;
   }
 
+  Future<String> getDatabaseDirectory() async {
+    final isTest = Platform.environment.containsKey('FLUTTER_TEST');
+    if (isTest) return '';
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      try {
+        final dir = await getApplicationSupportDirectory();
+        final dbDir = Directory(p.join(dir.path, 'databases'));
+        if (!dbDir.existsSync()) {
+          dbDir.createSync(recursive: true);
+        }
+        return dbDir.path;
+      } catch (e) {
+        debugPrint('getApplicationSupportDirectory error: $e, fallback to AppData');
+        final appData = Platform.environment['APPDATA'] ?? Platform.environment['USERPROFILE'] ?? '.';
+        final dbDir = Directory(p.join(appData, 'RFIDWarehouse', 'databases'));
+        if (!dbDir.existsSync()) {
+          dbDir.createSync(recursive: true);
+        }
+        return dbDir.path;
+      }
+    } else {
+      return await getDatabasesPath();
+    }
+  }
+
   Future<Database> _initDatabase() async {
     // Khởi tạo ffi cho môi trường desktop/test nếu không phải Android/iOS
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -27,7 +53,40 @@ class DatabaseService {
     }
 
     final isTest = Platform.environment.containsKey('FLUTTER_TEST');
-    final path = isTest ? inMemoryDatabasePath : p.join(await getDatabasesPath(), 'c72e_wms_clean_v3.db');
+    if (isTest) {
+      return await openDatabase(
+        inMemoryDatabasePath,
+        version: 2,
+        onCreate: (db, version) => _createTables(db),
+        onUpgrade: (db, oldVersion, newVersion) => _createTables(db),
+      );
+    }
+
+    // Đường dẫn thư mục CSDL cố định vĩnh viễn (không bao giờ bị xóa khi build clean hoặc đổi working directory)
+    final dbDir = await getDatabaseDirectory();
+    final path = p.join(dbDir, 'c72e_wms_clean_v3.db');
+
+    // Tự động sao chép CSDL từ thư mục cũ (.dart_tool) nếu thư mục mới chưa có file DB
+    try {
+      final targetFile = File(path);
+      if (!targetFile.existsSync()) {
+        final oldPaths = [
+          p.join(Directory.current.path, '.dart_tool', 'sqflite_common_ffi', 'databases', 'c72e_wms_clean_v3.db'),
+          p.join(await getDatabasesPath(), 'c72e_wms_clean_v3.db'),
+        ];
+        for (final oldPath in oldPaths) {
+          final oldFile = File(oldPath);
+          if (oldFile.existsSync() && oldPath != path) {
+            debugPrint('Migrating database from $oldPath to permanent location: $path');
+            await targetFile.parent.create(recursive: true);
+            await oldFile.copy(path);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Database migration check error: $e');
+    }
 
     debugPrint('Initializing SQLite Database (isTest=$isTest) at: $path');
 
@@ -71,21 +130,29 @@ class DatabaseService {
         zone TEXT NOT NULL,
         shelf TEXT NOT NULL,
         level TEXT NOT NULL,
+        max_pallet_capacity INTEGER DEFAULT 1,
         current_pallets INTEGER DEFAULT 0
       )
     ''');
+    try {
+      await db.execute('ALTER TABLE locations ADD COLUMN max_pallet_capacity INTEGER DEFAULT 1');
+    } catch (_) {}
 
     // 3. Bảng Pallet lưu kho (pallets)
     await db.execute('''
       CREATE TABLE IF NOT EXISTS pallets (
         pallet_id TEXT PRIMARY KEY,
         pallet_code TEXT NOT NULL UNIQUE,
+        rfid_epc TEXT,
         location_id TEXT,
         inbound_time TEXT NOT NULL,
         is_multi_sku INTEGER DEFAULT 0,
         FOREIGN KEY (location_id) REFERENCES locations (location_id)
       )
     ''');
+    try {
+      await db.execute('ALTER TABLE pallets ADD COLUMN rfid_epc TEXT');
+    } catch (_) {}
 
     // 4. Bảng Mặt hàng cụ thể gắn thẻ RFID Chip (items)
     await db.execute('''
@@ -383,6 +450,23 @@ class DatabaseService {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> insertProducts(List<Product> prods) async {
+    if (prods.isEmpty) return;
+    final db = await database;
+    final batch = db.batch();
+    for (final p in prods) {
+      batch.insert('products', {
+        'product_id': p.productId,
+        'sku': p.sku,
+        'product_name': p.productName,
+        'unit': p.unit,
+        'category': p.category,
+        'description': p.description,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<int> deleteProduct(String productId) async {
     final db = await database;
     return await db.delete('products', where: 'product_id = ? OR sku = ?', whereArgs: [productId, productId]);
@@ -402,6 +486,7 @@ class DatabaseService {
       zone: m['zone'] as String,
       shelf: m['shelf'] as String,
       level: m['level'] as String,
+      maxPalletCapacity: (m['max_pallet_capacity'] as int?) ?? 1,
       currentPallets: (m['current_pallets'] as int?) ?? 0,
     )).toList();
   }
@@ -414,25 +499,99 @@ class DatabaseService {
       'zone': l.zone,
       'shelf': l.shelf,
       'level': l.level,
+      'max_pallet_capacity': l.maxPalletCapacity,
       'current_pallets': l.currentPallets,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<void> deleteLocation(String locationId) async {
+  Future<void> deleteLocation(String locationIdOrCode) async {
     final db = await database;
-    await db.delete('locations', where: 'location_id = ?', whereArgs: [locationId]);
+    final clean = locationIdOrCode.trim().toUpperCase();
+    await db.delete(
+      'locations',
+      where: 'location_id = ? OR location_code = ? OR UPPER(location_code) = ?',
+      whereArgs: [locationIdOrCode, locationIdOrCode, clean],
+    );
+  }
+
+  Future<File?> _getPalletBackupFile() async {
+    final isTest = Platform.environment.containsKey('FLUTTER_TEST');
+    if (isTest) return null;
+    try {
+      final dbDir = await getDatabaseDirectory();
+      return File(p.join(dbDir, 'pallets_permanent_master.json'));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> savePalletsBackup(List<Pallet> pallets) async {
+    try {
+      final file = await _getPalletBackupFile();
+      if (file == null) return;
+      final list = pallets.map((p) => {
+        'pallet_id': p.palletId,
+        'pallet_code': p.palletCode,
+        'rfid_epc': p.rfidEpc,
+        'location_id': p.locationId,
+        'inbound_time': p.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+        'is_multi_sku': p.isMultiSku ? 1 : 0,
+      }).toList();
+      await file.parent.create(recursive: true);
+      await file.writeAsString(jsonEncode(list), flush: true);
+      debugPrint('Saved ${pallets.length} pallets to permanent JSON backup: ${file.path}');
+    } catch (e) {
+      debugPrint('Error saving pallets backup: $e');
+    }
+  }
+
+  Future<List<Pallet>> loadPalletsBackup() async {
+    try {
+      final file = await _getPalletBackupFile();
+      if (file == null || !file.existsSync()) return [];
+      final content = await file.readAsString();
+      if (content.trim().isEmpty) return [];
+      final decoded = jsonDecode(content) as List<dynamic>;
+      return decoded.map((m) {
+        final map = m as Map<String, dynamic>;
+        final inbTimeStr = map['inbound_time'] as String?;
+        DateTime inbTime = DateTime.now();
+        if (inbTimeStr != null && inbTimeStr.isNotEmpty) {
+          inbTime = DateTime.tryParse(inbTimeStr) ?? DateTime.now();
+        }
+        return Pallet(
+          palletId: (map['pallet_id'] as String?) ?? 'PAL-${map['pallet_code']}',
+          palletCode: (map['pallet_code'] as String?) ?? '',
+          rfidEpc: map['rfid_epc'] as String?,
+          locationId: map['location_id'] as String?,
+          inboundTime: inbTime,
+          isMultiSku: map['is_multi_sku'] == 1 || map['is_multi_sku'] == true,
+        );
+      }).where((p) => p.palletCode.isNotEmpty).toList();
+    } catch (e) {
+      debugPrint('Error loading pallets backup: $e');
+      return [];
+    }
   }
 
   Future<List<Pallet>> getPallets() async {
     final db = await database;
     final maps = await db.query('pallets');
-    return maps.map((m) => Pallet(
-      palletId: m['pallet_id'] as String,
-      palletCode: m['pallet_code'] as String,
-      locationId: m['location_id'] as String?,
-      inboundTime: DateTime.parse(m['inbound_time'] as String),
-      isMultiSku: (m['is_multi_sku'] as int?) == 1,
-    )).toList();
+    return maps.map((m) {
+      final inbTimeStr = m['inbound_time'] as String?;
+      DateTime inbTime = DateTime.now();
+      if (inbTimeStr != null && inbTimeStr.isNotEmpty) {
+        inbTime = DateTime.tryParse(inbTimeStr) ?? DateTime.now();
+      }
+      return Pallet(
+        palletId: m['pallet_id'] as String,
+        palletCode: m['pallet_code'] as String,
+        rfidEpc: m['rfid_epc'] as String?,
+        locationId: m['location_id'] as String?,
+        inboundTime: inbTime,
+        isMultiSku: (m['is_multi_sku'] as int?) == 1,
+      );
+    }).toList();
   }
 
   Future<void> insertPallet(Pallet pallet) async {
@@ -440,6 +599,7 @@ class DatabaseService {
     await db.insert('pallets', {
       'pallet_id': pallet.palletId,
       'pallet_code': pallet.palletCode,
+      'rfid_epc': pallet.rfidEpc,
       'location_id': pallet.locationId,
       'inbound_time': pallet.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'is_multi_sku': pallet.isMultiSku ? 1 : 0,
@@ -453,6 +613,16 @@ class DatabaseService {
       {'location_id': locationId},
       where: 'pallet_id = ?',
       whereArgs: [palletId],
+    );
+  }
+
+  Future<void> deletePallet(String identifier) async {
+    final db = await database;
+    final clean = identifier.trim().toUpperCase();
+    await db.delete(
+      'pallets',
+      where: 'pallet_id = ? OR pallet_code = ? OR pallet_id = ? OR UPPER(pallet_code) = ?',
+      whereArgs: [identifier, identifier, 'PAL-$clean', clean],
     );
   }
 
@@ -500,17 +670,66 @@ class DatabaseService {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<void> updateItemLocationAndPallet(String epc, String? locationId, String? palletId) async {
+  Future<void> insertItems(List<Item> items) async {
+    if (items.isEmpty) return;
     final db = await database;
+    final batch = db.batch();
+    for (final item in items) {
+      batch.insert('items', {
+        'item_id': item.itemId,
+        'product_id': item.productId,
+        'sku': item.sku,
+        'product_name': item.productName,
+        'serial_number': item.serialNumber,
+        'epc': item.epc,
+        'status': item.status.code,
+        'order_no': item.orderNo,
+        'pallet_id': item.palletId,
+        'location_id': item.locationId,
+        'inbound_time': item.inboundTime?.toIso8601String(),
+        'allocated_time': item.allocatedTime?.toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> updateItemLocationAndPallet(String epc, String? locationId, String? palletId, {String? status}) async {
+    final db = await database;
+    final Map<String, dynamic> data = {
+      'location_id': locationId,
+      'pallet_id': palletId,
+    };
+    if (status != null) {
+      data['status'] = status;
+    }
     await db.update(
       'items',
-      {
-        'location_id': locationId,
-        'pallet_id': palletId,
-      },
+      data,
       where: 'epc = ?',
       whereArgs: [epc],
     );
+  }
+
+  Future<void> updateItemsLocationAndPallet(List<String> epcs, String? locationId, String? palletId, {String? status}) async {
+    if (epcs.isEmpty) return;
+    final db = await database;
+    final batch = db.batch();
+    final Map<String, dynamic> data = {
+      'location_id': locationId,
+      'pallet_id': palletId,
+    };
+    if (status != null) {
+      data['status'] = status;
+    }
+    for (final epc in epcs) {
+      batch.update(
+        'items',
+        data,
+        where: 'epc = ?',
+        whereArgs: [epc],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<void> updateItemStatus(String epc, ItemStatus status) async {
@@ -665,6 +884,25 @@ class DatabaseService {
     });
   }
 
+  Future<void> enqueueSyncBatch(List<Map<String, dynamic>> items) async {
+    if (items.isEmpty) return;
+    final db = await database;
+    final batch = db.batch();
+    final nowStr = DateTime.now().toIso8601String();
+    for (final it in items) {
+      batch.insert('sync_queue', {
+        'table_name': it['table_name'],
+        'record_id': it['record_id'],
+        'action': it['action'],
+        'payload': it['payload'] is String ? it['payload'] : jsonEncode(it['payload']),
+        'created_at': nowStr,
+        'status': 0,
+        'retry_count': 0,
+      });
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<List<Map<String, dynamic>>> getPendingSyncItems({int limit = 100}) async {
     final db = await database;
     return await db.query(
@@ -714,6 +952,12 @@ class DatabaseService {
     await db.delete('inbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
     await db.delete('inbound_orders', where: 'inbound_order_id = ?', whereArgs: [orderId]);
     await db.delete('items', where: 'order_no = ?', whereArgs: [orderId]);
+  }
+
+  Future<void> deleteOutboundOrder(String orderId) async {
+    final db = await database;
+    await db.delete('outbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
+    await db.delete('outbound_orders', where: 'outbound_order_id = ?', whereArgs: [orderId]);
   }
 
   // --- USER QUERIES ---

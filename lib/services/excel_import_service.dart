@@ -111,6 +111,35 @@ class ExcelImportService {
     }
   }
 
+  String _normalizeHeader(String input) {
+    String s = input.trim().toLowerCase();
+    const map = {
+      'á': 'a', 'à': 'a', 'ả': 'a', 'ã': 'a', 'ạ': 'a',
+      'ă': 'a', 'ắ': 'a', 'ằ': 'a', 'ẳ': 'a', 'ẵ': 'a', 'ặ': 'a',
+      'â': 'a', 'ấ': 'a', 'ầ': 'a', 'ẩ': 'a', 'ẫ': 'a', 'ậ': 'a',
+      'é': 'e', 'è': 'e', 'ẻ': 'e', 'ẽ': 'e', 'ẹ': 'e',
+      'ê': 'e', 'ế': 'e', 'ề': 'e', 'ể': 'e', 'ễ': 'e', 'ệ': 'e',
+      'í': 'i', 'ì': 'i', 'ỉ': 'i', 'ĩ': 'i', 'ị': 'i',
+      'ó': 'o', 'ò': 'o', 'ỏ': 'o', 'õ': 'o', 'ọ': 'o',
+      'ô': 'o', 'ố': 'o', 'ồ': 'o', 'ổ': 'o', 'ỗ': 'o', 'ộ': 'o',
+      'ơ': 'o', 'ớ': 'o', 'ờ': 'o', 'ở': 'o', 'ỡ': 'o', 'ợ': 'o',
+      'ú': 'u', 'ù': 'u', 'ủ': 'u', 'ũ': 'u', 'ụ': 'u',
+      'ư': 'u', 'ứ': 'u', 'ừ': 'u', 'ử': 'u', 'ữ': 'u', 'ự': 'u',
+      'ý': 'y', 'ỳ': 'y', 'ỷ': 'y', 'ỹ': 'y', 'ỵ': 'y',
+      'đ': 'd',
+    };
+    final buffer = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      final char = s[i];
+      buffer.write(map[char] ?? char);
+    }
+    return buffer.toString();
+  }
+
+  (List<Map<String, dynamic>>, int) parseBytes(Uint8List bytes, {bool isCsv = false}) {
+    return isCsv ? _parseGoodsReceiveCsv(bytes) : _parseGoodsReceiveXlsx(bytes);
+  }
+
   (List<Map<String, dynamic>>, int) _parseGoodsReceiveXlsx(Uint8List bytes) {
     final excel = Excel.decodeBytes(bytes);
     if (excel.tables.isEmpty) {
@@ -125,102 +154,12 @@ class ExcelImportService {
       throw Exception('Sheet "$sheetName" không có dữ liệu.');
     }
 
-    int cartonCol = 0;
-    int serialCol = 1;
-    int? barcodeCol;
-    int nameCol = 2;
-    int startRow = 0;
-
-    // Kiểm tra dòng tiêu đề
-    final firstRow = rows.first;
-    final headers = firstRow.map((c) => _cellToString(c?.value).toLowerCase()).toList();
-
-    bool hasHeader = false;
-    for (int i = 0; i < headers.length; i++) {
-      final h = headers[i].trim();
-      if (h.contains('carton') || h.contains('thung') || h.contains('thùng') || h.contains('box') || h.contains('pallet')) {
-        cartonCol = i;
-        hasHeader = true;
-      } else if (h.contains('serial') || h.contains('epc') || h.contains('chip')) {
-        serialCol = i;
-        hasHeader = true;
-      } else if (h.contains('barcode') || h.contains('sku') || h.contains('mã sp') || h.contains('mã hàng')) {
-        barcodeCol = i;
-        hasHeader = true;
-      } else if (h.contains('name') || h.contains('tên') || h.contains('ten') || h.contains('product') || h.contains('sản phẩm')) {
-        nameCol = i;
-        hasHeader = true;
-      }
+    final List<List<String>> rawGrid = [];
+    for (final row in rows) {
+      rawGrid.add(row.map((c) => _cellToString(c?.value)).toList());
     }
 
-    if (hasHeader) {
-      startRow = 1;
-    }
-
-    final Map<String, Map<String, dynamic>> cartonMap = {};
-    int validDataRows = 0;
-
-    for (int r = startRow; r < rows.length; r++) {
-      final row = rows[r];
-      if (row.isEmpty) continue;
-
-      final carton = cartonCol < row.length ? _cellToString(row[cartonCol]?.value).trim() : '';
-      final serial = serialCol < row.length ? _cellToString(row[serialCol]?.value).trim() : '';
-      final barcode = (barcodeCol != null && barcodeCol < row.length) ? _cellToString(row[barcodeCol]?.value).trim() : '';
-      final name = nameCol < row.length ? _cellToString(row[nameCol]?.value).trim() : '';
-
-      if (carton.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
-        continue;
-      }
-
-      validDataRows++;
-
-      final effectiveCarton = carton.isNotEmpty ? carton : 'CARTON-DEFAULT';
-      final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
-
-      final groupKey = effectiveCarton;
-
-      if (!cartonMap.containsKey(groupKey)) {
-        // Tự động sinh mã Barcode 128 Hex chuẩn 16 ký tự ngay khi nạp danh sách
-        final generatedBarcode = (barcode.isNotEmpty && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(barcode))
-            ? barcode.toUpperCase()
-            : WarehouseRepository().generateHexBarcode128();
-
-        cartonMap[groupKey] = {
-          'cartonBox': effectiveCarton,
-          'productCode': generatedBarcode,
-          'productName': effectiveName,
-          'quantity': 0,
-          'serials': <String>[],
-          'serialItems': <Map<String, dynamic>>[],
-        };
-      }
-
-      final entry = cartonMap[groupKey]!;
-      final effectiveBarcode = entry['productCode'] as String;
-
-      if (serial.isNotEmpty) {
-        final serialsList = entry['serials'] as List<String>;
-        if (!serialsList.contains(serial)) {
-          serialsList.add(serial);
-          entry['quantity'] = serialsList.length;
-          (entry['serialItems'] as List<Map<String, dynamic>>).add({
-            'serial': serial,
-            'barcode': effectiveBarcode,
-            'name': effectiveName,
-            'carton': effectiveCarton,
-          });
-        }
-      } else {
-        entry['quantity'] = (entry['quantity'] as int) + 1;
-      }
-    }
-
-    if (cartonMap.isEmpty) {
-      throw Exception('Không tìm thấy dòng dữ liệu hợp lệ nào trong file Excel.');
-    }
-
-    return (cartonMap.values.toList(), validDataRows);
+    return _processRawRows(rawGrid);
   }
 
   (List<Map<String, dynamic>>, int) _parseGoodsReceiveCsv(Uint8List bytes) {
@@ -230,28 +169,77 @@ class ExcelImportService {
       throw Exception('Tệp CSV rỗng.');
     }
 
-    int cartonCol = 0;
-    int serialCol = 1;
+    final List<List<String>> rawGrid = [];
+    for (final line in lines) {
+      if (line.trim().isEmpty) continue;
+      rawGrid.add(line.split(RegExp(r',|\t|;')).map((c) => c.trim()).toList());
+    }
+
+    return _processRawRows(rawGrid);
+  }
+
+  (List<Map<String, dynamic>>, int) _processRawRows(List<List<String>> rawGrid) {
+    if (rawGrid.isEmpty) {
+      throw Exception('Không có dữ liệu trong tệp.');
+    }
+
+    int? cartonCol;
+    int? serialCol;
     int? barcodeCol;
-    int nameCol = 2;
+    int? nameCol;
     int startRow = 0;
 
-    final firstLine = lines.first.split(RegExp(r',|\t|;'));
-    final headers = firstLine.map((c) => c.trim().toLowerCase()).toList();
+    final firstRow = rawGrid.first;
+    final headers = firstRow.map((c) => _normalizeHeader(c)).toList();
 
     bool hasHeader = false;
     for (int i = 0; i < headers.length; i++) {
-      final h = headers[i].trim();
-      if (h.contains('carton') || h.contains('thung') || h.contains('thùng') || h.contains('box') || h.contains('pallet')) {
-        cartonCol = i;
-        hasHeader = true;
-      } else if (h.contains('serial') || h.contains('epc') || h.contains('chip')) {
+      final h = headers[i];
+      if (h.isEmpty) continue;
+
+      // 1. Kiểm tra cột mã Thẻ RFID / EPC / Chip / Serial
+      if (h.contains('epc') ||
+          h.contains('rfid') ||
+          h.contains('serial') ||
+          h.contains('chip') ||
+          h.contains('ma the') ||
+          h.contains('tag') ||
+          h.contains('tid')) {
         serialCol = i;
         hasHeader = true;
-      } else if (h.contains('barcode') || h.contains('sku') || h.contains('mã sp') || h.contains('mã hàng')) {
+      }
+      // 2. Kiểm tra cột Thùng hàng / Kiện / Box / Pallet
+      else if (h.contains('carton') ||
+          h.contains('thung') ||
+          h.contains('box') ||
+          h.contains('kien') ||
+          h.contains('pallet') ||
+          h.contains('hop')) {
+        cartonCol = i;
+        hasHeader = true;
+      }
+      // 3. Kiểm tra cột Mã sản phẩm / SKU / Barcode / Mã hàng (ưu tiên trước tên)
+      else if (h.contains('barcode') ||
+          h.contains('sku') ||
+          h.contains('ma sp') ||
+          h.contains('ma san pham') ||
+          h.contains('ma hang') ||
+          h.contains('ma vt') ||
+          h.contains('ma vach') ||
+          h.contains('item code') ||
+          h.contains('product code') ||
+          (h.startsWith('ma') && !h.contains('the') && !h.contains('chip'))) {
         barcodeCol = i;
         hasHeader = true;
-      } else if (h.contains('name') || h.contains('tên') || h.contains('ten') || h.contains('product') || h.contains('sản phẩm')) {
+      }
+      // 4. Kiểm tra cột Tên sản phẩm / Tên hàng
+      else if (h.contains('ten') ||
+          h.contains('name') ||
+          h.contains('mo ta') ||
+          h.contains('dien giai') ||
+          h.contains('description') ||
+          (h.contains('san pham') && !h.contains('ma')) ||
+          (h.contains('product') && !h.contains('code'))) {
         nameCol = i;
         hasHeader = true;
       }
@@ -259,20 +247,44 @@ class ExcelImportService {
 
     if (hasHeader) {
       startRow = 1;
+    } else {
+      // Tự động suy luận cột nếu không có tiêu đề
+      for (int i = 0; i < firstRow.length; i++) {
+        final val = firstRow[i].trim();
+        if (RegExp(r'^[0-9A-Fa-f]{16,32}$').hasMatch(val) || val.toUpperCase().startsWith('E280')) {
+          serialCol ??= i;
+        }
+      }
+      serialCol ??= (firstRow.length > 1 ? 1 : 0);
+      nameCol ??= (firstRow.length > 2 ? 2 : (serialCol == 0 ? 1 : 0));
     }
 
+    // Default fallback cho serialCol và nameCol nếu chưa khớp
+    if (serialCol == null) {
+      if (headers.length >= 3) {
+        serialCol = 1;
+        nameCol ??= 2;
+      } else if (headers.length == 2) {
+        serialCol = 0;
+        nameCol ??= 1;
+      } else {
+        serialCol = 0;
+      }
+    }
+    nameCol ??= (serialCol == 1 ? 2 : 1);
+
     final Map<String, Map<String, dynamic>> cartonMap = {};
+    final Map<String, String> nameToBarcodeMap = {};
     int validDataRows = 0;
 
-    for (int r = startRow; r < lines.length; r++) {
-      final line = lines[r].trim();
-      if (line.isEmpty) continue;
-      final row = line.split(RegExp(r',|\t|;'));
+    for (int r = startRow; r < rawGrid.length; r++) {
+      final row = rawGrid[r];
+      if (row.isEmpty) continue;
 
-      final carton = cartonCol < row.length ? row[cartonCol].trim() : '';
-      final serial = serialCol < row.length ? row[serialCol].trim() : '';
+      final carton = (cartonCol != null && cartonCol < row.length) ? row[cartonCol].trim() : '';
+      final serial = (serialCol < row.length) ? row[serialCol].trim() : '';
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
-      final name = nameCol < row.length ? row[nameCol].trim() : '';
+      final name = (nameCol < row.length) ? row[nameCol].trim() : '';
 
       if (carton.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
         continue;
@@ -280,19 +292,28 @@ class ExcelImportService {
 
       validDataRows++;
 
-      final effectiveCarton = carton.isNotEmpty ? carton : 'CARTON-DEFAULT';
+      final effectiveCarton = carton.isNotEmpty ? carton : 'KIỆN-CHUNG';
       final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
+
+      // Xác định SKU/Barcode riêng cho từng dòng sản phẩm
+      String rowBarcode = barcode;
+      if (rowBarcode.isEmpty) {
+        if (nameToBarcodeMap.containsKey(effectiveName)) {
+          rowBarcode = nameToBarcodeMap[effectiveName]!;
+        } else {
+          rowBarcode = WarehouseRepository().generateHexBarcode128();
+          nameToBarcodeMap[effectiveName] = rowBarcode;
+        }
+      } else if (!RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(rowBarcode)) {
+        rowBarcode = rowBarcode.toUpperCase();
+      }
 
       final groupKey = effectiveCarton;
 
       if (!cartonMap.containsKey(groupKey)) {
-        final generatedBarcode = (barcode.isNotEmpty && RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(barcode))
-            ? barcode.toUpperCase()
-            : WarehouseRepository().generateHexBarcode128();
-
         cartonMap[groupKey] = {
           'cartonBox': effectiveCarton,
-          'productCode': generatedBarcode,
+          'productCode': rowBarcode,
           'productName': effectiveName,
           'quantity': 0,
           'serials': <String>[],
@@ -301,7 +322,6 @@ class ExcelImportService {
       }
 
       final entry = cartonMap[groupKey]!;
-      final effectiveBarcode = entry['productCode'] as String;
 
       if (serial.isNotEmpty) {
         final serialsList = entry['serials'] as List<String>;
@@ -310,7 +330,7 @@ class ExcelImportService {
           entry['quantity'] = serialsList.length;
           (entry['serialItems'] as List<Map<String, dynamic>>).add({
             'serial': serial,
-            'barcode': effectiveBarcode,
+            'barcode': rowBarcode,
             'name': effectiveName,
             'carton': effectiveCarton,
           });
@@ -321,7 +341,34 @@ class ExcelImportService {
     }
 
     if (cartonMap.isEmpty) {
-      throw Exception('Không tìm thấy dòng dữ liệu hợp lệ nào trong file CSV.');
+      throw Exception('Không tìm thấy dòng dữ liệu hợp lệ nào trong file.');
+    }
+
+    // Cập nhật tóm tắt productName và productCode cho từng thùng dựa trên tất cả các mặt hàng bên trong
+    for (final entry in cartonMap.values) {
+      final sItems = (entry['serialItems'] as List<Map<String, dynamic>>);
+      if (sItems.isEmpty) continue;
+
+      final nameCounts = <String, int>{};
+      for (final it in sItems) {
+        final pName = (it['name'] ?? '').toString().trim();
+        if (pName.isNotEmpty) {
+          nameCounts[pName] = (nameCounts[pName] ?? 0) + 1;
+        }
+      }
+
+      if (nameCounts.length == 1) {
+        entry['productName'] = nameCounts.keys.first;
+      } else if (nameCounts.length > 1) {
+        entry['productName'] = nameCounts.entries.map((e) => '${e.key} (${e.value})').join(' • ');
+      }
+
+      final uniqueSkus = sItems.map((e) => (e['barcode'] ?? '').toString().trim()).where((s) => s.isNotEmpty).toSet().toList();
+      if (uniqueSkus.length == 1) {
+        entry['productCode'] = uniqueSkus.first;
+      } else if (uniqueSkus.length > 1) {
+        entry['productCode'] = uniqueSkus.join(', ');
+      }
     }
 
     return (cartonMap.values.toList(), validDataRows);

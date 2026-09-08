@@ -5,6 +5,7 @@ import 'services/uhf_service.dart';
 import 'services/supabase_sync_service.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
+import 'services/warehouse_repository.dart';
 import 'theme/eye_care_theme.dart';
 
 void main() async {
@@ -22,6 +23,8 @@ void main() async {
   ApiService().init();
   // Khởi tạo Auth service (phiên làm việc & tài khoản offline)
   await AuthService().init();
+  // Nạp toàn bộ CSDL Pallet, vị trí, danh mục vào RAM trước khi hiển thị UI
+  await WarehouseRepository().ensureInitialized();
   runApp(const RfidWmsApp());
 }
 

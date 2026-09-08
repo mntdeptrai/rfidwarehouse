@@ -31,7 +31,6 @@ class WarehouseRepository extends ChangeNotifier {
     try {
       final dbProducts = await _dbService.getProducts();
       final dbLocations = await _dbService.getLocations();
-      final dbPallets = await _dbService.getPallets();
       final dbItems = await _dbService.getItems();
       final dbInboundOrders = await _dbService.getInboundOrders();
       final dbOutboundOrders = await _dbService.getOutboundOrders();
@@ -49,23 +48,55 @@ class WarehouseRepository extends ChangeNotifier {
         'FALSE',
       };
 
-      // Chỉ xóa dữ liệu rác do đầu đọc gửi lệnh bị ghi nhầm thành sản phẩm
-      // KHÔNG xóa các mã EPC/đơn hàng nhập từ file Excel (ABCDEF..., CARTONTEST..., PRODUCT TEST...)
+      // Dọn dẹp triệt để dữ liệu rác, lệnh scanner và các dữ liệu mẫu kiểm thử cũ
       bool isTestProduct(Product p) {
         final pSku = p.sku.toUpperCase();
         final pId = p.productId.toUpperCase();
+        final pName = p.productName.toUpperCase();
         return bogusCommandNames.contains(pId) ||
-            bogusCommandNames.contains(pSku);
+            bogusCommandNames.contains(pSku) ||
+            pSku == '7A0B5FD0B4F31DD5' ||
+            pSku.startsWith('SKU-POLO') ||
+            pSku.startsWith('SKU-JEAN') ||
+            pSku.startsWith('SKU-SNEAKER') ||
+            pSku.startsWith('SKU-ELEC-') ||
+            pSku.startsWith('SKU-TEXT-') ||
+            pSku.startsWith('SKU-PHARM-') ||
+            pSku.contains('SAMPLE') ||
+            pSku.contains('TEST') ||
+            pId == 'PROD-001' ||
+            pId == 'PROD-002' ||
+            pId.startsWith('PROD-') ||
+            pName.contains('ÁO POLO RFID') ||
+            pName.contains('SAMPLE') ||
+            pName.contains('TEST') ||
+            pName.contains('MẪU');
       }
 
       bool isTestItem(Item i) {
         final epc = i.epc.toUpperCase();
         final sku = i.sku.toUpperCase();
         final orderNo = (i.orderNo ?? '').toUpperCase();
-        // Chỉ xóa: lệnh scanner bị ghi nhầm + chip phần cứng kiểm thử cố định
+        final itemId = i.itemId.toUpperCase();
+        final pName = i.productName.toUpperCase();
         return epc == 'E28011600000000000099888' ||
             epc == 'E28032F9666D00012F50' ||
             epc == 'E2803295B8FA00017846' ||
+            epc.startsWith('ABCDEF') ||
+            epc.startsWith('E280119120000000000000') ||
+            itemId.startsWith('ITEM-SAMPLE-') ||
+            itemId.startsWith('ITEM-TEST-') ||
+            itemId.startsWith('ITEM-00') ||
+            orderNo == 'CARTONTEST0001' ||
+            orderNo.startsWith('THUNG-') ||
+            orderNo.startsWith('INB-2026-') ||
+            orderNo == 'INB-001' ||
+            pName.contains('ÁO POLO RFID') ||
+            pName.contains('SAMPLE') ||
+            pName.contains('TEST') ||
+            pName.contains('MẪU') ||
+            sku.contains('SAMPLE') ||
+            sku.contains('TEST') ||
             bogusCommandNames.contains(sku) ||
             bogusCommandNames.contains(orderNo);
       }
@@ -80,9 +111,29 @@ class WarehouseRepository extends ChangeNotifier {
           await _dbService.deleteItem(i.epc);
         }
       }
+      for (final o in dbInboundOrders) {
+        if (o.orderNo == 'CARTONTEST0001' ||
+            o.orderNo.startsWith('THUNG-') ||
+            o.orderNo.startsWith('INB-2026-') ||
+            o.orderNo == 'INB-001') {
+          await _dbService.deleteInboundOrder(o.inboundOrderId);
+        }
+      }
+      for (final o in dbOutboundOrders) {
+        if (o.poNo == 'PO-2026-001' ||
+            o.poNo == 'PO-2026-002' ||
+            o.poNo == 'PO-2026-003' ||
+            o.poNo == 'OUT-001') {
+          await _dbService.deleteOutboundOrder(o.outboundOrderId);
+        }
+      }
 
       final cleanProducts = await _dbService.getProducts();
       final cleanItems = await _dbService.getItems();
+      final cleanPallets = await _dbService.getPallets();
+      final backupPallets = await _dbService.loadPalletsBackup();
+      final cleanInboundOrders = await _dbService.getInboundOrders();
+      final cleanOutboundOrders = await _dbService.getOutboundOrders();
       final dbUsers = await _dbService.getUsers();
       final dbCustomers = await _dbService.getCustomers();
       final dbDeliveryNotes = await _dbService.getDeliveryNotes();
@@ -94,29 +145,54 @@ class WarehouseRepository extends ChangeNotifier {
       _locations.clear();
       _locations.addAll(dbLocations);
 
+      // KHÔNG BAO GIỜ XÓA PALLET ĐÃ KHAI BÁO CỦA NGƯỜI DÙNG: Khai báo 1 lần dùng vĩnh viễn
+      // Đồng bộ 2 lớp: SQLite B-Tree Index + Permanent Master Backup File
+      final Map<String, Pallet> mergedPallets = {};
+      for (final p in backupPallets) {
+        mergedPallets[p.palletCode.toUpperCase()] = p;
+      }
+      for (final p in cleanPallets) {
+        final existing = mergedPallets[p.palletCode.toUpperCase()];
+        if (existing != null && (p.rfidEpc == null || p.rfidEpc!.isEmpty) && existing.rfidEpc != null) {
+          p.rfidEpc = existing.rfidEpc;
+        }
+        mergedPallets[p.palletCode.toUpperCase()] = p;
+      }
+
+      // Đảm bảo SQLite có đầy đủ các Pallet đã được lưu
+      for (final p in mergedPallets.values) {
+        await _dbService.insertPallet(p);
+      }
+
       _pallets.clear();
-      _pallets.addAll(dbPallets);
+      _pallets.addAll(mergedPallets.values);
+      await _dbService.savePalletsBackup(_pallets);
+
+      // Xóa tất cả các thẻ pendingInbound cũ còn sót lại từ các lần test trước
+      for (final orphan in cleanItems.where((i) => i.status == ItemStatus.pendingInbound || isTestItem(i))) {
+        await _dbService.deleteItem(orphan.epc);
+      }
 
       _items.clear();
-      _items.addAll(cleanItems.where((i) => !isTestItem(i)));
+      _items.addAll(cleanItems.where((i) => !isTestItem(i) && i.status != ItemStatus.pendingInbound));
       for (final p in _pallets) {
         p.itemIds.clear();
         p.itemIds.addAll(_items.where((i) => i.palletId == p.palletId).map((i) => i.itemId));
       }
 
       _inboundOrders.clear();
-      _inboundOrders.addAll(dbInboundOrders);
+      _inboundOrders.addAll(cleanInboundOrders.where((o) =>
+          o.orderNo != 'CARTONTEST0001' &&
+          !o.orderNo.startsWith('THUNG-') &&
+          !o.orderNo.startsWith('INB-2026-') &&
+          o.orderNo != 'INB-001'));
 
       _outboundOrders.clear();
-      _outboundOrders.addAll(dbOutboundOrders);
-
-      // Tự động dọn dẹp thẻ mồ côi chưa nhập kho không thuộc bất kỳ đơn nhập nào
-      final activeInboundOrderNos = _inboundOrders.map((o) => o.orderNo.toUpperCase()).toSet();
-      final orphanPending = _items.where((i) => i.status == ItemStatus.pendingInbound && (i.orderNo == null || !activeInboundOrderNos.contains(i.orderNo!.toUpperCase()))).toList();
-      for (final orphan in orphanPending) {
-        _items.remove(orphan);
-        await _dbService.deleteItem(orphan.epc);
-      }
+      _outboundOrders.addAll(cleanOutboundOrders.where((o) =>
+          o.poNo != 'PO-2026-001' &&
+          o.poNo != 'PO-2026-002' &&
+          o.poNo != 'PO-2026-003' &&
+          o.poNo != 'OUT-001'));
 
       _users.clear();
       _users.addAll(dbUsers);
@@ -484,6 +560,70 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> insertDirectItems(List<Item> items) async {
+    if (items.isEmpty) return;
+    final epcSet = items.map((i) => i.epc.toUpperCase()).toSet();
+    _items.removeWhere((i) => epcSet.contains(i.epc.toUpperCase()));
+    _items.addAll(items);
+    await _dbService.insertItems(items);
+
+    final syncRecords = items.map((item) => {
+      'table_name': 'items',
+      'record_id': item.itemId,
+      'action': 'INSERT',
+      'payload': {
+        'itemId': item.itemId,
+        'productId': item.productId,
+        'sku': item.sku,
+        'productName': item.productName,
+        'serialNumber': item.serialNumber,
+        'epc': item.epc,
+        'status': item.status.code,
+        'orderNo': item.orderNo,
+        'palletId': item.palletId,
+        'locationId': item.locationId,
+        'inboundTime': item.inboundTime?.toIso8601String(),
+      },
+    }).toList();
+    await _dbService.enqueueSyncBatch(syncRecords);
+
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<void> addProductsBatch(List<Product> newProds) async {
+    if (newProds.isEmpty) return;
+    final toAdd = <Product>[];
+    for (final p in newProds) {
+      final existing = _products.where((ex) => ex.productId == p.productId || ex.sku == p.sku).firstOrNull;
+      if (existing == null) {
+        toAdd.add(p);
+      }
+    }
+    if (toAdd.isEmpty) return;
+
+    await _dbService.insertProducts(toAdd);
+    _products.addAll(toAdd);
+
+    final syncRecords = toAdd.map((p) => {
+      'table_name': 'products',
+      'record_id': p.productId,
+      'action': 'INSERT',
+      'payload': {
+        'productId': p.productId,
+        'sku': p.sku,
+        'productName': p.productName,
+        'unit': p.unit,
+        'category': p.category,
+        'description': p.description,
+      },
+    }).toList();
+    await _dbService.enqueueSyncBatch(syncRecords);
+
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
   Future<void> addOutboundOrder(OutboundOrder order) async {
     await _dbService.insertOutboundOrder(order);
     _outboundOrders.add(order);
@@ -537,22 +677,97 @@ class WarehouseRepository extends ChangeNotifier {
   }
 
   Future<void> addLocation(Location location) async {
-    await _dbService.insertLocation(location);
+    _locations.removeWhere((l) =>
+        l.locationCode.toUpperCase() == location.locationCode.toUpperCase() ||
+        l.locationId.toUpperCase() == location.locationId.toUpperCase());
     _locations.add(location);
+    await _dbService.insertLocation(location);
     await _syncDirectOrQueue(
       tableName: 'locations',
       recordId: location.locationId,
       action: 'INSERT',
       payload: {
-        'locationId': location.locationId,
-        'locationCode': location.locationCode,
+        'location_id': location.locationId,
+        'location_code': location.locationCode,
         'zone': location.zone,
         'shelf': location.shelf,
         'level': location.level,
+        'max_pallet_capacity': location.maxPalletCapacity,
+        'current_pallets': location.currentPallets,
       },
     );
     _triggerBackgroundSync();
     notifyListeners();
+  }
+
+  Future<void> deleteLocation(String locationIdOrCode) async {
+    final clean = locationIdOrCode.trim().toUpperCase();
+    _locations.removeWhere((l) =>
+        l.locationCode.toUpperCase() == clean ||
+        l.locationId.toUpperCase() == clean);
+    await _dbService.deleteLocation(clean);
+    await _syncDirectOrQueue(
+      tableName: 'locations',
+      recordId: clean,
+      action: 'DELETE',
+      payload: {'location_id': clean, 'location_code': clean},
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  /// Khởi tạo nhanh sơ đồ kho mẫu gồm Khu A và Khu B (mỗi khu 8-12 ô kệ)
+  Future<int> generateSampleWarehouseLayout() async {
+    final zones = ['Khu A', 'Khu B'];
+    final createdLocs = <Location>[];
+
+    for (final zone in zones) {
+      final prefix = zone.replaceAll('Khu ', '').trim().toUpperCase();
+      for (int s = 1; s <= 2; s++) {
+        final shelfStr = s.toString().padLeft(2, '0');
+        for (int lv = 1; lv <= 3; lv++) {
+          final levelStr = lv.toString().padLeft(2, '0');
+          final code = '$prefix-$shelfStr-$levelStr';
+          if (!_locations.any((l) => l.locationCode.toUpperCase() == code)) {
+            final loc = Location(
+              locationId: 'LOC-$code',
+              locationCode: code,
+              zone: zone,
+              shelf: 'Kệ $shelfStr',
+              level: 'Tầng $lv',
+              maxPalletCapacity: 2,
+              currentPallets: 0,
+            );
+            createdLocs.add(loc);
+            _locations.add(loc);
+            await _dbService.insertLocation(loc);
+          }
+        }
+      }
+    }
+
+    notifyListeners();
+    return createdLocs.length;
+  }
+
+  /// Đếm chính xác số lượng Pallet đang được xếp tại vị trí kệ này
+  int getPalletCountForLocation(Location loc) {
+    final cleanCode = loc.locationCode.trim().toUpperCase();
+    final cleanId = loc.locationId.trim().toUpperCase();
+    return _pallets.where((p) =>
+      p.locationId != null &&
+      (p.locationId!.trim().toUpperCase() == cleanCode || p.locationId!.trim().toUpperCase() == cleanId)
+    ).length;
+  }
+
+  /// Danh sách các Pallet đang nằm tại vị trí kệ này
+  List<Pallet> getPalletsForLocation(Location loc) {
+    final cleanCode = loc.locationCode.trim().toUpperCase();
+    final cleanId = loc.locationId.trim().toUpperCase();
+    return _pallets.where((p) =>
+      p.locationId != null &&
+      (p.locationId!.trim().toUpperCase() == cleanCode || p.locationId!.trim().toUpperCase() == cleanId)
+    ).toList();
   }
 
   Future<void> _syncDirectOrQueue({
@@ -850,6 +1065,289 @@ class WarehouseRepository extends ChangeNotifier {
 
     notifyListeners();
     return pallet;
+  }
+
+  /// Tra cứu xe Pallet theo mã thẻ RFID (EPC) hoặc Hex ASCII của tên Pallet
+  Pallet? findPalletByRfid(String epc) {
+    final clean = epc.trim().toUpperCase();
+    if (clean.isEmpty) return null;
+    for (final p in _pallets) {
+      if (p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == clean) {
+        return p;
+      }
+      if (p.palletCode.toUpperCase() == clean || p.palletId.toUpperCase() == clean) {
+        return p;
+      }
+      // Hex ASCII matching
+      final hexCode = p.palletCode.codeUnits.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join('');
+      if (clean == hexCode || clean.startsWith(hexCode) || (clean.length >= 8 && hexCode.startsWith(clean))) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  /// Tra cứu bất đồng bộ có đối soát trực tiếp với SQLite để chống mất pallet
+  Future<Pallet?> findPalletByRfidAsync(String epc) async {
+    final direct = findPalletByRfid(epc);
+    if (direct != null) return direct;
+
+    try {
+      final dbPallets = await _dbService.getPallets();
+      final clean = epc.trim().toUpperCase();
+      for (final p in dbPallets) {
+        if ((p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == clean) ||
+            p.palletCode.toUpperCase() == clean ||
+            p.palletId.toUpperCase() == clean) {
+          if (!_pallets.any((x) => x.palletId == p.palletId)) {
+            _pallets.add(p);
+            notifyListeners();
+          }
+          return p;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Đăng ký hoặc cập nhật mã thẻ RFID, mã xe Pallet (lưu cố định vĩnh viễn vào Database)
+  Future<void> registerOrUpdatePallet({
+    required String palletCode,
+    required String rfidEpc,
+    String? locationId,
+    String? oldPalletCode,
+  }) async {
+    final cleanCode = palletCode.trim().toUpperCase();
+    final cleanEpc = rfidEpc.trim().toUpperCase();
+    final cleanOldCode = oldPalletCode?.trim().toUpperCase();
+
+    // Nếu sửa đổi tên/mã từ một Pallet cũ đã có
+    if (cleanOldCode != null && cleanOldCode.isNotEmpty && cleanOldCode != cleanCode) {
+      await _dbService.deletePallet(cleanOldCode);
+      _pallets.removeWhere((p) =>
+          p.palletCode.toUpperCase() == cleanOldCode ||
+          p.palletId.toUpperCase() == cleanOldCode ||
+          p.palletId.toUpperCase() == 'PAL-$cleanOldCode');
+
+      // Chuyển quyền sở hữu các Item sang mã Pallet mới
+      for (final item in _items.where((it) => it.palletId == 'PAL-$cleanOldCode' || it.palletId == cleanOldCode)) {
+        item.palletId = 'PAL-$cleanCode';
+        await _dbService.insertItem(item);
+      }
+    }
+
+    final existing = _pallets.where((p) =>
+        p.palletCode.toUpperCase() == cleanCode ||
+        p.palletId.toUpperCase() == cleanCode ||
+        p.palletId.toUpperCase() == 'PAL-$cleanCode').firstOrNull;
+    if (existing != null) {
+      existing.palletCode = cleanCode;
+      existing.rfidEpc = cleanEpc;
+      if (locationId != null) existing.locationId = locationId;
+      await _dbService.insertPallet(existing);
+    } else {
+      final newP = Pallet(
+        palletId: 'PAL-$cleanCode',
+        palletCode: cleanCode,
+        rfidEpc: cleanEpc,
+        locationId: locationId,
+        inboundTime: DateTime.now(),
+      );
+      _pallets.add(newP);
+      await _dbService.insertPallet(newP);
+    }
+
+    // Lưu backup vĩnh viễn
+    await _dbService.savePalletsBackup(_pallets);
+
+    // Đồng bộ lên Supabase nếu có mạng
+    final palToSync = _pallets.firstWhere((p) => p.palletCode.toUpperCase() == cleanCode);
+    await _syncDirectOrQueue(
+      tableName: 'pallets',
+      recordId: palToSync.palletId,
+      action: 'INSERT',
+      payload: {
+        'pallet_id': palToSync.palletId,
+        'pallet_code': palToSync.palletCode,
+        'location_id': palToSync.locationId,
+        'inbound_time': palToSync.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+        'is_multi_sku': palToSync.isMultiSku ? 1 : 0,
+      },
+    );
+
+    notifyListeners();
+  }
+
+  /// Xóa xe Pallet khỏi danh mục (xóa triệt để cả trong Database SQLite, File Backup và Cloud)
+  Future<void> deletePalletFromMaster(String palletCode) async {
+    final clean = palletCode.trim().toUpperCase();
+    _pallets.removeWhere((p) =>
+        p.palletCode.toUpperCase() == clean ||
+        p.palletId.toUpperCase() == clean ||
+        p.palletId.toUpperCase() == 'PAL-$clean');
+
+    // 1. Xóa triệt để khỏi SQLite Database theo cả ID và Code
+    await _dbService.deletePallet(clean);
+
+    // 2. Cập nhật lại file backup vĩnh viễn
+    await _dbService.savePalletsBackup(_pallets);
+
+    // 3. Đồng bộ lệnh xóa lên Supabase Cloud
+    await _syncDirectOrQueue(
+      tableName: 'pallets',
+      recordId: 'PAL-$clean',
+      action: 'DELETE',
+      payload: {'pallet_id': 'PAL-$clean', 'pallet_code': clean},
+    );
+
+    notifyListeners();
+  }
+
+  /// Gán trực tiếp danh sách các Item (theo danh sách mã EPC) vào một Pallet cụ thể
+  Future<Pallet> assignItemsToPallet({
+    required String palletCode,
+    String? rfidEpc,
+    required List<String> itemEpcs,
+  }) async {
+    final cleanPallet = palletCode.trim().toUpperCase();
+    final cleanEpcs = itemEpcs.map((e) => e.trim().toUpperCase()).toSet();
+
+    Pallet pallet = _pallets.firstWhere(
+      (p) => p.palletCode.toUpperCase() == cleanPallet || p.palletId.toUpperCase() == cleanPallet,
+      orElse: () {
+        final newP = Pallet(
+          palletId: 'PAL-$cleanPallet',
+          palletCode: cleanPallet,
+          rfidEpc: rfidEpc,
+          inboundTime: DateTime.now(),
+        );
+        _pallets.add(newP);
+        return newP;
+      },
+    );
+
+    if (rfidEpc != null && rfidEpc.isNotEmpty) {
+      pallet.rfidEpc = rfidEpc.trim().toUpperCase();
+    }
+
+    final updatedEpcs = <String>[];
+    for (var it in _items.toList()) {
+      if (cleanEpcs.contains(it.epc.toUpperCase())) {
+        it.palletId = pallet.palletCode;
+        if (!pallet.itemIds.contains(it.itemId)) {
+          pallet.itemIds.add(it.itemId);
+        }
+        updatedEpcs.add(it.epc);
+      }
+    }
+    if (updatedEpcs.isNotEmpty) {
+      await _dbService.updateItemsLocationAndPallet(updatedEpcs, null, pallet.palletCode);
+    }
+
+    await _dbService.insertPallet(pallet);
+    notifyListeners();
+    return pallet;
+  }
+
+  /// Gán danh sách các thùng hàng (cartonCodes) lên một Pallet cụ thể
+  Future<Pallet> assignCartonsToPallet({
+    required String palletCode,
+    String? rfidEpc,
+    required List<String> cartonCodes,
+  }) async {
+    final cleanPallet = palletCode.trim().toUpperCase();
+    final cleanCartons = cartonCodes.map((c) => c.trim().toUpperCase()).toSet();
+
+    Pallet pallet = _pallets.firstWhere(
+      (p) => p.palletCode.toUpperCase() == cleanPallet || p.palletId.toUpperCase() == cleanPallet,
+      orElse: () {
+        final newP = Pallet(
+          palletId: 'PAL-$cleanPallet-${DateTime.now().millisecondsSinceEpoch}',
+          palletCode: cleanPallet,
+          inboundTime: DateTime.now(),
+        );
+        _pallets.add(newP);
+        return newP;
+      },
+    );
+
+    final updatedCartonEpcs = <String>[];
+    for (var it in _items) {
+      final itemCarton = it.palletId?.toUpperCase() ?? '';
+      final itemOrder = it.orderNo?.toUpperCase() ?? '';
+      if (cleanCartons.contains(itemCarton) || cleanCartons.contains(itemOrder)) {
+        it.palletId = pallet.palletCode;
+        if (!pallet.itemIds.contains(it.itemId)) {
+          pallet.itemIds.add(it.itemId);
+        }
+        updatedCartonEpcs.add(it.epc);
+      }
+    }
+    if (updatedCartonEpcs.isNotEmpty) {
+      await _dbService.updateItemsLocationAndPallet(updatedCartonEpcs, null, pallet.palletCode);
+    }
+
+    await _dbService.insertPallet(pallet);
+    notifyListeners();
+    return pallet;
+  }
+
+  /// Cất Pallet vào vị trí ô kệ trống trong kho
+  Future<int> putawayPalletToLocation({
+    required String palletCodeOrId,
+    required String locationId,
+    String performedBy = 'Thủ kho Desktop',
+  }) async {
+    final cleanPallet = palletCodeOrId.trim().toUpperCase();
+    Pallet pallet = _pallets.firstWhere(
+      (p) => p.palletCode.toUpperCase() == cleanPallet || p.palletId.toUpperCase() == cleanPallet,
+      orElse: () {
+        final newP = Pallet(
+          palletId: 'PAL-$cleanPallet-${DateTime.now().millisecondsSinceEpoch}',
+          palletCode: cleanPallet,
+          locationId: locationId,
+          inboundTime: DateTime.now(),
+        );
+        _pallets.add(newP);
+        return newP;
+      },
+    );
+
+    pallet.locationId = locationId;
+    await _dbService.updatePalletLocation(pallet.palletId, locationId);
+
+    // Tìm tất cả các items thuộc pallet này
+    final matchedItems = _items.where((it) =>
+      it.palletId != null &&
+      (it.palletId!.toUpperCase() == pallet.palletId.toUpperCase() ||
+       it.palletId!.toUpperCase() == cleanPallet ||
+       pallet.itemIds.contains(it.itemId))
+    ).toList();
+
+    for (var it in matchedItems) {
+      it.locationId = locationId;
+      it.status = ItemStatus.inStock;
+      it.palletId = pallet.palletCode;
+      await _dbService.updateItemLocationAndPallet(
+        it.epc,
+        locationId,
+        pallet.palletCode,
+        status: ItemStatus.inStock.code,
+      );
+    }
+
+    // Cập nhật số lượng chứa cho Location
+    final loc = _locations.where((l) =>
+      l.locationId.toUpperCase() == locationId.toUpperCase() ||
+      l.locationCode.toUpperCase() == locationId.toUpperCase()
+    ).firstOrNull;
+    if (loc != null) {
+      loc.currentPallets = _pallets.where((p) => p.locationId == loc.locationId || p.locationId == loc.locationCode).length;
+      await _dbService.insertLocation(loc);
+    }
+
+    notifyListeners();
+    return matchedItems.length;
   }
 
   GateVerificationResult verifyGateInbound({

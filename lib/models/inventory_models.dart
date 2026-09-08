@@ -94,7 +94,8 @@ class Item {
 /// Pallet lưu trữ hàng hóa
 class Pallet {
   final String palletId;
-  final String palletCode;
+  String palletCode;
+  String? rfidEpc;
   String? locationId;
   DateTime? inboundTime;
   bool isMultiSku;
@@ -103,6 +104,7 @@ class Pallet {
   Pallet({
     required this.palletId,
     required this.palletCode,
+    this.rfidEpc,
     this.locationId,
     this.inboundTime,
     this.isMultiSku = false,

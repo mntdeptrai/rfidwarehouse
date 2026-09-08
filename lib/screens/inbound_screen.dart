@@ -164,9 +164,19 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       return;
     }
 
+    final pallet = _palletController.text.trim().toUpperCase();
+    if (pallet.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFEF4444),
+          content: Text('Vui lòng nhập Mã Pallet trước khi lưu!'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
-      final pallet = _palletController.text.trim().isEmpty ? 'PL-01' : _palletController.text.trim().toUpperCase();
       final sku = _skuController.text.trim();
       final prodName = _productNameController.text.trim();
 
@@ -420,7 +430,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   filled: true,
                   fillColor: const Color(0xFFF4EFE6),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  hintText: 'Mặc định: PL-01',
+                  hintText: 'Nhập mã Pallet',
                   hintStyle: const TextStyle(color: Color(0xFF8F8070), fontSize: 11),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFC7BDAF))),

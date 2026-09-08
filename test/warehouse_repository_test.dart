@@ -540,5 +540,57 @@ void main() {
         expect(it.sku, hexBarcode);
       }
     });
+
+    test('5-Step Inbound Wizard: Palletizing and Putaway to Location workflow', () async {
+      // Giả lập 2 thùng hàng chờ nhập kho
+      final item1 = Item(
+        itemId: 'ITEM-WIZ-01',
+        productId: 'PROD-WIZ-1',
+        sku: 'SKU-WIZ-01',
+        productName: 'Sản phẩm Wizard 1',
+        serialNumber: 'SN-WIZ-01',
+        epc: 'EPCWIZ000000000000000001',
+        status: ItemStatus.pendingInbound,
+        orderNo: 'CARTON-WIZ-A',
+      );
+      final item2 = Item(
+        itemId: 'ITEM-WIZ-02',
+        productId: 'PROD-WIZ-2',
+        sku: 'SKU-WIZ-02',
+        productName: 'Sản phẩm Wizard 2',
+        serialNumber: 'SN-WIZ-02',
+        epc: 'EPCWIZ000000000000000002',
+        status: ItemStatus.pendingInbound,
+        orderNo: 'CARTON-WIZ-B',
+      );
+      await repo.insertDirectItem(item1);
+      await repo.insertDirectItem(item2);
+
+      // Bước 2: Đặt 2 thùng lên Pallet PL-TEST-001
+      final pallet = await repo.assignCartonsToPallet(
+        palletCode: 'PL-TEST-001',
+        rfidEpc: '504C2D544553542D30303100',
+        cartonCodes: ['CARTON-WIZ-A', 'CARTON-WIZ-B'],
+      );
+      expect(pallet.palletCode, 'PL-TEST-001');
+
+      final boundItems = repo.items.where((i) => i.palletId == 'PL-TEST-001').toList();
+      expect(boundItems.length, 2);
+
+      // Bước 4: Cất Pallet vào vị trí kệ A-01-01
+      final putawayCount = await repo.putawayPalletToLocation(
+        palletCodeOrId: 'PL-TEST-001',
+        locationId: 'A-01-01',
+        performedBy: 'Thủ kho Desktop',
+      );
+      expect(putawayCount, 2);
+
+      // Bước 5: Kiểm tra trạng thái đã cất kho IN_STOCK
+      final finalItems = repo.items.where((i) => i.palletId == 'PL-TEST-001').toList();
+      for (final it in finalItems) {
+        expect(it.status, ItemStatus.inStock);
+        expect(it.locationId, 'A-01-01');
+      }
+    });
   });
 }

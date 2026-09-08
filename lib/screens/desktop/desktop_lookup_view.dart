@@ -19,7 +19,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
 
   @override
   void initState() {
-    super.initState();
+    super.initState(); 
     _eyeCare.addListener(_onThemeChanged);
     _repo.addListener(_onThemeChanged);
   }

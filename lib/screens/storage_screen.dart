@@ -129,7 +129,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           children: [
             TextField(
               controller: codeController,
-              decoration: InputDecoration(labelText: 'Mã Pallet (Pallet Code)', hintText: 'Ví dụ: PL-01', labelStyle: TextStyle(color: c.textSecondary)),
+              decoration: InputDecoration(labelText: 'Mã Pallet (Pallet Code)', hintText: 'Nhập mã Pallet', labelStyle: TextStyle(color: c.textSecondary)),
               style: TextStyle(color: c.textPrimary),
             ),
           ],

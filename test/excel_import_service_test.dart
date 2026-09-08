@@ -54,5 +54,78 @@ void main() {
       expect(isTagValid('E28099999999999999999999', true), isFalse); // External tag filtered out
       expect(isTagValid('E28099999999999999999999', false), isTrue); // Accepted when filter is OFF
     });
+
+    test('Parses Excel with multiple distinct products in same carton correctly', () {
+      final service = ExcelImportService();
+      final excel = Excel.createExcel();
+      final sheet = excel['Sheet1'];
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = TextCellValue('THÙNG');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0)).value = TextCellValue('MÃ CHIP EPC');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0)).value = TextCellValue('TÊN SẢN PHẨM');
+
+      // Row 1: Áo Polo
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue('THUNG-01');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1)).value = TextCellValue('E28011910000000000000001');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1)).value = TextCellValue('Áo Polo Cotton');
+
+      // Row 2: Quần Jeans (same carton, different product name!)
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).value = TextCellValue('THUNG-01');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 2)).value = TextCellValue('E28011910000000000000002');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 2)).value = TextCellValue('Quần Jeans Slimfit');
+
+      final bytes = Uint8List.fromList(excel.encode()!);
+      final (cartons, rowCount) = service.parseBytes(bytes);
+
+      expect(rowCount, equals(2));
+      expect(cartons.length, equals(1));
+
+      final c1 = cartons.first;
+      expect(c1['cartonBox'], equals('THUNG-01'));
+      // Carton summary must mention both products
+      expect(c1['productName'].contains('Áo Polo Cotton'), isTrue);
+      expect(c1['productName'].contains('Quần Jeans Slimfit'), isTrue);
+
+      final serialItems = (c1['serialItems'] as List<Map<String, dynamic>>);
+      expect(serialItems.length, equals(2));
+      // First chip has Áo Polo
+      expect(serialItems[0]['serial'], equals('E28011910000000000000001'));
+      expect(serialItems[0]['name'], equals('Áo Polo Cotton'));
+      // Second chip has Quần Jeans (NOT duplicated Áo Polo!)
+      expect(serialItems[1]['serial'], equals('E28011910000000000000002'));
+      expect(serialItems[1]['name'], equals('Quần Jeans Slimfit'));
+    });
+
+    test('Correctly distinguishes Mã sản phẩm and Tên sản phẩm without stealing column index', () {
+      final service = ExcelImportService();
+      final excel = Excel.createExcel();
+      final sheet = excel['Sheet1'];
+
+      // Header: Mã sản phẩm (has "sản phẩm"), Tên sản phẩm, Mã EPC
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = TextCellValue('Mã sản phẩm');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0)).value = TextCellValue('Tên sản phẩm');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0)).value = TextCellValue('Mã EPC');
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue('SKU-POLO-01');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1)).value = TextCellValue('Áo Polo Thể Thao');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1)).value = TextCellValue('E28011910000000000000001');
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).value = TextCellValue('SKU-JEAN-02');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 2)).value = TextCellValue('Quần Jean Ống Đứng');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 2)).value = TextCellValue('E28011910000000000000002');
+
+      final bytes = Uint8List.fromList(excel.encode()!);
+      final (cartons, rowCount) = service.parseBytes(bytes);
+
+      expect(rowCount, equals(2));
+      final c = cartons.first;
+      final serialItems = (c['serialItems'] as List<Map<String, dynamic>>);
+
+      expect(serialItems[0]['barcode'], equals('SKU-POLO-01'));
+      expect(serialItems[0]['name'], equals('Áo Polo Thể Thao'));
+
+      expect(serialItems[1]['barcode'], equals('SKU-JEAN-02'));
+      expect(serialItems[1]['name'], equals('Quần Jean Ống Đứng'));
+    });
   });
 }

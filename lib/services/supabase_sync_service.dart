@@ -18,7 +18,7 @@ class SupabaseConfig {
     String? url,
     String? anonKey,
     this.isAutoSync = true,
-    this.syncIntervalSeconds = 5,
+    this.syncIntervalSeconds = 30,
   })  : url = url ??
             const String.fromEnvironment(
               'SUPABASE_URL',
@@ -720,8 +720,19 @@ class SupabaseSyncService extends ChangeNotifier {
       for (final row in rows) {
         final map = Map<String, dynamic>.from(row as Map);
         map.remove('updated_at');
-        if (tableName == 'pallets' && map['is_multi_sku'] is bool) {
-          map['is_multi_sku'] = (map['is_multi_sku'] == true) ? 1 : 0;
+        if (tableName == 'pallets') {
+          if (map['is_multi_sku'] is bool) {
+            map['is_multi_sku'] = (map['is_multi_sku'] == true) ? 1 : 0;
+          }
+          // Bảo vệ rfid_epc đã có trong SQLite không bao giờ bị đè thành null bởi Supabase
+          final pId = map['pallet_id'];
+          final existing = await db.query('pallets', where: 'pallet_id = ?', whereArgs: [pId]);
+          if (existing.isNotEmpty) {
+            final localEpc = existing.first['rfid_epc'];
+            if ((map['rfid_epc'] == null || map['rfid_epc'].toString().isEmpty) && localEpc != null) {
+              map['rfid_epc'] = localEpc;
+            }
+          }
         }
         if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
           map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;

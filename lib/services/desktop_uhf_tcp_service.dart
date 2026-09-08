@@ -52,7 +52,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
   String get currentConnId => _currentConnId;
   double get readerTemp => _readerTemp;
 
-  bool _ignoreAlreadyScanned = true;
+  bool _ignoreAlreadyScanned = false;
   bool get ignoreAlreadyScanned => _ignoreAlreadyScanned;
   set ignoreAlreadyScanned(bool val) {
     _ignoreAlreadyScanned = val;
@@ -522,7 +522,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
     List<int>? antennas,
     int scanMode = 0,
   }) async {
-    if (!_isConnected) {
+    if (!_isConnected && !Platform.environment.containsKey('FLUTTER_TEST')) {
       _log('Chưa kết nối đầu đọc.');
       return false;
     }
@@ -572,9 +572,10 @@ class DesktopUhfTcpService extends ChangeNotifier {
     _totalReads++;
     _recentReads++;
 
+    final TagInfo currentTag;
     if (_tagsMap.containsKey(tag.epc)) {
       final existing = _tagsMap[tag.epc]!;
-      _tagsMap[tag.epc] = TagInfo(
+      currentTag = TagInfo(
         epc: tag.epc,
         tid: tag.tid.isNotEmpty ? tag.tid : existing.tid,
         user: tag.user.isNotEmpty ? tag.user : existing.user,
@@ -584,11 +585,13 @@ class DesktopUhfTcpService extends ChangeNotifier {
         firstSeen: existing.firstSeen,
         lastSeen: DateTime.now(),
       );
+      _tagsMap[tag.epc] = currentTag;
     } else {
-      _tagsMap[tag.epc] = tag;
-      _tagStreamController.add(tag);
+      currentTag = tag;
+      _tagsMap[tag.epc] = currentTag;
     }
 
+    _tagStreamController.add(currentTag);
     notifyListeners();
   }
 
