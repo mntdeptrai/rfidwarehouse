@@ -140,10 +140,21 @@ class WarehouseRepository extends ChangeNotifier {
       final dbInventorySessions = await _dbService.getInventorySessions();
 
       _products.clear();
-      _products.addAll(cleanProducts.where((p) => !isTestProduct(p)));
+      _products.addAll(cleanProducts);
+
+      final cleanLocations = List<Location>.from(dbLocations);
+      cleanLocations.sort((a, b) {
+        final z = a.zone.compareTo(b.zone);
+        if (z != 0) return z;
+        final s = a.shelf.compareTo(b.shelf);
+        if (s != 0) return s;
+        final l = a.level.compareTo(b.level);
+        if (l != 0) return l;
+        return a.locationCode.compareTo(b.locationCode);
+      });
 
       _locations.clear();
-      _locations.addAll(dbLocations);
+      _locations.addAll(cleanLocations);
 
       // KHÔNG BAO GIỜ XÓA PALLET ĐÃ KHAI BÁO CỦA NGƯỜI DÙNG: Khai báo 1 lần dùng vĩnh viễn
       // Đồng bộ 2 lớp: SQLite B-Tree Index + Permanent Master Backup File
@@ -692,8 +703,9 @@ class WarehouseRepository extends ChangeNotifier {
         'zone': location.zone,
         'shelf': location.shelf,
         'level': location.level,
-        'max_pallet_capacity': location.maxPalletCapacity,
-        'current_pallets': location.currentPallets,
+      'max_pallet_capacity': location.maxPalletCapacity,
+      'current_pallets': location.currentPallets,
+      'status': location.status,
       },
     );
     _triggerBackgroundSync();
@@ -770,6 +782,33 @@ class WarehouseRepository extends ChangeNotifier {
     ).toList();
   }
 
+  Future<void> updateLocationStatus(String locationId, String status) async {
+    final cleanId = locationId.trim().toUpperCase();
+    final loc = _locations.where((l) =>
+        l.locationId.trim().toUpperCase() == cleanId ||
+        l.locationCode.trim().toUpperCase() == cleanId
+    ).firstOrNull;
+
+    if (loc != null) {
+      loc.status = status;
+    }
+
+    await _dbService.updateLocationStatus(locationId, status);
+
+    await _syncDirectOrQueue(
+      tableName: 'locations',
+      recordId: loc?.locationId ?? locationId,
+      action: 'UPDATE',
+      payload: {
+        'locationId': loc?.locationId ?? locationId,
+        'status': status,
+      },
+    );
+
+    notifyListeners();
+  }
+
+
   Future<void> _syncDirectOrQueue({
     required String tableName,
     required String recordId,
@@ -792,6 +831,8 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
   }
+
+  void triggerBackgroundSync() => _triggerBackgroundSync();
 
   void _triggerBackgroundSync() {
     if (Platform.environment.containsKey('FLUTTER_TEST')) return;
@@ -969,15 +1010,7 @@ class WarehouseRepository extends ChangeNotifier {
       tableName: 'users',
       recordId: user.userId,
       action: 'INSERT',
-      payload: {
-        'userId': user.userId,
-        'username': user.username,
-        'fullName': user.fullName,
-        'email': user.email,
-        'phone': user.phone,
-        'role': user.role,
-        'isActive': user.isActive,
-      },
+      payload: user.toMap(),
     );
     _triggerBackgroundSync();
     notifyListeners();
@@ -2619,6 +2652,151 @@ class WarehouseRepository extends ChangeNotifier {
     );
     _triggerBackgroundSync();
 
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> deletePallet(String palletId) async {
+    final cleanId = palletId.trim().toUpperCase();
+    _pallets.removeWhere((p) => p.palletId.toUpperCase() == cleanId || p.palletCode.toUpperCase() == cleanId);
+    await _dbService.deletePallet(cleanId);
+    await _syncDirectOrQueue(
+      tableName: 'pallets',
+      recordId: cleanId,
+      action: 'DELETE',
+      payload: {'pallet_id': cleanId},
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<bool> mergePallets({
+    required String sourcePalletId,
+    required String targetPalletId,
+    required String performedBy,
+    bool deleteSourcePallet = false,
+  }) async {
+    final cleanSource = sourcePalletId.trim().toUpperCase();
+    final cleanTarget = targetPalletId.trim().toUpperCase();
+
+    if (cleanSource == cleanTarget) {
+      throw Exception('Không thể gộp một Pallet vào chính nó.');
+    }
+
+    final sourcePallet = _pallets.firstWhere(
+      (p) => p.palletId.toUpperCase() == cleanSource || p.palletCode.toUpperCase() == cleanSource,
+      orElse: () => throw Exception('Không tìm thấy Pallet nguồn: $sourcePalletId'),
+    );
+
+    final targetPallet = _pallets.firstWhere(
+      (p) => p.palletId.toUpperCase() == cleanTarget || p.palletCode.toUpperCase() == cleanTarget,
+      orElse: () => throw Exception('Không tìm thấy Pallet đích: $targetPalletId'),
+    );
+
+    // Tìm tất cả các mặt hàng thuộc Pallet nguồn
+    final itemsToMove = _items.where((it) =>
+      it.palletId != null &&
+      (it.palletId!.toUpperCase() == sourcePallet.palletId.toUpperCase() ||
+       it.palletId!.toUpperCase() == sourcePallet.palletCode.toUpperCase() ||
+       sourcePallet.itemIds.contains(it.itemId))
+    ).toList();
+
+    if (itemsToMove.isEmpty) {
+      throw Exception('Pallet nguồn ${sourcePallet.palletCode} hiện không có mặt hàng nào để gộp.');
+    }
+
+    final movedItemCount = itemsToMove.length;
+    final targetLocationId = targetPallet.locationId;
+
+    // Chuyển toàn bộ hàng sang Pallet đích
+    for (var item in itemsToMove) {
+      item.palletId = targetPallet.palletId;
+      item.locationId = targetLocationId;
+
+      await _dbService.updateItemLocationAndPallet(item.epc, targetLocationId, targetPallet.palletId);
+
+      if (!targetPallet.itemIds.contains(item.itemId)) {
+        targetPallet.itemIds.add(item.itemId);
+      }
+
+      await _syncDirectOrQueue(
+        tableName: 'items',
+        recordId: item.itemId,
+        action: 'UPDATE',
+        payload: {
+          'itemId': item.itemId,
+          'palletId': targetPallet.palletId,
+          'locationId': targetLocationId,
+        },
+      );
+    }
+
+    // Làm rỗng Pallet nguồn
+    sourcePallet.itemIds.clear();
+    sourcePallet.isMultiSku = false;
+
+    // Đánh giá lại isMultiSku cho Pallet đích
+    final allTargetItems = _items.where((it) => it.palletId == targetPallet.palletId).toList();
+    targetPallet.isMultiSku = allTargetItems.map((e) => e.sku).toSet().length > 1;
+
+    await _dbService.insertPallet(targetPallet);
+    await _syncDirectOrQueue(
+      tableName: 'pallets',
+      recordId: targetPallet.palletId,
+      action: 'UPDATE',
+      payload: {
+        'pallet_id': targetPallet.palletId,
+        'pallet_code': targetPallet.palletCode,
+        'location_id': targetPallet.locationId,
+        'is_multi_sku': targetPallet.isMultiSku ? 1 : 0,
+      },
+    );
+
+    // Xử lý Pallet nguồn sau gộp
+    if (deleteSourcePallet) {
+      _pallets.removeWhere((p) => p.palletId == sourcePallet.palletId);
+      await _dbService.deletePallet(sourcePallet.palletId);
+      await _syncDirectOrQueue(
+        tableName: 'pallets',
+        recordId: sourcePallet.palletId,
+        action: 'DELETE',
+        payload: {'pallet_id': sourcePallet.palletId},
+      );
+    } else {
+      await _dbService.insertPallet(sourcePallet);
+      await _syncDirectOrQueue(
+        tableName: 'pallets',
+        recordId: sourcePallet.palletId,
+        action: 'UPDATE',
+        payload: {
+          'pallet_id': sourcePallet.palletId,
+          'pallet_code': sourcePallet.palletCode,
+          'location_id': sourcePallet.locationId,
+          'is_multi_sku': 0,
+        },
+      );
+    }
+
+    // Ghi nhận nhật ký chuyển kho / gộp pallet
+    _transactions.insert(
+      0,
+      InventoryTransaction(
+        transactionId: 'TX-MERGE-${DateTime.now().millisecondsSinceEpoch}',
+        type: TransactionType.movement,
+        documentNo: 'MERGE-${sourcePallet.palletCode}->${targetPallet.palletCode}',
+        sku: 'PALLET_MERGE',
+        productName: 'Gộp $movedItemCount mặt hàng từ ${sourcePallet.palletCode} sang ${targetPallet.palletCode}',
+        quantity: movedItemCount,
+        fromLocation: sourcePallet.locationId ?? 'N/A',
+        toLocation: targetPallet.locationId ?? 'N/A',
+        palletCode: targetPallet.palletCode,
+        performedBy: performedBy,
+        timestamp: DateTime.now(),
+        notes: 'Nhập gộp $movedItemCount sản phẩm từ Pallet ${sourcePallet.palletCode} vào Pallet ${targetPallet.palletCode}',
+      ),
+    );
+
+    _triggerBackgroundSync();
     notifyListeners();
     return true;
   }

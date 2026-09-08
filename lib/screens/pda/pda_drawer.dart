@@ -4,6 +4,7 @@ import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
 import 'pda_putaway_screen.dart';
+import 'pda_shelf_status_screen.dart';
 import '../radar_locate_screen.dart';
 
 class PdaDrawer extends StatelessWidget {
@@ -19,12 +20,7 @@ class PdaDrawer extends StatelessWidget {
       builder: (context, _) {
         final c = eyeCare.colors;
         final user = auth.currentUser;
-        final roleLabel = switch (user?.role.toLowerCase()) {
-          'admin' => 'Quản Trị Viên',
-          'manager' => 'Quản Lý Kho',
-          'forklift' => 'Lái Xe Nâng',
-          _ => 'Thủ Kho',
-        };
+        final roleLabel = user?.rolePermission.name ?? 'Thủ Kho';
 
         return Drawer(
           backgroundColor: c.bgCard,
@@ -79,14 +75,40 @@ class PdaDrawer extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (user?.rolePermission.canInbound != false)
+                ListTile(
+                  leading: Icon(
+                    Icons.shelves,
+                    color: c.successEmerald,
+                  ),
+                  title: Text(
+                    'Xếp Kho / Cất Hàng (Putaway)',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+                    );
+                  },
+                ),
               ListTile(
-                leading: Icon(Icons.shelves, color: c.successEmerald),
-                title: Text('Xếp Kho / Cất Hàng (Putaway)', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                leading: Icon(Icons.tune_rounded, color: c.warningAmber),
+                title: Text(
+                  'Cập Nhật Trạng Thái Kệ',
+                  style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text('Đầy • Sắp hết • Còn trống', style: TextStyle(color: c.textMuted, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+                    MaterialPageRoute(builder: (_) => const PdaShelfStatusScreen()),
                   );
                 },
               ),
@@ -112,38 +134,40 @@ class PdaDrawer extends StatelessWidget {
                   );
                 },
               ),
-              Divider(color: c.border),
-              ListTile(
-                leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
-                title: Text('Xóa Sạch Dữ Liệu', style: TextStyle(color: c.errorCoral, fontSize: 14)),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      backgroundColor: c.bgCard,
-                      title: Text('Xác nhận xóa sạch dữ liệu?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
-                      content: Text('Toàn bộ đơn hàng và chip RFID thử nghiệm sẽ được xóa sạch 100% để bạn bắt đầu tạo dữ liệu thực tế.', style: TextStyle(color: c.textSecondary)),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('XÓA SẠCH', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) {
-                    await WarehouseRepository().clearAllData();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
-                      );
+              if (user?.rolePermission.canManageUsers == true) ...[
+                Divider(color: c.border),
+                ListTile(
+                  leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
+                  title: Text('Xóa Sạch Dữ Liệu', style: TextStyle(color: c.errorCoral, fontSize: 14)),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: c.bgCard,
+                        title: Text('Xác nhận xóa sạch dữ liệu?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
+                        content: Text('Toàn bộ đơn hàng và chip RFID thử nghiệm sẽ được xóa sạch 100% để bạn bắt đầu tạo dữ liệu thực tế.', style: TextStyle(color: c.textSecondary)),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('XÓA SẠCH', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await WarehouseRepository().clearAllData();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
+                        );
+                      }
                     }
-                  }
-                },
-              ),
+                  },
+                ),
+              ],
               Divider(color: c.border),
               ListTile(
                 leading: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),

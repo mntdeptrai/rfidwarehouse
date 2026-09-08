@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/roles/role_registry.dart';
 import '../../services/auth_service.dart';
 import '../../theme/eye_care_theme.dart';
 
@@ -20,17 +21,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final AuthService _auth = AuthService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
-  String _selectedRole = 'operator';
+  String _selectedRole = 'thukho';
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   String? _localError;
 
-  final List<Map<String, String>> _roles = [
-    {'code': 'operator', 'label': 'Thủ Kho / Nhân Viên Quét (Operator)'},
-    {'code': 'manager', 'label': 'Quản Lý Kho (Manager)'},
-    {'code': 'admin', 'label': 'Quản Trị Viên (Admin)'},
-    {'code': 'forklift', 'label': 'Lái Xe Nâng (Forklift Operator)'},
-  ];
+  final List<Map<String, String>> _roles = RoleRegistry.dropdownItems;
 
   @override
   void dispose() {

@@ -592,5 +592,82 @@ void main() {
         expect(it.locationId, 'A-01-01');
       }
     });
+
+    test('Pallet Consolidation: mergePallets merges goods from 2 pallets into one', () async {
+      // 1. Tạo 2 Pallet: PL-MERGE-A (2 sản phẩm) và PL-MERGE-B (1 sản phẩm)
+      final itemA1 = Item(
+        itemId: 'ITEM-M-A1',
+        productId: 'PROD-A',
+        sku: 'SKU-A',
+        productName: 'Giày Thể Thao',
+        serialNumber: 'SN-M-A1',
+        epc: 'EPC_M_A1',
+        locationId: 'LOC-A01-01',
+        status: ItemStatus.inStock,
+      );
+      final itemA2 = Item(
+        itemId: 'ITEM-M-A2',
+        productId: 'PROD-A',
+        sku: 'SKU-A',
+        productName: 'Giày Thể Thao',
+        serialNumber: 'SN-M-A2',
+        epc: 'EPC_M_A2',
+        locationId: 'LOC-A01-01',
+        status: ItemStatus.inStock,
+      );
+      final itemB1 = Item(
+        itemId: 'ITEM-M-B1',
+        productId: 'PROD-B',
+        sku: 'SKU-B',
+        productName: 'Túi Xách',
+        serialNumber: 'SN-M-B1',
+        epc: 'EPC_M_B1',
+        locationId: 'LOC-B01-01',
+        status: ItemStatus.inStock,
+      );
+
+      final palA = repo.createOrAssignPallet(
+        palletCode: 'PL-MERGE-A',
+        locationId: 'LOC-A01-01',
+        newItems: [itemA1, itemA2],
+      );
+      final palB = repo.createOrAssignPallet(
+        palletCode: 'PL-MERGE-B',
+        locationId: 'LOC-B01-01',
+        newItems: [itemB1],
+      );
+
+      expect(palA.itemIds.length, 2);
+      expect(palB.itemIds.length, 1);
+
+      // 2. Thực hiện gộp Pallet A vào Pallet B
+      final success = await repo.mergePallets(
+        sourcePalletId: palA.palletId,
+        targetPalletId: palB.palletId,
+        performedBy: 'Thủ kho kiểm thử',
+        deleteSourcePallet: false,
+      );
+
+      expect(success, isTrue);
+
+      // 3. Kiểm tra kết quả sau gộp
+      // Pallet A rỗng
+      expect(palA.itemIds.length, 0);
+
+      // Pallet B nhận thêm 2 items -> tổng 3 items
+      expect(palB.itemIds.length, 3);
+      expect(palB.isMultiSku, isTrue); // Có cả SKU-A và SKU-B
+
+      // Toàn bộ các items đã được cập nhật palletId và locationId sang Pallet B
+      final itemsOnB = repo.items.where((i) => i.palletId == palB.palletId).toList();
+      expect(itemsOnB.length, 3);
+      for (final it in itemsOnB) {
+        expect(it.locationId, 'LOC-B01-01');
+      }
+
+      // Kiểm tra lịch sử giao dịch đã được ghi nhận
+      final mergeTx = repo.transactions.firstWhere((tx) => tx.sku == 'PALLET_MERGE');
+      expect(mergeTx.notes, contains('Nhập gộp 2 sản phẩm từ Pallet PL-MERGE-A vào Pallet PL-MERGE-B'));
+    });
   });
 }

@@ -1331,203 +1331,222 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
 
-    return Container(
-      color: c.bgDeep,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Bar
-          Wrap(
-            spacing: 16,
-            runSpacing: 10,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const minW = 1150.0;
+        const minH = 650.0;
+        final isNarrow = constraints.maxWidth < minW;
+        final isShort = constraints.maxHeight < minH;
+
+        Widget mainContent = Container(
+          width: isNarrow ? minW : double.infinity,
+          height: isShort ? minH : double.infinity,
+          color: c.bgDeep,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Quản Lý Nhập Kho',
-                style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
-              ),
+              // Header Bar
               Wrap(
-                spacing: 10,
-                runSpacing: 8,
+                spacing: 16,
+                runSpacing: 10,
+                alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  // Nút Nhập Hàng với 2 lựa chọn (File Excel hoặc File nhập PO)
-                  PopupMenuButton<String>(
-                    enabled: !_isImporting,
-                    tooltip: 'Chọn nguồn nhập hàng',
-                    offset: const Offset(0, 44),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: c.border),
-                    ),
-                    color: c.bgCardElevated,
-                    elevation: 6,
-                    onSelected: (value) {
-                      if (_isImporting) return;
-                      if (value == 'excel') {
-                        _pickAndLoadLiveExcelFile();
-                      } else if (value == 'po') {
-                        _pickAndLoadPoFile();
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem<String>(
-                        value: 'excel',
+                  Text(
+                    'Quản Lý Nhập Kho',
+                    style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      // Nút Nhập Hàng với 2 lựa chọn (File Excel hoặc File nhập PO)
+                      PopupMenuButton<String>(
                         enabled: !_isImporting,
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Icon(Icons.table_view, color: Color(0xFF10B981), size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'File Excel (Thùng & Chip RFID)',
-                                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                        tooltip: 'Chọn nguồn nhập hàng',
+                        offset: const Offset(0, 44),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          side: BorderSide(color: c.border),
+                        ),
+                        color: c.bgCardElevated,
+                        elevation: 6,
+                        onSelected: (value) {
+                          if (_isImporting) return;
+                          if (value == 'excel') {
+                            _pickAndLoadLiveExcelFile();
+                          } else if (value == 'po') {
+                            _pickAndLoadPoFile();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem<String>(
+                            value: 'excel',
+                            enabled: !_isImporting,
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Nạp file chi tiết: Mã thùng, SKU, Tên hàng, EPC',
-                                    style: TextStyle(color: c.textSecondary, fontSize: 11),
-                                  ),
-                                ],
-                              ),
+                                  child: const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'File Danh Sách Thùng Hàng (.xlsx)',
+                                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Nạp file chứa Carton Box, SKU, Serial/EPC chuẩn bị nhập',
+                                      style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
+                          const PopupMenuDivider(),
+                          PopupMenuItem<String>(
+                            value: 'po',
+                            enabled: !_isImporting,
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: c.rfidCyan.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(Icons.receipt_long, color: c.rfidCyan, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'File Nhập PO (Đơn Mua Hàng)',
+                                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Nạp file đơn PO: Mã PO, Nhà cung cấp, SKU, Số lượng',
+                                      style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _isImporting ? c.rfidCyan.withValues(alpha: 0.5) : c.rfidCyan,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: c.rfidCyan.withValues(alpha: 0.25),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_isImporting)
+                                const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2C251E)),
+                                )
+                              else
+                                const Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF2C251E)),
+                              const SizedBox(width: 6),
+                              Text(
+                                _isImporting ? 'ĐANG XỬ LÝ...' : 'NHẬP HÀNG',
+                                style: const TextStyle(
+                                  color: Color(0xFF2C251E),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF2C251E)),
+                            ],
+                          ),
                         ),
                       ),
-                      const PopupMenuDivider(),
-                      PopupMenuItem<String>(
-                        value: 'po',
-                        enabled: !_isImporting,
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Icon(Icons.receipt_long, color: Color(0xFF3B82F6), size: 18),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'File Nhập PO (Đơn Mua Hàng)',
-                                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Nạp file đơn PO: Mã PO, Nhà cung cấp, SKU, Số lượng',
-                                    style: TextStyle(color: c.textSecondary, fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: c.textPrimary,
+                          side: BorderSide(color: c.border),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
+                        icon: Icon(Icons.refresh, size: 16, color: c.textPrimary),
+                        label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                        onPressed: _isImporting
+                            ? null
+                            : () async {
+                                if (_isImporting) return;
+                                setState(() => _isImporting = true);
+                                try {
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  await _supabaseSync.syncNow();
+                                  await _repo.reloadFromSqlite();
+                                  if (mounted) {
+                                    _invalidateCartonCaches();
+                                    setState(() {});
+                                    messenger.showSnackBar(
+                                      const SnackBar(
+                                        backgroundColor: Color(0xFF10B981),
+                                        duration: Duration(seconds: 2),
+                                        content: Text('Đã làm mới và đồng bộ dữ liệu kho thành công!'),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  if (mounted) setState(() => _isImporting = false);
+                                }
+                              },
                       ),
                     ],
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _isImporting ? c.rfidCyan.withValues(alpha: 0.5) : c.rfidCyan,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: c.rfidCyan.withValues(alpha: 0.25),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_isImporting)
-                            const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2C251E)),
-                            )
-                          else
-                            const Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF2C251E)),
-                          const SizedBox(width: 6),
-                          Text(
-                            _isImporting ? 'ĐANG XỬ LÝ...' : 'NHẬP HÀNG',
-                            style: const TextStyle(
-                              color: Color(0xFF2C251E),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF2C251E)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: c.textPrimary,
-                      side: BorderSide(color: c.border),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: Icon(Icons.refresh, size: 16, color: c.textPrimary),
-                    label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
-                    onPressed: _isImporting
-                        ? null
-                        : () async {
-                            if (_isImporting) return;
-                            setState(() => _isImporting = true);
-                            try {
-                              final messenger = ScaffoldMessenger.of(context);
-                              await _supabaseSync.syncNow();
-                              await _repo.reloadFromSqlite();
-                              if (mounted) {
-                                _invalidateCartonCaches();
-                                setState(() {});
-                                messenger.showSnackBar(
-                                  const SnackBar(
-                                    backgroundColor: Color(0xFF10B981),
-                                    duration: Duration(seconds: 2),
-                                    content: Text('Đã làm mới và đồng bộ dữ liệu kho thành công!'),
-                                  ),
-                                );
-                              }
-                            } finally {
-                              if (mounted) setState(() => _isImporting = false);
-                            }
-                          },
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+
+              // Khung nội dung nhập kho
+              Expanded(
+                child: _buildStepByStepWizard(c),
+              ),
             ],
           ),
-          const SizedBox(height: 12),
+        );
 
-          // Khung nội dung nhập kho
-          Expanded(
-            child: _buildStepByStepWizard(c),
-          ),
-        ],
-      ),
+        if (isNarrow || isShort) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.vertical,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: mainContent,
+            ),
+          );
+        }
+        return mainContent;
+      },
     );
   }
 

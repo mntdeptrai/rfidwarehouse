@@ -459,35 +459,35 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.inventory, color: Color(0xFF0284C7), size: 16),
-                  const SizedBox(width: 6),
-                  const Expanded(
-                    child: Text(
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    const Icon(Icons.inventory, color: Color(0xFF0284C7), size: 16),
+                    const SizedBox(width: 6),
+                    const Text(
                       'ĐƠN NHẬP KHO PO (WMS / ERP)',
                       style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11.5, letterSpacing: 0.3),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    onTap: _showCreateOrderDialog,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF0284C7)),
-                      ),
-                      child: const Text(
-                        '+ Tạo Đơn PO',
-                        style: TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.bold),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: _showCreateOrderDialog,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFF0284C7)),
+                        ),
+                        child: const Text(
+                          '+ Tạo Đơn PO',
+                          style: TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 10),
               if (availableOrders.isEmpty) ...[
@@ -780,116 +780,112 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
       ),
       child: Column(
         children: [
-          // Status bar (Responsive Wrap to prevent overflow)
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 9,
-                    height: 9,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _isScanning ? const Color(0xFF10B981) : Colors.orange,
-                      boxShadow: _isScanning
-                          ? [
-                              const BoxShadow(color: Color(0xFF10B981), blurRadius: 8, spreadRadius: 2),
-                            ]
-                          : [],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _isScanning ? 'ĐANG PHÁT SÓNG UHF' : 'SẴN SÀNG QUÉT (CÒ PDA)',
-                    style: TextStyle(
-                      color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11.5,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _uhf.filterDuplicates = !_uhf.filterDuplicates;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.orange,
-                          content: Text(_uhf.filterDuplicates ? 'Đã bật: Bỏ qua thẻ đã đọc (Lọc trùng)' : 'Đã tắt: Đọc liên tục tất cả lượt'),
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          // Status bar (SingleChildScrollView to prevent overflow at narrow widths)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
                       decoration: BoxDecoration(
-                        color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFF4EFE6),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFFC7BDAF)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _uhf.filterDuplicates ? Icons.filter_alt : Icons.filter_alt_off,
-                            color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
-                            size: 11,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
-                            style: TextStyle(
-                              color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                        shape: BoxShape.circle,
+                        color: _isScanning ? const Color(0xFF10B981) : Colors.orange,
+                        boxShadow: _isScanning
+                            ? [
+                                const BoxShadow(color: Color(0xFF10B981), blurRadius: 8, spreadRadius: 2),
+                              ]
+                            : [],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Container(
+                    const SizedBox(width: 6),
+                    Text(
+                      _isScanning ? 'ĐANG PHÁT SÓNG UHF' : 'SẴN SÀNG QUÉT (CÒ PDA)',
+                      style: TextStyle(
+                        color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11.5,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _uhf.filterDuplicates = !_uhf.filterDuplicates;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: _uhf.filterDuplicates ? const Color(0xFF10B981) : Colors.orange,
+                        content: Text(_uhf.filterDuplicates ? 'Đã bật: Bỏ qua thẻ đã đọc (Lọc trùng)' : 'Đã tắt: Đọc liên tục tất cả lượt'),
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF4EFE6),
+                      color: _uhf.filterDuplicates ? const Color(0xFF10B981).withValues(alpha: 0.2) : const Color(0xFFF4EFE6),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFC7BDAF)),
+                      border: Border.all(color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFFC7BDAF)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.flash_on, color: Color(0xFFF59E0B), size: 11),
+                        Icon(
+                          _uhf.filterDuplicates ? Icons.filter_alt : Icons.filter_alt_off,
+                          color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
+                          size: 11,
+                        ),
                         const SizedBox(width: 3),
                         Text(
-                          '${_uhf.rfPower} dBm',
-                          style: const TextStyle(color: Color(0xFF0284C7), fontSize: 10.5, fontWeight: FontWeight.bold),
+                          _uhf.filterDuplicates ? 'Lọc trùng: BẬT' : 'Lọc trùng: TẮT',
+                          style: TextStyle(
+                            color: _uhf.filterDuplicates ? const Color(0xFF10B981) : const Color(0xFF6B5D4D),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4EFE6),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFC7BDAF)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.flash_on, color: Color(0xFFF59E0B), size: 11),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${_uhf.rfPower} dBm',
+                        style: const TextStyle(color: Color(0xFF0284C7), fontSize: 10.5, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
 
-          // Big Counter
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+          // Big Counter (Responsive Wrap)
+          Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               Text(
                 '$count',
@@ -900,9 +896,9 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                   letterSpacing: -1,
                 ),
               ),
-              const SizedBox(width: 8),
               const Text(
                 'Thẻ RFID đã đọc',
+                textAlign: TextAlign.center,
                 style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13, fontWeight: FontWeight.w600),
               ),
             ],
@@ -913,18 +909,29 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           SizedBox(
             width: double.infinity,
             height: 48,
-            child: ElevatedButton.icon(
+            child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
                 elevation: 4,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: Icon(_isScanning ? Icons.stop : Icons.play_arrow, color: Colors.white, size: 20),
-              label: Text(
-                _isScanning ? 'DỪNG QUÉT' : 'BẮT ĐẦU QUÉT RFID (HOẶC BÓP CÒ)',
-                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-              ),
               onPressed: _toggleScan,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_isScanning ? Icons.stop : Icons.play_arrow, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _isScanning ? 'DỪNG QUÉT' : 'BẮT ĐẦU QUÉT RFID (HOẶC BÓP CÒ)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -948,21 +955,29 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.nfc, color: Color(0xFF0284C7), size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    'CHIP RFID VỪA ĐỌC TRÚNG',
-                    style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
-                  ),
-                ],
+              const Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.nfc, color: Color(0xFF0284C7), size: 16),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'CHIP RFID VỪA ĐỌC TRÚNG',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              if (_scannedTags.isNotEmpty)
+              if (_scannedTags.isNotEmpty) ...[
+                const SizedBox(width: 6),
                 InkWell(
                   onTap: _clearScannedList,
-                  child: const Text('Xóa dữ liệu', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                  child: const Text('Xóa', style: TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -983,11 +998,16 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'MÃ EPC ĐỘC BẢN',
-                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10, fontWeight: FontWeight.bold),
+                    const Flexible(
+                      child: Text(
+                        'MÃ EPC ĐỘC BẢN',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    if (latestTag != null)
+                    if (latestTag != null) ...[
+                      const SizedBox(width: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -999,6 +1019,7 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
                           style: const TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -1163,12 +1184,17 @@ class _InboundScreenState extends State<InboundScreen> with SingleTickerProvider
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.check_circle_outline, color: Color(0xFF2C251E), size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    count > 0 ? 'XÁC NHẬN NHẬP KHO ($count CHIP)' : 'CHƯA CÓ THẺ ĐỂ NHẬP KHO',
-                    style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      count > 0 ? 'XÁC NHẬN NHẬP KHO ($count CHIP)' : 'CHƯA CÓ THẺ ĐỂ NHẬP KHO',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Color(0xFF2C251E), fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    ),
                   ),
                 ],
               ),

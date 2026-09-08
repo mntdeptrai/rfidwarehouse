@@ -58,19 +58,19 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
   String _getStatusDisplay(ItemStatus status) {
     switch (status) {
       case ItemStatus.pendingInbound:
-        return '⏳ CHƯA NHẬP (DỰ KIẾN)';
+        return 'CHƯA NHẬP (DỰ KIẾN)';
       case ItemStatus.waitingPutaway:
-        return '⚡ CHỜ XẾP KỆ (ĐÃ QUA CỔNG)';
+        return 'CHỜ XẾP KỆ (ĐÃ QUA CỔNG)';
       case ItemStatus.inStock:
-        return '✓ TRONG KHO';
+        return 'TRONG KHO';
       case ItemStatus.allocated:
-        return '🔒 ĐÃ GIỮ PO';
+        return 'ĐÃ GIỮ PO';
       case ItemStatus.picked:
-        return '📦 ĐÃ NHẶT HÀNG';
+        return 'ĐÃ NHẶT HÀNG';
       case ItemStatus.waitingShipment:
-        return '🚚 CHỜ XUẤT HÀNG';
+        return 'CHỜ XUẤT HÀNG';
       case ItemStatus.out:
-        return '📤 ĐÃ XUẤT KHO';
+        return 'ĐÃ XUẤT KHO';
     }
   }
 
@@ -96,202 +96,275 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
           (i.orderNo ?? '').toLowerCase().contains(q);
     }).toList();
 
-    return Container(
-      color: c.bgDeep,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenW = constraints.maxWidth;
+        final isNarrow = screenW < 600;
+        final edgePad = isNarrow ? 10.0 : 24.0;
+
+        return Container(
+          color: c.bgDeep,
+          padding: EdgeInsets.all(edgePad),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'LOOKUP & SERIAL MANAGEMENT',
-                    style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tra Cứu Mã Serial, Thùng Carton & Thẻ RFID',
-                    style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              // Summary stats chips
+              // Header
               Wrap(
-                spacing: 8,
+                spacing: 14,
+                runSpacing: 10,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  _buildStatBadge('Trong kho: $inStockCount', const Color(0xFF10B981), c),
-                  _buildStatBadge('Chờ xếp: $waitingPutawayCount', const Color(0xFF06B6D4), c),
-                  _buildStatBadge('Chưa nhập: $pendingInboundCount', const Color(0xFFF59E0B), c),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isNarrow ? 'TRA CỨU SERIAL & RFID' : 'LOOKUP & SERIAL MANAGEMENT',
+                        style: TextStyle(color: c.textSecondary, fontSize: isNarrow ? 10 : 12, fontWeight: FontWeight.bold, letterSpacing: isNarrow ? 0.5 : 1),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tra Cứu Mã Serial & RFID',
+                        style: TextStyle(color: c.textPrimary, fontSize: isNarrow ? 18 : 22, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                  // Summary stats chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      _buildStatBadge('Trong kho: $inStockCount', const Color(0xFF10B981), c),
+                      _buildStatBadge('Chờ xếp: $waitingPutawayCount', const Color(0xFF06B6D4), c),
+                      _buildStatBadge('Chưa nhập: $pendingInboundCount', const Color(0xFFF59E0B), c),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-          // Search Bar & Filter Row
-          Row(
-            children: [
+              // Search Bar & Filter Row
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: c.bgCard,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: c.rfidCyan),
+                      ),
+                      child: TextField(
+                        controller: _queryController,
+                        style: TextStyle(color: c.textPrimary),
+                        decoration: InputDecoration(
+                          icon: Icon(Icons.search, color: c.rfidCyan),
+                          hintText: 'Nhập mã Serial, EPC tag, Barcode, Thùng hoặc tên sản phẩm...',
+                          hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
+                          border: InputBorder.none,
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(Icons.clear, color: c.textSecondary, size: 18),
+                                  onPressed: () {
+                                    _queryController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Status Filter Tabs
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildFilterChip('Tất cả ($totalCount)', null, c),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Trong kho ($inStockCount)', ItemStatus.inStock, c),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Chờ xếp kệ ($waitingPutawayCount)', ItemStatus.waitingPutaway, c),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Chưa nhập kho ($pendingInboundCount)', ItemStatus.pendingInbound, c),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Table
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   decoration: BoxDecoration(
                     color: c.bgCard,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: c.rfidCyan),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.border),
                   ),
-                  child: TextField(
-                    controller: _queryController,
-                    style: TextStyle(color: c.textPrimary),
-                    decoration: InputDecoration(
-                      icon: Icon(Icons.search, color: c.rfidCyan),
-                      hintText: 'Nhập mã Serial, EPC tag, Barcode, Thùng hoặc tên sản phẩm...',
-                      hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
-                      border: InputBorder.none,
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.clear, color: c.textSecondary, size: 18),
-                              onPressed: () {
-                                _queryController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                    ),
-                    onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                  ),
+                  child: filteredItems.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off, size: 56, color: c.textMuted),
+                              const SizedBox(height: 12),
+                              Text(
+                                _searchQuery.isEmpty ? 'Chưa có mặt hàng nào phù hợp với bộ lọc.' : 'Không tìm thấy kết quả cho "$_searchQuery"',
+                                style: TextStyle(color: c.textSecondary, fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: EdgeInsets.all(isNarrow ? 10 : 16),
+                          itemCount: filteredItems.length,
+                          separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
+                          itemBuilder: (context, index) {
+                            final item = filteredItems[index];
+                            final pallet = _repo.pallets.where((p) => p.palletId == item.palletId).firstOrNull;
+                            final loc = item.locationId != null
+                                ? _repo.locations.where((l) => l.locationId == item.locationId).firstOrNull
+                                : (pallet != null ? _repo.locations.where((l) => l.locationId == pallet.locationId).firstOrNull : null);
+
+                            final cartonDisplay = item.orderNo?.isNotEmpty == true
+                                ? item.orderNo!
+                                : (pallet?.palletCode ?? 'Chưa đóng thùng');
+                            final locationDisplay = loc?.locationCode ?? (item.locationId ?? 'Chưa có vị trí');
+                            final statusColor = _getStatusColor(item.status);
+                            final statusText = _getStatusDisplay(item.status);
+
+                            if (isNarrow) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Icon(
+                                            item.status == ItemStatus.inStock
+                                                ? Icons.inventory_2
+                                                : (item.status == ItemStatus.waitingPutaway ? Icons.move_to_inbox : Icons.pending_actions),
+                                            color: statusColor,
+                                            size: 16,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            item.productName,
+                                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                                          ),
+                                          child: Text(
+                                            statusText,
+                                            style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 9.5),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text('Serial: ${item.serialNumber} • SKU: ${item.sku}', style: TextStyle(color: c.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 2),
+                                    Text('EPC: ${item.epc}', style: TextStyle(color: c.rfidCyan, fontFamily: 'monospace', fontSize: 10.5, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                                    const SizedBox(height: 2),
+                                    Text('Thùng: $cartonDisplay • Vị trí: $locationDisplay', style: TextStyle(color: c.textMuted, fontSize: 10.5), overflow: TextOverflow.ellipsis),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      item.status == ItemStatus.inStock
+                                          ? Icons.inventory_2
+                                          : (item.status == ItemStatus.waitingPutaway ? Icons.move_to_inbox : Icons.pending_actions),
+                                      color: statusColor,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    flex: 3,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(item.productName, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                                        const SizedBox(height: 2),
+                                        Text('Serial: ${item.serialNumber} • SKU: ${item.sku}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 3,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('EPC: ${item.epc}', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11, fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Thùng: $cartonDisplay • Vị trí: $locationDisplay',
+                                          style: TextStyle(
+                                            color: item.status == ItemStatus.pendingInbound ? const Color(0xFFF59E0B) : c.textSecondary,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                                    ),
+                                    child: Text(
+                                      statusText,
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10.5),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // Status Filter Tabs
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              _buildFilterChip('Tất cả ($totalCount)', null, c),
-              _buildFilterChip('✓ Trong kho ($inStockCount)', ItemStatus.inStock, c),
-              _buildFilterChip('⚡ Chờ xếp kệ ($waitingPutawayCount)', ItemStatus.waitingPutaway, c),
-              _buildFilterChip('⏳ Chưa nhập kho / Dự kiến ($pendingInboundCount)', ItemStatus.pendingInbound, c),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Table
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: c.bgCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.border),
-              ),
-              child: filteredItems.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.search_off, size: 56, color: c.textMuted),
-                          const SizedBox(height: 12),
-                          Text(
-                            _searchQuery.isEmpty ? 'Chưa có mặt hàng nào phù hợp với bộ lọc.' : 'Không tìm thấy kết quả cho "$_searchQuery"',
-                            style: TextStyle(color: c.textSecondary, fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filteredItems.length,
-                      separatorBuilder: (_, index) => Divider(color: c.border, height: 1),
-                      itemBuilder: (context, index) {
-                        final item = filteredItems[index];
-                        final pallet = _repo.pallets.where((p) => p.palletId == item.palletId).firstOrNull;
-                        final loc = item.locationId != null
-                            ? _repo.locations.where((l) => l.locationId == item.locationId).firstOrNull
-                            : (pallet != null ? _repo.locations.where((l) => l.locationId == pallet.locationId).firstOrNull : null);
-
-                        final cartonDisplay = item.orderNo?.isNotEmpty == true
-                            ? item.orderNo!
-                            : (pallet?.palletCode ?? 'Chưa đóng thùng');
-                        final locationDisplay = loc?.locationCode ?? (item.locationId ?? 'Chưa có vị trí');
-                        final statusColor = _getStatusColor(item.status);
-                        final statusText = _getStatusDisplay(item.status);
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  item.status == ItemStatus.inStock
-                                      ? Icons.inventory_2
-                                      : (item.status == ItemStatus.waitingPutaway ? Icons.move_to_inbox : Icons.pending_actions),
-                                  color: statusColor,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.productName, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                                    const SizedBox(height: 2),
-                                    Text('Serial: ${item.serialNumber} • SKU: ${item.sku}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('EPC: ${item.epc}', style: TextStyle(color: c.rfidCyan, fontFamily: 'Courier', fontSize: 11, fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Thùng: $cartonDisplay • Vị trí: $locationDisplay',
-                                      style: TextStyle(
-                                        color: item.status == ItemStatus.pendingInbound ? const Color(0xFFF59E0B) : c.textSecondary,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: statusColor.withValues(alpha: 0.5)),
-                                ),
-                                child: Text(
-                                  statusText,
-                                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10.5),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

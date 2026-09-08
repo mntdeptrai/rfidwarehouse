@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import '../models/wms_models.dart';
 import 'database_service.dart';
+import 'warehouse_repository.dart';
 
 class AuthService extends ChangeNotifier {
   static final AuthService _instance = AuthService._internal();
@@ -57,13 +58,14 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Khởi tạo 2 tài khoản mẫu (Admin và Thủ kho) nếu CSDL chưa có người dùng
+  /// Khởi tạo 4 tài khoản mẫu theo từng Role nếu CSDL chưa có người dùng
   Future<void> _seedDefaultUsersIfEmpty() async {
     try {
       final existingUsers = await _dbService.getUsers();
       if (existingUsers.isEmpty) {
-        debugPrint('AuthService: CSDL chưa có người dùng. Đang khởi tạo tài khoản mẫu admin và thukho...');
+        debugPrint('AuthService: CSDL chưa có người dùng. Đang khởi tạo tài khoản mẫu (admin, thukho, camtay, seller)...');
 
+        // 1. Quản Trị Viên (Toàn quyền, chỉnh được thông số máy)
         final adminUser = WmsUser(
           userId: 'USER-ADMIN-001',
           username: 'admin',
@@ -76,17 +78,47 @@ class AuthService extends ChangeNotifier {
         );
         await _dbService.insertUserWithPassword(adminUser, hashPassword('admin123'));
 
-        final operatorUser = WmsUser(
+        // 2. Thủ Kho (Không chỉnh thông số máy)
+        final thukhoUser = WmsUser(
           userId: 'USER-OP-001',
           username: 'thukho',
           fullName: 'Thủ Kho Trưởng',
           email: 'thukho@rfidwarehouse.com',
           phone: '0987654321',
-          role: 'operator',
+          role: 'thukho',
           isActive: true,
           createdAt: DateTime.now(),
         );
-        await _dbService.insertUserWithPassword(operatorUser, hashPassword('123456'));
+        await _dbService.insertUserWithPassword(thukhoUser, hashPassword('123456'));
+
+        // 3. Máy Cầm Tay PDA (Không chỉnh thông số máy)
+        final handheldUser = WmsUser(
+          userId: 'USER-PDA-001',
+          username: 'camtay',
+          fullName: 'Nhân Viên Cầm Tay PDA',
+          email: 'pda@rfidwarehouse.com',
+          phone: '0912345678',
+          role: 'handheld',
+          isActive: true,
+          createdAt: DateTime.now(),
+        );
+        await _dbService.insertUserWithPassword(handheldUser, hashPassword('123456'));
+
+        // 4. Nhân Viên Bán Hàng / Seller (Không chỉnh thông số máy)
+        final sellerUser = WmsUser(
+          userId: 'USER-SEL-001',
+          username: 'seller',
+          fullName: 'Nhân Viên Bán Hàng',
+          email: 'seller@rfidwarehouse.com',
+          phone: '0933445566',
+          role: 'seller',
+          isActive: true,
+          createdAt: DateTime.now(),
+        );
+        await _dbService.insertUserWithPassword(sellerUser, hashPassword('123456'));
+
+        // Kích hoạt đồng bộ các tài khoản lên Supabase Cloud
+        WarehouseRepository().triggerBackgroundSync();
       }
     } catch (e) {
       debugPrint('AuthService: Lỗi khởi tạo người dùng mặc định: $e');
@@ -241,7 +273,10 @@ class AuthService extends ChangeNotifier {
       final hashedPass = hashPassword(cleanPassword);
       await _dbService.insertUserWithPassword(newUser, hashedPass);
 
-      // 4. Tự động đăng nhập
+      // 4. Đẩy vào WarehouseRepository và đồng bộ lên Supabase Cloud
+      await WarehouseRepository().addUser(newUser);
+
+      // 5. Tự động đăng nhập
       if (autoLogin) {
         _currentUser = newUser;
         await _dbService.setSystemConfig('active_user_id', newUser.userId);

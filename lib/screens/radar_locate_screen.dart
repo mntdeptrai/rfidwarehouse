@@ -24,7 +24,6 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   Item? _targetItem;
   bool _isTracking = false;
   double _currentRssi = -85.0;
-  Timer? _trackingSimulationTimer;
 
   StreamSubscription<bool>? _triggerSub;
   StreamSubscription<TagInfo>? _tagSub;
@@ -33,10 +32,9 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   void initState() {
     super.initState();
     if (widget.initialEpc != null) {
-      _targetItem = _repo.items.firstWhere(
+      _targetItem = _repo.items.where(
         (it) => it.epc == widget.initialEpc,
-        orElse: () => _repo.items.first,
-      );
+      ).firstOrNull;
     }
 
     // Lắng nghe sự kiện bóp cò súng vật lý trên tay cầm PDA
@@ -48,10 +46,8 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           if (_targetItem == null && _repo.items.isNotEmpty) {
             _targetItem = _repo.items.first;
           }
-          _currentRssi = -78.0;
         });
       } else {
-        _trackingSimulationTimer?.cancel();
         setState(() {
           _isTracking = false;
         });
@@ -100,7 +96,6 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
 
   @override
   void dispose() {
-    _trackingSimulationTimer?.cancel();
     _triggerSub?.cancel();
     _tagSub?.cancel();
     super.dispose();
@@ -112,24 +107,12 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       if (_targetItem == null && _repo.items.isNotEmpty) {
         _targetItem = _repo.items.first;
       }
-      _currentRssi = -78.0;
     });
 
     _uhfService.startInventory();
-
-    // Mô phỏng tín hiệu tăng dần khi test trên máy ảo/desktop
-    _trackingSimulationTimer?.cancel();
-    _trackingSimulationTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      if (!mounted || !_isTracking) return;
-      setState(() {
-        final delta = (DateTime.now().second % 4 == 0) ? 6.0 : -1.5;
-        _currentRssi = (_currentRssi + delta).clamp(-88.0, -30.0);
-      });
-    });
   }
 
   void _stopTracking() {
-    _trackingSimulationTimer?.cancel();
     _uhfService.stopInventory();
     setState(() {
       _isTracking = false;

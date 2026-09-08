@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/tag_info.dart';
+import 'auth_service.dart';
 
 enum PdaScanMode {
   auto,    // Tự động chuyển theo ngữ cảnh (Context-Aware)
@@ -71,6 +72,11 @@ class UhfService extends ChangeNotifier {
   bool _filterDuplicates = true;
   bool get filterDuplicates => _filterDuplicates;
   set filterDuplicates(bool val) {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      debugPrint('UhfService: Blocked filterDuplicates setter - Unauthorized role "${user.rolePermission.name}"');
+      return;
+    }
     _filterDuplicates = val;
     if (Platform.isAndroid) {
       try {
@@ -481,6 +487,11 @@ class UhfService extends ChangeNotifier {
     int filterPtr = 32,
     int filterCnt = 0,
   }) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      debugPrint('UhfService: Blocked writeData - Unauthorized role "${user.rolePermission.name}"');
+      return false;
+    }
     if (!Platform.isAndroid) {
       await Future.delayed(const Duration(milliseconds: 400));
       return true;
@@ -514,6 +525,11 @@ class UhfService extends ChangeNotifier {
     int filterPtr = 32,
     int filterCnt = 0,
   }) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      debugPrint('UhfService: Blocked writeDataToEpc - Unauthorized role "${user.rolePermission.name}"');
+      return false;
+    }
     if (!Platform.isAndroid) {
       await Future.delayed(const Duration(milliseconds: 300));
       return true;
@@ -564,6 +580,11 @@ class UhfService extends ChangeNotifier {
   /// Set RF Power (1 - 30 dBm)
   Future<bool> setRfPower(int power) async {
     if (power < 1 || power > 33) return false;
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      debugPrint('UhfService: Blocked setRfPower - Unauthorized role "${user.rolePermission.name}"');
+      return false;
+    }
     if (!Platform.isAndroid) {
       _rfPower = power;
       notifyListeners();
@@ -585,6 +606,11 @@ class UhfService extends ChangeNotifier {
 
   /// Set Frequency Region
   Future<bool> setFrequencyRegion(int mode) async {
+    final user = AuthService().currentUser;
+    if (user != null && !user.canConfigureHardware) {
+      debugPrint('UhfService: Blocked setFrequencyRegion - Unauthorized role "${user.rolePermission.name}"');
+      return false;
+    }
     if (!Platform.isAndroid) {
       _frequencyMode = mode;
       notifyListeners();

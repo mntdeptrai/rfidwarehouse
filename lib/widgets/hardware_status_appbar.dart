@@ -48,22 +48,28 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
           PdaScanMode.hybrid => ('HYBRID', Icons.alt_route, c.successEmerald),
         };
 
+        final screenWidth = MediaQuery.maybeOf(context)?.size.width ?? 600;
+        final isCompact = screenWidth < 450;
+        final isUltraNarrow = screenWidth < 280;
+
         return AppBar(
           backgroundColor: c.bgDeep,
           elevation: 0,
           title: Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: c.textPrimary,
               fontWeight: FontWeight.bold,
-              fontSize: 15.5,
+              fontSize: isUltraNarrow ? 13.0 : 15.5,
               letterSpacing: 0.3,
             ),
           ),
           actions: [
             // Scan Mode Switcher Chip
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 3),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
@@ -86,12 +92,12 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                     SnackBar(
                       backgroundColor: c.bgCardElevated,
                       duration: const Duration(milliseconds: 900),
-                      content: Text('⚡ Chế độ cò PDA: $modeDesc', style: TextStyle(color: c.textPrimary)),
+                      content: Text('Chế độ cò PDA: $modeDesc', style: TextStyle(color: c.textPrimary)),
                     ),
                   );
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 5 : 7, vertical: 2),
                   decoration: BoxDecoration(
                     color: scanColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(16),
@@ -100,16 +106,18 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(scanIcon, size: 12, color: scanColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        scanLabel,
-                        style: TextStyle(
-                          color: scanColor,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
+                      Icon(scanIcon, size: isUltraNarrow ? 11 : 12, color: scanColor),
+                      if (!isCompact) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          scanLabel,
+                          style: TextStyle(
+                            color: scanColor,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -118,7 +126,7 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
 
             // Cloud Sync Status Chip
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 3),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () async {
@@ -137,7 +145,7 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                   await syncService.syncNow();
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 5 : 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(16),
@@ -149,29 +157,54 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
+                      if (isCompact) ...[
+                        Icon(
+                          isSyncing ? Icons.sync : (isOnline ? Icons.cloud_done : Icons.cloud_off),
+                          size: isUltraNarrow ? 11 : 13,
                           color: statusColor,
-                          shape: BoxShape.circle,
                         ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        statusLabel,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                      ] else ...[
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 5),
+                        Text(
+                          statusLabel,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
-            ...?actions,
+            if (actions != null)
+              if (isUltraNarrow)
+                IconButtonTheme(
+                  data: IconButtonThemeData(
+                    style: IconButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(26, 26),
+                      maximumSize: const Size(28, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: actions!,
+                  ),
+                )
+              else
+                ...actions!,
           ],
         );
       },
