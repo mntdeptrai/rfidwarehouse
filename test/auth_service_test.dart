@@ -271,5 +271,42 @@ void main() {
       final savedId = await dbService.getSystemConfig('active_user_id');
       expect(savedId, equals(''));
     });
+
+    test('User with null password_hash from cloud sync can login with 12345678 and gets self-healed in SQLite', () async {
+      await authService.init(force: true);
+
+      // Simulate a user pulled from Cloud with null password_hash
+      final cloudUser = WmsUser(
+        userId: 'USER-CLOUD-001',
+        username: 'pda_test',
+        fullName: 'Test PDA Worker',
+        role: 'thukho',
+        isActive: true,
+        createdAt: DateTime.now(),
+      );
+      final db = await dbService.database;
+      final map = cloudUser.toMap();
+      map['password_hash'] = null;
+      await db.insert('users', map);
+
+      // Verify password_hash is null initially
+      final initialAuth = await dbService.getUserAuth('pda_test');
+      expect(initialAuth, isNotNull);
+      expect(initialAuth!['password_hash'], isNull);
+
+      // Logging in with 12345678 should succeed via fallback
+      final loginSuccess = await authService.login(username: 'pda_test', password: '12345678');
+      expect(loginSuccess, isTrue);
+      expect(authService.currentUser?.username, equals('pda_test'));
+
+      // Verify self-healing: password_hash is now populated in SQLite
+      final healedAuth = await dbService.getUserAuth('pda_test');
+      expect(healedAuth!['password_hash'], equals(AuthService.hashPassword('12345678')));
+
+      // Next login with 12345678 uses hashed password
+      await authService.logout();
+      final loginAgain = await authService.login(username: 'pda_test', password: '12345678');
+      expect(loginAgain, isTrue);
+    });
   });
 }

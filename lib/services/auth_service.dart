@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wms_models.dart';
 import 'database_service.dart';
+import 'supabase_sync_service.dart';
 import 'warehouse_repository.dart';
 
 class AuthService extends ChangeNotifier {
@@ -86,8 +89,9 @@ class AuthService extends ChangeNotifier {
           isActive: true,
           createdAt: DateTime.now(),
         );
-        await _dbService.insertUserWithPassword(adminUser, hashPassword('admin123'));
-        await WarehouseRepository().addUser(adminUser);
+        final adminPassHash = hashPassword('admin123');
+        await _dbService.insertUserWithPassword(adminUser, adminPassHash);
+        await WarehouseRepository().addUser(adminUser, passwordHash: adminPassHash);
 
         // Kích hoạt đồng bộ tài khoản admin lên Supabase Cloud nếu có cấu hình
         WarehouseRepository().triggerBackgroundSync();
@@ -117,7 +121,32 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final userMap = await _dbService.getUserAuth(cleanUsername);
+      Map<String, dynamic>? userMap = await _dbService.getUserAuth(cleanUsername);
+
+      // Nếu trong SQLite cục bộ chưa có user, nhưng máy đang online kết nối Supabase, tìm trực tiếp trên Cloud
+      if (userMap == null && SupabaseSyncService().isOnline) {
+        try {
+          final supa = Supabase.instance.client;
+          final List<dynamic> supaUsers = await supa
+              .from('users')
+              .select()
+              .or('username.ilike.$cleanUsername,email.ilike.$cleanUsername')
+              .limit(1);
+
+          if (supaUsers.isNotEmpty) {
+            final fetched = Map<String, dynamic>.from(supaUsers.first as Map);
+            fetched.remove('updated_at');
+            if (fetched['is_active'] is bool) {
+              fetched['is_active'] = (fetched['is_active'] == true) ? 1 : 0;
+            }
+            final db = await _dbService.database;
+            await db.insert('users', fetched, conflictAlgorithm: ConflictAlgorithm.replace);
+            userMap = await _dbService.getUserAuth(cleanUsername);
+          }
+        } catch (e) {
+          debugPrint('Auth online lookup error: $e');
+        }
+      }
 
       if (userMap == null) {
         _authError = 'Tài khoản "$cleanUsername" không tồn tại trong hệ thống.';
@@ -134,12 +163,31 @@ class AuthService extends ChangeNotifier {
         return false;
       }
 
-      final savedHash = userMap['password_hash'] as String?;
+      String? savedHash = userMap['password_hash'] as String?;
       final inputHash = hashPassword(cleanPassword);
 
-      // Kiểm tra mật khẩu (hỗ trợ cả hash SHA-256 và mật khẩu mẫu)
+      // Nếu tài khoản cục bộ chưa có hash nhưng máy có kết nối Supabase, kiểm tra password_hash từ Supabase
+      if (savedHash == null && SupabaseSyncService().isOnline) {
+        try {
+          final supa = Supabase.instance.client;
+          final List<dynamic> supaUsers = await supa
+              .from('users')
+              .select('password_hash')
+              .or('username.ilike.$cleanUsername,email.ilike.$cleanUsername')
+              .limit(1);
+
+          if (supaUsers.isNotEmpty && supaUsers.first['password_hash'] != null) {
+            savedHash = supaUsers.first['password_hash'] as String;
+            await _dbService.updateUserPassword(userMap['user_id'] as String, savedHash);
+          }
+        } catch (e) {
+          debugPrint('Auth remote password_hash check error: $e');
+        }
+      }
+
+      // Kiểm tra mật khẩu (hỗ trợ cả hash SHA-256 và mật khẩu mẫu khi tài khoản chưa có hash)
       final bool isPasswordCorrect = (savedHash != null && savedHash == inputHash) ||
-          (savedHash == null && (cleanPassword == 'admin123' || cleanPassword == '123456'));
+          (savedHash == null && (cleanPassword == 'admin123' || cleanPassword == '123456' || cleanPassword == '12345678'));
 
       if (!isPasswordCorrect) {
         _authError = 'Mật khẩu không chính xác. Vui lòng kiểm tra lại.';
@@ -148,13 +196,14 @@ class AuthService extends ChangeNotifier {
         return false;
       }
 
-      // Cập nhật lại hash nếu trước đó chưa có
+      final user = WmsUser.fromMap(userMap);
+
+      // Tự động chữa lành: Cập nhật lại hash vào SQLite và Supabase Cloud nếu trước đó tài khoản chưa có hash
       if (savedHash == null) {
-        final updatedUser = WmsUser.fromMap(userMap);
-        await _dbService.insertUserWithPassword(updatedUser, inputHash);
+        await _dbService.insertUserWithPassword(user, inputHash);
+        await WarehouseRepository().syncUserPassword(user.userId, inputHash);
       }
 
-      final user = WmsUser.fromMap(userMap);
       _currentUser = user;
 
       // Lưu phiên làm việc nếu chọn Ghi nhớ
@@ -246,7 +295,7 @@ class AuthService extends ChangeNotifier {
       await _dbService.insertUserWithPassword(newUser, hashedPass);
 
       // 4. Đẩy vào WarehouseRepository và đồng bộ lên Supabase Cloud
-      await WarehouseRepository().addUser(newUser);
+      await WarehouseRepository().addUser(newUser, passwordHash: hashedPass);
 
       // 5. Tự động đăng nhập
       if (autoLogin) {
@@ -331,7 +380,7 @@ class AuthService extends ChangeNotifier {
 
       final hashedPass = hashPassword(cleanPassword);
       await _dbService.insertUserWithPassword(newUser, hashedPass);
-      await WarehouseRepository().addUser(newUser);
+      await WarehouseRepository().addUser(newUser, passwordHash: hashedPass);
 
       _authError = null;
       _isLoading = false;
@@ -367,7 +416,7 @@ class AuthService extends ChangeNotifier {
     }
     try {
       final hashedPass = hashPassword(cleanPass);
-      await _dbService.updateUserPassword(userId, hashedPass);
+      await WarehouseRepository().syncUserPassword(userId, hashedPass);
       _authError = null;
       notifyListeners();
       return true;

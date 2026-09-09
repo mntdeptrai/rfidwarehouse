@@ -1139,21 +1139,32 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addUser(WmsUser user) async {
-    await _dbService.insertUser(user);
+  Future<void> addUser(WmsUser user, {String? passwordHash}) async {
+    if (passwordHash != null && passwordHash.isNotEmpty) {
+      await _dbService.insertUserWithPassword(user, passwordHash);
+    } else {
+      await _dbService.insertUser(user);
+    }
     _users.removeWhere((u) => u.userId == user.userId);
     _users.add(user);
+
+    final payload = user.toMap();
+    final hashToSync = passwordHash ?? (await _dbService.getUserAuth(user.username))?['password_hash'];
+    if (hashToSync != null) {
+      payload['password_hash'] = hashToSync;
+    }
+
     await _syncDirectOrQueue(
       tableName: 'users',
       recordId: user.userId,
       action: 'INSERT',
-      payload: user.toMap(),
+      payload: payload,
     );
     _triggerBackgroundSync();
     notifyListeners();
   }
 
-  Future<void> updateUser(WmsUser user) async {
+  Future<void> updateUser(WmsUser user, {String? passwordHash}) async {
     await _dbService.updateUser(user);
     final idx = _users.indexWhere((u) => u.userId == user.userId || u.username == user.username);
     if (idx >= 0) {
@@ -1161,14 +1172,35 @@ class WarehouseRepository extends ChangeNotifier {
     } else {
       _users.add(user);
     }
+
+    final payload = user.toMap();
+    final hashToSync = passwordHash ?? (await _dbService.getUserAuth(user.username))?['password_hash'];
+    if (hashToSync != null) {
+      payload['password_hash'] = hashToSync;
+    }
+
     await _syncDirectOrQueue(
       tableName: 'users',
       recordId: user.userId,
       action: 'UPDATE',
-      payload: user.toMap(),
+      payload: payload,
     );
     _triggerBackgroundSync();
     notifyListeners();
+  }
+
+  Future<void> syncUserPassword(String userId, String passwordHash) async {
+    await _dbService.updateUserPassword(userId, passwordHash);
+    await _syncDirectOrQueue(
+      tableName: 'users',
+      recordId: userId,
+      action: 'UPDATE',
+      payload: {
+        'user_id': userId,
+        'password_hash': passwordHash,
+      },
+    );
+    _triggerBackgroundSync();
   }
 
   Future<void> deleteUser(String userId) async {

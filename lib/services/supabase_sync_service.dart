@@ -265,6 +265,7 @@ class SupabaseSyncService extends ChangeNotifier {
           message: 'Kết nối thành công tới Supabase Cloud: ${config.url}',
         );
         notifyListeners();
+        syncUserPasswordsToCloud();
       }
       return true;
     } catch (e) {
@@ -405,8 +406,22 @@ class SupabaseSyncService extends ChangeNotifier {
           if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
             map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
           }
-          if (tableName == 'users' && map['is_active'] is bool) {
-            map['is_active'] = (map['is_active'] == true) ? 1 : 0;
+          if (tableName == 'users') {
+            if (map['is_active'] is bool) {
+              map['is_active'] = (map['is_active'] == true) ? 1 : 0;
+            }
+            if (map['password_hash'] == null) {
+              final localUsers = await db.query(
+                'users',
+                columns: ['password_hash'],
+                where: 'user_id = ? OR username = ?',
+                whereArgs: [map['user_id'], map['username']],
+                limit: 1,
+              );
+              if (localUsers.isNotEmpty && localUsers.first['password_hash'] != null) {
+                map['password_hash'] = localUsers.first['password_hash'];
+              }
+            }
           }
           await db.insert(tableName, map, conflictAlgorithm: ConflictAlgorithm.replace);
         } else {
@@ -818,7 +833,13 @@ class SupabaseSyncService extends ChangeNotifier {
             map['is_active'] = (map['is_active'] == true) ? 1 : 0;
           }
           if (map['password_hash'] == null) {
-            final localUsers = await db.query('users', columns: ['password_hash'], where: 'user_id = ?', whereArgs: [map['user_id']], limit: 1);
+            final localUsers = await db.query(
+              'users',
+              columns: ['password_hash'],
+              where: 'user_id = ? OR username = ?',
+              whereArgs: [map['user_id'], map['username']],
+              limit: 1,
+            );
             if (localUsers.isNotEmpty && localUsers.first['password_hash'] != null) {
               map['password_hash'] = localUsers.first['password_hash'];
             }
@@ -829,6 +850,26 @@ class SupabaseSyncService extends ChangeNotifier {
       await batch.commit(noResult: true);
     } catch (e) {
       debugPrint('Pull table $tableName from Supabase warning: $e');
+    }
+  }
+
+  /// Đẩy các password_hash của người dùng từ SQLite cục bộ lên Supabase Cloud nếu Cloud chưa có
+  Future<void> syncUserPasswordsToCloud() async {
+    if (!_isOnline || Platform.environment.containsKey('FLUTTER_TEST')) return;
+    try {
+      final supa = Supabase.instance.client;
+      final localUsers = await _dbService.getUsers();
+      for (final u in localUsers) {
+        final authRecord = await _dbService.getUserAuth(u.username);
+        final passHash = authRecord?['password_hash'] as String?;
+        if (passHash != null && passHash.isNotEmpty) {
+          try {
+            await supa.from('users').update({'password_hash': passHash}).eq('user_id', u.userId);
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('syncUserPasswordsToCloud error: $e');
     }
   }
 
