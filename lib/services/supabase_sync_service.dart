@@ -73,6 +73,7 @@ class SupabaseSyncService extends ChangeNotifier {
   final List<SupabaseLogEntry> _logs = [];
 
   Timer? _autoSyncTimer;
+  Timer? _reloadDebounceTimer;
   RealtimeChannel? _realtimeChannel;
   bool _isInitialized = false;
 
@@ -420,12 +421,19 @@ class SupabaseSyncService extends ChangeNotifier {
         isSuccess: true,
         message: 'Nhận sự kiện Realtime thay đổi từ $tableName (${payload.eventType})',
       );
-      await WarehouseRepository().reloadFromSqlite();
+      _scheduleReloadFromSqlite();
     } catch (e) {
       debugPrint('Realtime handling error on $tableName: $e');
       await _pullTableFromSupabase(tableName);
-      await WarehouseRepository().reloadFromSqlite();
+      _scheduleReloadFromSqlite();
     }
+  }
+
+  void _scheduleReloadFromSqlite() {
+    _reloadDebounceTimer?.cancel();
+    _reloadDebounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      await WarehouseRepository().reloadFromSqlite();
+    });
   }
 
   Map<String, dynamic> _normalizePayloadForSupabase(String tableName, Map<String, dynamic> input) {
