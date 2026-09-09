@@ -1255,6 +1255,7 @@ class WarehouseRepository extends ChangeNotifier {
     required String palletCode,
     String? locationId,
     required List<Item> newItems,
+    String? placedBy,
   }) {
     Pallet? pallet = _pallets.firstWhere(
       (p) => p.palletCode.toUpperCase() == palletCode.toUpperCase(),
@@ -1265,6 +1266,7 @@ class WarehouseRepository extends ChangeNotifier {
           locationId: locationId,
           inboundTime: DateTime.now(),
           isMultiSku: newItems.map((e) => e.sku).toSet().length > 1,
+          placedBy: placedBy ?? 'Thủ kho (Admin)',
         );
         _pallets.add(newP);
         return newP;
@@ -1272,6 +1274,9 @@ class WarehouseRepository extends ChangeNotifier {
     );
 
     pallet.locationId = locationId;
+    if (placedBy != null && placedBy.isNotEmpty) {
+      pallet.placedBy = placedBy;
+    }
     for (var item in newItems) {
       item.palletId = pallet.palletId;
       item.locationId = locationId;
@@ -1313,6 +1318,47 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  /// Lấy thông tin người đặt Pallet lên kệ
+  String getPalletPlacedBy(Pallet p) {
+    if (p.placedBy != null && p.placedBy!.trim().isNotEmpty) {
+      return p.placedBy!;
+    }
+    // Tra cứu trong nhật ký giao dịch biến động kho của pallet này
+    final tx = _transactions.where((t) =>
+      (t.palletCode != null && t.palletCode!.toUpperCase() == p.palletCode.toUpperCase()) ||
+      (t.documentNo.toUpperCase() == p.palletCode.toUpperCase())
+    ).firstOrNull;
+    if (tx != null && tx.performedBy.trim().isNotEmpty) {
+      return tx.performedBy;
+    }
+    // Tra cứu từ đơn nhập kho của các mặt hàng trong pallet
+    for (final itId in p.itemIds) {
+      final item = _items.where((i) => i.itemId == itId).firstOrNull;
+      if (item?.orderNo != null) {
+        final ord = _inboundOrders.where((o) => o.orderNo == item!.orderNo).firstOrNull;
+        if (ord != null && ord.sourceSupplier.trim().isNotEmpty) {
+          return 'Nhập từ: ${ord.sourceSupplier}';
+        }
+      }
+    }
+    return 'Thủ kho (Admin)';
+  }
+
+  /// Lấy thời gian đặt Pallet lên kệ
+  DateTime getPalletPlacedTime(Pallet p) {
+    if (p.inboundTime != null) {
+      return p.inboundTime!;
+    }
+    final tx = _transactions.where((t) =>
+      (t.palletCode != null && t.palletCode!.toUpperCase() == p.palletCode.toUpperCase()) ||
+      (t.documentNo.toUpperCase() == p.palletCode.toUpperCase())
+    ).firstOrNull;
+    if (tx != null) {
+      return tx.timestamp;
+    }
+    return DateTime.now();
   }
 
   /// Tra cứu bất đồng bộ có đối soát trực tiếp với SQLite để chống mất pallet
@@ -2798,7 +2844,10 @@ class WarehouseRepository extends ChangeNotifier {
     final newLocation = _locations.firstWhere((l) => l.locationId == newLocationId);
 
     pallet.locationId = newLocationId;
+    pallet.placedBy = performedBy;
+    pallet.inboundTime = DateTime.now();
     _dbService.updatePalletLocation(palletId, newLocationId);
+    _dbService.insertPallet(pallet);
     if (oldLocation.currentPallets > 0) oldLocation.currentPallets--;
     newLocation.currentPallets++;
 

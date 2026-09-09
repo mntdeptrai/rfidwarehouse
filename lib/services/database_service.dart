@@ -179,6 +179,9 @@ class DatabaseService {
     try {
       await db.execute('ALTER TABLE pallets ADD COLUMN rfid_epc TEXT');
     } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE pallets ADD COLUMN placed_by TEXT');
+    } catch (_) {}
 
     // 4. Bảng Mặt hàng cụ thể gắn thẻ RFID Chip (items)
     await db.execute('''
@@ -640,6 +643,7 @@ class DatabaseService {
           locationId: map['location_id'] as String?,
           inboundTime: inbTime,
           isMultiSku: map['is_multi_sku'] == 1 || map['is_multi_sku'] == true,
+          placedBy: map['placed_by'] as String?,
         );
       }).where((p) => p.palletCode.isNotEmpty).toList();
     } catch (e) {
@@ -664,6 +668,7 @@ class DatabaseService {
         locationId: m['location_id'] as String?,
         inboundTime: inbTime,
         isMultiSku: (m['is_multi_sku'] as int?) == 1,
+        placedBy: m['placed_by'] as String?,
       );
     }).toList();
   }
@@ -677,6 +682,7 @@ class DatabaseService {
       'location_id': pallet.locationId,
       'inbound_time': pallet.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'is_multi_sku': pallet.isMultiSku ? 1 : 0,
+      'placed_by': pallet.placedBy,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
