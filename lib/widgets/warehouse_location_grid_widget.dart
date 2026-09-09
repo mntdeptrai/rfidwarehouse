@@ -60,6 +60,9 @@ class WarehouseLocationGridWidget extends StatefulWidget {
   final String? selectedLocationId;
   final ValueChanged<String?>? onLocationSelected;
   final VoidCallback? onLocationDataChanged;
+  final double? maxHeight;
+  final bool isExpanded;
+  final bool defaultCollapsed;
 
   const WarehouseLocationGridWidget({
     super.key,
@@ -67,6 +70,9 @@ class WarehouseLocationGridWidget extends StatefulWidget {
     this.selectedLocationId,
     this.onLocationSelected,
     this.onLocationDataChanged,
+    this.maxHeight = 280.0,
+    this.isExpanded = false,
+    this.defaultCollapsed = false,
   });
 
   @override
@@ -78,6 +84,13 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
   String _selectedStatusFilter = 'ALL'; // ALL, FULL, NEAR_FULL, AVAILABLE
   String _selectedZoneFilter = 'ALL';
+  late bool _isCollapsed;
+
+  @override
+  void initState() {
+    super.initState();
+    _isCollapsed = widget.defaultCollapsed;
+  }
 
   ShelfStatusType _getShelfStatus(Location loc) {
     final s = loc.status.toUpperCase();
@@ -225,6 +238,23 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                     constraints: const BoxConstraints(),
                     onPressed: () => _confirmResetLocations(context, c),
                   ),
+                  const SizedBox(width: 8),
+                  // Nút Thu gọn / Mở rộng lưới ô kệ
+                  IconButton(
+                    tooltip: _isCollapsed ? 'Mở rộng lưới ô kệ' : 'Thu gọn lưới ô kệ',
+                    icon: Icon(
+                      _isCollapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
+                      size: 20,
+                    ),
+                    color: c.rfidCyan,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      setState(() {
+                        _isCollapsed = !_isCollapsed;
+                      });
+                    },
+                  ),
                 ],
               ),
             ),
@@ -270,47 +300,68 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
               ),
             ),
 
-          // ==================== 3. LƯỚI CÁC Ô KỆ (GIỐNG HỆT GIAO DIỆN KIỂM KHO) ====================
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: filteredLocations.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Text(
-                        'Không tìm thấy ô kệ nào khớp với bộ lọc.',
-                        style: TextStyle(color: c.textSecondary, fontSize: 13),
-                      ),
-                    ),
+          // ==================== 3. LƯỚI CÁC Ô KỆ (SỬ DỤNG GRIDVIEW & CUỘN TỰ ĐỘNG) ====================
+          if (!_isCollapsed)
+            widget.isExpanded
+                ? Expanded(
+                    child: _buildGridBody(filteredLocations, selectedLoc, c),
                   )
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      final availableWidth = constraints.maxWidth;
-                      int crossAxisCount = 5;
-                      if (availableWidth < 650) {
-                        crossAxisCount = 2;
-                      } else if (availableWidth < 900) {
-                        crossAxisCount = 3;
-                      } else if (availableWidth < 1200) {
-                        crossAxisCount = 4;
-                      }
-
-                      final itemWidth = (availableWidth - (crossAxisCount - 1) * 8) / crossAxisCount;
-
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: filteredLocations.map((loc) {
-                          return SizedBox(
-                            width: itemWidth,
-                            child: _buildShelfCard(loc, selectedLoc, c),
-                          );
-                        }).toList(),
-                      );
-                    },
+                : ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: widget.maxHeight ?? 280,
+                    ),
+                    child: _buildGridBody(filteredLocations, selectedLoc, c),
                   ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGridBody(List<Location> filteredLocations, Location? selectedLoc, EyeCareColors c) {
+    if (filteredLocations.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Text(
+            'Không tìm thấy ô kệ nào khớp với bộ lọc.',
+            style: TextStyle(color: c.textSecondary, fontSize: 13),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableWidth = constraints.maxWidth;
+          int crossAxisCount = 5;
+          if (availableWidth < 500) {
+            crossAxisCount = 1;
+          } else if (availableWidth < 750) {
+            crossAxisCount = 2;
+          } else if (availableWidth < 1050) {
+            crossAxisCount = 3;
+          } else if (availableWidth < 1350) {
+            crossAxisCount = 4;
+          }
+
+          return GridView.builder(
+            shrinkWrap: !widget.isExpanded,
+            physics: const BouncingScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              mainAxisExtent: 135,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: filteredLocations.length,
+            itemBuilder: (context, index) {
+              final loc = filteredLocations[index];
+              return _buildShelfCard(loc, selectedLoc, c);
+            },
+          );
+        },
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:uhf/models/catalog_models.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/screens/desktop/desktop_goods_delivery_view.dart';
 import 'package:uhf/services/warehouse_repository.dart';
+import 'package:uhf/widgets/warehouse_location_grid_widget.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -117,6 +118,48 @@ void main() {
       expect(find.textContaining('SƠ ĐỒ 10 VỊ TRÍ'), findsOneWidget);
       // Nút tiếp tục qua cổng RFID xuất kho ở góc phải
       expect(find.textContaining('TIẾP TỤC: QUA CỔNG RFID XUẤT KHO'), findsOneWidget);
+    });
+
+    testWidgets('WarehouseLocationGridWidget uses GridView, scrolls smoothly and supports collapse/expand', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(splashFactory: InkRipple.splashFactory),
+          home: const Scaffold(
+            body: SingleChildScrollView(
+              child: WarehouseLocationGridWidget(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // GridView is used instead of Column/Wrap
+      expect(find.byType(GridView), findsOneWidget);
+
+      // Verify cards exist in the grid
+      expect(find.textContaining('KỆ 01'), findsOneWidget);
+
+      // Tap collapse button
+      final collapseBtn = find.byTooltip('Thu gọn lưới ô kệ');
+      expect(collapseBtn, findsOneWidget);
+      await tester.tap(collapseBtn);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Now GridView is hidden
+      expect(find.byType(GridView), findsNothing);
+
+      // Tap expand button
+      final expandBtn = find.byTooltip('Mở rộng lưới ô kệ');
+      expect(expandBtn, findsOneWidget);
+      await tester.tap(expandBtn);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // GridView is restored
+      expect(find.byType(GridView), findsOneWidget);
     });
   });
 }
