@@ -9,6 +9,9 @@ import '../../services/tower_light_service.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../services/excel_import_service.dart';
 import '../../theme/eye_care_theme.dart';
+import '../../widgets/warehouse_floor_plan_widget.dart';
+import '../../widgets/warehouse_floor_plan_editor_dialog.dart';
+import '../../widgets/warehouse_location_grid_widget.dart';
 
 /// Màn hình Quản Lý Nhập Kho Desktop với Quy Trình 5 Bước Tuần Tự (Guided Inbound & Putaway Wizard)
 class DesktopGoodsReceiveView extends StatefulWidget {
@@ -38,6 +41,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   // Pallet tự động nhận diện từ CSDL hoặc chọn nhanh
   Pallet? _wizardDetectedPallet;
   String? _wizardDetectedPalletTag;
+  String? _targetPutawayLocationId;
+  bool _showFloorPlanPutaway = true;
 
   final Map<String, TagInfo> _wizardScannedTags = {};
   final Map<String, TagInfo> _wizardUnexpectedTags = {};
@@ -497,14 +502,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         );
       }
 
-      // Cập nhật trạng thái inStock
+      // Cập nhật trạng thái inStock và vị trí lưu kho
       for (final it in _repo.items) {
         if ((it.palletId != null && it.palletId!.toUpperCase() == palletCode.toUpperCase()) ||
             itemEpcs.contains(it.epc) ||
             (it.orderNo != null && _wizardSelectedCartons.contains(it.orderNo))) {
           it.status = ItemStatus.inStock;
           it.palletId = palletCode;
+          if (_targetPutawayLocationId != null) {
+            it.locationId = _targetPutawayLocationId;
+          }
         }
+      }
+      if (_wizardDetectedPallet != null && _targetPutawayLocationId != null) {
+        _wizardDetectedPallet!.locationId = _targetPutawayLocationId;
       }
 
       // Cập nhật InboundOrder hoàn tất nếu toàn bộ sản phẩm đơn đã nhập
@@ -1338,9 +1349,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         final isNarrow = constraints.maxWidth < minW;
         final isShort = constraints.maxHeight < minH;
 
+        final contentW = isNarrow ? minW : constraints.maxWidth;
+        final contentH = isShort ? minH : constraints.maxHeight;
+
         Widget mainContent = Container(
-          width: isNarrow ? minW : double.infinity,
-          height: isShort ? minH : double.infinity,
+          width: contentW,
+          height: contentH,
           color: c.bgDeep,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: Column(
@@ -1367,6 +1381,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         enabled: !_isImporting,
                         tooltip: 'Chọn nguồn nhập hàng',
                         offset: const Offset(0, 44),
+                        constraints: const BoxConstraints(minWidth: 380, maxWidth: 440),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                           side: BorderSide(color: c.border),
@@ -1385,66 +1400,78 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           PopupMenuItem<String>(
                             value: 'excel',
                             enabled: !_isImporting,
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(
+                              width: 360,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 20),
                                   ),
-                                  child: const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'File Danh Sách Thùng Hàng (.xlsx)',
-                                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'File Danh Sách Thùng Hàng (.xlsx)',
+                                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Nạp file chứa Carton Box, SKU, Serial/EPC chuẩn bị nhập',
+                                          style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                          softWrap: true,
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Nạp file chứa Carton Box, SKU, Serial/EPC chuẩn bị nhập',
-                                      style: TextStyle(color: c.textSecondary, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           const PopupMenuDivider(),
                           PopupMenuItem<String>(
                             value: 'po',
                             enabled: !_isImporting,
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: c.rfidCyan.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(
+                              width: 360,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: c.rfidCyan.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(Icons.receipt_long, color: c.rfidCyan, size: 20),
                                   ),
-                                  child: Icon(Icons.receipt_long, color: c.rfidCyan, size: 20),
-                                ),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'File Nhập PO (Đơn Mua Hàng)',
-                                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'File Nhập PO (Đơn Mua Hàng)',
+                                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Nạp file đơn PO: Mã PO, Nhà cung cấp, SKU, Số lượng',
+                                          style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                          softWrap: true,
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Nạp file đơn PO: Mã PO, Nhà cung cấp, SKU, Số lượng',
-                                      style: TextStyle(color: c.textSecondary, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -2378,7 +2405,59 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+
+          // SƠ ĐỒ CÁC Ô VỊ TRÍ KHO DỄ NHÌN (CHỌN VỊ TRÍ CẤT HÀNG)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: c.bgDeep,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.grid_view_rounded, color: Color(0xFF10B981), size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _targetPutawayLocationId != null
+                        ? 'ĐÃ CHỌN VỊ TRÍ CẤT PALLET: $_targetPutawayLocationId • BẤM ĐỔI VỊ TRÍ NẾU CẦN'
+                        : 'CHỌN Ô VỊ TRÍ KỆ ĐỂ CẤT HÀNG / PALLET NHẬP KHO',
+                    style: const TextStyle(color: Color(0xFF10B981), fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => setState(() => _showFloorPlanPutaway = !_showFloorPlanPutaway),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_showFloorPlanPutaway ? 'Thu gọn các ô kệ' : 'Mở xem các ô kệ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                        Icon(_showFloorPlanPutaway ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: c.textSecondary),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_showFloorPlanPutaway) ...[
+            const SizedBox(height: 8),
+            WarehouseLocationGridWidget(
+              mode: WarehouseLocationGridMode.inbound,
+              selectedLocationId: _targetPutawayLocationId,
+              onLocationSelected: (locId) {
+                setState(() => _targetPutawayLocationId = locId);
+              },
+              onLocationDataChanged: () {
+                setState(() {});
+              },
+            ),
+          ],
+          const SizedBox(height: 12),
+
           // Realtime Inspection Table
           Expanded(
             child: Container(

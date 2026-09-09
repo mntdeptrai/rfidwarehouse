@@ -870,6 +870,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
       return itemLoc == locCode || itemLoc == locId;
     }).toList();
 
+    final palletsOnShelf = _repo.pallets.where((p) {
+      final pLoc = p.locationId?.trim().toUpperCase();
+      if (pLoc == null || pLoc.isEmpty) return false;
+      return pLoc == locCode || pLoc == locId;
+    }).toList();
+
     return LayoutBuilder(
       builder: (context, cardConstraints) {
         final cardW = cardConstraints.maxWidth;
@@ -968,7 +974,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   ],
                 ),
 
-                // Dòng 2: Chi tiết số chip RFID thực tế (Tự động co giãn nội dung)
+                // Dòng 2: Chi tiết số chip RFID thực tế & Pallet (Tự động co giãn nội dung)
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: isCompact ? 8 : 10, vertical: isCompact ? 6 : 7),
                   decoration: BoxDecoration(
@@ -982,12 +988,18 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       Expanded(
                         child: Text(
                           itemsOnShelf.isNotEmpty
-                              ? (isCompact ? '${itemsOnShelf.length} chip RFID' : 'Đang có ${itemsOnShelf.length} chip RFID trên kệ')
-                              : (isCompact ? 'Kệ trống' : 'Kệ trống, chưa có chip RFID'),
+                              ? (palletsOnShelf.isNotEmpty
+                                  ? (isCompact
+                                      ? '${itemsOnShelf.length} SP (${palletsOnShelf.length} Pallet)'
+                                      : 'Đang có ${itemsOnShelf.length} chip RFID • ${palletsOnShelf.length} Pallet (${palletsOnShelf.map((p) => p.palletCode).join(', ')})')
+                                  : (isCompact ? '${itemsOnShelf.length} chip RFID' : 'Đang có ${itemsOnShelf.length} chip RFID trên kệ'))
+                              : (palletsOnShelf.isNotEmpty
+                                  ? 'Pallet rỗng: ${palletsOnShelf.map((p) => p.palletCode).join(', ')}'
+                                  : (isCompact ? 'Kệ trống' : 'Kệ trống, chưa có chip RFID')),
                           style: TextStyle(
-                            color: itemsOnShelf.isNotEmpty ? c.textPrimary : c.textMuted,
+                            color: (itemsOnShelf.isNotEmpty || palletsOnShelf.isNotEmpty) ? c.textPrimary : c.textMuted,
                             fontSize: isCompact ? 10.5 : 11,
-                            fontWeight: itemsOnShelf.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight: (itemsOnShelf.isNotEmpty || palletsOnShelf.isNotEmpty) ? FontWeight.w600 : FontWeight.normal,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1079,6 +1091,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             final itemLoc = i.locationId?.trim().toUpperCase();
             if (itemLoc == null || itemLoc.isEmpty) return false;
             return itemLoc == locCode || itemLoc == locId;
+          }).toList();
+
+          final palletsOnShelf = _repo.pallets.where((p) {
+            final pLoc = p.locationId?.trim().toUpperCase();
+            if (pLoc == null || pLoc.isEmpty) return false;
+            return pLoc == locCode || pLoc == locId;
           }).toList();
 
           return AlertDialog(
@@ -1202,7 +1220,36 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
+
+                  // Thông tin Pallet đang đặt tại kệ (nếu có chuyển kho từ PDA)
+                  if (palletsOnShelf.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.pallet, color: Color(0xFF10B981), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Pallet tại kệ (${palletsOnShelf.length}): ',
+                            style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                          Expanded(
+                            child: Text(
+                              palletsOnShelf.map((p) => '${p.palletCode} (${p.itemIds.length} SP)').join(' • '),
+                              style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                   Text(
                     'Danh sách hàng hóa / RFID Chip trên kệ (${liveItems.length}):',
@@ -1231,6 +1278,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                             separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
                             itemBuilder: (dialogListCtx, idx) {
                               final item = liveItems[idx];
+                              final itemPallet = item.palletId != null
+                                  ? _repo.pallets.where((p) => p.palletId == item.palletId).firstOrNull
+                                  : null;
                               return ListTile(
                                 dense: true,
                                 leading: Container(
@@ -1239,7 +1289,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                   child: Icon(Icons.nfc, color: c.rfidCyan, size: 16),
                                 ),
                                 title: Text(item.productName.isNotEmpty ? item.productName : item.sku, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
-                                subtitle: Text('EPC: ${item.epc}', style: TextStyle(color: c.textMuted, fontSize: 10.5, fontFamily: 'Courier')),
+                                subtitle: Text(
+                                  itemPallet != null
+                                      ? 'EPC: ${item.epc}  •  📦 Pallet: ${itemPallet.palletCode}'
+                                      : 'EPC: ${item.epc}',
+                                  style: TextStyle(color: c.textMuted, fontSize: 10.5, fontFamily: 'Courier'),
+                                ),
                                 trailing: Text(item.status.label, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11)),
                               );
                             },

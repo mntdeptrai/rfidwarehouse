@@ -100,6 +100,10 @@ class WarehouseRepository extends ChangeNotifier {
 
       _locations.clear();
       _locations.addAll(cleanLocations);
+      if (!Platform.environment.containsKey('FLUTTER_TEST') && _locations.length < 10) {
+        await ensureDefault10Locations();
+      }
+      _floorPlanConfig = await _dbService.getWarehouseLayoutConfig();
 
       // KHÔNG BAO GIỜ XÓA PALLET ĐÃ KHAI BÁO CỦA NGƯỜI DÙNG: Khai báo 1 lần dùng vĩnh viễn
       // Đồng bộ 2 lớp: SQLite B-Tree Index + Permanent Master Backup File
@@ -694,6 +698,204 @@ class WarehouseRepository extends ChangeNotifier {
     return createdLocs.length;
   }
 
+  /// Đảm bảo luôn có sẵn 10 ô vị trí sơ đồ kho (Vị trí 01 đến Vị trí 10)
+  Future<void> ensureDefault10Locations() async {
+    final defaultSlots = [
+      {'code': 'A-01', 'zone': 'Khu A', 'shelf': 'Kệ 01', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'LEFT', 'order': 1},
+      {'code': 'A-02', 'zone': 'Khu A', 'shelf': 'Kệ 02', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'LEFT', 'order': 2},
+      {'code': 'A-03', 'zone': 'Khu A', 'shelf': 'Kệ 03', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'LEFT', 'order': 3},
+      {'code': 'A-04', 'zone': 'Khu A', 'shelf': 'Kệ 04', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'LEFT', 'order': 4},
+      {'code': 'A-05', 'zone': 'Khu A', 'shelf': 'Kệ 05', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'LEFT', 'order': 5},
+      {'code': 'B-01', 'zone': 'Khu B', 'shelf': 'Kệ 01', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'RIGHT', 'order': 1},
+      {'code': 'B-02', 'zone': 'Khu B', 'shelf': 'Kệ 02', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'RIGHT', 'order': 2},
+      {'code': 'B-03', 'zone': 'Khu B', 'shelf': 'Kệ 03', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'RIGHT', 'order': 3},
+      {'code': 'B-04', 'zone': 'Khu B', 'shelf': 'Kệ 04', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'RIGHT', 'order': 4},
+      {'code': 'B-05', 'zone': 'Khu B', 'shelf': 'Kệ 05', 'level': 'Tầng 1', 'capacity': 50, 'aisle': 'RIGHT', 'order': 5},
+    ];
+
+    bool changed = false;
+    for (int i = 0; i < defaultSlots.length; i++) {
+      final slot = defaultSlots[i];
+      final code = slot['code'] as String;
+      final existingIdx = _locations.indexWhere((l) =>
+          l.locationCode.trim().toUpperCase() == code.toUpperCase() ||
+          l.locationId.trim().toUpperCase() == 'LOC-$code'.toUpperCase());
+      if (existingIdx == -1) {
+        if (_locations.length < 10) {
+          final loc = Location(
+            locationId: 'LOC-$code',
+            locationCode: code,
+            zone: slot['zone'] as String,
+            shelf: slot['shelf'] as String,
+            level: slot['level'] as String,
+            maxPalletCapacity: (slot['capacity'] as int?) ?? 50,
+            currentPallets: 0,
+            status: 'AVAILABLE',
+            aisleSide: slot['aisle'] as String,
+            sortOrder: slot['order'] as int,
+          );
+          _locations.add(loc);
+          await _dbService.insertLocation(loc);
+          changed = true;
+        }
+      } else {
+        // Cập nhật bổ sung aisleSide và sortOrder nếu chưa được phân dãy
+        final loc = _locations[existingIdx];
+        if (loc.aisleSide != slot['aisle'] || loc.sortOrder == 0) {
+          final updated = loc.copyWith(
+            aisleSide: slot['aisle'] as String,
+            sortOrder: slot['order'] as int,
+          );
+          _locations[existingIdx] = updated;
+          await _dbService.insertLocation(updated);
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      notifyListeners();
+    }
+  }
+
+  /// Lưu cấu hình sơ đồ mặt bằng kho thực tế của khách hàng
+  Future<void> saveWarehouseLayoutConfig(WarehouseFloorPlanConfig config) async {
+    _floorPlanConfig = config;
+    await _dbService.saveWarehouseLayoutConfig(config);
+    notifyListeners();
+  }
+
+  /// Thêm vị trí kệ mới tùy chỉnh cho khách hàng
+  Future<void> addCustomLocation(Location loc) async {
+    final cleanId = loc.locationId.trim();
+    _locations.removeWhere((l) =>
+        l.locationId == cleanId ||
+        l.locationCode.trim().toUpperCase() == loc.locationCode.trim().toUpperCase());
+    _locations.add(loc);
+    await _dbService.insertLocation(loc);
+    await _syncDirectOrQueue(
+      tableName: 'locations',
+      recordId: loc.locationId,
+      action: 'INSERT',
+      payload: loc.toMap(),
+    );
+    notifyListeners();
+  }
+
+  /// Xóa vị trí kệ
+  Future<void> deleteCustomLocation(String locationIdOrCode) async {
+    final clean = locationIdOrCode.trim().toUpperCase();
+    _locations.removeWhere((l) =>
+        l.locationId.trim().toUpperCase() == clean ||
+        l.locationCode.trim().toUpperCase() == clean);
+    await _dbService.deleteLocation(clean);
+    await _syncDirectOrQueue(
+      tableName: 'locations',
+      recordId: clean,
+      action: 'DELETE',
+      payload: {'location_id': clean},
+    );
+    notifyListeners();
+  }
+
+  /// Đặt lại sơ đồ kho theo mẫu định sẵn
+  Future<void> resetLayoutToPreset(WarehouseLayoutType type) async {
+    _floorPlanConfig = _floorPlanConfig.copyWith(layoutType: type);
+    await _dbService.saveWarehouseLayoutConfig(_floorPlanConfig);
+
+    // Bố trí lại các vị trí kệ theo mẫu mới
+    if (type == WarehouseLayoutType.parallelAisles) {
+      int leftIdx = 1;
+      int rightIdx = 1;
+      for (int i = 0; i < _locations.length; i++) {
+        final loc = _locations[i];
+        if (loc.locationCode.startsWith('A') || i % 2 == 0) {
+          _locations[i] = loc.copyWith(aisleSide: 'LEFT', sortOrder: leftIdx++);
+        } else {
+          _locations[i] = loc.copyWith(aisleSide: 'RIGHT', sortOrder: rightIdx++);
+        }
+        await _dbService.insertLocation(_locations[i]);
+      }
+    } else if (type == WarehouseLayoutType.uShape) {
+      final total = _locations.length;
+      final part = (total / 3).ceil();
+      for (int i = 0; i < _locations.length; i++) {
+        final loc = _locations[i];
+        if (i < part) {
+          _locations[i] = loc.copyWith(aisleSide: 'LEFT', sortOrder: i + 1);
+        } else if (i < part * 2) {
+          _locations[i] = loc.copyWith(aisleSide: 'BACK', sortOrder: i - part + 1);
+        } else {
+          _locations[i] = loc.copyWith(aisleSide: 'RIGHT', sortOrder: i - part * 2 + 1);
+        }
+        await _dbService.insertLocation(_locations[i]);
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Danh sách tất cả sản phẩm (Item) thực tế đang nằm tại vị trí kệ này (trực tiếp hoặc qua Pallet)
+  List<Item> getItemsAtLocation(Location loc) {
+    final cleanCode = loc.locationCode.trim().toUpperCase();
+    final cleanId = loc.locationId.trim().toUpperCase();
+    final targetIds = {cleanCode, cleanId};
+
+    final palletIdsAtLoc = _pallets
+        .where((p) => p.locationId != null && targetIds.contains(p.locationId!.trim().toUpperCase()))
+        .map((p) => p.palletId.trim().toUpperCase())
+        .toSet();
+
+    return _items.where((it) {
+      if (it.status == ItemStatus.out) return false;
+      final itLoc = it.locationId?.trim().toUpperCase();
+      if (itLoc != null && targetIds.contains(itLoc)) return true;
+      final itPal = it.palletId?.trim().toUpperCase();
+      if (itPal != null && palletIdsAtLoc.contains(itPal)) return true;
+      return false;
+    }).toList();
+  }
+
+  /// Cập nhật thông tin chi tiết vị trí kệ (Tên hiển thị, Sức chứa, Khu vực, Trạng thái...)
+  Future<void> updateLocationDetails({
+    required String locationId,
+    required String locationCode,
+    required String zone,
+    required String shelf,
+    required String level,
+    required int maxCapacity,
+    String? status,
+    String? aisleSide,
+    int? sortOrder,
+  }) async {
+    final cleanId = locationId.trim().toUpperCase();
+    final idx = _locations.indexWhere((l) =>
+        l.locationId.trim().toUpperCase() == cleanId ||
+        l.locationCode.trim().toUpperCase() == cleanId);
+    if (idx != -1) {
+      final old = _locations[idx];
+      final updated = old.copyWith(
+        locationCode: locationCode.trim(),
+        zone: zone.trim(),
+        shelf: shelf.trim(),
+        level: level.trim(),
+        maxPalletCapacity: maxCapacity,
+        status: status ?? old.status,
+        aisleSide: aisleSide ?? old.aisleSide,
+        sortOrder: sortOrder ?? old.sortOrder,
+      );
+      _locations[idx] = updated;
+      await _dbService.insertLocation(updated);
+      await _syncDirectOrQueue(
+        tableName: 'locations',
+        recordId: updated.locationId,
+        action: 'UPDATE',
+        payload: updated.toMap(),
+      );
+      _triggerBackgroundSync();
+      notifyListeners();
+    }
+  }
+
+
   /// Đếm chính xác số lượng Pallet đang được xếp tại vị trí kệ này
   int getPalletCountForLocation(Location loc) {
     final cleanCode = loc.locationCode.trim().toUpperCase();
@@ -789,6 +991,9 @@ class WarehouseRepository extends ChangeNotifier {
   final List<WmsUser> _users = [];
   final List<Customer> _customers = [];
   final List<DeliveryNote> _deliveryNotes = [];
+
+  WarehouseFloorPlanConfig _floorPlanConfig = WarehouseFloorPlanConfig.defaultConfig();
+  WarehouseFloorPlanConfig get floorPlanConfig => _floorPlanConfig;
 
   List<Product> get products => List.unmodifiable(_products);
   List<Location> get locations => List.unmodifiable(_locations);
