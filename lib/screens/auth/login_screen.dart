@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../theme/eye_care_theme.dart';
-import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,11 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _fillCredentials(String user, String pass) {
-    _usernameController.text = user;
-    _passwordController.text = pass;
-    setState(() {});
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -261,131 +255,28 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
 
-                      // Demo quick login accounts chips
+                      // Thông báo tài khoản nội bộ do Quản trị viên cấp phát (Bỏ đăng ký)
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
                           color: c.bgCardElevated,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: c.border),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              'ĐĂNG NHẬP NHANH TÀI KHOẢN MẪU:',
-                              style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: c.border),
-                                      padding: const EdgeInsets.symmetric(vertical: 7),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                    ),
-                                    onPressed: () => _fillCredentials('admin', 'admin123'),
-                                    child: Column(
-                                      children: [
-                                        Text('Admin', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
-                                        Text('admin123', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: c.border),
-                                      padding: const EdgeInsets.symmetric(vertical: 7),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                    ),
-                                    onPressed: () => _fillCredentials('thukho', '123456'),
-                                    child: Column(
-                                      children: [
-                                        Text('Thủ kho', style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 11)),
-                                        Text('123456', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: c.border),
-                                      padding: const EdgeInsets.symmetric(vertical: 7),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                    ),
-                                    onPressed: () => _fillCredentials('camtay', '123456'),
-                                    child: Column(
-                                      children: [
-                                        Text('Máy cầm tay', style: TextStyle(color: const Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 11)),
-                                        Text('123456', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: c.border),
-                                      padding: const EdgeInsets.symmetric(vertical: 7),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                    ),
-                                    onPressed: () => _fillCredentials('seller', '123456'),
-                                    child: Column(
-                                      children: [
-                                        Text('Seller', style: TextStyle(color: const Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 11)),
-                                        Text('123456', style: TextStyle(color: c.textMuted, fontSize: 9.5)),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            Icon(Icons.shield_outlined, color: c.rfidCyan, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Hệ thống quản lý kho WMS nội bộ. Tài khoản do Quản Trị Viên (Admin) cấp phát và phân quyền.',
+                                style: TextStyle(color: c.textMuted, fontSize: 11.5, height: 1.3),
+                              ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Register link
-                      Wrap(
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            'Chưa có tài khoản nhân viên? ',
-                            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-                          ),
-                          InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                              );
-                            },
-                            child: Text(
-                              'Đăng ký ngay',
-                              style: TextStyle(
-                                color: c.rfidCyan,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12.5,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),

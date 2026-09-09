@@ -200,11 +200,13 @@ CREATE TABLE IF NOT EXISTS public.users (
     full_name TEXT NOT NULL,
     email TEXT,
     phone TEXT,
-    role TEXT NOT NULL DEFAULT 'operator', -- 'admin', 'manager', 'operator', 'forklift'
+    role TEXT NOT NULL DEFAULT 'thukho', -- 'admin', 'kythuat', 'thukho', 'handheld', 'seller'
+    password_hash TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 CREATE INDEX IF NOT EXISTS idx_users_username ON public.users (username);
 
 -- 15. Bảng Lịch sử Đồng bộ (sync_logs)

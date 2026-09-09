@@ -1,7 +1,7 @@
 import 'role_base.dart';
 
 /// Vai trò: Quản Trị Viên Hệ Thống (Admin)
-/// Toàn quyền quản trị, cấu hình phần cứng RFID, chỉnh thông số máy, IP/Port, công suất phát
+/// Toàn quyền quản trị hệ thống, cấp và phân quyền tài khoản người dùng
 class AdminRole extends BaseRolePermission {
   const AdminRole();
 
@@ -12,10 +12,10 @@ class AdminRole extends BaseRolePermission {
   String get name => 'Quản Trị Viên (Admin)';
 
   @override
-  String get description => 'Toàn quyền cấu hình đầu đọc RFID, công suất máy, kết nối mạng và quản trị hệ thống';
+  String get description => 'Toàn quyền quản trị hệ thống, cấp và phân quyền tài khoản nhân viên';
 
   @override
-  bool get canConfigureHardware => true; // Admin được toàn quyền chỉnh thông số máy
+  bool get canConfigureHardware => false; // Màn hình chỉnh thông số máy thuộc về role Kỹ thuật
 
   @override
   bool get canInbound => true;
@@ -30,5 +30,6 @@ class AdminRole extends BaseRolePermission {
   bool get canAudit => true;
 
   @override
-  bool get canManageUsers => true;
+  bool get canManageUsers => true; // Admin cấp và quản lý tài khoản
 }
+

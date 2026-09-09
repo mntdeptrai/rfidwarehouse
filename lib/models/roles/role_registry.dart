@@ -1,11 +1,13 @@
 import 'role_base.dart';
 import 'admin_role.dart';
+import 'technician_role.dart';
 import 'warehouse_keeper_role.dart';
 import 'handheld_role.dart';
 import 'seller_role.dart';
 
 export 'role_base.dart';
 export 'admin_role.dart';
+export 'technician_role.dart';
 export 'warehouse_keeper_role.dart';
 export 'handheld_role.dart';
 export 'seller_role.dart';
@@ -13,6 +15,7 @@ export 'seller_role.dart';
 /// Bộ điều phối và tra cứu Vai Trò (Role Registry)
 class RoleRegistry {
   static const AdminRole admin = AdminRole();
+  static const TechnicianRole technician = TechnicianRole();
   static const WarehouseKeeperRole warehouseKeeper = WarehouseKeeperRole();
   static const HandheldRole handheld = HandheldRole();
   static const SellerRole seller = SellerRole();
@@ -20,12 +23,13 @@ class RoleRegistry {
   /// Danh sách tất cả các vai trò khả dụng trong hệ thống
   static const List<BaseRolePermission> allRoles = [
     admin,
+    technician,
     warehouseKeeper,
     handheld,
     seller,
   ];
 
-  /// Danh sách dạng Map phục vụ cho Dropdown chọn vai trò khi đăng ký tài khoản
+  /// Danh sách dạng Map phục vụ cho Dropdown chọn vai trò khi cấp tài khoản
   static List<Map<String, String>> get dropdownItems => allRoles
       .map((r) => {
             'code': r.code,
@@ -45,6 +49,13 @@ class RoleRegistry {
       case 'admin':
       case 'administrator':
         return admin;
+
+      case 'kythuat':
+      case 'technician':
+      case 'tech':
+      case 'it':
+      case 'kythuatvien':
+        return technician;
 
       case 'thukho':
       case 'operator':
@@ -69,3 +80,4 @@ class RoleRegistry {
     }
   }
 }
+

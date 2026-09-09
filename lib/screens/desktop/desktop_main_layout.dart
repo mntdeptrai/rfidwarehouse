@@ -4,6 +4,7 @@ import 'desktop_goods_delivery_view.dart';
 import 'desktop_inventory_view.dart';
 import 'desktop_lookup_view.dart';
 import 'desktop_uhf_studio_view.dart';
+import 'desktop_user_management_view.dart';
 import '../storage_screen.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
@@ -29,6 +30,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     const DesktopInventoryView(), // 3: Inventory
     const DesktopLookupView(), // 4: Lookup
     const DesktopUhfStudioView(), // 5: UHF Reader Studio (Hopeland SDK & Fixed Reader)
+    const DesktopUserManagementView(), // 6: User Management (Admin Account Provisioning)
   ];
 
   @override
@@ -81,6 +83,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     final user = _auth.currentUser;
     final perm = user?.rolePermission;
     final canConfig = perm?.canConfigureHardware ?? false;
+    final canManageUsers = perm?.canManageUsers ?? false;
     final canIn = perm?.canInbound ?? true;
     final canTrans = perm?.canTransfer ?? true;
     final canAud = perm?.canAudit ?? true;
@@ -90,7 +93,8 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     if (effectiveIndex == 0 && !canIn) effectiveIndex = 1;
     if (effectiveIndex == 2 && !canTrans) effectiveIndex = 1;
     if (effectiveIndex == 3 && !canAud) effectiveIndex = 1;
-    if (effectiveIndex == 5 && !canConfig) effectiveIndex = 1;
+    if (effectiveIndex == 5 && !canConfig) effectiveIndex = canManageUsers ? 6 : 1;
+    if (effectiveIndex == 6 && !canManageUsers) effectiveIndex = canConfig ? 5 : 1;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
@@ -131,6 +135,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     final user = _auth.currentUser;
     final perm = user?.rolePermission;
     final canConfig = perm?.canConfigureHardware ?? false;
+    final canManageUsers = perm?.canManageUsers ?? false;
     final canIn = perm?.canInbound ?? true;
     final canTrans = perm?.canTransfer ?? true;
     final canAud = perm?.canAudit ?? true;
@@ -260,7 +265,27 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     5,
                     Icons.radar,
                     'Đầu Đọc UHF (Studio)',
-                    'Hopeland SDK 4.42 & Fixed Reader',
+                    'Hopeland SDK 4.42 & Chỉnh thông số máy',
+                    c,
+                    badge: 'KỸ THUẬT',
+                    isCompact: isCompact,
+                  ),
+                ],
+                if (canManageUsers) ...[
+                  const SizedBox(height: 8),
+                  if (!isCompact)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Text(
+                        'QUẢN TRỊ HỆ THỐNG',
+                        style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      ),
+                    ),
+                  _buildMenuItem(
+                    6,
+                    Icons.manage_accounts_rounded,
+                    'Cấp & Quản Lý Tài Khoản',
+                    'Cấp phát, phân quyền nhân viên',
                     c,
                     badge: 'ADMIN',
                     isCompact: isCompact,

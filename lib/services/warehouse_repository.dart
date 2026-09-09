@@ -948,6 +948,24 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateUser(WmsUser user) async {
+    await _dbService.updateUser(user);
+    final idx = _users.indexWhere((u) => u.userId == user.userId || u.username == user.username);
+    if (idx >= 0) {
+      _users[idx] = user;
+    } else {
+      _users.add(user);
+    }
+    await _syncDirectOrQueue(
+      tableName: 'users',
+      recordId: user.userId,
+      action: 'UPDATE',
+      payload: user.toMap(),
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
   Future<void> deleteUser(String userId) async {
     final cleanId = userId.trim();
     await _dbService.deleteUser(cleanId);

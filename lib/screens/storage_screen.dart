@@ -7,7 +7,12 @@ import '../widgets/pda_location_barcode_card.dart';
 import '../theme/eye_care_theme.dart';
 
 class StorageScreen extends StatefulWidget {
-  const StorageScreen({super.key});
+  final bool enablePalletMerge;
+
+  const StorageScreen({
+    super.key,
+    this.enablePalletMerge = false,
+  });
 
   @override
   State<StorageScreen> createState() => _StorageScreenState();
@@ -828,16 +833,17 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                           spacing: 8,
                           runSpacing: 6,
                           children: [
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.call_merge, size: 16, color: Color(0xFF2C251E)),
-                              label: const Text('GỘP 2 PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFF59E0B),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            if (widget.enablePalletMerge)
+                              ElevatedButton.icon(
+                                icon: const Icon(Icons.call_merge, size: 16, color: Color(0xFF2C251E)),
+                                label: const Text('GỘP 2 PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFF59E0B),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                ),
+                                onPressed: () => _showMergePalletsDialog(),
                               ),
-                              onPressed: () => _showMergePalletsDialog(),
-                            ),
                             ElevatedButton.icon(
                               icon: const Icon(Icons.add_box, size: 16, color: Color(0xFF2C251E)),
                               label: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
@@ -961,10 +967,11 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
 
     if (pallets.isEmpty) {
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.pallet, size: 56, color: c.textMuted),
               const SizedBox(height: 14),
@@ -1085,7 +1092,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                           onPressed: () => _showMovePalletDialog(pallet),
                         ),
                         const SizedBox(width: 8),
-                        if (hasItems)
+                        if (widget.enablePalletMerge && hasItems)
                           OutlinedButton.icon(
                             icon: const Icon(Icons.call_merge, size: 15),
                             label: const Text('Gộp Sang Pallet Khác', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),

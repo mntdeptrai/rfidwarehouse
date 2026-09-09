@@ -1044,6 +1044,32 @@ class DatabaseService {
     return await db.delete('users', where: 'user_id = ? OR username = ?', whereArgs: [userId, userId]);
   }
 
+  Future<void> updateUser(WmsUser user) async {
+    final db = await database;
+    await db.update(
+      'users',
+      {
+        'full_name': user.fullName,
+        'email': user.email,
+        'phone': user.phone,
+        'role': user.role,
+        'is_active': user.isActive ? 1 : 0,
+      },
+      where: 'user_id = ? OR username = ?',
+      whereArgs: [user.userId, user.username],
+    );
+  }
+
+  Future<void> updateUserPassword(String userId, String passwordHash) async {
+    final db = await database;
+    await db.update(
+      'users',
+      {'password_hash': passwordHash},
+      where: 'user_id = ? OR username = ?',
+      whereArgs: [userId, userId],
+    );
+  }
+
   // --- CUSTOMER QUERIES ---
   Future<List<Customer>> getCustomers() async {
     final db = await database;
