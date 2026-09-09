@@ -5,7 +5,6 @@ import 'desktop_inventory_view.dart';
 import 'desktop_lookup_view.dart';
 import 'desktop_uhf_studio_view.dart';
 import 'desktop_user_management_view.dart';
-import '../storage_screen.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
 import '../../services/auth_service.dart';
@@ -26,11 +25,10 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   List<Widget> _buildViews() => [
     DesktopGoodsReceiveView(isActive: _selectedMenuIndex == 0), // 0: Goods Receive
     DesktopGoodsDeliveryView(isActive: _selectedMenuIndex == 1), // 1: Goods Delivery
-    const StorageScreen(), // 2: Goods Transfer / Storage
-    const DesktopInventoryView(), // 3: Inventory
-    const DesktopLookupView(), // 4: Lookup
-    const DesktopUhfStudioView(), // 5: UHF Reader Studio (Hopeland SDK & Fixed Reader)
-    const DesktopUserManagementView(), // 6: User Management (Admin Account Provisioning)
+    const DesktopInventoryView(), // 2: Inventory
+    const DesktopLookupView(), // 3: Lookup
+    const DesktopUhfStudioView(), // 4: UHF Reader Studio (Hopeland SDK & Fixed Reader)
+    const DesktopUserManagementView(), // 5: User Management (Admin Account Provisioning)
   ];
 
   @override
@@ -85,16 +83,14 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     final canConfig = perm?.canConfigureHardware ?? false;
     final canManageUsers = perm?.canManageUsers ?? false;
     final canIn = perm?.canInbound ?? true;
-    final canTrans = perm?.canTransfer ?? true;
     final canAud = perm?.canAudit ?? true;
 
     // Tự động chuyển sang màn hình được phép nếu màn hình hiện tại bị ẩn
     int effectiveIndex = _selectedMenuIndex;
     if (effectiveIndex == 0 && !canIn) effectiveIndex = 1;
-    if (effectiveIndex == 2 && !canTrans) effectiveIndex = 1;
-    if (effectiveIndex == 3 && !canAud) effectiveIndex = 1;
-    if (effectiveIndex == 5 && !canConfig) effectiveIndex = canManageUsers ? 6 : 1;
-    if (effectiveIndex == 6 && !canManageUsers) effectiveIndex = canConfig ? 5 : 1;
+    if (effectiveIndex == 2 && !canAud) effectiveIndex = 1;
+    if (effectiveIndex == 4 && !canConfig) effectiveIndex = canManageUsers ? 5 : 1;
+    if (effectiveIndex == 5 && !canManageUsers) effectiveIndex = canConfig ? 4 : 1;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
@@ -107,21 +103,11 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
               // Sidebar: Tự động co giãn thanh điều hướng theo kích thước cửa sổ
               _buildSidebar(c, isCompact: isCompactSidebar),
 
-              // Main View Content: Tự động co giãn toàn bộ diện tích còn lại
+              // Main View Content: Tự động co giãn toàn bộ diện tích còn lại, sát trên cùng
               Expanded(
-                child: Column(
-                  children: [
-                    // Top Header Bar
-                    _buildTopHeader(c, isCompact: isCompactSidebar),
-
-                    // Active View
-                    Expanded(
-                      child: IndexedStack(
-                        index: effectiveIndex,
-                        children: _buildViews(),
-                      ),
-                    ),
-                  ],
+                child: IndexedStack(
+                  index: effectiveIndex,
+                  children: _buildViews(),
                 ),
               ),
             ],
@@ -137,7 +123,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     final canConfig = perm?.canConfigureHardware ?? false;
     final canManageUsers = perm?.canManageUsers ?? false;
     final canIn = perm?.canInbound ?? true;
-    final canTrans = perm?.canTransfer ?? true;
     final canAud = perm?.canAudit ?? true;
 
     return AnimatedContainer(
@@ -232,25 +217,16 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     isCompact: isCompact,
                   ),
                 _buildMenuItem(1, Icons.output, 'Xuất Kho', 'Xuất hàng xuất bán', c, isCompact: isCompact),
-                if (canTrans)
-                  _buildMenuItem(
-                    2,
-                    Icons.swap_horiz,
-                    'Chuyển Kho',
-                    'Điều chuyển / Vị trí',
-                    c,
-                    isCompact: isCompact,
-                  ),
                 if (canAud)
                   _buildMenuItem(
-                    3,
+                    2,
                     Icons.inventory_2,
                     'Kiểm Kê Kho',
                     'Kiểm đếm & quét RFID',
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(4, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
+                _buildMenuItem(3, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
                 if (canConfig) ...[
                   const SizedBox(height: 8),
                   if (!isCompact)
@@ -262,7 +238,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       ),
                     ),
                   _buildMenuItem(
-                    5,
+                    4,
                     Icons.radar,
                     'Đầu Đọc UHF (Studio)',
                     'Hopeland SDK 4.42 & Chỉnh thông số máy',
@@ -282,7 +258,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       ),
                     ),
                   _buildMenuItem(
-                    6,
+                    5,
                     Icons.manage_accounts_rounded,
                     'Cấp & Quản Lý Tài Khoản',
                     'Cấp phát, phân quyền nhân viên',
@@ -507,48 +483,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTopHeader(EyeCareColors c, {bool isCompact = false}) {
-    return Container(
-      height: 64,
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 12 : 24),
-      decoration: BoxDecoration(
-        color: c.bgCard,
-        border: Border(bottom: BorderSide(color: c.border, width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Search box
-          Flexible(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 380),
-              height: 38,
-              child: TextField(
-                style: TextStyle(color: c.textPrimary, fontSize: 13),
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.search, color: c.textMuted, size: 18),
-                  hintText: isCompact ? 'Tìm...' : 'Tìm kiếm phiếu, hàng hóa, serial, EPC...',
-                  hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
-                  filled: true,
-                  fillColor: c.bgCardElevated,
-                  contentPadding: EdgeInsets.zero,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: c.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: c.border),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

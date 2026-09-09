@@ -138,7 +138,11 @@ class DatabaseService {
         level TEXT NOT NULL,
         max_pallet_capacity INTEGER DEFAULT 1,
         current_pallets INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'AVAILABLE'
+        status TEXT DEFAULT 'AVAILABLE',
+        aisle_side TEXT DEFAULT 'LEFT',
+        sort_order INTEGER DEFAULT 0,
+        grid_row INTEGER DEFAULT 0,
+        grid_col INTEGER DEFAULT 0
       )
     ''');
     try {
@@ -146,6 +150,18 @@ class DatabaseService {
     } catch (_) {}
     try {
       await db.execute("ALTER TABLE locations ADD COLUMN status TEXT DEFAULT 'AVAILABLE'");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE locations ADD COLUMN aisle_side TEXT DEFAULT 'LEFT'");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE locations ADD COLUMN sort_order INTEGER DEFAULT 0");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE locations ADD COLUMN grid_row INTEGER DEFAULT 0");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE locations ADD COLUMN grid_col INTEGER DEFAULT 0");
     } catch (_) {}
 
     // 3. Bảng Pallet lưu kho (pallets)
@@ -491,7 +507,7 @@ class DatabaseService {
     final db = await database;
     final maps = await db.query(
       'locations',
-      orderBy: 'zone ASC, shelf ASC, level ASC, location_code ASC',
+      orderBy: 'sort_order ASC, zone ASC, shelf ASC, level ASC, location_code ASC',
     );
     return maps.map((m) => Location(
       locationId: m['location_id'] as String,
@@ -502,6 +518,10 @@ class DatabaseService {
       maxPalletCapacity: (m['max_pallet_capacity'] as int?) ?? 1,
       currentPallets: (m['current_pallets'] as int?) ?? 0,
       status: (m['status'] as String?) ?? 'AVAILABLE',
+      aisleSide: (m['aisle_side'] as String?) ?? 'LEFT',
+      sortOrder: (m['sort_order'] as int?) ?? 0,
+      gridRow: (m['grid_row'] as int?) ?? 0,
+      gridCol: (m['grid_col'] as int?) ?? 0,
     )).toList();
   }
 
@@ -516,7 +536,33 @@ class DatabaseService {
       'max_pallet_capacity': l.maxPalletCapacity,
       'current_pallets': l.currentPallets,
       'status': l.status,
+      'aisle_side': l.aisleSide,
+      'sort_order': l.sortOrder,
+      'grid_row': l.gridRow,
+      'grid_col': l.gridCol,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<WarehouseFloorPlanConfig> getWarehouseLayoutConfig() async {
+    try {
+      final val = await getSystemConfig('warehouse_floor_plan_config');
+      if (val != null && val.isNotEmpty) {
+        final map = jsonDecode(val) as Map<String, dynamic>;
+        return WarehouseFloorPlanConfig.fromJson(map);
+      }
+    } catch (e) {
+      debugPrint('DatabaseService.getWarehouseLayoutConfig error: $e');
+    }
+    return WarehouseFloorPlanConfig.defaultConfig();
+  }
+
+  Future<void> saveWarehouseLayoutConfig(WarehouseFloorPlanConfig config) async {
+    try {
+      final val = jsonEncode(config.toJson());
+      await setSystemConfig('warehouse_floor_plan_config', val);
+    } catch (e) {
+      debugPrint('DatabaseService.saveWarehouseLayoutConfig error: $e');
+    }
   }
 
   Future<void> updateLocationStatus(String locationId, String status) async {
