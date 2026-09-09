@@ -14,6 +14,7 @@ class PalletMergeRecord {
   final String sourcePalletCode;
   final String targetPalletCode;
   final int itemCount;
+  final String sourceLocationName;
   final String targetLocationName;
   final DateTime timestamp;
 
@@ -21,10 +22,14 @@ class PalletMergeRecord {
     required this.sourcePalletCode,
     required this.targetPalletCode,
     required this.itemCount,
+    required this.sourceLocationName,
     required this.targetLocationName,
     required this.timestamp,
   });
 }
+
+/// Ô mục tiêu đang được chọn để bóp cò súng PDA quét Barcode
+enum MergeScanSlot { source, target }
 
 class PdaMergePalletsScreen extends StatefulWidget {
   final Pallet? initialSourcePallet;
@@ -46,7 +51,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
 
   Pallet? _sourcePallet;
   Pallet? _targetPallet;
-  bool _deleteSourcePallet = false;
+  MergeScanSlot _selectedSlot = MergeScanSlot.source;
   bool _isProcessing = false;
 
   Timer? _resetTimer;
@@ -54,7 +59,6 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
   final List<PalletMergeRecord> _recentMerges = [];
 
   StreamSubscription<String>? _barcodeSub;
-  StreamSubscription<TagInfo>? _rfidSub;
 
   @override
   void initState() {
@@ -64,19 +68,15 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
 
     if (widget.initialSourcePallet != null) {
       _sourcePallet = widget.initialSourcePallet;
+      _selectedSlot = MergeScanSlot.target;
     }
 
-    // Đặt chế độ quét kết hợp Barcode & RFID trên PDA
-    _uhf.setScanMode(PdaScanMode.auto);
+    // Thiết lập chế độ chuyên biệt: CHỈ QUÉT MÃ VẠCH (BARCODE) trên máy PDA
+    _uhf.pushScanMode(PdaScanMode.barcode);
 
-    // Lắng nghe súng quét Barcode PDA
+    // Lắng nghe súng quét Barcode 1D/2D PDA
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
       _handleIncomingScan(barcode);
-    });
-
-    // Lắng nghe đầu đọc RFID PDA
-    _rfidSub = _uhf.onTagRead.listen((tag) {
-      _handleIncomingScan(tag.epc);
     });
   }
 
@@ -87,17 +87,17 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
   @override
   void dispose() {
     _resetTimer?.cancel();
+    _uhf.popScanMode();
     _eyeCare.removeListener(_onStateChange);
     _repo.removeListener(_onStateChange);
     _barcodeSub?.cancel();
-    _rfidSub?.cancel();
     super.dispose();
   }
 
   @visibleForTesting
   Future<void> handleIncomingScan(String rawCode) => _handleIncomingScan(rawCode);
 
-  /// Xử lý mã Barcode hoặc RFID quét được từ PDA
+  /// Xử lý mã Barcode quét được từ súng laser PDA: Tự động điền vào ô mục tiêu đang chọn
   Future<void> _handleIncomingScan(String rawCode) async {
     if (_isProcessing) return; // Đang chạy gộp thì không nhận thêm
 
@@ -111,10 +111,11 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
       setState(() {
         _sourcePallet = null;
         _targetPallet = null;
+        _selectedSlot = MergeScanSlot.source;
       });
     }
 
-    // Tìm kiếm Pallet theo mã Pallet, ID hoặc RFID EPC trong kho
+    // Tìm kiếm Pallet theo mã Barcode / Pallet Code trong kho
     final found = _repo.pallets.where((p) {
       return p.palletCode.toUpperCase() == clean ||
           p.palletId.toUpperCase() == clean ||
@@ -122,42 +123,67 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
     }).firstOrNull;
 
     if (found == null) {
-      _showFeedbackSnackBar('Không tìm thấy Pallet nào khớp với mã: $clean', isError: true);
+      _showFeedbackSnackBar('Không tìm thấy Pallet nào khớp với mã Barcode: $clean', isError: true);
       HapticFeedback.vibrate();
       return;
     }
 
-    // 1. NẾU CHƯA CÓ PALLET NGUỒN -> GÁN LÀM PALLET NGUỒN
-    if (_sourcePallet == null) {
+    // 1. NẾU ĐANG CHỌN Ô PALLET NGUỒN (A)
+    if (_selectedSlot == MergeScanSlot.source) {
+      if (_targetPallet != null && found.palletId == _targetPallet!.palletId) {
+        _showFeedbackSnackBar('Pallet nguồn không thể trùng với Pallet đích!', isError: true);
+        HapticFeedback.vibrate();
+        return;
+      }
+
       final items = _repo.items.where((it) => it.palletId == found.palletId).length;
       if (items == 0) {
         _showFeedbackSnackBar('Pallet [${found.palletCode}] đang rỗng, không thể làm Pallet nguồn để gộp!', isError: true);
         HapticFeedback.vibrate();
         return;
       }
+
       setState(() {
         _sourcePallet = found;
-        _targetPallet = null;
+        // Tự động chuyển vùng chọn sang ô Pallet đích cho lần quét tiếp theo
+        _selectedSlot = MergeScanSlot.target;
       });
       HapticFeedback.lightImpact();
-      _showFeedbackSnackBar('Đã nhận Nguồn: ${found.palletCode} ($items SP). MỜI QUÉT PALLET ĐÍCH ĐỂ TỰ ĐỘNG GỘP ⚡');
+
+      // Nếu ô Đích đã có sẵn pallet trước đó -> Tự động kích hoạt gộp luôn!
+      if (_targetPallet != null && _targetPallet!.palletId != found.palletId) {
+        await _executeAutoMerge();
+      } else {
+        _showFeedbackSnackBar('✓ Đã điền Nguồn: ${found.palletCode} ($items SP). Đang chọn ô Đích ➔ Mời quét Pallet Đích để gộp ngay ⚡');
+      }
       return;
     }
 
-    // 2. NẾU ĐÃ CÓ PALLET NGUỒN -> GÁN LÀM PALLET ĐÍCH VÀ TỰ ĐỘNG GỘP NGAY
-    if (found.palletId == _sourcePallet!.palletId) {
-      _showFeedbackSnackBar('Pallet đích không thể trùng với Pallet nguồn!', isError: true);
-      HapticFeedback.vibrate();
+    // 2. NẾU ĐANG CHỌN Ô PALLET ĐÍCH (B)
+    if (_selectedSlot == MergeScanSlot.target) {
+      if (_sourcePallet != null && found.palletId == _sourcePallet!.palletId) {
+        _showFeedbackSnackBar('Pallet đích không thể trùng với Pallet nguồn!', isError: true);
+        HapticFeedback.vibrate();
+        return;
+      }
+
+      setState(() {
+        _targetPallet = found;
+      });
+      HapticFeedback.mediumImpact();
+
+      // Nếu ô Nguồn đã có sẵn pallet -> Tự động kích hoạt gộp ngay lập tức!
+      if (_sourcePallet != null) {
+        await _executeAutoMerge();
+      } else {
+        // Chưa có Nguồn -> Tự động chuyển vùng chọn sang ô Nguồn để quét tiếp
+        setState(() {
+          _selectedSlot = MergeScanSlot.source;
+        });
+        _showFeedbackSnackBar('✓ Đã điền Đích: ${found.palletCode}. Đang chọn ô Nguồn ➔ Mời quét Pallet Nguồn để gộp ⚡');
+      }
       return;
     }
-
-    setState(() {
-      _targetPallet = found;
-    });
-    HapticFeedback.mediumImpact();
-
-    // ⚡ TỰ ĐỘNG GỘP NGAY LẬP TỨC KHÔNG CẦN THAO TÁC BẤM NÚT
-    await _executeAutoMerge();
   }
 
   /// Tự động thực hiện gộp dữ liệu hàng hóa từ Pallet nguồn sang Pallet đích
@@ -169,6 +195,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
     final sourceCode = sourcePallet.palletCode;
     final targetCode = targetPallet.palletCode;
     final targetLocName = _getLocationName(targetPallet.locationId);
+    final sourceLocName = _getLocationName(sourcePallet.locationId);
     final sourceItemsCount = _repo.items.where((it) => it.palletId == sourcePallet.palletId).length;
 
     setState(() => _isProcessing = true);
@@ -180,7 +207,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
         sourcePalletId: sourcePallet.palletId,
         targetPalletId: targetPallet.palletId,
         performedBy: performedBy,
-        deleteSourcePallet: _deleteSourcePallet,
+        deleteSourcePallet: false,
       );
 
       if (success && mounted) {
@@ -190,6 +217,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
           sourcePalletCode: sourceCode,
           targetPalletCode: targetCode,
           itemCount: sourceItemsCount,
+          sourceLocationName: sourceLocName,
           targetLocationName: targetLocName,
           timestamp: DateTime.now(),
         );
@@ -200,7 +228,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
         });
 
         _showFeedbackSnackBar(
-          '⚡ ĐÃ TỰ ĐỘNG GỘP $sourceItemsCount SP: [$sourceCode] ➔ [$targetCode] (Kệ: $targetLocName)',
+          '⚡ ĐÃ TỰ ĐỘNG GỘP $sourceItemsCount SP VÀO [$targetCode] (Kệ: $targetLocName) • Pallet [$sourceCode] TRỐNG HÀNG tại $sourceLocName',
           isSuccess: true,
         );
 
@@ -281,6 +309,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
     setState(() {
       _sourcePallet = null;
       _targetPallet = null;
+      _selectedSlot = MergeScanSlot.source;
     });
     _showFeedbackSnackBar('Đã đặt lại trạng thái quét');
   }
@@ -316,7 +345,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
             final filtered = candidates.where((p) {
               if (filter.isEmpty) return true;
               return p.palletCode.toUpperCase().contains(filter.toUpperCase()) ||
-                  (p.rfidEpc != null && p.rfidEpc!.toUpperCase().contains(filter.toUpperCase()));
+                  p.palletId.toUpperCase().contains(filter.toUpperCase());
             }).toList();
 
             return Padding(
@@ -350,7 +379,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                     TextField(
                       style: TextStyle(color: c.textPrimary, fontSize: 13),
                       decoration: InputDecoration(
-                        hintText: 'Tìm kiếm mã Pallet hoặc RFID...',
+                        hintText: 'Tìm kiếm mã Barcode Pallet...',
                         hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                         prefixIcon: Icon(Icons.search, color: c.textMuted, size: 18),
                         filled: true,
@@ -388,15 +417,25 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                                     if (isSelectingSource) {
                                       setState(() {
                                         _sourcePallet = p;
-                                        _targetPallet = null;
+                                        _selectedSlot = MergeScanSlot.target;
                                       });
-                                      _showFeedbackSnackBar('Đã chọn Nguồn: ${p.palletCode}. Mời quét Pallet Đích để gộp tự động.');
+                                      if (_targetPallet != null && _targetPallet!.palletId != p.palletId) {
+                                        await _executeAutoMerge();
+                                      } else {
+                                        _showFeedbackSnackBar('✓ Đã chọn Nguồn: ${p.palletCode}. Đang chọn ô Đích ➔ Mời quét Pallet Đích để gộp.');
+                                      }
                                     } else {
                                       setState(() {
                                         _targetPallet = p;
                                       });
-                                      // Tự động gộp luôn khi chọn xong Pallet đích
-                                      await _executeAutoMerge();
+                                      if (_sourcePallet != null && _sourcePallet!.palletId != p.palletId) {
+                                        await _executeAutoMerge();
+                                      } else {
+                                        setState(() {
+                                          _selectedSlot = MergeScanSlot.source;
+                                        });
+                                        _showFeedbackSnackBar('✓ Đã chọn Đích: ${p.palletCode}. Đang chọn ô Nguồn ➔ Mời quét Pallet Nguồn để gộp.');
+                                      }
                                     }
                                   },
                                 );
@@ -473,8 +512,8 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                               _isProcessing
                                   ? 'ĐANG TỰ ĐỘNG GỘP...'
                                   : (_sourcePallet != null && _targetPallet == null
-                                      ? 'QUÉT ĐÍCH ĐỂ TỰ ĐỘNG GỘP NGAY'
-                                      : 'CHẾ ĐỘ TỰ ĐỘNG GỘP (ZERO-TOUCH)'),
+                                      ? 'QUÉT BARCODE ĐÍCH ĐỂ TỰ ĐỘNG GỘP NGAY'
+                                      : 'CHẾ ĐỘ TỰ ĐỘNG GỘP (QUÉT MÃ BARCODE)'),
                               style: TextStyle(
                                 color: _sourcePallet != null ? const Color(0xFFF59E0B) : c.textMuted,
                                 fontSize: 11,
@@ -503,14 +542,10 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                     const SizedBox(height: 14),
 
                     // THÔNG BÁO VỪA GỘP THÀNH CÔNG GẦN NHẤT
-                    if (_lastMergedRecord != null) _buildLastMergedBanner(c),
-
-                    const SizedBox(height: 14),
-
-                    // TÙY CHỌN & CẤU HÌNH NHANH
-                    _buildOptionsCard(c),
-
-                    const SizedBox(height: 14),
+                    if (_lastMergedRecord != null) ...[
+                      _buildLastMergedBanner(c),
+                      const SizedBox(height: 14),
+                    ],
 
                     // LỊCH SỬ CÁC LẦN TỰ ĐỘNG GỘP TRONG PHIÊN NÀY
                     _buildRecentMergesList(c),
@@ -537,17 +572,23 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
       stepText = 'Đang tự động gộp và chuyển toàn bộ dữ liệu hàng hóa...';
       stepIcon = Icons.sync_rounded;
       stepColor = c.rfidCyan;
-    } else if (_sourcePallet == null) {
-      stepText = 'BƯỚC 1/2: Bóp cò súng PDA quét mã Pallet NGUỒN (có hàng).';
+    } else if (_sourcePallet != null && _targetPallet != null) {
+      stepText = 'Đã hoàn tất gộp! Sẵn sàng quét mã Barcode cặp Pallet tiếp theo...';
+      stepIcon = Icons.check_circle_rounded;
+      stepColor = c.successEmerald;
+    } else if (_selectedSlot == MergeScanSlot.source) {
+      stepText = _sourcePallet == null
+          ? 'BƯỚC 1/2: Bóp cò súng PDA quét mã Barcode Pallet NGUỒN (có hàng).'
+          : 'ĐANG CHỌN QUÉT Ô NGUỒN (A) ➔ Bóp cò PDA để đổi Pallet, hoặc chạm ô Đích.';
       stepIcon = Icons.qr_code_scanner_rounded;
       stepColor = const Color(0xFFF59E0B);
-    } else if (_targetPallet == null) {
-      stepText = 'BƯỚC 2/2: Quét mã Pallet ĐÍCH ➔ Hệ thống sẽ TỰ ĐỘNG GỘP NGAY LẬP TỨC!';
-      stepIcon = Icons.bolt_rounded;
-      stepColor = c.successEmerald;
     } else {
-      stepText = 'Đã hoàn tất gộp! Sẵn sàng quét cặp Pallet tiếp theo...';
-      stepIcon = Icons.check_circle_rounded;
+      stepText = _targetPallet == null
+          ? (_sourcePallet != null
+              ? 'BƯỚC 2/2: Quét mã Barcode Pallet ĐÍCH ➔ Hệ thống sẽ TỰ ĐỘNG GỘP NGAY LẬP TỨC!'
+              : 'ĐANG CHỌN QUÉT Ô ĐÍCH (B) ➔ Bóp cò súng PDA quét mã Barcode Pallet Đích.')
+          : 'ĐANG CHỌN QUÉT Ô ĐÍCH (B) ➔ Bóp cò PDA để đổi Pallet, hoặc chạm ô Nguồn.';
+      stepIcon = Icons.bolt_rounded;
       stepColor = c.successEmerald;
     }
 
@@ -570,7 +611,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
               style: TextStyle(color: stepColor, fontSize: 12, fontWeight: FontWeight.bold, height: 1.3),
             ),
           ),
-          if (_sourcePallet != null && !_isProcessing)
+          if ((_sourcePallet != null || _targetPallet != null) && !_isProcessing)
             TextButton.icon(
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -578,7 +619,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               icon: Icon(Icons.refresh_rounded, color: c.textMuted, size: 16),
-              label: Text('Hủy / Đặt lại', style: TextStyle(color: c.textMuted, fontSize: 11)),
+              label: Text('Đặt lại', style: TextStyle(color: c.textMuted, fontSize: 11)),
               onPressed: _manualReset,
             ),
         ],
@@ -596,165 +637,287 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
     required bool isSource,
     required EyeCareColors c,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: c.bgCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: pallet != null ? badgeColor.withValues(alpha: 0.6) : c.border,
-          width: pallet != null ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header box
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: c.bgCardElevated,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(badge, style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-                if (pallet != null)
-                  InkWell(
-                    onTap: _isProcessing
-                        ? null
-                        : () {
-                            setState(() {
-                              if (isSource) {
-                                _sourcePallet = null;
-                              } else {
-                                _targetPallet = null;
-                              }
-                            });
-                          },
-                    child: Text('Đổi', style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
-                  )
-                else
-                  InkWell(
-                    onTap: _isProcessing ? null : () => _showManualSelectModal(isSource),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.list, color: c.rfidCyan, size: 16),
-                        const SizedBox(width: 4),
-                        Text('Chọn danh sách', style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
+    final isSelected = _selectedSlot == (isSource ? MergeScanSlot.source : MergeScanSlot.target);
 
-          // Body
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: pallet == null
-                ? InkWell(
-                    onTap: _isProcessing ? null : () => _showManualSelectModal(isSource),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      alignment: Alignment.center,
+    return GestureDetector(
+      onTap: _isProcessing
+          ? null
+          : () {
+              setState(() {
+                _selectedSlot = isSource ? MergeScanSlot.source : MergeScanSlot.target;
+              });
+              HapticFeedback.selectionClick();
+            },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: c.bgCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? badgeColor
+                : (pallet != null ? badgeColor.withValues(alpha: 0.5) : c.border),
+            width: isSelected ? 2.2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: badgeColor.withValues(alpha: 0.22),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header box
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? badgeColor.withValues(alpha: 0.12) : c.bgCardElevated,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(badge, style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                  // Chỉ báo đang chọn quét
+                  if (isSelected)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      margin: const EdgeInsets.only(right: 6),
                       decoration: BoxDecoration(
-                        border: Border.all(color: c.border, style: BorderStyle.solid),
-                        borderRadius: BorderRadius.circular(8),
+                        color: badgeColor,
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Column(
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            isSource ? Icons.qr_code_scanner : Icons.sensors_rounded,
-                            color: isSource ? const Color(0xFFF59E0B) : c.textMuted,
-                            size: 26,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            isSource
-                                ? 'Bóp cò súng PDA quét mã Pallet Nguồn'
-                                : 'Bóp cò súng PDA quét mã Pallet Đích (Sẽ gộp ngay)',
-                            style: TextStyle(
-                              color: isSource ? c.textPrimary : c.textMuted,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text('hoặc chạm vào đây để chọn danh sách', style: TextStyle(color: c.textMuted, fontSize: 10.5)),
+                          Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
+                          SizedBox(width: 2),
+                          Text('ĐANG CHỜ QUÉT', style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
                         ],
+                      ),
+                    )
+                  else
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _selectedSlot = isSource ? MergeScanSlot.source : MergeScanSlot.target;
+                        });
+                        HapticFeedback.selectionClick();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: c.bgCard,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Text('Chạm chọn quét', style: TextStyle(color: c.textMuted, fontSize: 9.5, fontWeight: FontWeight.w500)),
                       ),
                     ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.inventory_2_rounded, color: badgeColor, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              pallet.palletCode,
-                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: badgeColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              isSource ? '$itemsCount sản phẩm cần chuyển' : '$itemsCount sản phẩm hiện tại',
-                              style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11.5),
-                            ),
-                          ),
-                        ],
+                  if (pallet != null)
+                    InkWell(
+                      onTap: _isProcessing
+                          ? null
+                          : () {
+                              setState(() {
+                                if (isSource) {
+                                  _sourcePallet = null;
+                                  _selectedSlot = MergeScanSlot.source;
+                                } else {
+                                  _targetPallet = null;
+                                  _selectedSlot = MergeScanSlot.target;
+                                }
+                              });
+                            },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Text('Đổi', style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.location_on_outlined, color: c.textMuted, size: 16),
-                          const SizedBox(width: 4),
-                          Text('Kệ lưu kho: ', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
-                          Text(
-                            _getLocationName(pallet.locationId),
-                            style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                      if (pallet.rfidEpc != null && pallet.rfidEpc!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Row(
+                    )
+                  else
+                    InkWell(
+                      onTap: _isProcessing ? null : () => _showManualSelectModal(isSource),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.sensors, color: c.textMuted, size: 16),
-                            const SizedBox(width: 4),
-                            Text('RFID: ', style: TextStyle(color: c.textMuted, fontSize: 11)),
-                            Expanded(
-                              child: Text(
-                                pallet.rfidEpc!,
-                                style: TextStyle(color: c.textMuted, fontSize: 11, fontFamily: 'monospace'),
-                                overflow: TextOverflow.ellipsis,
+                            Icon(Icons.list, color: c.rfidCyan, size: 16),
+                            const SizedBox(width: 3),
+                            Text('Chọn danh sách', style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Body
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: pallet == null
+                  ? InkWell(
+                      onTap: _isProcessing
+                          ? null
+                          : () {
+                              setState(() {
+                                _selectedSlot = isSource ? MergeScanSlot.source : MergeScanSlot.target;
+                              });
+                              HapticFeedback.selectionClick();
+                            },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected ? badgeColor.withValues(alpha: 0.06) : Colors.transparent,
+                          border: Border.all(
+                            color: isSelected ? badgeColor.withValues(alpha: 0.6) : c.border,
+                            width: isSelected ? 1.5 : 1,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.qr_code_scanner_rounded,
+                              color: isSelected ? badgeColor : (isSource ? const Color(0xFFF59E0B) : c.successEmerald),
+                              size: 28,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              isSource
+                                  ? 'Bóp cò súng PDA quét mã Barcode Pallet Nguồn'
+                                  : 'Bóp cò súng PDA quét mã Barcode Pallet Đích (Sẽ gộp ngay)',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              isSelected
+                                  ? '⚡ ĐANG CHỌN MỤC NÀY ➔ TỰ ĐỘNG ĐIỀN KHI QUÉT'
+                                  : 'Chạm vào đây để chọn quét mục này',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isSelected ? badgeColor : c.textMuted,
+                                fontSize: 10.5,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                           ],
                         ),
-                      ],
-                    ],
-                  ),
-          ),
-        ],
+                      ),
+                    )
+                  : InkWell(
+                      onTap: _isProcessing
+                          ? null
+                          : () {
+                              setState(() {
+                                _selectedSlot = isSource ? MergeScanSlot.source : MergeScanSlot.target;
+                              });
+                              HapticFeedback.selectionClick();
+                            },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isSelected)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: badgeColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(5),
+                                border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.bolt_rounded, color: badgeColor, size: 14),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      'ĐANG CHỌN Ô NÀY ➔ Bóp cò súng PDA quét Barcode để đổi Pallet',
+                                      style: TextStyle(color: badgeColor, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Row(
+                            children: [
+                              Icon(Icons.inventory_2_rounded, color: badgeColor, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  pallet.palletCode,
+                                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: badgeColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  isSource ? '$itemsCount sản phẩm cần chuyển' : '$itemsCount sản phẩm hiện tại',
+                                  style: TextStyle(color: badgeColor, fontWeight: FontWeight.bold, fontSize: 11.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(Icons.location_on_outlined, color: c.textMuted, size: 16),
+                              const SizedBox(width: 4),
+                              Text('Kệ lưu kho: ', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
+                              Text(
+                                _getLocationName(pallet.locationId),
+                                style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.qr_code_2_rounded, color: c.textMuted, size: 16),
+                              const SizedBox(width: 4),
+                              Text('Mã Barcode: ', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                              Text(
+                                pallet.palletCode,
+                                style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -797,6 +960,11 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                   'Vị trí kệ mới: ${rec.targetLocationName}',
                   style: TextStyle(color: c.textSecondary, fontSize: 11),
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  'Pallet nguồn [${rec.sourcePalletCode}]: TRỐNG HÀNG (0 SP) • Vị trí: ${rec.sourceLocationName}',
+                  style: TextStyle(color: const Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold),
+                ),
               ],
             ),
           ),
@@ -805,47 +973,6 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
     );
   }
 
-  /// Card tùy chọn xóa Pallet nguồn
-  Widget _buildOptionsCard(EyeCareColors c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: c.bgCard,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            height: 24,
-            width: 24,
-            child: Checkbox(
-              value: _deleteSourcePallet,
-              activeColor: const Color(0xFFEF4444),
-              onChanged: _isProcessing
-                  ? null
-                  : (val) => setState(() => _deleteSourcePallet = val ?? false),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: _isProcessing
-                  ? null
-                  : () => setState(() => _deleteSourcePallet = !_deleteSourcePallet),
-              child: Text(
-                'Xóa mã Pallet nguồn khỏi hệ thống sau khi chuyển hết hàng (mặc định giữ lại làm Pallet rỗng)',
-                style: TextStyle(
-                  color: _deleteSourcePallet ? const Color(0xFFEF4444) : c.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   /// Lịch sử các lần gộp trong phiên
   Widget _buildRecentMergesList(EyeCareColors c) {
@@ -935,6 +1062,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
 
   /// Thanh trạng thái Auto-Merge dưới cùng màn hình (Hands-free visual confirmation)
   Widget _buildBottomStatusIndicator(EyeCareColors c) {
+    final isSourceSlot = _selectedSlot == MergeScanSlot.source;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -946,7 +1074,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: (_sourcePallet != null && _targetPallet == null)
+              color: isSourceSlot
                   ? const Color(0xFFF59E0B).withValues(alpha: 0.2)
                   : c.successEmerald.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
@@ -954,10 +1082,8 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
             child: Icon(
               _isProcessing
                   ? Icons.sync_rounded
-                  : (_sourcePallet != null ? Icons.bolt_rounded : Icons.qr_code_scanner_rounded),
-              color: (_sourcePallet != null && _targetPallet == null)
-                  ? const Color(0xFFF59E0B)
-                  : c.successEmerald,
+                  : (isSourceSlot ? Icons.qr_code_scanner_rounded : Icons.bolt_rounded),
+              color: isSourceSlot ? const Color(0xFFF59E0B) : c.successEmerald,
               size: 20,
             ),
           ),
@@ -985,15 +1111,31 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                         style: TextStyle(color: c.successEmerald, fontSize: 9.5, fontWeight: FontWeight.bold),
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: (isSourceSlot ? const Color(0xFFF59E0B) : c.successEmerald).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isSourceSlot ? 'CHỜ Ô 1 (NGUỒN)' : 'CHỜ Ô 2 (ĐÍCH)',
+                        style: TextStyle(
+                          color: isSourceSlot ? const Color(0xFFF59E0B) : c.successEmerald,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _isProcessing
                       ? 'Đang tiến hành gộp dữ liệu hàng hóa...'
-                      : (_sourcePallet == null
-                          ? 'Sẵn sàng: Bóp cò súng PDA quét Pallet Nguồn'
-                          : 'Đã nhận Nguồn ➔ Quét Pallet Đích để Gộp Ngay'),
+                      : (isSourceSlot
+                          ? 'Bóp cò súng PDA quét mã Barcode Pallet Nguồn (hoặc chạm ô Đích)'
+                          : 'Bóp cò súng PDA quét mã Barcode Pallet Đích (${_sourcePallet != null ? "Sẽ Gộp Ngay ⚡" : "hoặc chạm ô Nguồn"})'),
                   style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 11.5,
@@ -1004,10 +1146,10 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
               ],
             ),
           ),
-          if (_sourcePallet != null && !_isProcessing)
+          if ((_sourcePallet != null || _targetPallet != null) && !_isProcessing)
             IconButton(
               icon: Icon(Icons.close_rounded, color: c.textMuted, size: 20),
-              tooltip: 'Hủy chọn',
+              tooltip: 'Đặt lại',
               onPressed: _manualReset,
             ),
         ],

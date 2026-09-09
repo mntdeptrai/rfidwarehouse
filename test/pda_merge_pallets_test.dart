@@ -84,8 +84,9 @@ void main() {
       expect(updatedItem1.locationId, equals('LOC-B2')); // Chuyển theo vị trí kệ của Pallet B
       expect(updatedItem2.locationId, equals('LOC-B2'));
 
-      // Pallet A đã rỗng
+      // Pallet A đã rỗng và vẫn lưu giữ vị trí cập nhật lần cuối cùng của nó
       expect(palletA.itemIds.isEmpty, isTrue);
+      expect(palletA.locationId, equals('LOC-A1'));
 
       // Pallet B chứa đủ 3 items (2 từ A + 1 của B)
       expect(palletB.itemIds.length, equals(3));
@@ -112,6 +113,8 @@ void main() {
       expect(find.textContaining('2. PALLET ĐÍCH (B)'), findsOneWidget);
       expect(find.text('TỰ ĐỘNG GỘP PALLET:'), findsOneWidget);
       expect(find.text('HOẠT ĐỘNG ⚡'), findsOneWidget);
+      expect(find.text('QUY TẮC MẶC ĐỊNH SAU GỘP:'), findsNothing);
+      expect(UhfService().scanMode, equals(PdaScanMode.barcode));
     });
 
     testWidgets('PdaMergePalletsScreen automatically merges pallets immediately upon scanning 2 pallets', (WidgetTester tester) async {
@@ -187,6 +190,76 @@ void main() {
       expect(find.textContaining('LỊCH SỬ GỘP TRONG PHIÊN'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('PdaMergePalletsScreen allows selecting slot manually and auto-fills accordingly', (WidgetTester tester) async {
+      final itemA = Item(
+        itemId: 'ITEM-SLOT-1',
+        productId: 'PROD-SLOT-1',
+        sku: 'SKU-SLOT-1',
+        productName: 'Sản phẩm thử nghiệm slot',
+        serialNumber: 'SN-SLOT-01',
+        epc: 'E28099000000000000000011',
+        status: ItemStatus.inStock,
+        locationId: 'LOC-SLOT-A',
+      );
+      final itemB = Item(
+        itemId: 'ITEM-SLOT-2',
+        productId: 'PROD-SLOT-2',
+        sku: 'SKU-SLOT-2',
+        productName: 'Sản phẩm đích slot',
+        serialNumber: 'SN-SLOT-02',
+        epc: 'E28099000000000000000012',
+        status: ItemStatus.inStock,
+        locationId: 'LOC-SLOT-B',
+      );
+
+      final palletA = repo.createOrAssignPallet(
+        palletCode: 'PL-SLOT-SRC',
+        locationId: 'LOC-SLOT-A',
+        newItems: [itemA],
+      );
+      final palletB = repo.createOrAssignPallet(
+        palletCode: 'PL-SLOT-DST',
+        locationId: 'LOC-SLOT-B',
+        newItems: [itemB],
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: PdaMergePalletsScreen(),
+        ),
+      );
+      await tester.pump();
+
+      // Ban đầu mặc định slot nguồn được chọn
+      expect(find.text('CHỜ Ô 1 (NGUỒN)'), findsOneWidget);
+
+      // Chạm vào mục 2 (Pallet Đích) để chọn quét mục này
+      await tester.tap(find.textContaining('2. PALLET ĐÍCH (B)'));
+      await tester.pump();
+
+      // Lúc này slot đích được chọn
+      expect(find.text('CHỜ Ô 2 (ĐÍCH)'), findsOneWidget);
+
+      final state = tester.state<PdaMergePalletsScreenState>(find.byType(PdaMergePalletsScreen));
+
+      // Quét pallet đích trước
+      await tester.runAsync(() async {
+        await state.handleIncomingScan(palletB.palletCode);
+      });
+      await tester.pump();
+
+      // Đã tự động điền vào ô Đích và chuyển sang chờ ô Nguồn
+      expect(find.text('CHỜ Ô 1 (NGUỒN)'), findsOneWidget);
+
+      // Quét pallet nguồn -> tự động gộp ngay lập tức
+      await tester.runAsync(() async {
+        await state.handleIncomingScan(palletA.palletCode);
+      });
+      await tester.pump();
+
+      expect(find.text('VỪA TỰ ĐỘNG GỘP THÀNH CÔNG!'), findsOneWidget);
     });
 
     test('Inject barcode selects source and target pallets via UhfService', () async {

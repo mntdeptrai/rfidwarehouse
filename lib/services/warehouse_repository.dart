@@ -2971,9 +2971,20 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // Làm rỗng Pallet nguồn
+    // Làm rỗng Pallet nguồn: Mặc định chuyển về trạng thái trống hàng (0 items)
     sourcePallet.itemIds.clear();
     sourcePallet.isMultiSku = false;
+
+    // Đảm bảo Pallet nguồn luôn lưu giữ vị trí được cập nhật lần cuối cùng của nó
+    if (sourcePallet.locationId == null || sourcePallet.locationId!.trim().isEmpty) {
+      final lastTx = _transactions.where((t) =>
+        (t.palletCode != null && t.palletCode!.toUpperCase() == sourcePallet.palletCode.toUpperCase()) ||
+        (t.documentNo.toUpperCase() == sourcePallet.palletCode.toUpperCase())
+      ).firstOrNull;
+      if (lastTx != null) {
+        sourcePallet.locationId = lastTx.toLocation ?? lastTx.fromLocation;
+      }
+    }
 
     // Đánh giá lại isMultiSku cho Pallet đích
     final allTargetItems = _items.where((it) => it.palletId == targetPallet.palletId).toList();
@@ -2992,7 +3003,7 @@ class WarehouseRepository extends ChangeNotifier {
       },
     );
 
-    // Xử lý Pallet nguồn sau gộp
+    // Xử lý Pallet nguồn sau gộp: Mặc định luôn giữ lại làm Pallet rỗng tại vị trí cập nhật lần cuối
     if (deleteSourcePallet) {
       _pallets.removeWhere((p) => p.palletId == sourcePallet.palletId);
       await _dbService.deletePallet(sourcePallet.palletId);
@@ -3005,6 +3016,7 @@ class WarehouseRepository extends ChangeNotifier {
       );
     } else {
       await _dbService.insertPallet(sourcePallet);
+      await _dbService.savePalletsBackup(_pallets);
       await _syncDirectOrQueue(
         tableName: 'pallets',
         recordId: sourcePallet.palletId,

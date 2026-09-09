@@ -1661,69 +1661,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          const Divider(height: 1),
-          const SizedBox(height: 12),
-
-          // Quick status update row
-          Row(
-            children: [
-              Icon(Icons.sync_alt_rounded, size: 16, color: c.rfidCyan),
-              const SizedBox(width: 6),
-              Text(
-                'CẬP NHẬT NHANH TRẠNG THÁI KỆ (ĐỒNG BỘ REALTIME TỚI MÁY PDA & CLOUD):',
-                style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildQuickStatusBtn(
-                        label: '🔴 KỆ ĐẦY',
-                        statusVal: 'FULL',
-                        color: const Color(0xFFEF4444),
-                        isSelected: loc.status == 'FULL',
-                        onTap: () async {
-                          loc.status = 'FULL';
-                          setState(() {});
-                          await _repo.updateLocationStatus(loc.locationId, 'FULL');
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildQuickStatusBtn(
-                        label: '🟡 SẮP HẾT CHỖ',
-                        statusVal: 'NEAR_FULL',
-                        color: const Color(0xFFF59E0B),
-                        isSelected: loc.status == 'NEAR_FULL',
-                        onTap: () async {
-                          loc.status = 'NEAR_FULL';
-                          setState(() {});
-                          await _repo.updateLocationStatus(loc.locationId, 'NEAR_FULL');
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildQuickStatusBtn(
-                        label: '🟢 TRỐNG NHIỀU',
-                        statusVal: 'AVAILABLE',
-                        color: const Color(0xFF10B981),
-                        isSelected: loc.status != 'FULL' && loc.status != 'NEAR_FULL',
-                        onTap: () async {
-                          loc.status = 'AVAILABLE';
-                          setState(() {});
-                          await _repo.updateLocationStatus(loc.locationId, 'AVAILABLE');
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
