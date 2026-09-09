@@ -773,13 +773,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
 
-    // KPI Metrics
-    final totalPallets = _repo.pallets.length;
-    final palletsWithItems = _repo.pallets.where((p) => _repo.items.any((it) => it.palletId == p.palletId)).length;
-    final emptyPallets = totalPallets - palletsWithItems;
-    final usedLocations = _repo.locations.where((l) => l.currentPallets > 0 || _repo.pallets.any((p) => p.locationId == l.locationId)).length;
-    final totalItemsInStock = _repo.items.where((i) => i.status == ItemStatus.inStock).length;
-
     return Scaffold(
       backgroundColor: c.bgDeep,
       appBar: HardwareStatusAppBar(
@@ -799,7 +792,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
       ),
       body: Column(
         children: [
-          // KPI Stats & Action Bar
+          // Action Bar & Search
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             decoration: BoxDecoration(
@@ -810,51 +803,32 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               builder: (context, constraints) {
                 return Column(
                   children: [
-                    // Row 1: KPI Stats Chips
+                    // Nút hành động Toolbar
                     Wrap(
-                      spacing: 12,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 6,
                       children: [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            _buildStatChip('Tổng Pallet: $totalPallets', c.rfidCyan, c),
-                            _buildStatChip('Pallet có hàng: $palletsWithItems', const Color(0xFF10B981), c),
-                            _buildStatChip('Pallet trống: $emptyPallets', const Color(0xFFF59E0B), c),
-                            _buildStatChip('Vị trí kệ dùng: $usedLocations/${_repo.locations.length}', const Color(0xFF8B5CF6), c),
-                            _buildStatChip('Tồn kho: $totalItemsInStock SP', const Color(0xFF06B6D4), c),
-                          ],
-                        ),
-                        // Nút hành động Toolbar
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            if (widget.enablePalletMerge)
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.call_merge, size: 16, color: Color(0xFF2C251E)),
-                                label: const Text('GỘP 2 PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFF59E0B),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                ),
-                                onPressed: () => _showMergePalletsDialog(),
-                              ),
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.add_box, size: 16, color: Color(0xFF2C251E)),
-                              label: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              ),
-                              onPressed: _showAddPalletDialog,
+                        if (widget.enablePalletMerge)
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.call_merge, size: 16, color: Color(0xFF2C251E)),
+                            label: const Text('GỘP 2 PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF59E0B),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             ),
-                          ],
+                            onPressed: () => _showMergePalletsDialog(),
+                          ),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.add_box, size: 16, color: Color(0xFF2C251E)),
+                          label: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                          onPressed: _showAddPalletDialog,
                         ),
                       ],
                     ),
@@ -937,18 +911,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildStatChip(String label, Color color, EyeCareColors c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.bold)),
     );
   }
 
