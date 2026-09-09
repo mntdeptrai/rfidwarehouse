@@ -133,6 +133,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          theme: ThemeData(splashFactory: InkRipple.splashFactory),
           home: Scaffold(
             body: StatefulBuilder(
               builder: (context, setState) => SingleChildScrollView(
@@ -171,8 +172,9 @@ void main() {
       addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
+        MaterialApp(
+          theme: ThemeData(splashFactory: InkRipple.splashFactory),
+          home: const Scaffold(
             body: WarehouseFloorPlanEditorDialog(),
           ),
         ),
