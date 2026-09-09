@@ -23,8 +23,20 @@ CREATE TABLE IF NOT EXISTS public.locations (
     shelf TEXT NOT NULL,
     level TEXT NOT NULL,
     current_pallets INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'AVAILABLE',
+    max_pallet_capacity INTEGER DEFAULT 1,
+    aisle_side TEXT DEFAULT 'LEFT',
+    sort_order INTEGER DEFAULT 0,
+    grid_row INTEGER DEFAULT 0,
+    grid_col INTEGER DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'AVAILABLE';
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS max_pallet_capacity INTEGER DEFAULT 1;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS aisle_side TEXT DEFAULT 'LEFT';
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS grid_row INTEGER DEFAULT 0;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS grid_col INTEGER DEFAULT 0;
 
 -- 3. Bảng Pallet lưu kho (pallets)
 -- FK: location_id -> locations(location_id)

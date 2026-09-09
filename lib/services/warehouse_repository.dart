@@ -918,23 +918,31 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> updateLocationStatus(String locationId, String status) async {
     final cleanId = locationId.trim().toUpperCase();
+    final stripped = cleanId.startsWith('LOC-') ? cleanId.substring(4) : cleanId;
+    final withLoc = cleanId.startsWith('LOC-') ? cleanId : 'LOC-$cleanId';
+
     final loc = _locations.where((l) =>
         l.locationId.trim().toUpperCase() == cleanId ||
-        l.locationCode.trim().toUpperCase() == cleanId
+        l.locationCode.trim().toUpperCase() == cleanId ||
+        l.locationId.trim().toUpperCase() == withLoc ||
+        l.locationCode.trim().toUpperCase() == stripped
     ).firstOrNull;
 
     if (loc != null) {
       loc.status = status;
     }
 
-    await _dbService.updateLocationStatus(locationId, status);
+    final targetId = loc?.locationId ?? locationId;
+    final targetCode = loc?.locationCode ?? stripped;
+    await _dbService.updateLocationStatus(targetId, status);
 
     await _syncDirectOrQueue(
       tableName: 'locations',
-      recordId: loc?.locationId ?? locationId,
+      recordId: targetId,
       action: 'UPDATE',
       payload: {
-        'locationId': loc?.locationId ?? locationId,
+        'location_id': targetId,
+        'location_code': targetCode,
         'status': status,
       },
     );

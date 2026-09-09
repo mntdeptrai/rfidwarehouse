@@ -406,6 +406,20 @@ class SupabaseSyncService extends ChangeNotifier {
           if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
             map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
           }
+          if (tableName == 'locations') {
+            if (map['status'] == null) {
+              final localLoc = await db.query(
+                'locations',
+                columns: ['status'],
+                where: 'location_id = ? OR location_code = ?',
+                whereArgs: [map['location_id'], map['location_code']],
+                limit: 1,
+              );
+              if (localLoc.isNotEmpty && localLoc.first['status'] != null) {
+                map['status'] = localLoc.first['status'];
+              }
+            }
+          }
           if (tableName == 'users') {
             if (map['is_active'] is bool) {
               map['is_active'] = (map['is_active'] == true) ? 1 : 0;
@@ -665,10 +679,32 @@ class SupabaseSyncService extends ChangeNotifier {
             'shelf': loc.shelf,
             'level': loc.level,
             'current_pallets': loc.currentPallets,
+            'status': loc.status,
+            'max_pallet_capacity': loc.maxPalletCapacity,
+            'aisle_side': loc.aisleSide,
+            'sort_order': loc.sortOrder,
+            'grid_row': loc.gridRow,
+            'grid_col': loc.gridCol,
           }).toList();
           for (var i = 0; i < locBatch.length; i += 100) {
             final chunk = locBatch.sublist(i, (i + 100 > locBatch.length) ? locBatch.length : i + 100);
-            await supa.from('locations').upsert(chunk);
+            try {
+              await supa.from('locations').upsert(chunk);
+            } catch (e) {
+              debugPrint('Warning upserting locations with status to Supabase: $e');
+              // Fallback nếu Supabase chưa chạy ALTER TABLE thêm status
+              final fallbackChunk = chunk.map((m) => {
+                'location_id': m['location_id'],
+                'location_code': m['location_code'],
+                'zone': m['zone'],
+                'shelf': m['shelf'],
+                'level': m['level'],
+                'current_pallets': m['current_pallets'],
+              }).toList();
+              try {
+                await supa.from('locations').upsert(fallbackChunk);
+              } catch (_) {}
+            }
           }
         }
 
@@ -827,6 +863,20 @@ class SupabaseSyncService extends ChangeNotifier {
         }
         if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
           map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
+        }
+        if (tableName == 'locations') {
+          if (map['status'] == null) {
+            final localLoc = await db.query(
+              'locations',
+              columns: ['status'],
+              where: 'location_id = ? OR location_code = ?',
+              whereArgs: [map['location_id'], map['location_code']],
+              limit: 1,
+            );
+            if (localLoc.isNotEmpty && localLoc.first['status'] != null) {
+              map['status'] = localLoc.first['status'];
+            }
+          }
         }
         if (tableName == 'users') {
           if (map['is_active'] is bool) {

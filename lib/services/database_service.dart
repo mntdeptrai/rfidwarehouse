@@ -567,11 +567,14 @@ class DatabaseService {
 
   Future<void> updateLocationStatus(String locationId, String status) async {
     final db = await database;
+    final clean = locationId.trim().toUpperCase();
+    final stripped = clean.startsWith('LOC-') ? clean.substring(4) : clean;
+    final withLoc = clean.startsWith('LOC-') ? clean : 'LOC-$clean';
     await db.update(
       'locations',
       {'status': status},
-      where: 'location_id = ? OR location_code = ?',
-      whereArgs: [locationId, locationId],
+      where: 'location_id = ? OR location_code = ? OR UPPER(location_id) = ? OR UPPER(location_code) = ? OR location_id = ? OR location_code = ?',
+      whereArgs: [locationId, locationId, clean, clean, withLoc, stripped],
     );
   }
 
