@@ -411,6 +411,17 @@ class WarehouseRepository extends ChangeNotifier {
     _inboundOrders.removeWhere((o) => o.inboundOrderId == orderIdVal || o.orderNo == orderNo);
     _items.removeWhere((i) => i.orderNo == orderNo || i.orderNo == orderIdVal || i.orderNo == cleanId);
 
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        final supa = Supabase.instance.client;
+        await supa.from('inbound_order_details').delete().eq('order_id', orderIdVal);
+        await supa.from('inbound_orders').delete().or('inbound_order_id.eq.$orderIdVal,order_no.eq.$orderNo');
+        await supa.from('items').delete().or('order_no.eq.$orderNo,order_no.eq.$orderIdVal');
+      } catch (e) {
+        debugPrint('deleteInboundOrder Supabase direct error: $e');
+      }
+    }
+
     await _syncDirectOrQueue(
       tableName: 'inbound_orders',
       recordId: orderIdVal,
@@ -425,6 +436,15 @@ class WarehouseRepository extends ChangeNotifier {
     final cleanEpc = epc.trim().toUpperCase();
     await _dbService.deleteItem(cleanEpc);
     _items.removeWhere((i) => i.epc.toUpperCase() == cleanEpc);
+
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        await Supabase.instance.client.from('items').delete().eq('epc', cleanEpc);
+      } catch (e) {
+        debugPrint('deleteItem Supabase direct error: $e');
+      }
+    }
+
     await _syncDirectOrQueue(
       tableName: 'items',
       recordId: cleanEpc,
@@ -438,6 +458,21 @@ class WarehouseRepository extends ChangeNotifier {
     final epcSet = epcs.map((e) => e.trim().toUpperCase()).toSet();
     for (final epc in epcSet) {
       await _dbService.deleteItem(epc);
+    }
+    _items.removeWhere((i) => epcSet.contains(i.epc.toUpperCase()));
+
+    if (!Platform.environment.containsKey('FLUTTER_TEST') && epcSet.isNotEmpty) {
+      try {
+        final supa = Supabase.instance.client;
+        for (final epc in epcSet) {
+          await supa.from('items').delete().eq('epc', epc);
+        }
+      } catch (e) {
+        debugPrint('deleteItemsByEpcs Supabase direct error: $e');
+      }
+    }
+
+    for (final epc in epcSet) {
       await _syncDirectOrQueue(
         tableName: 'items',
         recordId: epc,
@@ -445,7 +480,6 @@ class WarehouseRepository extends ChangeNotifier {
         payload: {'epc': epc},
       );
     }
-    _items.removeWhere((i) => epcSet.contains(i.epc.toUpperCase()));
     notifyListeners();
   }
 
@@ -552,6 +586,33 @@ class WarehouseRepository extends ChangeNotifier {
   Future<List<Item>> addInboundOrder(InboundOrder order, {bool autoGenerateEpcs = true}) async {
     await _dbService.insertInboundOrder(order);
     _inboundOrders.add(order);
+
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        final supa = Supabase.instance.client;
+        await supa.from('inbound_orders').upsert({
+          'inbound_order_id': order.inboundOrderId,
+          'order_no': order.orderNo,
+          'source_supplier': order.sourceSupplier,
+          'status': order.status.code,
+          'created_at': order.createdAt.toIso8601String(),
+        });
+        final detailRows = order.details.map((d) => {
+          'order_id': order.inboundOrderId,
+          'product_id': d.productId,
+          'sku': d.sku,
+          'product_name': d.productName,
+          'required_qty': d.requiredQty,
+          'received_qty': d.receivedQty,
+        }).toList();
+        if (detailRows.isNotEmpty) {
+          await supa.from('inbound_order_details').upsert(detailRows);
+        }
+      } catch (e) {
+        debugPrint('addInboundOrder Supabase direct error: $e');
+      }
+    }
+
     await _syncDirectOrQueue(
       tableName: 'inbound_orders',
       recordId: order.inboundOrderId,
@@ -562,13 +623,6 @@ class WarehouseRepository extends ChangeNotifier {
         'sourceSupplier': order.sourceSupplier,
         'status': order.status.code,
         'createdAt': order.createdAt.toIso8601String(),
-        'details': order.details.map((d) => {
-          'productId': d.productId,
-          'sku': d.sku,
-          'productName': d.productName,
-          'requiredQty': d.requiredQty,
-          'receivedQty': d.receivedQty,
-        }).toList(),
       },
     );
 
@@ -820,6 +874,28 @@ class WarehouseRepository extends ChangeNotifier {
     }).toList();
     await _dbService.enqueueSyncBatch(syncRecords);
 
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        final rows = items.map((item) => {
+          'item_id': item.itemId,
+          'product_id': item.productId,
+          'sku': item.sku,
+          'product_name': item.productName,
+          'serial_number': item.serialNumber,
+          'epc': item.epc,
+          'status': item.status.code,
+          'order_no': item.orderNo,
+          'pallet_id': item.palletId,
+          'location_id': item.locationId,
+          'inbound_time': item.inboundTime?.toIso8601String(),
+          'allocated_time': item.allocatedTime?.toIso8601String(),
+        }).toList();
+        await Supabase.instance.client.from('items').upsert(rows);
+      } catch (e) {
+        debugPrint('insertDirectItems Supabase direct error: $e');
+      }
+    }
+
     _triggerBackgroundSync();
     notifyListeners();
   }
@@ -837,6 +913,22 @@ class WarehouseRepository extends ChangeNotifier {
 
     await _dbService.insertProducts(toAdd);
     _products.addAll(toAdd);
+
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        final rows = toAdd.map((p) => {
+          'product_id': p.productId,
+          'sku': p.sku,
+          'product_name': p.productName,
+          'unit': p.unit,
+          'category': p.category,
+          'description': p.description,
+        }).toList();
+        await Supabase.instance.client.from('products').upsert(rows);
+      } catch (e) {
+        debugPrint('addProductsBatch Supabase direct error: $e');
+      }
+    }
 
     final syncRecords = toAdd.map((p) => {
       'table_name': 'products',
