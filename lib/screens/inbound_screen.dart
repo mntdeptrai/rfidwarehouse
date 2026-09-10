@@ -951,9 +951,174 @@ class _InboundScreenState extends State<InboundScreen> {
 
     return Column(
       children: [
-        // Thanh công cụ NHẬP HÀNG & LÀM MỚI (Tương tự Desktop)
+        // Thanh công cụ NHẬP HÀNG & LÀM MỚI (Kéo Nhập Hàng sang bên trái)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: c.bgDeep,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                // Nút Nhập Hàng (Dropdown menu kéo sang bên trái)
+                PopupMenuButton<String>(
+                  enabled: !_isImporting,
+                  tooltip: 'Chọn nguồn nạp file',
+                  offset: const Offset(0, 38),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: BorderSide(color: c.border),
+                  ),
+                  color: c.bgCardElevated,
+                  onSelected: (value) {
+                    if (_isImporting) return;
+                    if (value == 'excel') {
+                      _pickAndLoadLiveExcelFile();
+                    } else if (value == 'po') {
+                      _pickAndLoadPoFile();
+                    } else if (value == 'manual') {
+                      _showCreateOrderDialog();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      value: 'excel',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 18),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'File Thùng Hàng (.xlsx)',
+                                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              Text(
+                                'Carton Box, SKU, Serial/EPC',
+                                style: TextStyle(color: c.textSecondary, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'po',
+                      child: Row(
+                        children: [
+                          Icon(Icons.receipt_long, color: c.rfidCyan, size: 18),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'File Nhập PO (Đơn Mua Hàng)',
+                                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              Text(
+                                'Đơn PO: Mã PO, SKU, Số lượng',
+                                style: TextStyle(color: c.textSecondary, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'manual',
+                      child: Row(
+                        children: [
+                          const Icon(Icons.post_add, color: Color(0xFF0284C7), size: 18),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Tạo Đơn Thủ Công',
+                                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              Text(
+                                'Nhập mã đơn, SKU, số lượng thủ công',
+                                style: TextStyle(color: c.textSecondary, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: _isImporting ? c.rfidCyan.withValues(alpha: 0.5) : c.rfidCyan,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: c.rfidCyan.withValues(alpha: 0.25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isImporting)
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2C251E)),
+                          )
+                        else
+                          const Icon(Icons.file_download_outlined, size: 16, color: Color(0xFF2C251E)),
+                        const SizedBox(width: 5),
+                        Text(
+                          _isImporting ? 'ĐANG NẠP...' : 'NHẬP HÀNG',
+                          style: const TextStyle(
+                            color: Color(0xFF2C251E),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down, size: 16, color: Color(0xFF2C251E)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Nút Làm Mới (Xóa file đã nạp để chọn lại file khác)
+                Tooltip(
+                  message: 'Xóa dữ liệu file đã nạp để chọn lại file mới',
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    icon: Icon(Icons.refresh, size: 15, color: c.textPrimary),
+                    label: Text(
+                      'LÀM MỚI',
+                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                    ),
+                    onPressed: _isImporting ? null : _handleRefreshOrClearFile,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // Dòng Tiêu đề: DANH SÁCH HÀNG NHẬP (chuyển xuống dưới)
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
           color: c.bgDeep,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -964,166 +1129,21 @@ class _InboundScreenState extends State<InboundScreen> {
                   style: TextStyle(
                     color: c.textPrimary,
                     fontWeight: FontWeight.bold,
-                    fontSize: 13,
+                    fontSize: 12.5,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(width: 12),
-              // Nút Nhập Hàng (Dropdown menu tương tự Desktop)
-              PopupMenuButton<String>(
-                enabled: !_isImporting,
-                tooltip: 'Chọn nguồn nạp file',
-                offset: const Offset(0, 38),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: c.border),
-                ),
-                color: c.bgCardElevated,
-                onSelected: (value) {
-                  if (_isImporting) return;
-                  if (value == 'excel') {
-                    _pickAndLoadLiveExcelFile();
-                  } else if (value == 'po') {
-                    _pickAndLoadPoFile();
-                  } else if (value == 'manual') {
-                    _showCreateOrderDialog();
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem<String>(
-                    value: 'excel',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 18),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'File Thùng Hàng (.xlsx)',
-                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
-                            Text(
-                              'Carton Box, SKU, Serial/EPC',
-                              style: TextStyle(color: c.textSecondary, fontSize: 10),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem<String>(
-                    value: 'po',
-                    child: Row(
-                      children: [
-                        Icon(Icons.receipt_long, color: c.rfidCyan, size: 18),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'File Nhập PO (Đơn Mua Hàng)',
-                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
-                            Text(
-                              'Đơn PO: Mã PO, SKU, Số lượng',
-                              style: TextStyle(color: c.textSecondary, fontSize: 10),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem<String>(
-                    value: 'manual',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.post_add, color: Color(0xFF0284C7), size: 18),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Tạo Đơn Thủ Công',
-                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
-                            Text(
-                              'Nhập mã đơn, SKU, số lượng thủ công',
-                              style: TextStyle(color: c.textSecondary, fontSize: 10),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                if (allDetailedItems.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '(${allDetailedItems.length} sản phẩm)',
+                    style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                 ],
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: _isImporting ? c.rfidCyan.withValues(alpha: 0.5) : c.rfidCyan,
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: c.rfidCyan.withValues(alpha: 0.25),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_isImporting)
-                        const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2C251E)),
-                        )
-                      else
-                        const Icon(Icons.file_download_outlined, size: 16, color: Color(0xFF2C251E)),
-                      const SizedBox(width: 5),
-                      Text(
-                        _isImporting ? 'ĐANG NẠP...' : 'NHẬP HÀNG',
-                        style: const TextStyle(
-                          color: Color(0xFF2C251E),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11.5,
-                        ),
-                      ),
-                      const Icon(Icons.arrow_drop_down, size: 16, color: Color(0xFF2C251E)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Nút Làm Mới (Xóa file đã nạp để chọn lại file khác)
-              Tooltip(
-                message: 'Xóa dữ liệu file đã nạp để chọn lại file mới',
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: c.textPrimary,
-                    side: BorderSide(color: c.border),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  icon: Icon(Icons.refresh, size: 15, color: c.textPrimary),
-                  label: Text(
-                    'LÀM MỚI',
-                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
-                  ),
-                  onPressed: _isImporting ? null : _handleRefreshOrClearFile,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
 
         // Sub-toolbar: Tìm kiếm & Chọn tất cả
         Container(
