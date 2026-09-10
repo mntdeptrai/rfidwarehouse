@@ -789,8 +789,9 @@ class WarehouseRepository extends ChangeNotifier {
       tableName: 'locations',
       recordId: clean,
       action: 'DELETE',
-      payload: {'location_id': clean},
+      payload: {'location_id': clean, 'location_code': clean},
     );
+    _triggerBackgroundSync();
     notifyListeners();
   }
 
