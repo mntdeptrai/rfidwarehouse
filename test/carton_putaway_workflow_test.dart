@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhf/models/wms_models.dart';
+import 'package:uhf/services/excel_import_service.dart';
 import 'package:uhf/services/warehouse_repository.dart';
 
 void main() {
@@ -364,6 +367,144 @@ void main() {
 
       final orderFinal = repo.inboundOrders.firstWhere((o) => o.orderNo == orderNo);
       expect(orderFinal.status, equals(InboundOrderStatus.completed));
+
+      await repo.clearAllData(alsoClearCloud: false);
+    });
+
+    test('Excel with [CARTON CODE, EPC, NAME, NCC, BARCODE PALET, EPC PALLET] parses correctly and puts away by Pallet', () async {
+      final repo = WarehouseRepository();
+      await repo.ensureInitialized();
+
+      // 1. Kiểm tra parse file CSV/Excel chứa đúng định dạng như trong hình ảnh của người dùng:
+      // CARTON CODE | EPC | NAME | NCC | BARCODE PALET | EPC PALLET
+      const csvContent =
+          'CARTON CODE,EPC,NAME,NCC,BARCODE PALET,EPC PALLET\r\n'
+          'CARTONTEST0001,ABCDEF000000000000000001,áo hồng,PEPSICO,945321545,AB2600100000000000000200\r\n'
+          'CARTONTEST0002,ABCDEF000000000000000002,áo tím,PEPSICO,945321545,AB2600100000000000000200\r\n';
+
+      final parsed = ExcelImportService().parseBytes(Uint8List.fromList(utf8.encode(csvContent)), isCsv: true);
+      final cartons = parsed.$1;
+      expect(cartons.length, equals(2));
+
+      final c1 = cartons[0];
+      expect(c1['cartonBox'], equals('CARTONTEST0001'));
+      expect(c1['palletCode'], equals('945321545'));
+      expect(c1['palletEpc'], equals('AB2600100000000000000200'));
+      expect(c1['supplier'], equals('PEPSICO'));
+      expect(c1['productName'], equals('áo hồng'));
+
+      final sItems1 = (c1['serialItems'] as List<Map<String, dynamic>>);
+      expect(sItems1.length, equals(1));
+      expect(sItems1[0]['serial'], equals('ABCDEF000000000000000001'));
+      expect(sItems1[0]['pallet'], equals('945321545'));
+      expect(sItems1[0]['palletEpc'], equals('AB2600100000000000000200'));
+
+      final c2 = cartons[1];
+      expect(c2['cartonBox'], equals('CARTONTEST0002'));
+      expect(c2['palletCode'], equals('945321545'));
+      expect(c2['palletEpc'], equals('AB2600100000000000000200'));
+      expect(c2['productName'], equals('áo tím'));
+
+      // 2. Đăng ký Pallet vào hệ thống từ file Excel
+      await repo.registerOrUpdatePallet(
+        palletCode: '945321545',
+        rfidEpc: 'AB2600100000000000000200',
+      );
+
+      // Nhận diện Pallet qua chip RFID tại Cổng
+      final foundPallet = repo.findPalletByRfid('AB2600100000000000000200');
+      expect(foundPallet, isNotNull);
+      expect(foundPallet!.palletCode, equals('945321545'));
+
+      // 3. Giả lập đơn nhập hàng được nạp từ file Excel vào Database
+      const orderNo = 'NK-PALLET-TEST-001';
+      final order = InboundOrder(
+        inboundOrderId: 'INB-$orderNo',
+        orderNo: orderNo,
+        sourceSupplier: 'PEPSICO',
+        status: InboundOrderStatus.newOrder,
+        createdAt: DateTime.now(),
+        details: [
+          InboundOrderDetail(
+            productId: c1['productCode'],
+            sku: c1['productCode'],
+            productName: 'áo hồng',
+            requiredQty: 1,
+          ),
+          InboundOrderDetail(
+            productId: c2['productCode'],
+            sku: c2['productCode'],
+            productName: 'áo tím',
+            requiredQty: 1,
+          ),
+        ],
+      );
+      await repo.addInboundOrder(order, autoGenerateEpcs: false);
+
+      final item1 = Item(
+        itemId: 'ITEM-TEST-001',
+        productId: c1['productCode'],
+        sku: c1['productCode'],
+        productName: 'áo hồng',
+        serialNumber: 'ABCDEF000000000000000001',
+        epc: 'ABCDEF000000000000000001',
+        status: ItemStatus.pendingInbound,
+        orderNo: orderNo,
+        palletId: 'PAL-945321545',
+        cartonCode: 'CARTONTEST0001',
+        supplier: 'PEPSICO',
+      );
+      final item2 = Item(
+        itemId: 'ITEM-TEST-002',
+        productId: c2['productCode'],
+        sku: c2['productCode'],
+        productName: 'áo tím',
+        serialNumber: 'ABCDEF000000000000000002',
+        epc: 'ABCDEF000000000000000002',
+        status: ItemStatus.pendingInbound,
+        orderNo: orderNo,
+        palletId: 'PAL-945321545',
+        cartonCode: 'CARTONTEST0002',
+        supplier: 'PEPSICO',
+      );
+      await repo.insertDirectItem(item1);
+      await repo.insertDirectItem(item2);
+
+      // 4. Qua Cổng RFID Gate: Vì đơn đã có mã Pallet trong file nên chuyển thẳng sang Chờ xếp kệ (WAITING_PUTAWAY)
+      final scannedEpcs = ['ABCDEF000000000000000001', 'ABCDEF000000000000000002'];
+      final gateCount = await repo.confirmGateReceiveToWaitingPutaway(
+        orderNo: orderNo,
+        scannedEpcs: scannedEpcs,
+        palletCode: '945321545',
+        performedBy: 'Cổng RFID Gate',
+      );
+      expect(gateCount, equals(2));
+
+      final itemsAfterGate = repo.getItemsByOrderNo(orderNo);
+      expect(itemsAfterGate.every((i) => i.status == ItemStatus.waitingPutaway), isTrue);
+      expect(itemsAfterGate.every((i) => i.palletId == 'PAL-945321545'), isTrue);
+
+      final orderAfterGate = repo.inboundOrders.firstWhere((o) => o.orderNo == orderNo);
+      expect(orderAfterGate.status, equals(InboundOrderStatus.waitingPutaway));
+
+      // 5. Thủ kho cầm PDA quét Barcode Pallet 945321545 và quét Kệ LOC-K02-05
+      const shelfLocation = 'LOC-K02-05';
+      final putawayCount = await repo.confirmPdaPutawayByCarton(
+        cartonOrOrderBarcode: '945321545', // Quét mã Pallet Barcode
+        locationId: shelfLocation,
+        performedBy: 'Thủ kho PDA',
+      );
+      expect(putawayCount, equals(2));
+
+      // Kiểm tra trạng thái đã chuyển thành IN_STOCK tại đúng kệ
+      final itemsAfterPutaway = repo.getItemsByOrderNo(orderNo);
+      expect(itemsAfterPutaway.every((i) => i.status == ItemStatus.inStock), isTrue);
+      expect(itemsAfterPutaway.every((i) => i.locationId == shelfLocation), isTrue);
+      expect(itemsAfterPutaway.every((i) => i.statusDisplay == 'Đã lưu vào vị trí $shelfLocation'), isTrue);
+
+      // Pallet cũng được cập nhật vị trí lên kệ kho
+      final palAfter = repo.pallets.where((p) => p.palletCode == '945321545').first;
+      expect(palAfter.locationId, equals(shelfLocation));
 
       await repo.clearAllData(alsoClearCloud: false);
     });

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
@@ -163,7 +164,12 @@ class ExcelImportService {
   }
 
   (List<Map<String, dynamic>>, int) _parseGoodsReceiveCsv(Uint8List bytes) {
-    final content = String.fromCharCodes(bytes);
+    String content;
+    try {
+      content = utf8.decode(bytes);
+    } catch (_) {
+      content = String.fromCharCodes(bytes);
+    }
     final lines = content.split(RegExp(r'\r\n|\n|\r'));
     if (lines.isEmpty) {
       throw Exception('Tệp CSV rỗng.');
@@ -185,6 +191,7 @@ class ExcelImportService {
 
     int? cartonCol;
     int? palletCol;
+    int? palletEpcCol;
     int? serialCol;
     int? barcodeCol;
     int? nameCol;
@@ -199,23 +206,31 @@ class ExcelImportService {
       final h = headers[i];
       if (h.isEmpty) continue;
 
-      // 1. Kiểm tra cột mã Thẻ RFID / EPC / Chip / Serial
-      if (h.contains('epc') ||
+      final isPalletHeader = h.contains('pallet') || h.contains('palet');
+      final isEpcOrRfid = h.contains('epc') ||
           h.contains('rfid') ||
           h.contains('serial') ||
           h.contains('chip') ||
           h.contains('ma the') ||
           h.contains('tag') ||
-          h.contains('tid')) {
-        serialCol = i;
+          h.contains('tid');
+
+      // 1. Cột Thẻ RFID / EPC của xe Pallet (Ví dụ: EPC PALLET, EPC PALET, RFID PALLET, CHIP PALLET, TAG PALET)
+      if (isPalletHeader && isEpcOrRfid) {
+        palletEpcCol = i;
         hasHeader = true;
       }
-      // 2. Kiểm tra cột Pallet riêng biệt
-      else if (h.contains('pallet')) {
+      // 2. Cột Mã xe / Barcode Pallet (Ví dụ: BARCODE PALET, BARCODE PALLET, MA PALLET, MA PALET, PALLET, PALET)
+      else if (isPalletHeader) {
         palletCol = i;
         hasHeader = true;
       }
-      // 3. Kiểm tra cột Thùng hàng / Kiện / Box / Hộp
+      // 3. Cột mã Thẻ RFID / EPC / Chip / Serial của SẢN PHẨM (không phải của Pallet)
+      else if (isEpcOrRfid) {
+        serialCol = i;
+        hasHeader = true;
+      }
+      // 4. Cột Thùng hàng / Kiện / Box / Hộp (không phải Pallet)
       else if (h.contains('carton') ||
           h.contains('thung') ||
           h.contains('box') ||
@@ -224,7 +239,7 @@ class ExcelImportService {
         cartonCol = i;
         hasHeader = true;
       }
-      // 3. Kiểm tra cột Mã sản phẩm / SKU / Barcode / Mã hàng (ưu tiên trước tên)
+      // 5. Cột Mã sản phẩm / SKU / Barcode / Mã hàng (không phải Pallet)
       else if (h.contains('barcode') ||
           h.contains('sku') ||
           h.contains('ma sp') ||
@@ -238,7 +253,7 @@ class ExcelImportService {
         barcodeCol = i;
         hasHeader = true;
       }
-      // 4. Kiểm tra cột Tên sản phẩm / Tên hàng
+      // 6. Cột Tên sản phẩm / Tên hàng
       else if (h.contains('ten') ||
           h.contains('name') ||
           h.contains('mo ta') ||
@@ -249,7 +264,7 @@ class ExcelImportService {
         nameCol = i;
         hasHeader = true;
       }
-      // 5. Kiểm tra cột Nhà cung cấp / Supplier / NCC / Vendor
+      // 7. Cột Nhà cung cấp / Supplier / NCC / Vendor
       else if (h.contains('supplier') ||
           h.contains('ncc') ||
           h.contains('nha cung cap') ||
@@ -298,19 +313,21 @@ class ExcelImportService {
 
       final carton = (cartonCol != null && cartonCol < row.length) ? row[cartonCol].trim() : '';
       final pallet = (palletCol != null && palletCol < row.length) ? row[palletCol].trim() : '';
+      final palletEpc = (palletEpcCol != null && palletEpcCol < row.length) ? row[palletEpcCol].trim() : '';
       final serial = (serialCol < row.length) ? row[serialCol].trim() : '';
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
       final name = (nameCol < row.length) ? row[nameCol].trim() : '';
       final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
 
-      if (carton.isEmpty && pallet.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
+      if (carton.isEmpty && pallet.isEmpty && palletEpc.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
         continue;
       }
 
       validDataRows++;
 
       final effectiveCarton = carton.isNotEmpty ? carton : (pallet.isNotEmpty ? pallet : 'KIỆN-CHUNG');
-      final effectivePallet = pallet.isNotEmpty ? pallet : null;
+      final effectivePallet = pallet.isNotEmpty ? pallet : (palletEpc.isNotEmpty ? palletEpc : null);
+      final effectivePalletEpc = palletEpc.isNotEmpty ? palletEpc : null;
       final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
 
       // Xác định SKU/Barcode riêng cho từng dòng sản phẩm
@@ -332,6 +349,7 @@ class ExcelImportService {
         cartonMap[groupKey] = {
           'cartonBox': effectiveCarton,
           'palletCode': effectivePallet,
+          'palletEpc': effectivePalletEpc,
           'productCode': rowBarcode,
           'productName': effectiveName,
           'supplier': supplier.isNotEmpty ? supplier : 'Nhà cung cấp tổng hợp',
@@ -345,6 +363,9 @@ class ExcelImportService {
         }
         if (cartonMap[groupKey]!['palletCode'] == null && effectivePallet != null) {
           cartonMap[groupKey]!['palletCode'] = effectivePallet;
+        }
+        if (cartonMap[groupKey]!['palletEpc'] == null && effectivePalletEpc != null) {
+          cartonMap[groupKey]!['palletEpc'] = effectivePalletEpc;
         }
       }
 
@@ -361,6 +382,7 @@ class ExcelImportService {
             'name': effectiveName,
             'carton': effectiveCarton,
             'pallet': effectivePallet,
+            'palletEpc': effectivePalletEpc,
             'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
           });
         }

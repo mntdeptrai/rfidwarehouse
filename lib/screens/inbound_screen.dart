@@ -473,6 +473,41 @@ class _InboundScreenState extends State<InboundScreen> {
 
       final List<Item> explicitItems = [];
       int itemSeq = 1;
+      final Map<String, String?> palletsToRegister = {};
+
+      for (var c in result.cartons) {
+        final palletCode = c['palletCode']?.toString().trim();
+        final palletEpc = c['palletEpc']?.toString().trim();
+        if (palletCode != null && palletCode.isNotEmpty) {
+          palletsToRegister[palletCode] = (palletEpc != null && palletEpc.isNotEmpty) ? palletEpc : palletsToRegister[palletCode];
+        }
+        final serialItems = (c['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        if (serialItems != null && serialItems.isNotEmpty) {
+          for (var sItem in serialItems) {
+            final sPallet = (sItem['pallet']?.toString().trim() ?? palletCode);
+            final sPalletEpc = (sItem['palletEpc']?.toString().trim() ?? palletEpc);
+            final effectivePallet = (sPallet != null && sPallet.isNotEmpty) ? sPallet : null;
+            if (effectivePallet != null) {
+              if (sPalletEpc != null && sPalletEpc.isNotEmpty) {
+                palletsToRegister[effectivePallet] = sPalletEpc;
+              } else if (!palletsToRegister.containsKey(effectivePallet)) {
+                palletsToRegister[effectivePallet] = null;
+              }
+            }
+          }
+        }
+      }
+
+      // Đăng ký/cập nhật thông tin xe Pallet nếu file Excel có chứa mã Pallet hoặc RFID Pallet
+      for (final entry in palletsToRegister.entries) {
+        final pCode = entry.key;
+        final pEpc = entry.value ?? '';
+        await _repo.registerOrUpdatePallet(
+          palletCode: pCode,
+          rfidEpc: pEpc,
+        );
+      }
+
       for (var c in result.cartons) {
         final cartonBox = c['cartonBox']?.toString().trim();
         final palletCode = c['palletCode']?.toString().trim();
@@ -485,6 +520,9 @@ class _InboundScreenState extends State<InboundScreen> {
             final sSupplier = (sItem['supplier'] ?? c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
             final sPallet = (sItem['pallet']?.toString().trim() ?? palletCode);
             final effectivePallet = (sPallet != null && sPallet.isNotEmpty) ? sPallet : null;
+            final assignedPalletId = effectivePallet != null
+                ? (_repo.pallets.where((p) => p.palletCode.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == 'PAL-${effectivePallet.toUpperCase()}').firstOrNull?.palletId ?? (effectivePallet.toUpperCase().startsWith('PAL-') ? effectivePallet : 'PAL-$effectivePallet'))
+                : null;
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
@@ -494,7 +532,7 @@ class _InboundScreenState extends State<InboundScreen> {
               epc: sSerial,
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
-              palletId: effectivePallet,
+              palletId: assignedPalletId,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
@@ -506,6 +544,9 @@ class _InboundScreenState extends State<InboundScreen> {
           final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim()).toList() ?? [];
           final sSupplier = (c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
           final effectivePallet = (palletCode != null && palletCode.isNotEmpty) ? palletCode : null;
+          final assignedPalletId = effectivePallet != null
+              ? (_repo.pallets.where((p) => p.palletCode.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == 'PAL-${effectivePallet.toUpperCase()}').firstOrNull?.palletId ?? (effectivePallet.toUpperCase().startsWith('PAL-') ? effectivePallet : 'PAL-$effectivePallet'))
+              : null;
           for (var serial in serials) {
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
@@ -516,7 +557,7 @@ class _InboundScreenState extends State<InboundScreen> {
               epc: serial,
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
-              palletId: effectivePallet,
+              palletId: assignedPalletId,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,

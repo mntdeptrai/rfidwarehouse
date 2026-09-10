@@ -118,6 +118,11 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   void _handleIncomingRfid(String epc) {
     final clean = epc.trim().toUpperCase();
+    final pallet = _repo.findPalletByRfid(clean);
+    if (pallet != null) {
+      _processPutawayCarton(pallet.palletCode);
+      return;
+    }
     final item = _repo.items.where((i) => i.epc.toUpperCase() == clean).firstOrNull;
     if (item != null && item.orderNo != null && item.orderNo!.isNotEmpty) {
       _processPutawayCarton(item.orderNo!);

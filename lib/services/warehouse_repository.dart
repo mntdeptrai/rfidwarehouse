@@ -2388,9 +2388,22 @@ class WarehouseRepository extends ChangeNotifier {
       level: 'Tầng 1',
     );
 
+    final matchingPalletIds = _pallets
+        .where((p) =>
+            p.palletCode.trim().toUpperCase() == cleanBarcode ||
+            p.palletId.trim().toUpperCase() == cleanBarcode ||
+            p.palletId.trim().toUpperCase() == 'PAL-$cleanBarcode' ||
+            (p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == cleanBarcode))
+        .map((p) => p.palletId.trim().toUpperCase())
+        .toSet();
+
     var matchedItems = _items.where((it) {
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) return true;
-      if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) return true;
+      if (it.palletId != null) {
+        final itPal = it.palletId!.trim().toUpperCase();
+        if (itPal == cleanBarcode || itPal == 'PAL-$cleanBarcode' || matchingPalletIds.contains(itPal)) return true;
+      }
+      if (it.cartonCode != null && it.cartonCode!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.sku.trim().toUpperCase() == cleanBarcode) return true;
       if (it.productId.trim().toUpperCase() == cleanBarcode) return true;
       if (it.epc.trim().toUpperCase() == cleanBarcode || it.serialNumber.trim().toUpperCase() == cleanBarcode) return true;
@@ -2538,6 +2551,27 @@ class WarehouseRepository extends ChangeNotifier {
           notes: 'Xác nhận cất thùng hàng $cleanBarcode lên kệ ${loc.locationCode} bằng PDA Barcode',
         ),
       );
+    }
+
+    final affectedPalletIds = matchedItems.map((i) => i.palletId).whereType<String>().toSet();
+    for (final palId in affectedPalletIds) {
+      final pal = _pallets.where((p) =>
+          p.palletId.trim().toUpperCase() == palId.trim().toUpperCase() ||
+          p.palletCode.trim().toUpperCase() == palId.trim().toUpperCase() ||
+          p.palletId.trim().toUpperCase() == 'PAL-${palId.trim().toUpperCase()}').firstOrNull;
+      if (pal != null) {
+        pal.locationId = loc.locationId;
+        await _dbService.insertPallet(pal);
+        await _syncDirectOrQueue(
+          tableName: 'pallets',
+          recordId: pal.palletId,
+          action: 'UPDATE',
+          payload: {
+            'pallet_id': pal.palletId,
+            'location_id': pal.locationId,
+          },
+        );
+      }
     }
 
     final affectedOrderNos = matchedItems.map((i) => i.orderNo).whereType<String>().toSet();
@@ -2852,7 +2886,11 @@ class WarehouseRepository extends ChangeNotifier {
     String? locId = item.locationId;
     if (locId == null || locId.trim().isEmpty) {
       if (item.palletId != null) {
-        final pal = _pallets.where((p) => p.palletId == item.palletId).firstOrNull;
+        final cleanPalId = item.palletId!.trim().toUpperCase();
+        final pal = _pallets.where((p) =>
+            p.palletId.toUpperCase() == cleanPalId ||
+            p.palletCode.toUpperCase() == cleanPalId ||
+            p.palletId.toUpperCase() == 'PAL-$cleanPalId').firstOrNull;
         locId = pal?.locationId;
       }
     }
