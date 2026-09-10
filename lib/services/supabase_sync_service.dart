@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/secrets.dart';
 import 'database_service.dart';
@@ -58,6 +57,9 @@ class SupabaseLogEntry {
   });
 }
 
+/// Dịch vụ quản lý kết nối Cloud Supabase (Single Source of Truth)
+/// Chịu trách nhiệm: Khởi tạo Supabase, Lắng nghe Realtime, Giám sát Online/Offline
+/// KHÔNG sử dụng SQLite cục bộ để lưu trữ hay chèn dữ liệu đè lên Cloud khi vận hành thực tế.
 class SupabaseSyncService extends ChangeNotifier {
   static final SupabaseSyncService _instance = SupabaseSyncService._internal();
   factory SupabaseSyncService() => _instance;
@@ -68,9 +70,11 @@ class SupabaseSyncService extends ChangeNotifier {
   bool _isOnline = false;
   bool _isSyncing = false;
   DateTime? _lastSyncTime;
-  int _pendingCount = 0;
   String _connectionStatusDetail = '';
   final List<SupabaseLogEntry> _logs = [];
+
+  // Hàng đợi ngoại tuyến lưu trong bộ nhớ RAM khi tạm mất mạng
+  final List<Map<String, dynamic>> _offlineQueue = [];
 
   Timer? _autoSyncTimer;
   Timer? _reloadDebounceTimer;
@@ -80,9 +84,10 @@ class SupabaseSyncService extends ChangeNotifier {
   bool get isOnline => _isOnline;
   bool get isSyncing => _isSyncing;
   DateTime? get lastSyncTime => _lastSyncTime;
-  int get pendingCount => _pendingCount;
+  int get pendingCount => _offlineQueue.length;
   String get connectionStatusDetail => _connectionStatusDetail;
   List<SupabaseLogEntry> get logs => List.unmodifiable(_logs);
+
   SupabaseClient? get client {
     if (!_isInitialized) return null;
     try {
@@ -93,25 +98,11 @@ class SupabaseSyncService extends ChangeNotifier {
   }
 
   SupabaseSyncService._internal() {
-    _loadConfigFromDb();
-    _refreshPendingCount();
     _startAutoSyncTimer();
+    initSupabase();
   }
 
-  Future<void> _loadConfigFromDb() async {
-    try {
-      final u = await _dbService.getSystemConfig('supabase_url');
-      final k = await _dbService.getSystemConfig('supabase_anon_key');
-      final auto = await _dbService.getSystemConfig('supabase_auto_sync');
-
-      if (u != null && u.isNotEmpty) config.url = u;
-      if (k != null && k.isNotEmpty) config.anonKey = k;
-      if (auto != null) config.isAutoSync = auto == '1';
-    } catch (_) {}
-
-    await initSupabase();
-  }
-
+  /// Khởi tạo kết nối Supabase Cloud Client
   Future<bool> initSupabase() async {
     try {
       if (Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -167,11 +158,8 @@ class SupabaseSyncService extends ChangeNotifier {
       (_) async {
         if (config.isAutoSync && !_isSyncing) {
           await checkConnectivity();
-          if (_isOnline) {
-            final count = await _dbService.getPendingSyncCount();
-            if (count > 0) {
-              await syncNow();
-            }
+          if (_isOnline && _offlineQueue.isNotEmpty) {
+            await syncNow();
           }
         }
       },
@@ -187,25 +175,9 @@ class SupabaseSyncService extends ChangeNotifier {
     config.anonKey = anonKey.trim();
     config.isAutoSync = isAutoSync;
 
-    try {
-      await _dbService.setSystemConfig('supabase_url', config.url);
-      await _dbService.setSystemConfig('supabase_anon_key', config.anonKey);
-      await _dbService.setSystemConfig(
-        'supabase_auto_sync',
-        config.isAutoSync ? '1' : '0',
-      );
-    } catch (_) {}
-
     _isInitialized = false;
     _startAutoSyncTimer();
     await initSupabase();
-  }
-
-  Future<void> _refreshPendingCount() async {
-    try {
-      _pendingCount = await _dbService.getPendingSyncCount();
-      notifyListeners();
-    } catch (_) {}
   }
 
   void _addLog({
@@ -249,8 +221,8 @@ class SupabaseSyncService extends ChangeNotifier {
       }
 
       final supa = Supabase.instance.client;
-      // Health check bằng cách query bảng system_config hoặc products
-      await supa.from('system_config').select('config_key').limit(1);
+      // Health check bằng cách truy vấn 1 bản ghi bất kỳ từ locations hoặc products
+      await supa.from('locations').select('location_id').limit(1);
 
       final prev = _isOnline;
       _isOnline = true;
@@ -265,7 +237,6 @@ class SupabaseSyncService extends ChangeNotifier {
           message: 'Kết nối thành công tới Supabase Cloud: ${config.url}',
         );
         notifyListeners();
-        syncUserPasswordsToCloud();
       }
       return true;
     } catch (e) {
@@ -287,7 +258,7 @@ class SupabaseSyncService extends ChangeNotifier {
     }
   }
 
-  /// Test connection chi tiết
+  /// Kiểm tra kết nối chi tiết kèm tốc độ phản hồi (ms)
   Future<Map<String, dynamic>> testConnection() async {
     final sw = Stopwatch()..start();
     try {
@@ -320,7 +291,7 @@ class SupabaseSyncService extends ChangeNotifier {
     }
   }
 
-  /// Thiết lập Realtime listener để tự động cập nhật khi có thay đổi từ thiết bị khác
+  /// Thiết lập Realtime WebSockets để tự động cập nhật khi dữ liệu Cloud thay đổi
   void _setupRealtimeSubscription() {
     try {
       if (!_isInitialized) return;
@@ -363,114 +334,20 @@ class SupabaseSyncService extends ChangeNotifier {
     }
   }
 
-  Future<void> _handleRealtimeTableChange(String tableName, PostgresChangePayload payload) async {
-    try {
-      debugPrint('Supabase Realtime event on $tableName: ${payload.eventType}');
-      final db = await _dbService.database;
-
-      if (payload.eventType == PostgresChangeEvent.delete) {
-        final oldRecord = payload.oldRecord;
-        if (oldRecord.isNotEmpty) {
-          if (tableName == 'items' && oldRecord['item_id'] != null) {
-            await db.delete('items', where: 'item_id = ?', whereArgs: [oldRecord['item_id']]);
-          } else if (tableName == 'products' && oldRecord['product_id'] != null) {
-            await db.delete('products', where: 'product_id = ?', whereArgs: [oldRecord['product_id']]);
-          } else if (tableName == 'locations' && oldRecord['location_id'] != null) {
-            await db.delete('locations', where: 'location_id = ?', whereArgs: [oldRecord['location_id']]);
-          } else if (tableName == 'pallets' && oldRecord['pallet_id'] != null) {
-            await db.delete('pallets', where: 'pallet_id = ?', whereArgs: [oldRecord['pallet_id']]);
-          } else if (tableName == 'customers' && oldRecord['customer_id'] != null) {
-            await db.delete('customers', where: 'customer_id = ?', whereArgs: [oldRecord['customer_id']]);
-          } else if (tableName == 'inbound_orders' && oldRecord['inbound_order_id'] != null) {
-            await db.delete('inbound_orders', where: 'inbound_order_id = ?', whereArgs: [oldRecord['inbound_order_id']]);
-          } else if (tableName == 'outbound_orders' && oldRecord['outbound_order_id'] != null) {
-            await db.delete('outbound_orders', where: 'outbound_order_id = ?', whereArgs: [oldRecord['outbound_order_id']]);
-          } else if (tableName == 'delivery_notes' && oldRecord['delivery_id'] != null) {
-            await db.delete('delivery_notes', where: 'delivery_id = ?', whereArgs: [oldRecord['delivery_id']]);
-          } else if (tableName == 'inventory_sessions' && oldRecord['session_id'] != null) {
-            await db.delete('inventory_sessions', where: 'session_id = ?', whereArgs: [oldRecord['session_id']]);
-          } else if (tableName == 'users' && oldRecord['user_id'] != null) {
-            await db.delete('users', where: 'user_id = ?', whereArgs: [oldRecord['user_id']]);
-          }
-        } else {
-          await _pullTableFromSupabase(tableName);
-        }
-      } else {
-        final newRecord = payload.newRecord;
-        if (newRecord.isNotEmpty) {
-          final map = Map<String, dynamic>.from(newRecord);
-          map.remove('updated_at');
-          if (tableName == 'pallets' && map['is_multi_sku'] is bool) {
-            map['is_multi_sku'] = (map['is_multi_sku'] == true) ? 1 : 0;
-          }
-          if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
-            map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
-          }
-          if (tableName == 'locations') {
-            if (!Platform.isAndroid && !Platform.isIOS) {
-              final exists = await db.query(
-                'locations',
-                columns: ['location_id'],
-                where: 'location_id = ? OR location_code = ?',
-                whereArgs: [map['location_id'], map['location_code']],
-                limit: 1,
-              );
-              if (exists.isEmpty) {
-                return; // Kệ này không tồn tại trên Desktop -> không tự chèn thêm vào SQLite
-              }
-            }
-            if (map['status'] == null) {
-              final localLoc = await db.query(
-                'locations',
-                columns: ['status'],
-                where: 'location_id = ? OR location_code = ?',
-                whereArgs: [map['location_id'], map['location_code']],
-                limit: 1,
-              );
-              if (localLoc.isNotEmpty && localLoc.first['status'] != null) {
-                map['status'] = localLoc.first['status'];
-              }
-            }
-          }
-          if (tableName == 'users') {
-            if (map['is_active'] is bool) {
-              map['is_active'] = (map['is_active'] == true) ? 1 : 0;
-            }
-            if (map['password_hash'] == null) {
-              final localUsers = await db.query(
-                'users',
-                columns: ['password_hash'],
-                where: 'user_id = ? OR username = ?',
-                whereArgs: [map['user_id'], map['username']],
-                limit: 1,
-              );
-              if (localUsers.isNotEmpty && localUsers.first['password_hash'] != null) {
-                map['password_hash'] = localUsers.first['password_hash'];
-              }
-            }
-          }
-          await db.insert(tableName, map, conflictAlgorithm: ConflictAlgorithm.replace);
-        } else {
-          await _pullTableFromSupabase(tableName);
-        }
-      }
-
-      _addLog(
-        action: 'REALTIME',
-        tableName: tableName,
-        recordCount: 1,
-        isSuccess: true,
-        message: 'Nhận sự kiện Realtime thay đổi từ $tableName (${payload.eventType})',
-      );
-      _scheduleReloadFromSqlite();
-    } catch (e) {
-      debugPrint('Realtime handling error on $tableName: $e');
-      await _pullTableFromSupabase(tableName);
-      _scheduleReloadFromSqlite();
-    }
+  void _handleRealtimeTableChange(String tableName, PostgresChangePayload payload) {
+    debugPrint('Supabase Realtime event on $tableName: ${payload.eventType}');
+    _addLog(
+      action: 'REALTIME',
+      tableName: tableName,
+      recordCount: 1,
+      isSuccess: true,
+      message: 'Nhận sự kiện Realtime thay đổi từ $tableName (${payload.eventType})',
+    );
+    // Khi có thay đổi trên Cloud, kích hoạt nạp mới dữ liệu trực tiếp từ Supabase vào RAM
+    _scheduleReloadFromCloud();
   }
 
-  void _scheduleReloadFromSqlite() {
+  void _scheduleReloadFromCloud() {
     _reloadDebounceTimer?.cancel();
     _reloadDebounceTimer = Timer(const Duration(milliseconds: 300), () async {
       await WarehouseRepository().reloadFromSqlite();
@@ -480,7 +357,6 @@ class SupabaseSyncService extends ChangeNotifier {
   Map<String, dynamic> _normalizePayloadForSupabase(String tableName, Map<String, dynamic> input) {
     final result = <String, dynamic>{};
     input.forEach((key, value) {
-      // Convert camelCase to snake_case
       final snakeKey = key.replaceAllMapped(
         RegExp(r'[A-Z]'),
         (match) => '_${match.group(0)!.toLowerCase()}',
@@ -488,7 +364,6 @@ class SupabaseSyncService extends ChangeNotifier {
       result[snakeKey] = value;
     });
 
-    // Special table key corrections
     if (tableName == 'inbound_orders' && result.containsKey('inbound_order_id')) {
       result.remove('details');
     }
@@ -496,80 +371,6 @@ class SupabaseSyncService extends ChangeNotifier {
       result.remove('details');
     }
     return result;
-  }
-
-  /// Đồng bộ trực tiếp hoặc đẩy vào hàng đợi Offline
-  Future<void> syncDirectOrQueue({
-    required String tableName,
-    required String recordId,
-    required String action,
-    required Map<String, dynamic> payload,
-  }) async {
-    // Nếu là bảng giao dịch log không có trong Supabase, map sang sync_logs
-    String targetTable = tableName;
-    if (tableName == 'inbound_transactions' || tableName == 'outbound_transactions') {
-      targetTable = 'sync_logs';
-    }
-
-    final normalized = _normalizePayloadForSupabase(targetTable, payload);
-
-    if (Platform.environment.containsKey('FLUTTER_TEST')) {
-      await _dbService.enqueueSync(
-        tableName: targetTable,
-        recordId: recordId,
-        action: action,
-        payload: normalized,
-      );
-      await _refreshPendingCount();
-      return;
-    }
-
-    if (_isOnline && _isInitialized) {
-      try {
-        final supa = Supabase.instance.client;
-        if (action == 'INSERT' || action.contains('CONFIRM')) {
-          if (targetTable == 'sync_logs') {
-            await supa.from(targetTable).insert({
-              'log_id': recordId,
-              'action': action,
-              'table_name': tableName,
-              'record_count': payload['itemCount'] ?? payload['item_count'] ?? 1,
-              'is_success': true,
-              'message': jsonEncode(payload),
-            });
-          } else {
-            await supa.from(targetTable).upsert(normalized);
-          }
-        } else if (action == 'UPDATE') {
-          final pkCol = _getPrimaryKeyColumn(targetTable);
-          try {
-            await supa.from(targetTable).update(normalized).eq(pkCol, recordId);
-          } catch (_) {
-            await supa.from(targetTable).upsert(normalized);
-          }
-        } else if (action == 'DELETE') {
-          final pkCol = _getPrimaryKeyColumn(targetTable);
-          if (targetTable == 'locations') {
-            final altId = recordId.startsWith('LOC-') ? recordId.substring(4) : 'LOC-$recordId';
-            await supa.from(targetTable).delete().or('$pkCol.eq.$recordId,$pkCol.eq.$altId,location_code.eq.$recordId,location_code.eq.$altId');
-          } else {
-            await supa.from(targetTable).delete().eq(pkCol, recordId);
-          }
-        }
-        return;
-      } catch (e) {
-        debugPrint('Direct Supabase sync failed, enqueuing offline: $e');
-      }
-    }
-
-    // Nếu không có mạng hoặc lỗi, lưu vào SQLite sync_queue
-    await _dbService.enqueueSync(
-      tableName: targetTable,
-      recordId: recordId,
-      action: action,
-      payload: normalized,
-    );
-    await _refreshPendingCount();
   }
 
   String _getPrimaryKeyColumn(String table) {
@@ -601,7 +402,81 @@ class SupabaseSyncService extends ChangeNotifier {
     }
   }
 
-  /// Đồng bộ 2 chiều: Push offline items lên Supabase -> Pull latest master data về SQLite
+  /// Gửi trực tiếp thao tác lên Supabase Cloud hoặc xếp vào hàng đợi nếu mất mạng
+  Future<void> syncDirectOrQueue({
+    required String tableName,
+    required String recordId,
+    required String action,
+    required Map<String, dynamic> payload,
+  }) async {
+    String targetTable = tableName;
+    if (tableName == 'inbound_transactions' || tableName == 'outbound_transactions') {
+      targetTable = 'sync_logs';
+    }
+
+    final normalized = _normalizePayloadForSupabase(targetTable, payload);
+
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      await _dbService.enqueueSync(
+        tableName: targetTable,
+        recordId: recordId,
+        action: action,
+        payload: normalized,
+      );
+      return;
+    }
+
+    if (_isOnline && _isInitialized) {
+      try {
+        final supa = Supabase.instance.client;
+        if (action == 'INSERT' || action.contains('CONFIRM')) {
+          if (targetTable == 'sync_logs') {
+            await supa.from(targetTable).insert({
+              'log_id': recordId,
+              'action': action,
+              'table_name': tableName,
+              'record_count': payload['itemCount'] ?? payload['item_count'] ?? 1,
+              'is_success': true,
+              'message': jsonEncode(payload),
+            });
+          } else {
+            await supa.from(targetTable).upsert(normalized);
+          }
+        } else if (action == 'UPDATE') {
+          final pkCol = _getPrimaryKeyColumn(targetTable);
+          try {
+            await supa.from(targetTable).update(normalized).eq(pkCol, recordId);
+          } catch (_) {
+            await supa.from(targetTable).upsert(normalized);
+          }
+        } else if (action == 'DELETE') {
+          final pkCol = _getPrimaryKeyColumn(targetTable);
+          if (targetTable == 'locations') {
+            final altId = recordId.startsWith('LOC-') ? recordId.substring(4) : 'LOC-$recordId';
+            await supa.from(targetTable).delete().or(
+              '$pkCol.eq.$recordId,$pkCol.eq.$altId,location_code.eq.$recordId,location_code.eq.$altId',
+            );
+          } else {
+            await supa.from(targetTable).delete().eq(pkCol, recordId);
+          }
+        }
+        return;
+      } catch (e) {
+        debugPrint('Direct Supabase sync failed, enqueuing offline in memory: $e');
+      }
+    }
+
+    // Nếu rớt mạng, lưu vào hàng đợi RAM
+    _offlineQueue.add({
+      'table_name': targetTable,
+      'record_id': recordId,
+      'action': action,
+      'payload': normalized,
+    });
+    notifyListeners();
+  }
+
+  /// Làm mới dữ liệu từ Supabase Cloud và đẩy các thao tác đang chờ trong hàng đợi
   Future<bool> syncNow() async {
     if (_isSyncing) return false;
     _isSyncing = true;
@@ -623,243 +498,54 @@ class SupabaseSyncService extends ChangeNotifier {
           );
         }
         _lastSyncTime = DateTime.now();
-        await _refreshPendingCount();
+        notifyListeners();
         return true;
       }
 
       final ok = await checkConnectivity();
       if (!ok) {
         _isSyncing = false;
-        await _refreshPendingCount();
         notifyListeners();
         return false;
       }
 
       final supa = Supabase.instance.client;
 
-      // 1. PUSH DỮ LIỆU TỪ SQLITE SYNC_QUEUE LÊN SUPABASE
-      final pending = await _dbService.getPendingSyncItems(limit: 200);
-      int pushed = 0;
-
-      if (pending.isNotEmpty) {
+      // 1. Đẩy các thao tác tồn đọng từ hàng đợi ngoại tuyến (nếu có)
+      if (_offlineQueue.isNotEmpty) {
+        final pending = List<Map<String, dynamic>>.from(_offlineQueue);
         for (final item in pending) {
-          final queueId = item['queue_id'] as int;
           final tableName = item['table_name'] as String;
           final action = item['action'] as String;
-          final payloadStr = item['payload'] as String;
+          final payload = item['payload'] as Map<String, dynamic>;
+          final recordId = item['record_id'] as String;
+          final pkCol = _getPrimaryKeyColumn(tableName);
 
           try {
-            final payload = jsonDecode(payloadStr) as Map<String, dynamic>;
             if (action == 'INSERT' || action.contains('CONFIRM')) {
               await supa.from(tableName).upsert(payload);
             } else if (action == 'UPDATE') {
-              final pkCol = _getPrimaryKeyColumn(tableName);
-              final recId = item['record_id'] as String;
-              try {
-                await supa.from(tableName).update(payload).eq(pkCol, recId);
-              } catch (_) {
-                await supa.from(tableName).upsert(payload);
-              }
+              await supa.from(tableName).update(payload).eq(pkCol, recordId);
             } else if (action == 'DELETE') {
-              final pkCol = _getPrimaryKeyColumn(tableName);
-              final recId = item['record_id'] as String;
-              if (tableName == 'locations') {
-                final altId = recId.startsWith('LOC-') ? recId.substring(4) : 'LOC-$recId';
-                await supa.from(tableName).delete().or('$pkCol.eq.$recId,$pkCol.eq.$altId,location_code.eq.$recId,location_code.eq.$altId');
-              } else {
-                await supa.from(tableName).delete().eq(pkCol, recId);
-              }
+              await supa.from(tableName).delete().eq(pkCol, recordId);
             }
-
-            await _dbService.markSyncItemSynced(queueId);
-            pushed++;
-          } catch (err) {
-            debugPrint('Error pushing item $queueId to Supabase: $err');
-            await _dbService.markSyncItemFailed(queueId, err.toString());
+            _offlineQueue.remove(item);
+          } catch (e) {
+            debugPrint('Failed to sync queued item: $e');
           }
         }
       }
 
-      if (pushed > 0) {
-        _addLog(
-          action: 'PUSH',
-          tableName: 'ALL_TABLES',
-          recordCount: pushed,
-          isSuccess: true,
-          message: 'Đã đẩy thành công $pushed bản ghi từ PDA/Desktop lên Supabase',
-        );
-      }
-
-      // Tự động đẩy toàn bộ Master Data, Kệ, Pallet, Sản phẩm và Thẻ RFID từ PDA/Desktop lên Supabase Cloud theo Batch
-      try {
-        final localLocs = await _dbService.getLocations();
-
-        // Đồng bộ dọn dẹp các kệ đã bị xóa khỏi SQLite cục bộ, không để tồn đọng trên Supabase Cloud
-        try {
-          final localIds = localLocs.map((l) => l.locationId.trim().toUpperCase()).toSet();
-          final localCodes = localLocs.map((l) => l.locationCode.trim().toUpperCase()).toSet();
-          final cloudLocs = await supa.from('locations').select('location_id, location_code');
-          for (final cl in cloudLocs) {
-            final cId = (cl['location_id'] ?? '').toString().trim().toUpperCase();
-            final cCode = (cl['location_code'] ?? '').toString().trim().toUpperCase();
-            final strippedId = cId.startsWith('LOC-') ? cId.substring(4) : cId;
-            final exists = localIds.contains(cId) || localCodes.contains(cCode) || localCodes.contains(strippedId);
-            if (!exists && cId.isNotEmpty) {
-              await supa.from('locations').delete().eq('location_id', cl['location_id']);
-            }
-          }
-        } catch (e) {
-          debugPrint('Cloud prune locations error: $e');
-        }
-
-        if (localLocs.isNotEmpty) {
-          final locBatch = localLocs.map((loc) => {
-            'location_id': loc.locationId,
-            'location_code': loc.locationCode,
-            'zone': loc.zone,
-            'shelf': loc.shelf,
-            'level': loc.level,
-            'current_pallets': loc.currentPallets,
-            'status': loc.status,
-            'max_pallet_capacity': loc.maxPalletCapacity,
-            'aisle_side': loc.aisleSide,
-            'sort_order': loc.sortOrder,
-            'grid_row': loc.gridRow,
-            'grid_col': loc.gridCol,
-          }).toList();
-          for (var i = 0; i < locBatch.length; i += 100) {
-            final chunk = locBatch.sublist(i, (i + 100 > locBatch.length) ? locBatch.length : i + 100);
-            try {
-              await supa.from('locations').upsert(chunk);
-            } catch (e) {
-              debugPrint('Warning upserting locations with status to Supabase: $e');
-              // Fallback nếu Supabase chưa chạy ALTER TABLE thêm status
-              final fallbackChunk = chunk.map((m) => {
-                'location_id': m['location_id'],
-                'location_code': m['location_code'],
-                'zone': m['zone'],
-                'shelf': m['shelf'],
-                'level': m['level'],
-                'current_pallets': m['current_pallets'],
-              }).toList();
-              try {
-                await supa.from('locations').upsert(fallbackChunk);
-              } catch (_) {}
-            }
-          }
-        }
-
-        final localProds = await _dbService.getProducts();
-        if (localProds.isNotEmpty) {
-          final prodBatch = localProds.map((p) => {
-            'product_id': p.productId,
-            'sku': p.sku,
-            'product_name': p.productName,
-            'unit': p.unit,
-            'category': p.category,
-            'description': p.description,
-          }).toList();
-          for (var i = 0; i < prodBatch.length; i += 100) {
-            final chunk = prodBatch.sublist(i, (i + 100 > prodBatch.length) ? prodBatch.length : i + 100);
-            await supa.from('products').upsert(chunk);
-          }
-        }
-
-        final localPallets = await _dbService.getPallets();
-        if (localPallets.isNotEmpty) {
-          final palBatch = localPallets.map((pal) => {
-            'pallet_id': pal.palletId,
-            'pallet_code': pal.palletCode,
-            'location_id': pal.locationId,
-            'inbound_time': pal.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
-            'is_multi_sku': pal.isMultiSku ? 1 : 0,
-          }).toList();
-          for (var i = 0; i < palBatch.length; i += 100) {
-            final chunk = palBatch.sublist(i, (i + 100 > palBatch.length) ? palBatch.length : i + 100);
-            await supa.from('pallets').upsert(chunk);
-          }
-        }
-
-        final localItems = await _dbService.getItems();
-        if (localItems.isNotEmpty) {
-          final itemBatch = localItems.map((it) => {
-            'item_id': it.itemId,
-            'product_id': it.productId,
-            'sku': it.sku,
-            'product_name': it.productName,
-            'serial_number': it.serialNumber,
-            'epc': it.epc,
-            'status': it.status.code,
-            'order_no': it.orderNo,
-            'pallet_id': it.palletId,
-            'location_id': it.locationId,
-            'inbound_time': it.inboundTime?.toIso8601String(),
-          }).toList();
-          for (var i = 0; i < itemBatch.length; i += 100) {
-            final chunk = itemBatch.sublist(i, (i + 100 > itemBatch.length) ? itemBatch.length : i + 100);
-            await supa.from('items').upsert(chunk);
-          }
-        }
-
-        final localUsers = await _dbService.getUsers();
-        for (final u in localUsers) {
-          final authRecord = await _dbService.getUserAuth(u.username);
-          final passHash = authRecord?['password_hash'] as String?;
-          final userMap = <String, dynamic>{
-            'user_id': u.userId,
-            'username': u.username,
-            'full_name': u.fullName,
-            'email': u.email,
-            'phone': u.phone,
-            'role': u.role,
-            'is_active': u.isActive,
-            'created_at': u.createdAt?.toIso8601String() ?? DateTime.now().toIso8601String(),
-          };
-          try {
-            if (passHash != null) {
-              await supa.from('users').upsert({
-                ...userMap,
-                'password_hash': passHash,
-              });
-            } else {
-              await supa.from('users').upsert(userMap);
-            }
-          } catch (_) {
-            await supa.from('users').upsert(userMap);
-          }
-        }
-      } catch (e) {
-        debugPrint('Master data cloud push error: $e');
-      }
-
-      // 2. PULL DỮ LIỆU TỪ SUPABASE VỀ SQLITE (DANH MỤC SẢN PHẨM, VỊ TRÍ, LỆNH NHẬP/XUẤT, NGƯỜI DÙNG, KHÁCH HÀNG, PHIẾU XUẤT, KIỂM KÊ)
-      if (Platform.isAndroid || Platform.isIOS) {
-        await _pullTableFromSupabase('locations');
-      }
-      await _pullTableFromSupabase('products');
-      await _pullTableFromSupabase('pallets');
-      await _pullTableFromSupabase('items');
-      await _pullTableFromSupabase('customers');
-      await _pullTableFromSupabase('inbound_orders');
-      await _pullTableFromSupabase('inbound_order_details');
-      await _pullTableFromSupabase('outbound_orders');
-      await _pullTableFromSupabase('outbound_order_details');
-      await _pullTableFromSupabase('delivery_notes');
-      await _pullTableFromSupabase('delivery_note_details');
-      await _pullTableFromSupabase('inventory_sessions');
-      await _pullTableFromSupabase('inventory_session_details');
-      await _pullTableFromSupabase('users');
-
-      _lastSyncTime = DateTime.now();
-      await _refreshPendingCount();
+      // 2. Làm mới toàn bộ dữ liệu ứng dụng trực tiếp từ Supabase Cloud
       await WarehouseRepository().reloadFromSqlite();
 
+      _lastSyncTime = DateTime.now();
       _addLog(
         action: 'PULL',
         tableName: 'ALL_TABLES',
         recordCount: 0,
         isSuccess: true,
-        message: 'Hoàn tất đồng bộ 2 chiều với Supabase Cloud.',
+        message: 'Đã làm mới dữ liệu từ Supabase Cloud thành công.',
       );
 
       return true;
@@ -869,100 +555,12 @@ class SupabaseSyncService extends ChangeNotifier {
         tableName: 'SYNC',
         recordCount: 0,
         isSuccess: false,
-        message: 'Lỗi trong quá trình đồng bộ Supabase: $e',
+        message: 'Lỗi làm mới dữ liệu Supabase: $e',
       );
       return false;
     } finally {
       _isSyncing = false;
       notifyListeners();
-    }
-  }
-
-  Future<void> _pullTableFromSupabase(String tableName) async {
-    try {
-      final supa = Supabase.instance.client;
-      final List<dynamic> rows = await supa.from(tableName).select();
-      if (rows.isEmpty) return;
-
-      final db = await _dbService.database;
-      final batch = db.batch();
-
-      for (final row in rows) {
-        final map = Map<String, dynamic>.from(row as Map);
-        map.remove('updated_at');
-        if (tableName == 'pallets') {
-          if (map['is_multi_sku'] is bool) {
-            map['is_multi_sku'] = (map['is_multi_sku'] == true) ? 1 : 0;
-          }
-          // Bảo vệ rfid_epc đã có trong SQLite không bao giờ bị đè thành null bởi Supabase
-          final pId = map['pallet_id'];
-          final existing = await db.query('pallets', where: 'pallet_id = ?', whereArgs: [pId]);
-          if (existing.isNotEmpty) {
-            final localEpc = existing.first['rfid_epc'];
-            if ((map['rfid_epc'] == null || map['rfid_epc'].toString().isEmpty) && localEpc != null) {
-              map['rfid_epc'] = localEpc;
-            }
-          }
-        }
-        if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
-          map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
-        }
-        if (tableName == 'locations') {
-          if (map['status'] == null) {
-            final localLoc = await db.query(
-              'locations',
-              columns: ['status'],
-              where: 'location_id = ? OR location_code = ?',
-              whereArgs: [map['location_id'], map['location_code']],
-              limit: 1,
-            );
-            if (localLoc.isNotEmpty && localLoc.first['status'] != null) {
-              map['status'] = localLoc.first['status'];
-            }
-          }
-        }
-        if (tableName == 'users') {
-          if (map['is_active'] is bool) {
-            map['is_active'] = (map['is_active'] == true) ? 1 : 0;
-          }
-          if (map['password_hash'] == null) {
-            final localUsers = await db.query(
-              'users',
-              columns: ['password_hash'],
-              where: 'user_id = ? OR username = ?',
-              whereArgs: [map['user_id'], map['username']],
-              limit: 1,
-            );
-            if (localUsers.isNotEmpty && localUsers.first['password_hash'] != null) {
-              map['password_hash'] = localUsers.first['password_hash'];
-            }
-          }
-        }
-        batch.insert(tableName, map, conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-      await batch.commit(noResult: true);
-    } catch (e) {
-      debugPrint('Pull table $tableName from Supabase warning: $e');
-    }
-  }
-
-  /// Đẩy các password_hash của người dùng từ SQLite cục bộ lên Supabase Cloud nếu Cloud chưa có
-  Future<void> syncUserPasswordsToCloud() async {
-    if (!_isOnline || Platform.environment.containsKey('FLUTTER_TEST')) return;
-    try {
-      final supa = Supabase.instance.client;
-      final localUsers = await _dbService.getUsers();
-      for (final u in localUsers) {
-        final authRecord = await _dbService.getUserAuth(u.username);
-        final passHash = authRecord?['password_hash'] as String?;
-        if (passHash != null && passHash.isNotEmpty) {
-          try {
-            await supa.from('users').update({'password_hash': passHash}).eq('user_id', u.userId);
-          } catch (_) {}
-        }
-      }
-    } catch (e) {
-      debugPrint('syncUserPasswordsToCloud error: $e');
     }
   }
 

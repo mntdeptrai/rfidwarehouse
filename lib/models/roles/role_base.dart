@@ -39,4 +39,7 @@ abstract class BaseRolePermission {
 
   /// Quyền hạn: Quản lý người dùng, phân quyền tài khoản nhân viên
   bool get canManageUsers => false;
+
+  /// Là vai trò Kỹ thuật viên (Technician)
+  bool get isTechnician => false;
 }

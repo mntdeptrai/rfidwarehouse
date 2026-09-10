@@ -80,7 +80,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     final c = _eyeCare.colors;
     final user = _auth.currentUser;
     final perm = user?.rolePermission;
-    final canConfig = perm?.canConfigureHardware ?? false;
+    final isTech = perm?.isTechnician ?? false;
     final canManageUsers = perm?.canManageUsers ?? false;
     final canIn = perm?.canInbound ?? true;
     final canAud = perm?.canAudit ?? true;
@@ -89,8 +89,8 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     int effectiveIndex = _selectedMenuIndex;
     if (effectiveIndex == 0 && !canIn) effectiveIndex = 1;
     if (effectiveIndex == 2 && !canAud) effectiveIndex = 1;
-    if (effectiveIndex == 4 && !canConfig) effectiveIndex = canManageUsers ? 5 : 1;
-    if (effectiveIndex == 5 && !canManageUsers) effectiveIndex = canConfig ? 4 : 1;
+    if (effectiveIndex == 4 && !isTech) effectiveIndex = canManageUsers ? 5 : 1;
+    if (effectiveIndex == 5 && !canManageUsers) effectiveIndex = isTech ? 4 : 1;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
@@ -120,7 +120,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   Widget _buildSidebar(EyeCareColors c, {bool isCompact = false}) {
     final user = _auth.currentUser;
     final perm = user?.rolePermission;
-    final canConfig = perm?.canConfigureHardware ?? false;
+    final isTech = perm?.isTechnician ?? false;
     final canManageUsers = perm?.canManageUsers ?? false;
     final canIn = perm?.canInbound ?? true;
     final canAud = perm?.canAudit ?? true;
@@ -227,7 +227,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     isCompact: isCompact,
                   ),
                 _buildMenuItem(3, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
-                if (canConfig) ...[
+                if (isTech) ...[
                   const SizedBox(height: 8),
                   if (!isCompact)
                     Padding(

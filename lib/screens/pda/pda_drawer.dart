@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../services/database_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
@@ -207,6 +208,24 @@ class PdaDrawer extends StatelessWidget {
                           SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
                         );
                       }
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.cleaning_services_rounded, color: c.successEmerald),
+                  title: Text('Xóa SQLite Trên Tay Cầm', style: TextStyle(color: c.textPrimary, fontSize: 14)),
+                  subtitle: Text('Xóa file SQLite cục bộ & nạp thẳng từ Cloud', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await DatabaseService.wipeHandheldSqliteDatabase();
+                    await WarehouseRepository().reloadFromSqlite();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: c.successEmerald,
+                          content: const Text('✓ Đã xóa sạch SQLite trên tay cầm! Đang dùng 100% Supabase Cloud.'),
+                        ),
+                      );
                     }
                   },
                 ),

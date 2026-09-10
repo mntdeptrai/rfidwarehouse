@@ -143,5 +143,21 @@ void main() {
       expect(camtayUser.canConfigureHardware, isFalse);
       expect(sellerUser.canConfigureHardware, isFalse);
     });
+
+    test('isTechnician is strictly true ONLY for TechnicianRole and false for all other roles', () {
+      expect(TechnicianRole().isTechnician, isTrue);
+      expect(AdminRole().isTechnician, isFalse);
+      expect(WarehouseKeeperRole().isTechnician, isFalse);
+      expect(HandheldRole().isTechnician, isFalse);
+      expect(SellerRole().isTechnician, isFalse);
+
+      final adminUser = WmsUser(userId: 'u1', username: 'admin', fullName: 'Admin', role: 'admin');
+      final techUser = WmsUser(userId: 'u2', username: 'kythuat', fullName: 'Kỹ thuật', role: 'kythuat');
+      final thukhoUser = WmsUser(userId: 'u3', username: 'thukho', fullName: 'Thủ kho', role: 'thukho');
+
+      expect(techUser.isTechnician, isTrue);
+      expect(adminUser.isTechnician, isFalse);
+      expect(thukhoUser.isTechnician, isFalse);
+    });
   });
 }

@@ -115,6 +115,10 @@ void main() {
 
       // Sơ đồ vị trí hiển thị
       expect(find.textContaining('SƠ ĐỒ 10 VỊ TRÍ'), findsOneWidget);
+      // Nút gợi ý xuất FIFO ưu tiên lô xa nhất
+      expect(find.textContaining('GỢI Ý FIFO (LÔ XA NHẤT)'), findsOneWidget);
+      // Cột ngày nhập kho FIFO hiển thị trên bảng
+      expect(find.textContaining('NGÀY NHẬP KHO (FIFO)'), findsOneWidget);
       // Nút tiếp tục qua cổng RFID xuất kho ở góc phải
       expect(find.textContaining('TIẾP TỤC: QUA CỔNG RFID XUẤT KHO'), findsOneWidget);
     });

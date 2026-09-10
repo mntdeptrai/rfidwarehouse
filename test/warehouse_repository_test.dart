@@ -152,6 +152,65 @@ void main() {
       expect(po.status, OutboundOrderStatus.shipped);
     });
 
+    test('Outbound FIFO: Khi 1 mã hàng có ngày nhập khác nhau, ưu tiên lấy theo ngày xa hiện tại nhất (FIFO)', () async {
+      final now = DateTime.now();
+      // Tạo 3 item cùng SKU nhưng ngày nhập khác nhau: 30 ngày trước, 10 ngày trước, 1 ngày trước
+      final itemOldest = Item(
+        itemId: 'IT-FIFO-OLD-30D',
+        productId: 'PROD-FIFO-01',
+        sku: 'SKU-FIFO-01',
+        productName: 'Mặt hàng FIFO Test',
+        serialNumber: 'SN-F-01',
+        epc: 'E28011910000000000FIFO01',
+        status: ItemStatus.inStock,
+        inboundTime: now.subtract(const Duration(days: 30)),
+      );
+      final itemMiddle = Item(
+        itemId: 'IT-FIFO-MID-10D',
+        productId: 'PROD-FIFO-01',
+        sku: 'SKU-FIFO-01',
+        productName: 'Mặt hàng FIFO Test',
+        serialNumber: 'SN-F-02',
+        epc: 'E28011910000000000FIFO02',
+        status: ItemStatus.inStock,
+        inboundTime: now.subtract(const Duration(days: 10)),
+      );
+      final itemNewest = Item(
+        itemId: 'IT-FIFO-NEW-1D',
+        productId: 'PROD-FIFO-01',
+        sku: 'SKU-FIFO-01',
+        productName: 'Mặt hàng FIFO Test',
+        serialNumber: 'SN-F-03',
+        epc: 'E28011910000000000FIFO03',
+        status: ItemStatus.inStock,
+        inboundTime: now.subtract(const Duration(days: 1)),
+      );
+
+      // Đưa vào 3 pallet khác nhau
+      repo.createOrAssignPallet(palletCode: 'PL-FIFO-NEW', locationId: 'A-01', newItems: [itemNewest]);
+      repo.createOrAssignPallet(palletCode: 'PL-FIFO-OLD', locationId: 'A-02', newItems: [itemOldest]);
+      repo.createOrAssignPallet(palletCode: 'PL-FIFO-MID', locationId: 'B-01', newItems: [itemMiddle]);
+
+      // Tạo đơn xuất cần lấy 1 sản phẩm
+      final po = OutboundOrder(
+        outboundOrderId: 'OUT-FIFO-01',
+        poNo: 'PO-FIFO-2026',
+        customer: 'Khách Hàng FIFO',
+        status: OutboundOrderStatus.newOrder,
+        createdAt: now,
+        details: [
+          OutboundOrderDetail(productId: 'PROD-FIFO-01', sku: 'SKU-FIFO-01', productName: 'Mặt hàng FIFO Test', requiredQty: 1),
+        ],
+      );
+      await repo.addOutboundOrder(po);
+
+      final plan = repo.generateFifoPickingPlan(po.outboundOrderId);
+      expect(plan.lines.isNotEmpty, isTrue);
+      // Lô nhập cách đây 30 ngày (xa hiện tại nhất) phải được chọn đầu tiên
+      expect(plan.lines.first.palletCode, 'PL-FIFO-OLD');
+      expect(plan.lines.first.targetItemIds.first, 'IT-FIFO-OLD-30D');
+    });
+
     test('Inventory Audit: Categorizes 4 Variance Types correctly', () {
       // Setup 1 item ở B-01-01 và 1 item ở A-01-01
       repo.createOrAssignPallet(

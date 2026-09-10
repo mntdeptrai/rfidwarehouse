@@ -55,3 +55,14 @@ app.*.map.json
 *.env.json
 supabase_secrets.json
 
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Root loose binaries & temporary archives
+/*.aar
+/*.jar
+/*.dll
+/*.exe

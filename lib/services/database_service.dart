@@ -45,6 +45,33 @@ class DatabaseService {
     }
   }
 
+  /// Xóa sạch triệt để toàn bộ các file SQLite trên thiết bị tay cầm PDA
+  static Future<void> wipeHandheldSqliteDatabase() async {
+    if (kIsWeb || Platform.environment.containsKey('FLUTTER_TEST')) return;
+    try {
+      if (Platform.isAndroid || Platform.isIOS) {
+        final dbDir = await getDatabasesPath();
+        final dir = Directory(dbDir);
+        if (dir.existsSync()) {
+          final files = dir.listSync();
+          for (final f in files) {
+            if (f is File && (f.path.endsWith('.db') || f.path.endsWith('.db-wal') || f.path.endsWith('.db-shm'))) {
+              try {
+                await deleteDatabase(f.path);
+                if (f.existsSync()) f.deleteSync();
+                debugPrint('✓ Đã xóa vĩnh viễn file SQLite trên tay cầm: ${f.path}');
+              } catch (e) {
+                debugPrint('Lỗi khi xóa file SQLite ${f.path}: $e');
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('wipeHandheldSqliteDatabase error: $e');
+    }
+  }
+
   Future<Database> _initDatabase() async {
     // Khởi tạo ffi cho môi trường desktop/test nếu không phải Android/iOS
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -53,7 +80,12 @@ class DatabaseService {
     }
 
     final isTest = Platform.environment.containsKey('FLUTTER_TEST');
-    if (isTest) {
+    // Trên thiết bị tay cầm PDA (Android/iOS): KHÔNG lưu SQLite vật lý vào bộ nhớ máy, chỉ dùng in-memory RAM
+    if (isTest || Platform.isAndroid || Platform.isIOS) {
+      if (Platform.isAndroid || Platform.isIOS) {
+        await wipeHandheldSqliteDatabase();
+        debugPrint('PDA Handheld: Đã xóa file SQLite vật lý, chuyển hoàn toàn sang RAM & Supabase Cloud trực tiếp.');
+      }
       return await openDatabase(
         inMemoryDatabasePath,
         version: 2,
@@ -616,66 +648,9 @@ class DatabaseService {
     } catch (_) {}
   }
 
-  Future<File?> _getPalletBackupFile() async {
-    final isTest = Platform.environment.containsKey('FLUTTER_TEST');
-    if (isTest) return null;
-    try {
-      final dbDir = await getDatabaseDirectory();
-      return File(p.join(dbDir, 'pallets_permanent_master.json'));
-    } catch (_) {
-      return null;
-    }
-  }
+  Future<void> savePalletsBackup(List<Pallet> pallets) async {}
 
-  Future<void> savePalletsBackup(List<Pallet> pallets) async {
-    try {
-      final file = await _getPalletBackupFile();
-      if (file == null) return;
-      final list = pallets.map((p) => {
-        'pallet_id': p.palletId,
-        'pallet_code': p.palletCode,
-        'rfid_epc': p.rfidEpc,
-        'location_id': p.locationId,
-        'inbound_time': p.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
-        'is_multi_sku': p.isMultiSku ? 1 : 0,
-      }).toList();
-      await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode(list), flush: true);
-      debugPrint('Saved ${pallets.length} pallets to permanent JSON backup: ${file.path}');
-    } catch (e) {
-      debugPrint('Error saving pallets backup: $e');
-    }
-  }
-
-  Future<List<Pallet>> loadPalletsBackup() async {
-    try {
-      final file = await _getPalletBackupFile();
-      if (file == null || !file.existsSync()) return [];
-      final content = await file.readAsString();
-      if (content.trim().isEmpty) return [];
-      final decoded = jsonDecode(content) as List<dynamic>;
-      return decoded.map((m) {
-        final map = m as Map<String, dynamic>;
-        final inbTimeStr = map['inbound_time'] as String?;
-        DateTime inbTime = DateTime.now();
-        if (inbTimeStr != null && inbTimeStr.isNotEmpty) {
-          inbTime = DateTime.tryParse(inbTimeStr) ?? DateTime.now();
-        }
-        return Pallet(
-          palletId: (map['pallet_id'] as String?) ?? 'PAL-${map['pallet_code']}',
-          palletCode: (map['pallet_code'] as String?) ?? '',
-          rfidEpc: map['rfid_epc'] as String?,
-          locationId: map['location_id'] as String?,
-          inboundTime: inbTime,
-          isMultiSku: map['is_multi_sku'] == 1 || map['is_multi_sku'] == true,
-          placedBy: map['placed_by'] as String?,
-        );
-      }).where((p) => p.palletCode.isNotEmpty).toList();
-    } catch (e) {
-      debugPrint('Error loading pallets backup: $e');
-      return [];
-    }
-  }
+  Future<List<Pallet>> loadPalletsBackup() async => [];
 
   Future<List<Pallet>> getPallets() async {
     final db = await database;

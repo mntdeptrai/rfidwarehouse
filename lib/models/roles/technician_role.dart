@@ -32,4 +32,7 @@ class TechnicianRole extends BaseRolePermission {
 
   @override
   bool get canManageUsers => false;
+
+  @override
+  bool get isTechnician => true;
 }

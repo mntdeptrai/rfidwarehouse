@@ -73,10 +73,17 @@ class WarehouseRepository extends ChangeNotifier {
         }
       }
 
+      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+        final supaLoaded = await _tryLoadFromSupabaseDirect();
+        if (supaLoaded) {
+          notifyListeners();
+          return;
+        }
+      }
+
       final cleanProducts = await _dbService.getProducts();
       final cleanItems = await _dbService.getItems();
       final cleanPallets = await _dbService.getPallets();
-      final backupPallets = await _dbService.loadPalletsBackup();
       final cleanInboundOrders = await _dbService.getInboundOrders();
       final cleanOutboundOrders = await _dbService.getOutboundOrders();
       final dbUsers = await _dbService.getUsers();
@@ -102,34 +109,14 @@ class WarehouseRepository extends ChangeNotifier {
       _locations.addAll(cleanLocations);
       _floorPlanConfig = await _dbService.getWarehouseLayoutConfig();
 
-      // KHÔNG BAO GIỜ XÓA PALLET ĐÃ KHAI BÁO CỦA NGƯỜI DÙNG: Khai báo 1 lần dùng vĩnh viễn
-      // Đồng bộ 2 lớp: SQLite B-Tree Index + Permanent Master Backup File
-      final Map<String, Pallet> mergedPallets = {};
-      for (final p in backupPallets) {
-        mergedPallets[p.palletCode.toUpperCase()] = p;
-      }
-      for (final p in cleanPallets) {
-        final existing = mergedPallets[p.palletCode.toUpperCase()];
-        if (existing != null && (p.rfidEpc == null || p.rfidEpc!.isEmpty) && existing.rfidEpc != null) {
-          p.rfidEpc = existing.rfidEpc;
-        }
-        mergedPallets[p.palletCode.toUpperCase()] = p;
-      }
-
-      // Đảm bảo SQLite có đầy đủ các Pallet đã được lưu
-      for (final p in mergedPallets.values) {
-        await _dbService.insertPallet(p);
-      }
-
       _pallets.clear();
-      _pallets.addAll(mergedPallets.values);
-      await _dbService.savePalletsBackup(_pallets);
+      _pallets.addAll(cleanPallets);
 
       _items.clear();
       _items.addAll(cleanItems.where((i) => !isBogusCommandItem(i)));
       for (final p in _pallets) {
         p.itemIds.clear();
-        p.itemIds.addAll(_items.where((i) => i.palletId == p.palletId).map((i) => i.itemId));
+        p.itemIds.addAll(_items.where((i) => i.palletId == p.palletId || i.palletId == p.palletCode).map((i) => i.itemId));
       }
 
       _inboundOrders.clear();
@@ -153,6 +140,246 @@ class WarehouseRepository extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('WarehouseRepository: SQLite load error: $e');
+    }
+  }
+
+  Future<bool> _tryLoadFromSupabaseDirect() async {
+    try {
+      final supaSync = SupabaseSyncService();
+      if (!supaSync.isOnline) {
+        final ok = await supaSync.checkConnectivity();
+        if (!ok) return false;
+      }
+      final supa = supaSync.client ?? Supabase.instance.client;
+
+      // Nạp song song các bảng từ Supabase Cloud
+      final results = await Future.wait([
+        supa.from('locations').select(),
+        supa.from('pallets').select(),
+        supa.from('products').select(),
+        supa.from('items').select(),
+        supa.from('inbound_orders').select(),
+        supa.from('inbound_order_details').select(),
+        supa.from('outbound_orders').select(),
+        supa.from('outbound_order_details').select(),
+        supa.from('users').select(),
+        supa.from('customers').select(),
+      ]);
+
+      final locRows = results[0] as List<dynamic>;
+      final palRows = results[1] as List<dynamic>;
+      final prodRows = results[2] as List<dynamic>;
+      final itemRows = results[3] as List<dynamic>;
+      final inbRows = results[4] as List<dynamic>;
+      final inbDetailRows = results[5] as List<dynamic>;
+      final outRows = results[6] as List<dynamic>;
+      final outDetailRows = results[7] as List<dynamic>;
+      final userRows = results[8] as List<dynamic>;
+      final custRows = results[9] as List<dynamic>;
+
+      // 1. Locations
+      final loadedLocs = locRows.map((m) => Location(
+        locationId: (m['location_id'] ?? '').toString(),
+        locationCode: (m['location_code'] ?? '').toString(),
+        zone: (m['zone'] ?? '').toString(),
+        shelf: (m['shelf'] ?? '').toString(),
+        level: (m['level'] ?? '').toString(),
+        currentPallets: (m['current_pallets'] as num?)?.toInt() ?? 0,
+        maxPalletCapacity: (m['max_pallet_capacity'] as num?)?.toInt() ?? 50,
+        status: (m['status'] ?? 'AVAILABLE').toString(),
+        aisleSide: (m['aisle_side'] ?? 'LEFT').toString(),
+        sortOrder: (m['sort_order'] as num?)?.toInt() ?? 0,
+        gridRow: (m['grid_row'] as num?)?.toInt() ?? 0,
+        gridCol: (m['grid_col'] as num?)?.toInt() ?? 0,
+      )).toList();
+
+      loadedLocs.sort((a, b) {
+        final z = a.zone.compareTo(b.zone);
+        if (z != 0) return z;
+        final s = a.shelf.compareTo(b.shelf);
+        if (s != 0) return s;
+        final l = a.level.compareTo(b.level);
+        if (l != 0) return l;
+        return a.locationCode.compareTo(b.locationCode);
+      });
+
+      // 2. Pallets
+      final loadedPallets = palRows.map((m) {
+        final inbTimeStr = m['inbound_time'] as String?;
+        return Pallet(
+          palletId: (m['pallet_id'] ?? '').toString(),
+          palletCode: (m['pallet_code'] ?? '').toString(),
+          rfidEpc: m['rfid_epc'] as String?,
+          locationId: m['location_id'] as String?,
+          inboundTime: inbTimeStr != null ? DateTime.tryParse(inbTimeStr) : null,
+          isMultiSku: m['is_multi_sku'] == 1 || m['is_multi_sku'] == true,
+          placedBy: m['placed_by'] as String?,
+        );
+      }).toList();
+
+      // 3. Products
+      final loadedProds = prodRows.map((m) => Product(
+        productId: (m['product_id'] ?? '').toString(),
+        sku: (m['sku'] ?? '').toString(),
+        productName: (m['product_name'] ?? '').toString(),
+        unit: (m['unit'] ?? '').toString(),
+        category: (m['category'] ?? '').toString(),
+        description: m['description'] as String?,
+      )).toList();
+
+      // 4. Items
+      final loadedItems = itemRows.map((m) {
+        final inbTimeStr = m['inbound_time'] as String?;
+        final allocTimeStr = m['allocated_time'] as String?;
+        final statusCode = (m['status'] ?? 'IN_STOCK').toString();
+        final status = ItemStatus.values.firstWhere(
+          (s) => s.code == statusCode,
+          orElse: () => ItemStatus.inStock,
+        );
+        return Item(
+          itemId: (m['item_id'] ?? '').toString(),
+          productId: (m['product_id'] ?? '').toString(),
+          sku: (m['sku'] ?? '').toString(),
+          productName: (m['product_name'] ?? '').toString(),
+          serialNumber: (m['serial_number'] ?? '').toString(),
+          epc: (m['epc'] ?? '').toString(),
+          status: status,
+          orderNo: m['order_no'] as String?,
+          palletId: m['pallet_id'] as String?,
+          locationId: m['location_id'] as String?,
+          inboundTime: inbTimeStr != null ? DateTime.tryParse(inbTimeStr) : null,
+          allocatedTime: allocTimeStr != null ? DateTime.tryParse(allocTimeStr) : null,
+          supplier: m['supplier'] as String?,
+          cartonCode: m['carton_code'] as String?,
+          inboundBy: m['inbound_by'] as String?,
+          putawayBy: m['putaway_by'] as String?,
+        );
+      }).toList();
+
+      // 5. Inbound Orders
+      final Map<String, List<InboundOrderDetail>> inbDetailsMap = {};
+      for (final d in inbDetailRows) {
+        final orderId = (d['order_id'] ?? '').toString();
+        inbDetailsMap.putIfAbsent(orderId, () => []).add(InboundOrderDetail(
+          productId: (d['product_id'] ?? '').toString(),
+          sku: (d['sku'] ?? '').toString(),
+          productName: (d['product_name'] ?? '').toString(),
+          requiredQty: (d['required_qty'] as num?)?.toInt() ?? 0,
+          receivedQty: (d['received_qty'] as num?)?.toInt() ?? 0,
+        ));
+      }
+      final loadedInbOrders = inbRows.map((om) {
+        final orderId = (om['inbound_order_id'] ?? '').toString();
+        final statusStr = (om['status'] ?? '').toString();
+        final status = InboundOrderStatus.values.firstWhere(
+          (s) => s.code == statusStr,
+          orElse: () => InboundOrderStatus.newOrder,
+        );
+        return InboundOrder(
+          inboundOrderId: orderId,
+          orderNo: (om['order_no'] ?? '').toString(),
+          sourceSupplier: (om['source_supplier'] ?? '').toString(),
+          status: status,
+          createdAt: DateTime.tryParse((om['created_at'] ?? '').toString()) ?? DateTime.now(),
+          details: inbDetailsMap[orderId] ?? [],
+        );
+      }).toList();
+
+      // 6. Outbound Orders
+      final Map<String, List<OutboundOrderDetail>> outDetailsMap = {};
+      for (final d in outDetailRows) {
+        final orderId = (d['order_id'] ?? '').toString();
+        outDetailsMap.putIfAbsent(orderId, () => []).add(OutboundOrderDetail(
+          productId: (d['product_id'] ?? '').toString(),
+          sku: (d['sku'] ?? '').toString(),
+          productName: (d['product_name'] ?? '').toString(),
+          requiredQty: (d['required_qty'] as num?)?.toInt() ?? 0,
+          pickedQty: (d['picked_qty'] as num?)?.toInt() ?? 0,
+        ));
+      }
+      final List<OutboundOrder> loadedOutOrders = outRows.map((om) {
+        final orderId = (om['outbound_order_id'] ?? '').toString();
+        final statusStr = (om['status'] ?? '').toString();
+        final status = OutboundOrderStatus.values.firstWhere(
+          (s) => s.code == statusStr,
+          orElse: () => OutboundOrderStatus.newOrder,
+        );
+        return OutboundOrder(
+          outboundOrderId: orderId,
+          poNo: (om['po_no'] ?? om['order_no'] ?? '').toString(),
+          customer: (om['customer'] ?? om['destination_customer'] ?? '').toString(),
+          status: status,
+          createdAt: DateTime.tryParse((om['created_at'] ?? '').toString()) ?? DateTime.now(),
+          details: outDetailsMap[orderId] ?? [],
+        );
+      }).toList();
+
+      // 7. Users
+      final List<WmsUser> loadedUsers = userRows.map((u) => WmsUser(
+        userId: (u['user_id'] ?? '').toString(),
+        username: (u['username'] ?? '').toString(),
+        fullName: (u['full_name'] ?? '').toString(),
+        email: u['email'] as String?,
+        phone: u['phone'] as String?,
+        role: (u['role'] ?? 'thukho').toString(),
+        isActive: u['is_active'] == 1 || u['is_active'] == true,
+        createdAt: DateTime.tryParse((u['created_at'] ?? '').toString()),
+      )).toList();
+
+      // 8. Customers
+      final List<Customer> loadedCusts = custRows.map((c) => Customer(
+        customerId: (c['customer_id'] ?? '').toString(),
+        customerCode: (c['customer_code'] ?? '').toString(),
+        customerName: (c['customer_name'] ?? '').toString(),
+        phone: c['phone'] as String?,
+        email: c['email'] as String?,
+        address: c['address'] as String?,
+        taxCode: c['tax_code'] as String?,
+        contactPerson: c['contact_person'] as String?,
+        notes: c['notes'] as String?,
+        createdAt: DateTime.tryParse((c['created_at'] ?? '').toString()) ?? DateTime.now(),
+      )).toList();
+
+      // Link pallet items:
+      for (final p in loadedPallets) {
+        p.itemIds.clear();
+        p.itemIds.addAll(
+          loadedItems
+              .where((i) => i.palletId == p.palletId || i.palletId == p.palletCode)
+              .map((i) => i.itemId),
+        );
+      }
+
+      // Commit to RAM state:
+      _locations.clear();
+      _locations.addAll(loadedLocs);
+
+      _pallets.clear();
+      _pallets.addAll(loadedPallets);
+
+      _products.clear();
+      _products.addAll(loadedProds);
+
+      _items.clear();
+      _items.addAll(loadedItems);
+
+      _inboundOrders.clear();
+      _inboundOrders.addAll(loadedInbOrders);
+
+      _outboundOrders.clear();
+      _outboundOrders.addAll(loadedOutOrders);
+
+      _users.clear();
+      _users.addAll(loadedUsers);
+
+      _customers.clear();
+      _customers.addAll(loadedCusts);
+
+      debugPrint('Directly synced from Supabase Cloud: ${_locations.length} locs, ${_pallets.length} pallets, ${_items.length} items, ${_products.length} prods');
+      return true;
+    } catch (e) {
+      debugPrint('Supabase direct load error: $e');
+      return false;
     }
   }
 
@@ -2436,6 +2663,16 @@ class WarehouseRepository extends ChangeNotifier {
         (it) => it.productId == detail.productId && it.status == ItemStatus.inStock && it.palletId != null,
       ).toList();
 
+      // Sắp xếp các sản phẩm cùng mã theo ngày nhập xa hiện tại nhất (FIFO) lên đầu
+      availableItems.sort((a, b) {
+        final timeA = a.inboundTime;
+        final timeB = b.inboundTime;
+        if (timeA == null && timeB == null) return 0;
+        if (timeA == null) return 1;
+        if (timeB == null) return -1;
+        return timeA.compareTo(timeB);
+      });
+
       final Map<String, List<Item>> palletGroups = {};
       for (var it in availableItems) {
         palletGroups.putIfAbsent(it.palletId!, () => []).add(it);
@@ -2443,11 +2680,17 @@ class WarehouseRepository extends ChangeNotifier {
 
       final sortedPalletIds = palletGroups.keys.toList()
         ..sort((a, b) {
-          final pA = _pallets.firstWhere((p) => p.palletId == a);
-          final pB = _pallets.firstWhere((p) => p.palletId == b);
-          final timeA = pA.inboundTime ?? DateTime.now();
-          final timeB = pB.inboundTime ?? DateTime.now();
-          return timeA.compareTo(timeB);
+          final itemsA = palletGroups[a]!;
+          final itemsB = palletGroups[b]!;
+          final pA = _pallets.firstWhere((p) => p.palletId == a, orElse: () => Pallet(palletId: a, palletCode: a));
+          final pB = _pallets.firstWhere((p) => p.palletId == b, orElse: () => Pallet(palletId: b, palletCode: b));
+          final earliestA = itemsA.map((i) => i.inboundTime).whereType<DateTime>().fold<DateTime?>(pA.inboundTime, (prev, curr) => prev == null ? curr : (curr.isBefore(prev) ? curr : prev));
+          final earliestB = itemsB.map((i) => i.inboundTime).whereType<DateTime>().fold<DateTime?>(pB.inboundTime, (prev, curr) => prev == null ? curr : (curr.isBefore(prev) ? curr : prev));
+
+          if (earliestA == null && earliestB == null) return 0;
+          if (earliestA == null) return 1;
+          if (earliestB == null) return -1;
+          return earliestA.compareTo(earliestB);
         });
 
       for (var palId in sortedPalletIds) {

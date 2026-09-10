@@ -246,15 +246,75 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       items = _getAllStockedItems();
     }
 
-    if (_searchQuery.trim().isEmpty) return items;
-    final q = _searchQuery.trim().toUpperCase();
-    return items.where((it) {
-      return it.sku.toUpperCase().contains(q) ||
-          it.productName.toUpperCase().contains(q) ||
-          it.epc.toUpperCase().contains(q) ||
-          (it.palletId != null && it.palletId!.toUpperCase().contains(q)) ||
-          (it.locationId != null && it.locationId!.toUpperCase().contains(q));
-    }).toList();
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.trim().toUpperCase();
+      items = items.where((it) {
+        return it.sku.toUpperCase().contains(q) ||
+            it.productName.toUpperCase().contains(q) ||
+            it.epc.toUpperCase().contains(q) ||
+            (it.palletId != null && it.palletId!.toUpperCase().contains(q)) ||
+            (it.locationId != null && it.locationId!.toUpperCase().contains(q));
+      }).toList();
+    }
+
+    // Ưu tiên gợi ý xuất kho FIFO: Trong trường hợp 1 mã hàng có ngày nhập khác nhau,
+    // ưu tiên đẩy gợi ý có ngày nhập xa hiện tại nhất (cũ nhất) lên đầu.
+    items.sort((a, b) {
+      final skuComp = a.sku.trim().toLowerCase().compareTo(b.sku.trim().toLowerCase());
+      if (skuComp != 0) return skuComp;
+
+      final timeA = a.inboundTime;
+      final timeB = b.inboundTime;
+      if (timeA == null && timeB == null) return 0;
+      if (timeA == null) return 1;
+      if (timeB == null) return -1;
+      return timeA.compareTo(timeB); // Nhỏ hơn (xa thời điểm hiện tại hơn) lên đầu
+    });
+
+    return items;
+  }
+
+  void _suggestFifoOutbound(List<Item> currentItems) {
+    if (currentItems.isEmpty) return;
+    final Map<String, List<Item>> skuMap = {};
+    for (var it in currentItems) {
+      skuMap.putIfAbsent(it.sku.trim().toLowerCase(), () => []).add(it);
+    }
+
+    final Set<String> toSelect = {};
+    for (var list in skuMap.values) {
+      list.sort((a, b) {
+        final tA = a.inboundTime;
+        final tB = b.inboundTime;
+        if (tA == null && tB == null) return 0;
+        if (tA == null) return 1;
+        if (tB == null) return -1;
+        return tA.compareTo(tB);
+      });
+      if (list.isNotEmpty) {
+        final oldestTime = list.first.inboundTime;
+        if (oldestTime != null) {
+          final oldestBatch = list.where((i) => i.inboundTime == oldestTime);
+          for (var it in oldestBatch) {
+            toSelect.add(it.epc.toUpperCase());
+          }
+        } else {
+          toSelect.add(list.first.epc.toUpperCase());
+        }
+      }
+    }
+
+    setState(() {
+      _selectedEpcs.addAll(toSelect);
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF10B981),
+        duration: const Duration(seconds: 3),
+        content: Text('⚡ Đã tự động gợi ý chọn ${toSelect.length} sản phẩm có ngày nhập xa hiện tại nhất (FIFO)!'),
+      ),
+    );
   }
 
 
@@ -671,7 +731,25 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   ],
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
+
+              // Nút gợi ý xuất FIFO (Ưu tiên lô xa nhất)
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.flash_on, size: 15),
+                label: const Text(
+                  'GỢI Ý FIFO (LÔ XA NHẤT)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                ),
+                onPressed: () => _suggestFifoOutbound(items),
+              ),
+              const SizedBox(width: 14),
 
               // Ô tìm kiếm
               Expanded(
@@ -734,17 +812,19 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     const SizedBox(width: 8),
                     SizedBox(width: 45, child: Text('STT', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 120, child: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 110, child: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 140, child: Text('MÃ THÙNG / PALLET', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 130, child: Text('MÃ THÙNG / PALLET', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 160, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 140, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
                     Expanded(flex: 3, child: Text('TÊN SẢN PHẨM / QUY CÁCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
                     Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 120, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 170, child: Text('NGÀY NHẬP KHO (FIFO)', style: TextStyle(color: const Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold))),
+                    const SizedBox(width: 8),
+                    SizedBox(width: 110, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                   ],
                 ),
               ),
@@ -840,7 +920,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   ),
                                   const SizedBox(width: 8),
                                   SizedBox(
-                                    width: 120,
+                                    width: 110,
                                     child: Align(
                                       alignment: Alignment.centerLeft,
                                       child: Container(
@@ -860,7 +940,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   ),
                                   const SizedBox(width: 8),
                                   SizedBox(
-                                    width: 140,
+                                    width: 130,
                                     child: Text(
                                       pallet,
                                       overflow: TextOverflow.ellipsis,
@@ -869,7 +949,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   ),
                                   const SizedBox(width: 8),
                                   SizedBox(
-                                    width: 160,
+                                    width: 140,
                                     child: Text(
                                       it.sku,
                                       overflow: TextOverflow.ellipsis,
@@ -901,7 +981,56 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   ),
                                   const SizedBox(width: 8),
                                   SizedBox(
-                                    width: 120,
+                                    width: 170,
+                                    child: Builder(
+                                      builder: (context) {
+                                        if (it.inboundTime == null) {
+                                          return Text('--', style: TextStyle(color: c.textSecondary, fontSize: 11));
+                                        }
+                                        final inTime = it.inboundTime!;
+                                        final daysAgo = DateTime.now().difference(inTime).inDays;
+                                        final sameSkuItems = items.where((x) => x.sku.trim().toLowerCase() == it.sku.trim().toLowerCase() && x.inboundTime != null).toList();
+                                        final isOldestBatch = sameSkuItems.isNotEmpty && !sameSkuItems.any((x) => x.inboundTime!.isBefore(inTime));
+
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              it.formattedInboundDate,
+                                              style: TextStyle(
+                                                color: isOldestBatch ? const Color(0xFFF59E0B) : c.textPrimary,
+                                                fontSize: 11,
+                                                fontWeight: isOldestBatch ? FontWeight.bold : FontWeight.normal,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            if (isOldestBatch)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5), width: 0.8),
+                                                ),
+                                                child: Text(
+                                                  '⚡ Lô xa nhất (${daysAgo > 0 ? "$daysAgo ngày trước" : "Hôm nay"})',
+                                                  style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 9.5, fontWeight: FontWeight.bold),
+                                                ),
+                                              )
+                                            else
+                                              Text(
+                                                '${daysAgo > 0 ? "$daysAgo ngày trước" : "Hôm nay"} (Mới hơn)',
+                                                style: TextStyle(color: c.textSecondary, fontSize: 10),
+                                              ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    width: 110,
                                     child: Center(
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

@@ -74,7 +74,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
     _eyeCare.addListener(_onServiceUpdate);
     _auth.addListener(_onServiceUpdate);
     _uhfService.onLog.listen((line) {
-      if (mounted) {
+      if (mounted && (_auth.currentUser?.isTechnician ?? false)) {
         setState(() {
           _logLines.add(line);
           if (_logLines.length > 500) _logLines.removeAt(0);
@@ -232,6 +232,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
     final user = _auth.currentUser;
+    final isTech = user?.isTechnician ?? false;
     final canConfigure = user?.canConfigureHardware ?? false;
     final roleName = user?.rolePermission.name ?? 'Nhân viên';
 
@@ -278,10 +279,12 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 ),
               ),
             ),
-            const SizedBox(height: 8),
 
-            // 4. Console Log
-            _buildConsoleLog(c),
+            // 4. Console Log (Chỉ hiển thị cho Kỹ thuật viên)
+            if (isTech) ...[
+              const SizedBox(height: 8),
+              _buildConsoleLog(c),
+            ],
           ],
         ),
       ),

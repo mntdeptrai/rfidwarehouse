@@ -214,10 +214,13 @@ class _OutboundScreenState extends State<OutboundScreen> {
         return matchSku && isInStock;
       }).toList();
 
-      // 2. Sắp xếp theo FIFO: thời gian nhập kho (inboundTime) cũ nhất lên đầu
+      // 2. Sắp xếp theo FIFO: thời gian nhập kho (inboundTime) cũ nhất / xa hiện tại nhất lên đầu
       availableItems.sort((a, b) {
-        final timeA = a.inboundTime ?? DateTime(2000);
-        final timeB = b.inboundTime ?? DateTime(2000);
+        final timeA = a.inboundTime;
+        final timeB = b.inboundTime;
+        if (timeA == null && timeB == null) return 0;
+        if (timeA == null) return 1;
+        if (timeB == null) return -1;
         return timeA.compareTo(timeB);
       });
 
@@ -254,12 +257,28 @@ class _OutboundScreenState extends State<OutboundScreen> {
           'productName': item.productName,
           'locationCode': locCode,
           'palletCode': item.palletId ?? '--',
-          'inboundTime': item.inboundTime ?? DateTime.now(),
+          'inboundTime': item.inboundTime,
           'orderNo': orderNo ?? item.orderNo ?? '--',
           'isFifo': true,
         });
       }
     }
+
+    // 4. Ưu tiên gợi ý xuất kho: Trong trường hợp 1 mã hàng có ngày nhập khác nhau,
+    // ưu tiên đẩy gợi ý có ngày nhập xa hiện tại nhất lên đầu
+    suggestions.sort((a, b) {
+      final skuA = (a['sku'] ?? '').toString().trim().toLowerCase();
+      final skuB = (b['sku'] ?? '').toString().trim().toLowerCase();
+      final skuComp = skuA.compareTo(skuB);
+      if (skuComp != 0) return skuComp;
+
+      final timeA = a['inboundTime'] as DateTime?;
+      final timeB = b['inboundTime'] as DateTime?;
+      if (timeA == null && timeB == null) return 0;
+      if (timeA == null) return 1;
+      if (timeB == null) return -1;
+      return timeA.compareTo(timeB);
+    });
 
     setState(() {
       _suggestedFifoItems.clear();
@@ -1240,8 +1259,18 @@ class _OutboundScreenState extends State<OutboundScreen> {
                             final item = filteredItems[index];
                             final epc = item['epc'] as String;
                             final isChecked = _selectedEpcs.contains(epc);
-                            final inboundDate = item['inboundTime'] as DateTime;
-                            final formattedDate = '${inboundDate.day.toString().padLeft(2, '0')}/${inboundDate.month.toString().padLeft(2, '0')}/${inboundDate.year} ${inboundDate.hour.toString().padLeft(2, '0')}:${inboundDate.minute.toString().padLeft(2, '0')}';
+                            final inboundDate = item['inboundTime'] as DateTime?;
+                            final formattedDate = inboundDate != null
+                                ? '${inboundDate.day.toString().padLeft(2, '0')}/${inboundDate.month.toString().padLeft(2, '0')}/${inboundDate.year} ${inboundDate.hour.toString().padLeft(2, '0')}:${inboundDate.minute.toString().padLeft(2, '0')}'
+                                : '--';
+                            final daysAgo = inboundDate != null ? DateTime.now().difference(inboundDate).inDays : 0;
+                            final sameSkuItems = filteredItems.where((x) =>
+                                (x['sku'] ?? '').toString().trim().toLowerCase() ==
+                                    (item['sku'] ?? '').toString().trim().toLowerCase() &&
+                                x['inboundTime'] is DateTime).toList();
+                            final isOldestForSku = sameSkuItems.isNotEmpty &&
+                                (inboundDate != null &&
+                                    !sameSkuItems.any((x) => (x['inboundTime'] as DateTime).isBefore(inboundDate)));
 
                             return DataRow(
                               color: WidgetStateProperty.resolveWith((states) {
@@ -1317,21 +1346,43 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                   ),
                                 ),
                                 DataCell(
-                                  Text(
-                                    formattedDate,
-                                    style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.w500),
+                                  Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        formattedDate,
+                                        style: TextStyle(
+                                          color: isOldestForSku ? const Color(0xFFF59E0B) : c.textPrimary,
+                                          fontSize: 11,
+                                          fontWeight: isOldestForSku ? FontWeight.bold : FontWeight.w500,
+                                        ),
+                                      ),
+                                      Text(
+                                        daysAgo > 0 ? '$daysAgo ngày trước' : 'Hôm nay',
+                                        style: TextStyle(color: c.textSecondary, fontSize: 10),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 DataCell(
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                      color: isOldestForSku ? const Color(0xFFF59E0B).withValues(alpha: 0.2) : c.bgCardElevated,
                                       borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: isOldestForSku ? const Color(0xFFF59E0B) : c.border,
+                                        width: 0.8,
+                                      ),
                                     ),
-                                    child: const Text(
-                                      '⚡ FIFO Ưu Tiên',
-                                      style: TextStyle(color: Color(0xFFF59E0B), fontSize: 10, fontWeight: FontWeight.bold),
+                                    child: Text(
+                                      isOldestForSku ? '⚡ FIFO Xa nhất' : 'Lô mới hơn',
+                                      style: TextStyle(
+                                        color: isOldestForSku ? const Color(0xFFF59E0B) : c.textSecondary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ),

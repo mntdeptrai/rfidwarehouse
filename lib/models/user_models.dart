@@ -29,6 +29,9 @@ class WmsUser {
   /// (Chỉ duy nhất Admin = true; Thủ kho, Máy cầm tay, Seller = false)
   bool get canConfigureHardware => rolePermission.canConfigureHardware;
 
+  /// Kiểm tra xem người dùng có phải vai trò Kỹ thuật viên hay không
+  bool get isTechnician => rolePermission.isTechnician;
+
   Map<String, dynamic> toMap() => {
     'user_id': userId,
     'username': username,

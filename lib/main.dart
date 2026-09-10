@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/desktop_pda_wrapper.dart';
+import 'services/database_service.dart';
 import 'services/uhf_service.dart';
 import 'services/supabase_sync_service.dart';
 import 'services/api_service.dart';
@@ -16,6 +17,8 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
+  // Xóa sạch file SQLite vật lý trên tay cầm PDA để chuyển 100% sang Supabase Cloud
+  await DatabaseService.wipeHandheldSqliteDatabase();
   // Khởi tạo UHF service sớm
   UhfService().init();
   // Khởi tạo Supabase Cloud Sync & Realtime APIs
