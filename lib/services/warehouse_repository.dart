@@ -3525,6 +3525,97 @@ class WarehouseRepository extends ChangeNotifier {
     return true;
   }
 
+  /// Chuyển kho PDA: tìm pallet qua EPC chip của pallet, cập nhật location_id
+  /// cho pallet và toàn bộ items thuộc pallet đó lên Supabase.
+  /// Trả về số items đã được chuyển kho.
+  Future<int> transferPalletToLocation({
+    required String palletEpc,
+    required String newLocationId,
+    required String performedBy,
+  }) async {
+    final cleanEpc = palletEpc.trim().toUpperCase();
+
+    // Tìm pallet qua rfidEpc hoặc palletId
+    Pallet? pallet = _pallets.where((p) {
+      final epcMatch = (p.rfidEpc ?? '').toUpperCase() == cleanEpc ||
+          p.palletId.toUpperCase() == cleanEpc;
+      return epcMatch;
+    }).firstOrNull;
+
+    if (pallet == null) return 0;
+
+    final oldLocationId = pallet.locationId;
+    final oldLocation = _locations
+        .where((l) => l.locationId == oldLocationId)
+        .firstOrNull;
+    final newLocation = _locations
+        .where((l) => l.locationId == newLocationId || l.locationCode == newLocationId)
+        .firstOrNull;
+    final effectiveNewLocId = newLocation?.locationId ?? newLocationId;
+
+    // Cập nhật RAM
+    pallet.locationId = effectiveNewLocId;
+    if (oldLocation != null && oldLocation.currentPallets > 0) {
+      oldLocation.currentPallets--;
+    }
+    if (newLocation != null) newLocation.currentPallets++;
+
+    // Đồng bộ pallet lên Supabase
+    await _syncDirectOrQueue(
+      tableName: 'pallets',
+      recordId: pallet.palletId,
+      action: 'UPDATE',
+      payload: {
+        'pallet_id': pallet.palletId,
+        'location_id': effectiveNewLocId,
+      },
+    );
+
+    // Cập nhật tất cả items thuộc pallet này
+    final palletItems = _items
+        .where((it) => it.palletId == pallet.palletId || it.palletId == pallet.palletCode)
+        .toList();
+
+    for (final item in palletItems) {
+      item.locationId = effectiveNewLocId;
+      item.status = ItemStatus.inStock;
+      _dbService.updateItemLocationAndPallet(item.epc, effectiveNewLocId, pallet.palletId);
+      await _syncDirectOrQueue(
+        tableName: 'items',
+        recordId: item.itemId,
+        action: 'UPDATE',
+        payload: {
+          'item_id': item.itemId,
+          'location_id': effectiveNewLocId,
+          'status': ItemStatus.inStock.code,
+        },
+      );
+    }
+
+    // Ghi transaction
+    _transactions.insert(
+      0,
+      InventoryTransaction(
+        transactionId: 'TX-TRANSFER-${DateTime.now().millisecondsSinceEpoch}',
+        type: TransactionType.movement,
+        documentNo: pallet.palletCode,
+        sku: 'PALLET_${pallet.palletCode}',
+        productName: 'Chuyển kho ${palletItems.length} Items',
+        quantity: palletItems.length,
+        fromLocation: oldLocation?.locationCode ?? (oldLocationId ?? ''),
+        toLocation: newLocation?.locationCode ?? newLocationId,
+        palletCode: pallet.palletCode,
+        performedBy: performedBy,
+        timestamp: DateTime.now(),
+        notes: 'Chuyển kho PDA: ${oldLocation?.locationCode ?? oldLocationId} → ${newLocation?.locationCode ?? newLocationId}',
+      ),
+    );
+
+    _triggerBackgroundSync();
+    notifyListeners();
+    return palletItems.length;
+  }
+
   Future<void> deletePallet(String palletId) async {
     final cleanId = palletId.trim().toUpperCase();
     _pallets.removeWhere((p) => p.palletId.toUpperCase() == cleanId || p.palletCode.toUpperCase() == cleanId);

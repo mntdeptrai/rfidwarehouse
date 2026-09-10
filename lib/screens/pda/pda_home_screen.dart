@@ -8,7 +8,7 @@ import 'pda_drawer.dart';
 import 'pda_goods_delivery_screen.dart';
 import 'pda_inventory_screen.dart';
 import '../inbound_screen.dart';
-import '../storage_screen.dart';
+import 'pda_transfer_screen.dart';
 import 'pda_putaway_screen.dart';
 import 'pda_shelf_status_screen.dart';
 import 'pda_lookup_screen.dart';
@@ -246,7 +246,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const StorageScreen()),
+                                MaterialPageRoute(builder: (_) => const PdaTransferScreen()),
                               );
                             },
                           ),
