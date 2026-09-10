@@ -100,9 +100,6 @@ class WarehouseRepository extends ChangeNotifier {
 
       _locations.clear();
       _locations.addAll(cleanLocations);
-      if (!Platform.environment.containsKey('FLUTTER_TEST') && _locations.length < 10) {
-        await ensureDefault10Locations();
-      }
       _floorPlanConfig = await _dbService.getWarehouseLayoutConfig();
 
       // KHÔNG BAO GIỜ XÓA PALLET ĐÃ KHAI BÁO CỦA NGƯỜI DÙNG: Khai báo 1 lần dùng vĩnh viễn
