@@ -45,6 +45,7 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
     _searchCtrl.dispose();
     _repo.removeListener(_onThemeUpdate);
     _eyeCare.removeListener(_onThemeUpdate);
+    _uhf.setScanMode(PdaScanMode.rfid);
     super.dispose();
   }
 

@@ -106,6 +106,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       DataColumn(label: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                       DataColumn(label: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                       DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('CHUYỂN KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
                     ],
                     rows: items.asMap().entries.map((e) {
                       final idx = e.key + 1;
@@ -141,6 +142,16 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(it.status.label, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10)),
+                            ),
+                          ),
+                          DataCell(
+                            IconButton(
+                              icon: const Icon(Icons.drive_file_move_outlined, size: 18, color: Color(0xFF10B981)),
+                              tooltip: 'Di chuyển sản phẩm này sang kệ khác',
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _showMoveSingleItemDialog(it);
+                              },
                             ),
                           ),
                         ],
@@ -448,6 +459,309 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
           },
         );
       },
+    );
+  }
+
+  /// CHỨC NĂNG DI CHUYỂN 1 SẢN PHẨM RIÊNG LẺ SANG VỊ TRÍ KỆ / PALLET MỚI
+  void _showMoveSingleItemDialog([Item? initialItem]) {
+    if (_repo.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: _eyeCare.colors.warningAmber,
+          content: const Text('Kho hiện chưa có sản phẩm nào để di chuyển!'),
+        ),
+      );
+      return;
+    }
+    if (_repo.locations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: _eyeCare.colors.warningAmber,
+          content: const Text('Hệ thống chưa có vị trí kệ kho nào!'),
+        ),
+      );
+      return;
+    }
+
+    final c = _eyeCare.colors;
+    Item? selectedItem = initialItem ?? _repo.items.first;
+    String selectedLocId = selectedItem.locationId ?? _repo.locations.first.locationId;
+    String? selectedPalletId = selectedItem.palletId;
+    final searchCtrl = TextEditingController(text: initialItem != null ? initialItem.productName : '');
+    bool isProcessing = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setModalState) {
+          final curLoc = _repo.locations.where((l) => l.locationId == selectedItem?.locationId || l.locationCode == selectedItem?.locationId).firstOrNull;
+          final curLocDisplay = curLoc?.displayName ?? (selectedItem?.locationId ?? 'Chưa có kệ');
+          final curPallet = _repo.pallets.where((p) => p.palletId == selectedItem?.palletId || p.palletCode == selectedItem?.palletId).firstOrNull;
+          final curPalletDisplay = curPallet?.palletCode ?? (selectedItem?.palletId ?? 'Không có Pallet');
+
+          final allItems = _repo.items;
+          final q = searchCtrl.text.trim().toLowerCase();
+          final filteredItems = q.isEmpty
+              ? allItems
+              : allItems.where((it) {
+                  return it.productName.toLowerCase().contains(q) ||
+                      it.sku.toLowerCase().contains(q) ||
+                      it.serialNumber.toLowerCase().contains(q) ||
+                      it.epc.toLowerCase().contains(q);
+                }).toList();
+
+          return AlertDialog(
+            backgroundColor: c.bgCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: c.border)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: c.rfidCyan.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.drive_file_move_rounded, color: c.rfidCyan, size: 22),
+                ),
+                const SizedBox(width: 10),
+                Text('Di Chuyển Sản Phẩm Riêng Lẻ', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Bước 1: Chọn kho đến (Vị trí kệ kho đích)
+                    Text('1. Chọn kho đến (Vị trí kệ kho đích):', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                      decoration: BoxDecoration(color: c.bgDeep, borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.6))),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _repo.locations.any((l) => l.locationId == selectedLocId) ? selectedLocId : _repo.locations.first.locationId,
+                          isExpanded: true,
+                          dropdownColor: c.bgCard,
+                          items: _repo.locations.map((loc) => DropdownMenuItem(
+                            value: loc.locationId,
+                            child: Text('${loc.locationCode} • ${loc.displayName}', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                          )).toList(),
+                          onChanged: (val) {
+                            if (val != null) setModalState(() => selectedLocId = val);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Tùy chọn Pallet đích (nếu muốn xếp vào Pallet tại kho đến)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                      decoration: BoxDecoration(color: c.bgDeep, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          value: selectedPalletId,
+                          isExpanded: true,
+                          dropdownColor: c.bgCard,
+                          hint: Text('Để lẻ trên kệ (Không xếp vào Pallet)', style: TextStyle(color: c.textMuted, fontSize: 12.5)),
+                          items: [
+                            DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Để lẻ trên kệ (Không xếp vào Pallet)', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+                            ),
+                            ..._repo.pallets.map((p) => DropdownMenuItem<String?>(
+                              value: p.palletId,
+                              child: Text('Pallet ${p.palletCode} (${p.itemIds.length} SP)', style: TextStyle(color: c.textPrimary, fontSize: 12.5)),
+                            )),
+                          ],
+                          onChanged: (val) => setModalState(() => selectedPalletId = val),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Bước 2: Quét mã RFID EPC của sản phẩm đó
+                    Text('2. Quét mã RFID EPC của sản phẩm đó:', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: searchCtrl,
+                      style: TextStyle(color: c.textPrimary, fontSize: 13, fontFamily: 'monospace'),
+                      decoration: InputDecoration(
+                        hintText: 'Quét thẻ RFID hoặc nhập mã EPC...',
+                        hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
+                        prefixIcon: Icon(Icons.nfc, color: c.rfidCyan, size: 20),
+                        filled: true,
+                        fillColor: c.bgDeep,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.rfidCyan)),
+                      ),
+                      onChanged: (val) {
+                        final clean = val.trim().toLowerCase();
+                        // Tự động chọn sản phẩm nếu mã EPC khớp chính xác
+                        final exactMatch = _repo.items.where((i) => i.epc.toLowerCase() == clean || i.serialNumber.toLowerCase() == clean).firstOrNull;
+                        if (exactMatch != null) {
+                          setModalState(() {
+                            selectedItem = exactMatch;
+                          });
+                        } else {
+                          setModalState(() {});
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Danh sách gợi ý nếu chưa khớp chính xác
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 110),
+                      decoration: BoxDecoration(color: c.bgDeep, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
+                      child: filteredItems.isEmpty
+                          ? Center(child: Text('Không tìm thấy sản phẩm có mã RFID EPC này', style: TextStyle(color: c.textMuted, fontSize: 11.5)))
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: filteredItems.length,
+                              separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
+                              itemBuilder: (_, idx) {
+                                final it = filteredItems[idx];
+                                final isChosen = selectedItem?.epc == it.epc;
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: ListTile(
+                                    dense: true,
+                                    selected: isChosen,
+                                    selectedTileColor: c.rfidCyan.withValues(alpha: 0.1),
+                                    leading: Icon(Icons.nfc, color: isChosen ? c.rfidCyan : c.textMuted, size: 18),
+                                    title: Text(it.productName, style: TextStyle(color: isChosen ? c.rfidCyan : c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                                    subtitle: Text('EPC: ${it.epc}  •  SKU: ${it.sku}  •  S/N: ${it.serialNumber}', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'monospace'), overflow: TextOverflow.ellipsis),
+                                    onTap: () {
+                                      setModalState(() {
+                                        selectedItem = it;
+                                        searchCtrl.text = it.epc;
+                                      });
+                                    },
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Card hiển thị thông tin sản phẩm và lộ trình di chuyển
+                    if (selectedItem != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: c.bgDeep,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.5)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(child: Text(selectedItem!.productName, style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                                Text('S/N: ${selectedItem!.serialNumber}', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text('Mã RFID EPC: ${selectedItem!.epc}', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('KHO HIỆN TẠI', style: TextStyle(color: const Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold)),
+                                        Text('$curLocDisplay${selectedItem?.palletId != null ? " ($curPalletDisplay)" : ""}', style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward, color: Color(0xFF10B981), size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('KHO ĐẾN MỚI', style: TextStyle(color: const Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
+                                        Text(
+                                          _repo.locations.where((l) => l.locationId == selectedLocId).firstOrNull?.displayName ?? selectedLocId,
+                                          style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.bold),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isProcessing ? null : () => Navigator.pop(dialogCtx),
+                child: Text('HỦY', style: TextStyle(color: c.textMuted)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                onPressed: (selectedItem == null || isProcessing)
+                    ? null
+                    : () async {
+                        setModalState(() => isProcessing = true);
+                        try {
+                          final ok = await _repo.moveItemIndividual(
+                            epc: selectedItem!.epc,
+                            newLocationId: selectedLocId,
+                            newPalletId: selectedPalletId,
+                            performedBy: 'Thủ kho Desktop',
+                          );
+
+                          if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                          if (mounted) {
+                            final destLoc = _repo.locations.where((l) => l.locationId == selectedLocId).firstOrNull;
+                            final destLocName = destLoc?.displayName ?? selectedLocId;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: const Color(0xFF10B981),
+                                content: Text(ok
+                                    ? '✓ Đã cập nhật lại vị trí sản phẩm "${selectedItem!.productName}" sang $destLocName${selectedPalletId != null ? " (Pallet $selectedPalletId)" : ""}!'
+                                    : 'Có lỗi xảy ra khi di chuyển sản phẩm.'),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setModalState(() => isProcessing = false);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(backgroundColor: c.errorCoral, content: Text('Lỗi: $e')),
+                            );
+                          }
+                        }
+                      },
+                child: isProcessing
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('XÁC NHẬN CẬP NHẬT VỊ TRÍ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -1017,6 +1331,16 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                             onPressed: () => _openMergePalletFlow(),
                           ),
                         ElevatedButton.icon(
+                          icon: const Icon(Icons.swap_horiz_rounded, size: 16, color: Color(0xFF2C251E)),
+                          label: const Text('CHUYỂN SẢN PHẨM', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: c.rfidCyan,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                          onPressed: () => _showMoveSingleItemDialog(),
+                        ),
+                        ElevatedButton.icon(
                           icon: const Icon(Icons.add_box, size: 16, color: Color(0xFF2C251E)),
                           label: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
                           style: ElevatedButton.styleFrom(
@@ -1304,6 +1628,13 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                                 Expanded(
                                   flex: 3,
                                   child: Text('EPC: ${it.epc}', style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontFamily: 'monospace'), overflow: TextOverflow.ellipsis),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.drive_file_move_outlined, size: 16, color: Color(0xFF10B981)),
+                                  tooltip: 'Chuyển sản phẩm sang kệ khác',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  onPressed: () => _showMoveSingleItemDialog(it),
                                 ),
                               ],
                             ),

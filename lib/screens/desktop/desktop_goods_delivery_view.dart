@@ -250,6 +250,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       final q = _searchQuery.trim().toUpperCase();
       items = items.where((it) {
         return it.sku.toUpperCase().contains(q) ||
+            it.productId.toUpperCase().contains(q) ||
+            it.serialNumber.toUpperCase().contains(q) ||
             it.productName.toUpperCase().contains(q) ||
             it.epc.toUpperCase().contains(q) ||
             (it.palletId != null && it.palletId!.toUpperCase().contains(q)) ||

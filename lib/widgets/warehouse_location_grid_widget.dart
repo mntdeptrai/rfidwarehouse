@@ -386,7 +386,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                       )
                     : ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxHeight: widget.maxGridHeight ?? widget.maxHeight ?? 280.0,
+                          maxHeight: widget.maxGridHeight ?? widget.maxHeight ?? 330.0,
                         ),
                         child: _buildGridBody(filteredLocations, selectedLoc, c),
                       ),
@@ -429,7 +429,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
             physics: const BouncingScrollPhysics(),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
-              mainAxisExtent: 135,
+              mainAxisExtent: availableWidth < 500 ? 162 : 158,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),

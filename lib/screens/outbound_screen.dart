@@ -763,7 +763,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     try {
       final shippedEpcs = _scannedTags.keys.toList();
       final now = DateTime.now();
-      final performedBy = 'Thủ kho PDA';
+      final performedBy = _repo.resolveUserFullName(null, defaultRole: 'handheld');
       final poNo = _selectedOrder?.poNo ?? _loadedFileName ?? 'XUẤT-FIFO-${now.millisecondsSinceEpoch % 10000}';
 
       final List<Item> itemsToUpdate = [];

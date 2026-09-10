@@ -1784,7 +1784,7 @@ class WarehouseRepository extends ChangeNotifier {
   /// Lấy người nhập kho của Item
   String getItemInboundBy(Item item) {
     if (item.inboundBy != null && item.inboundBy!.trim().isNotEmpty) {
-      return item.inboundBy!.trim();
+      return resolveUserFullName(item.inboundBy, defaultRole: 'thukho');
     }
     if (item.orderNo != null && item.orderNo!.trim().isNotEmpty) {
       final tx = _transactions.where((t) =>
@@ -1792,34 +1792,102 @@ class WarehouseRepository extends ChangeNotifier {
         (t.type == TransactionType.inbound || t.transactionId.contains('INBOUND') || t.transactionId.contains('GATE'))
       ).firstOrNull;
       if (tx != null && tx.performedBy.trim().isNotEmpty) {
-        return tx.performedBy.trim();
+        return resolveUserFullName(tx.performedBy, defaultRole: 'thukho');
       }
     }
     return 'Cổng RFID Gate';
   }
 
-  /// Lấy người cất kệ của Item
-  String getItemPutawayBy(Item item) {
-    if (item.putawayBy != null && item.putawayBy!.trim().isNotEmpty) {
-      return item.putawayBy!.trim();
+  /// Tra cứu chính xác họ và tên người dùng từ CSDL (bảng users) thay vì hiển thị role/mã kỹ thuật
+  String resolveUserFullName(String? rawIdentifier, {String defaultRole = 'handheld'}) {
+    const legacyMockIds = {'USER-PDA-001', 'USER-OP-001', 'USER-SEL-001', 'USER-TECH-001'};
+
+    if (rawIdentifier != null && rawIdentifier.trim().isNotEmpty) {
+      final trimmed = rawIdentifier.trim();
+
+      // 1. Khớp chính xác fullName của user trong CSDL
+      final byFullName = _users.where((u) => u.fullName.trim().toLowerCase() == trimmed.toLowerCase()).firstOrNull;
+      if (byFullName != null) return byFullName.fullName.trim();
+
+      // 2. Khớp theo userId
+      final byId = _users.where((u) => u.userId.trim().toLowerCase() == trimmed.toLowerCase()).firstOrNull;
+      if (byId != null && byId.fullName.trim().isNotEmpty) return byId.fullName.trim();
+
+      // 3. Khớp theo username (ví dụ: 'pda123', 'thukho1', 'admin', 'kythuat1')
+      final byUsername = _users.where((u) => u.username.trim().toLowerCase() == trimmed.toLowerCase()).firstOrNull;
+      if (byUsername != null && byUsername.fullName.trim().isNotEmpty) return byUsername.fullName.trim();
+
+      // 4. Kiểm tra các từ khóa role cũ để chuyển đổi sang tên thật trong CSDL
+      final lower = trimmed.toLowerCase();
+      if (lower.contains('pda') || lower.contains('handheld') || lower.contains('cầm tay')) {
+        final realPda = _users.where((u) => u.isActive && !legacyMockIds.contains(u.userId) && (u.username == 'pda123' || u.role == 'handheld')).firstOrNull
+            ?? _users.where((u) => u.isActive && (u.username == 'pda123' || u.role == 'handheld')).firstOrNull;
+        if (realPda != null && realPda.fullName.trim().isNotEmpty) return realPda.fullName.trim();
+      }
+
+      if (lower.contains('thukho') || lower.contains('thủ kho')) {
+        final realTk = _users.where((u) => u.isActive && !legacyMockIds.contains(u.userId) && (u.username == 'thukho1' || u.role == 'thukho')).firstOrNull
+            ?? _users.where((u) => u.isActive && (u.username == 'thukho1' || u.role == 'thukho')).firstOrNull;
+        if (realTk != null && realTk.fullName.trim().isNotEmpty) return realTk.fullName.trim();
+      }
+
+      if (lower.contains('admin') || lower.contains('quản trị')) {
+        final adm = _users.where((u) => u.isActive && u.role == 'admin').firstOrNull;
+        if (adm != null && adm.fullName.trim().isNotEmpty) return adm.fullName.trim();
+      }
+
+      // Nếu là tên bình thường (không phải role string kỹ thuật), giữ nguyên tên đó
+      if (!lower.contains('thủ kho pda') && !lower.contains('thủ kho desktop') && !lower.contains('cổng rfid')) {
+        return trimmed;
+      }
     }
+
+    // Nếu không có identifier hoặc là role string kỹ thuật:
+    // Lấy user tương ứng trong CSDL (ưu tiên role handheld hoặc username pda123)
+    final target = _users.where((u) => u.isActive && !legacyMockIds.contains(u.userId) && (u.username == 'pda123' || u.role == defaultRole)).firstOrNull
+        ?? _users.where((u) => u.isActive && (u.username == 'pda123' || u.role == defaultRole)).firstOrNull
+        ?? _users.where((u) => u.isActive && !legacyMockIds.contains(u.userId)).firstOrNull;
+
+    if (target != null && target.fullName.trim().isNotEmpty) {
+      return target.fullName.trim();
+    }
+
+    return 'Chưa cất kệ';
+  }
+
+  /// Lấy người cất kệ của Item chính xác theo tên trong CSDL (không lấy theo role)
+  String getItemPutawayBy(Item item) {
+    if (item.status != ItemStatus.inStock && (item.locationId == null || item.locationId!.trim().isEmpty)) {
+      return 'Chưa cất kệ';
+    }
+
+    // 1. Kiểm tra trực tiếp trên Item
+    if (item.putawayBy != null && item.putawayBy!.trim().isNotEmpty) {
+      return resolveUserFullName(item.putawayBy);
+    }
+
+    // 2. Kiểm tra trên Pallet chứa Item
     if (item.palletId != null && item.palletId!.trim().isNotEmpty) {
       final pal = _pallets.where((p) =>
         p.palletId.toUpperCase() == item.palletId!.toUpperCase() ||
         p.palletCode.toUpperCase() == item.palletId!.toUpperCase()
       ).firstOrNull;
       if (pal != null && pal.placedBy != null && pal.placedBy!.trim().isNotEmpty) {
-        return pal.placedBy!.trim();
+        return resolveUserFullName(pal.placedBy);
       }
     }
+
+    // 3. Kiểm tra trong Transaction di chuyển / cất kệ
     final tx = _transactions.where((t) =>
       t.sku == item.sku &&
       (t.type == TransactionType.movement || t.transactionId.contains('PUTAWAY'))
     ).firstOrNull;
     if (tx != null && tx.performedBy.trim().isNotEmpty) {
-      return tx.performedBy.trim();
+      return resolveUserFullName(tx.performedBy);
     }
-    return item.status == ItemStatus.inStock ? 'Thủ kho PDA' : 'Chưa cất kệ';
+
+    // 4. Nếu hàng đã inStock (đã cất kệ): Lấy chính xác tên người cất kệ (handheld) trong CSDL
+    return resolveUserFullName(null, defaultRole: 'handheld');
   }
 
   /// Lấy thời gian nhập kho của Item
@@ -2604,11 +2672,15 @@ class WarehouseRepository extends ChangeNotifier {
       return 0;
     }
 
+    final actualPerformer = (performedBy.isNotEmpty && !performedBy.contains('Thủ kho PDA'))
+        ? resolveUserFullName(performedBy, defaultRole: 'handheld')
+        : resolveUserFullName(null, defaultRole: 'handheld');
+
     for (var it in matchedItems) {
       final oldLoc = it.locationId ?? 'LOC-GATE-IN';
       it.status = ItemStatus.inStock;
       it.locationId = loc.locationId;
-      it.putawayBy = performedBy;
+      it.putawayBy = actualPerformer;
       it.inboundTime ??= now;
 
       await _dbService.insertItem(it);
@@ -2639,7 +2711,7 @@ class WarehouseRepository extends ChangeNotifier {
           quantity: 1,
           fromLocation: oldLoc,
           toLocation: loc.locationCode,
-          performedBy: performedBy,
+          performedBy: actualPerformer,
           timestamp: now,
           notes: 'Xác nhận cất thùng hàng $cleanBarcode lên kệ ${loc.locationCode} bằng PDA Barcode',
         ),
@@ -2742,6 +2814,11 @@ class WarehouseRepository extends ChangeNotifier {
     final now = DateTime.now();
     int count = 0;
     final effectiveStatus = locationId != null ? ItemStatus.inStock : ItemStatus.waitingPutaway;
+    final actualPerformer = (performedBy.isNotEmpty && !performedBy.contains('Thủ kho PDA'))
+        ? resolveUserFullName(performedBy, defaultRole: 'handheld')
+        : resolveUserFullName(null, defaultRole: 'handheld');
+
+    pallet.placedBy = actualPerformer;
 
     await _syncDirectOrQueue(
       tableName: 'pallets',
@@ -2753,6 +2830,7 @@ class WarehouseRepository extends ChangeNotifier {
         'location_id': pallet.locationId,
         'inbound_time': pallet.inboundTime?.toIso8601String() ?? now.toIso8601String(),
         'is_multi_sku': pallet.isMultiSku ? 1 : 0,
+        'placed_by': actualPerformer,
       },
     );
 
@@ -2764,9 +2842,9 @@ class WarehouseRepository extends ChangeNotifier {
         item.locationId = locationId;
         item.palletId = pallet.palletId;
         item.inboundTime = now;
-        item.inboundBy = performedBy;
+        item.inboundBy = actualPerformer;
         if (locationId != null) {
-          item.putawayBy = performedBy;
+          item.putawayBy = actualPerformer;
         }
         if (item.cartonCode == null || item.cartonCode!.isEmpty) {
           item.cartonCode = palletCode;
@@ -2834,7 +2912,7 @@ class WarehouseRepository extends ChangeNotifier {
         quantity: uniqueEpcs.length,
         toLocation: destinationName,
         palletCode: palletCode,
-        performedBy: performedBy,
+        performedBy: actualPerformer,
         timestamp: now,
         notes: 'Nhập $count thẻ RFID qua PDA vào Pallet $palletCode - Trạng thái: $destinationName',
       ),
@@ -3280,6 +3358,24 @@ class WarehouseRepository extends ChangeNotifier {
     return uniqueEpcs.length;
   }
 
+  /// Tra cứu vị trí kệ kho thực tế của sản phẩm (hỗ trợ cả hàng lẻ và hàng trên Pallet)
+  Location? resolveItemLocation(Item it) {
+    String? rawLocId = it.locationId;
+    if ((rawLocId == null || rawLocId.trim().isEmpty) && it.palletId != null && it.palletId!.trim().isNotEmpty) {
+      final pClean = it.palletId!.trim().toUpperCase();
+      final pal = _pallets.where((p) => p.palletId.toUpperCase() == pClean || p.palletCode.toUpperCase() == pClean).firstOrNull;
+      rawLocId = pal?.locationId;
+    }
+    if (rawLocId == null || rawLocId.trim().isEmpty) return null;
+    final clean = rawLocId.trim().toUpperCase();
+    return _locations.where((l) =>
+      l.locationId.toUpperCase() == clean ||
+      l.locationCode.toUpperCase() == clean ||
+      l.locationId.toUpperCase().replaceAll('LOC-', '') == clean.replaceAll('LOC-', '') ||
+      l.locationCode.toUpperCase().replaceAll('LOC-', '') == clean.replaceAll('LOC-', '')
+    ).firstOrNull;
+  }
+
   InventorySession startInventorySession({required String zone, String? locationCode}) {
     final session = InventorySession(
       sessionId: 'SESS-${DateTime.now().millisecondsSinceEpoch}',
@@ -3305,6 +3401,10 @@ class WarehouseRepository extends ChangeNotifier {
       },
     );
     _triggerBackgroundSync();
+
+    // Nạp sẵn danh sách hàng kỳ vọng trên CSDL tại vị trí này (trạng thái missing ban đầu khi chưa quét)
+    processAuditScan(sessionId: session.sessionId, scannedEpcs: []);
+
     notifyListeners();
     return session;
   }
@@ -3312,12 +3412,13 @@ class WarehouseRepository extends ChangeNotifier {
   void processAuditScan({
     required String sessionId,
     required List<String> scannedEpcs,
+    bool notify = false,
   }) {
     final session = _inventorySessions.where((s) => s.sessionId == sessionId).firstOrNull;
     if (session == null || session.isCompleted) return;
     session.results.clear();
 
-    final uniqueScannedEpcs = scannedEpcs.toSet();
+    final uniqueScannedEpcs = scannedEpcs.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
 
     final isAllWarehouse = session.zone.trim().toLowerCase().contains('toàn bộ') ||
         session.zone.trim().toUpperCase() == 'ALL' ||
@@ -3326,23 +3427,39 @@ class WarehouseRepository extends ChangeNotifier {
     final expectedItems = _items.where((it) {
       if (it.status != ItemStatus.inStock) return false;
       if (isAllWarehouse) return true;
-      final loc = _locations.firstWhere((l) => l.locationId == it.locationId, orElse: () => Location(locationId: '', locationCode: '', zone: '', shelf: '', level: ''));
-      if (session.locationCode != null && session.locationCode!.isNotEmpty) {
-        return loc.locationCode.trim().toUpperCase() == session.locationCode!.trim().toUpperCase();
+      final loc = resolveItemLocation(it);
+      if (loc == null) return false;
+
+      if (session.locationCode != null && session.locationCode!.trim().isNotEmpty) {
+        final target = session.locationCode!.trim().toUpperCase();
+        return loc.locationCode.trim().toUpperCase() == target ||
+               loc.locationId.trim().toUpperCase() == target ||
+               loc.locationId.trim().toUpperCase().replaceAll('LOC-', '') == target.replaceAll('LOC-', '');
       }
-      return loc.zone.trim().toUpperCase() == session.zone.trim().toUpperCase() ||
-             loc.locationCode.trim().toUpperCase().startsWith(session.zone.trim().toUpperCase());
+      if (session.zone.isNotEmpty) {
+        final targetZone = session.zone.trim().toUpperCase();
+        return loc.zone.trim().toUpperCase() == targetZone ||
+               loc.locationCode.trim().toUpperCase().startsWith(targetZone);
+      }
+      return false;
     }).toList();
 
-    final expectedEpcs = expectedItems.map((e) => e.epc).toSet();
+    final expectedEpcs = expectedItems.map((e) => e.epc.toUpperCase()).toSet();
 
-    for (var epc in uniqueScannedEpcs) {
-      final item = _items.firstWhere(
-        (it) => it.epc == epc,
-        orElse: () => Item(itemId: '', productId: '', sku: 'UNKNOWN', productName: 'Thẻ chưa khai báo', serialNumber: '', epc: epc),
-      );
+    final currentAuditLoc = session.locationCode != null && session.locationCode!.trim().isNotEmpty
+        ? _locations.where((l) => l.locationCode == session.locationCode || l.locationId == session.locationCode).firstOrNull
+        : null;
+    final currentAuditLocDisplay = currentAuditLoc != null
+        ? '${currentAuditLoc.locationCode} • ${currentAuditLoc.displayName}'
+        : (session.locationCode != null && session.locationCode!.trim().isNotEmpty
+            ? session.locationCode!
+            : (session.zone.isNotEmpty ? session.zone : 'Toàn bộ kho'));
 
-      if (item.sku == 'UNKNOWN' || item.itemId.isEmpty) {
+    for (var rawEpc in uniqueScannedEpcs) {
+      final epc = rawEpc.trim();
+      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+
+      if (item == null || item.sku == 'UNKNOWN' || item.itemId.isEmpty) {
         session.results.add(
           InventoryItemResult(
             epc: epc,
@@ -3350,28 +3467,34 @@ class WarehouseRepository extends ChangeNotifier {
             readAt: DateTime.now(),
           ),
         );
-      } else if (isAllWarehouse || expectedEpcs.contains(epc)) {
-        final actualLoc = _locations.firstWhere((l) => l.locationId == item.locationId, orElse: () => Location(locationId: '', locationCode: item.locationId ?? 'Chưa gán kệ', zone: '', shelf: '', level: ''));
+      } else if (isAllWarehouse || expectedEpcs.contains(item.epc.toUpperCase())) {
+        final actualLoc = resolveItemLocation(item);
+        final locDisplay = actualLoc?.displayName ?? (actualLoc?.locationCode ?? item.locationId ?? currentAuditLocDisplay);
         session.results.add(
           InventoryItemResult(
-            epc: epc,
+            epc: item.epc,
             sku: item.sku,
             productName: item.productName,
-            expectedLocation: actualLoc.locationCode,
-            actualLocation: actualLoc.locationCode,
+            expectedLocation: locDisplay,
+            actualLocation: currentAuditLocDisplay,
             resultType: InventoryVarianceType.match,
             readAt: DateTime.now(),
           ),
         );
       } else {
-        final actualLoc = _locations.firstWhere((l) => l.locationId == item.locationId, orElse: () => Location(locationId: '', locationCode: item.locationId ?? 'Chưa rõ', zone: '', shelf: '', level: ''));
+        // Thuộc KỆ KHÁC / KHO KHÁC trong database (Sai vị trí)
+        final actualLoc = resolveItemLocation(item);
+        final originLocDisplay = actualLoc != null
+            ? '${actualLoc.locationCode} • ${actualLoc.displayName} (${actualLoc.zone})'
+            : (item.locationId ?? 'Kệ khác / Chưa gán');
+
         session.results.add(
           InventoryItemResult(
-            epc: epc,
+            epc: item.epc,
             sku: item.sku,
             productName: item.productName,
-            expectedLocation: actualLoc.locationCode,
-            actualLocation: session.locationCode ?? session.zone,
+            expectedLocation: originLocDisplay, // Vị trí gốc trong CSDL
+            actualLocation: currentAuditLocDisplay, // Vị trí đang quét thực tế
             resultType: InventoryVarianceType.wrongLocation,
             readAt: DateTime.now(),
           ),
@@ -3380,15 +3503,16 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     for (var expItem in expectedItems) {
-      if (!uniqueScannedEpcs.contains(expItem.epc)) {
-        final actualLoc = _locations.firstWhere((l) => l.locationId == expItem.locationId, orElse: () => Location(locationId: '', locationCode: expItem.locationId ?? 'Chưa gán kệ', zone: '', shelf: '', level: ''));
+      if (!uniqueScannedEpcs.any((e) => e.trim().toUpperCase() == expItem.epc.trim().toUpperCase())) {
+        final loc = resolveItemLocation(expItem);
+        final locDisplay = loc != null ? '${loc.locationCode} • ${loc.displayName}' : (expItem.locationId ?? currentAuditLocDisplay);
         session.results.add(
           InventoryItemResult(
             epc: expItem.epc,
             sku: expItem.sku,
             productName: expItem.productName,
-            expectedLocation: actualLoc.locationCode,
-            actualLocation: 'Không thấy',
+            expectedLocation: locDisplay,
+            actualLocation: 'Chưa quét thấy',
             resultType: InventoryVarianceType.missing,
             readAt: DateTime.now(),
           ),
@@ -3397,7 +3521,9 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     _dbService.insertInventorySession(session);
-    notifyListeners();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   Future<void> completeInventorySession(String sessionId, String approvedBy) async {
@@ -3553,8 +3679,13 @@ class WarehouseRepository extends ChangeNotifier {
         .firstOrNull;
     final effectiveNewLocId = newLocation?.locationId ?? newLocationId;
 
+    final actualPerformer = (performedBy.isNotEmpty && !performedBy.contains('Thủ kho PDA'))
+        ? resolveUserFullName(performedBy, defaultRole: 'handheld')
+        : resolveUserFullName(null, defaultRole: 'handheld');
+
     // Cập nhật RAM
     pallet.locationId = effectiveNewLocId;
+    pallet.placedBy = actualPerformer;
     if (oldLocation != null && oldLocation.currentPallets > 0) {
       oldLocation.currentPallets--;
     }
@@ -3568,6 +3699,7 @@ class WarehouseRepository extends ChangeNotifier {
       payload: {
         'pallet_id': pallet.palletId,
         'location_id': effectiveNewLocId,
+        'placed_by': actualPerformer,
       },
     );
 
@@ -3579,6 +3711,7 @@ class WarehouseRepository extends ChangeNotifier {
     for (final item in palletItems) {
       item.locationId = effectiveNewLocId;
       item.status = ItemStatus.inStock;
+      item.putawayBy = actualPerformer;
       _dbService.updateItemLocationAndPallet(item.epc, effectiveNewLocId, pallet.palletId);
       await _syncDirectOrQueue(
         tableName: 'items',
@@ -3605,7 +3738,7 @@ class WarehouseRepository extends ChangeNotifier {
         fromLocation: oldLocation?.locationCode ?? (oldLocationId ?? ''),
         toLocation: newLocation?.locationCode ?? newLocationId,
         palletCode: pallet.palletCode,
-        performedBy: performedBy,
+        performedBy: actualPerformer,
         timestamp: DateTime.now(),
         notes: 'Chuyển kho PDA: ${oldLocation?.locationCode ?? oldLocationId} → ${newLocation?.locationCode ?? newLocationId}',
       ),
@@ -3614,6 +3747,158 @@ class WarehouseRepository extends ChangeNotifier {
     _triggerBackgroundSync();
     notifyListeners();
     return palletItems.length;
+  }
+
+  /// Chuyển kho theo danh sách items cụ thể (không theo pallet).
+  /// Dùng khi nhân viên quét từng chip item EPC trên tay cầm.
+  Future<int> transferItemsToLocation({
+    required List<String> itemEpcs,
+    required String newLocationId,
+    required String performedBy,
+  }) async {
+    if (itemEpcs.isEmpty) return 0;
+
+    final newLocation = _locations
+        .where((l) => l.locationId == newLocationId || l.locationCode == newLocationId)
+        .firstOrNull;
+    final effectiveNewLocId = newLocation?.locationId ?? newLocationId;
+    final actualPerformer = (performedBy.isNotEmpty && !performedBy.contains('Thủ kho PDA'))
+        ? resolveUserFullName(performedBy, defaultRole: 'handheld')
+        : resolveUserFullName(null, defaultRole: 'handheld');
+    int count = 0;
+
+    for (final epc in itemEpcs) {
+      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+      if (item == null) continue;
+
+      item.locationId = effectiveNewLocId;
+      item.status = ItemStatus.inStock;
+      item.putawayBy = actualPerformer;
+      _dbService.updateItemLocationAndPallet(item.epc, effectiveNewLocId, item.palletId ?? '');
+      await _syncDirectOrQueue(
+        tableName: 'items',
+        recordId: item.itemId,
+        action: 'UPDATE',
+        payload: {
+          'item_id': item.itemId,
+          'location_id': effectiveNewLocId,
+          'status': ItemStatus.inStock.code,
+        },
+      );
+      count++;
+    }
+
+    if (count > 0) {
+      _transactions.insert(
+        0,
+        InventoryTransaction(
+          transactionId: 'TX-TRANSFER-${DateTime.now().millisecondsSinceEpoch}',
+          type: TransactionType.movement,
+          documentNo: 'MANUAL-TRANSFER',
+          sku: 'ĐA_SKU',
+          productName: 'Chuyển kho $count Items',
+          quantity: count,
+          fromLocation: '',
+          toLocation: newLocation?.locationCode ?? newLocationId,
+          performedBy: actualPerformer,
+          timestamp: DateTime.now(),
+          notes: 'Chuyển kho PDA (quét từng item): $count items → ${newLocation?.locationCode ?? newLocationId}',
+        ),
+      );
+      _triggerBackgroundSync();
+      notifyListeners();
+    }
+
+    return count;
+  }
+
+  /// Di chuyển 1 sản phẩm riêng lẻ đến vị trí kệ kho hoặc pallet mới.
+  Future<bool> moveItemIndividual({
+    required String epc,
+    required String newLocationId,
+    String? newPalletId,
+    required String performedBy,
+  }) async {
+    final cleanEpc = epc.trim().toUpperCase();
+    final item = _items.where((it) => it.epc.toUpperCase() == cleanEpc).firstOrNull;
+    if (item == null) return false;
+
+    final newLocation = _locations
+        .where((l) => l.locationId == newLocationId || l.locationCode == newLocationId)
+        .firstOrNull;
+    final effectiveLocId = newLocation?.locationId ?? newLocationId;
+
+    final oldLocationId = item.locationId ?? '';
+    final oldLocation = _locations
+        .where((l) => l.locationId == oldLocationId || l.locationCode == oldLocationId)
+        .firstOrNull;
+    final oldPalletId = item.palletId;
+
+    final actualPerformer = (performedBy.isNotEmpty && !performedBy.contains('Thủ kho PDA'))
+        ? resolveUserFullName(performedBy, defaultRole: 'handheld')
+        : resolveUserFullName(null, defaultRole: 'handheld');
+
+    // Xử lý Pallet cũ và Pallet mới
+    final targetPalletId = (newPalletId != null && newPalletId.trim().isNotEmpty) ? newPalletId.trim() : null;
+
+    if (oldPalletId != null && oldPalletId.isNotEmpty && oldPalletId != targetPalletId) {
+      final oldPallet = _pallets
+          .where((p) => p.palletId == oldPalletId || p.palletCode == oldPalletId)
+          .firstOrNull;
+      if (oldPallet != null) {
+        oldPallet.itemIds.remove(item.itemId);
+      }
+    }
+
+    String? effectivePalletId = targetPalletId;
+    if (effectivePalletId != null) {
+      final newPallet = _pallets
+          .where((p) => p.palletId == effectivePalletId || p.palletCode == effectivePalletId)
+          .firstOrNull;
+      if (newPallet != null && !newPallet.itemIds.contains(item.itemId)) {
+        newPallet.itemIds.add(item.itemId);
+      }
+    }
+
+    item.locationId = effectiveLocId;
+    item.palletId = effectivePalletId;
+    item.status = ItemStatus.inStock;
+    item.putawayBy = actualPerformer;
+
+    await _dbService.updateItemLocationAndPallet(item.epc, effectiveLocId, effectivePalletId);
+    await _syncDirectOrQueue(
+      tableName: 'items',
+      recordId: item.itemId,
+      action: 'UPDATE',
+      payload: {
+        'item_id': item.itemId,
+        'location_id': effectiveLocId,
+        'pallet_id': effectivePalletId,
+        'status': ItemStatus.inStock.code,
+      },
+    );
+
+    _transactions.insert(
+      0,
+      InventoryTransaction(
+        transactionId: 'TX-ITEM-MOVE-${DateTime.now().millisecondsSinceEpoch}',
+        type: TransactionType.movement,
+        documentNo: item.sku,
+        sku: item.sku,
+        productName: 'Chuyển sản phẩm: ${item.productName}',
+        quantity: 1,
+        fromLocation: oldLocation?.locationCode ?? oldLocationId,
+        toLocation: newLocation?.locationCode ?? newLocationId,
+        palletCode: effectivePalletId,
+        performedBy: actualPerformer,
+        timestamp: DateTime.now(),
+        notes: 'Chuyển SP riêng lẻ [${item.sku} - EPC: ${item.epc}] từ ${oldLocation?.displayName ?? oldLocationId} sang ${newLocation?.displayName ?? newLocationId}${effectivePalletId != null ? " (Pallet: $effectivePalletId)" : ""}',
+      ),
+    );
+
+    _triggerBackgroundSync();
+    notifyListeners();
+    return true;
   }
 
   Future<void> deletePallet(String palletId) async {

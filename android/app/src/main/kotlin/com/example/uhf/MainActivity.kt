@@ -54,7 +54,7 @@ class MainActivity : FlutterActivity() {
     private var lastBeepTime = 0L
     private val BEEP_MIN_INTERVAL_MS = 60L
 
-    private var currentScanMode = "auto"
+    private var currentScanMode = "rfid"
 
     private var lastTriggerDown = 0L
     private val TRIGGER_DEBOUNCE_MS = 50L
@@ -347,6 +347,7 @@ class MainActivity : FlutterActivity() {
 
         bgHandler.post {
             initBarcodeScannerCache()
+            disableBarcodeScannerHardware()
         }
     }
 
@@ -397,7 +398,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "setScanMode" -> {
-                    currentScanMode = call.argument<String>("mode") ?: "auto"
+                    currentScanMode = call.argument<String>("mode") ?: "rfid"
                     Log.d(TAG, "Scan mode: $currentScanMode")
                     if (currentScanMode.lowercase() == "barcode") {
                         enableBarcodeScannerHardware()
@@ -612,6 +613,10 @@ class MainActivity : FlutterActivity() {
             try {
                 clazz.getMethod("setTarget", Int::class.javaPrimitiveType).invoke(service, 0)
                 Log.d(TAG, "Configured setTarget(0)")
+            } catch (_: Throwable) {}
+
+            try {
+                disableBarcodeScannerHardware()
             } catch (_: Throwable) {}
 
             Log.d(TAG, "SEUIC UHF initialized successfully with max RF power and optimized parameters")
@@ -920,15 +925,26 @@ class MainActivity : FlutterActivity() {
         if (pressed) {
             val now = System.currentTimeMillis()
             if (now - lastTriggerDown < TRIGGER_DEBOUNCE_MS) return
+            val prevDown = lastTriggerDown
             lastTriggerDown = now
-            if (!isTriggerActive.compareAndSet(false, true)) return
+            if (!isTriggerActive.compareAndSet(false, true)) {
+                // Failsafe: nếu cò bị kẹt cờ active quá 3 giây mà không có ACTION_UP, tự động giải phóng cờ
+                if (now - prevDown > 3000) {
+                    isTriggerActive.set(true)
+                } else {
+                    return
+                }
+            }
 
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 // Instant trigger with 0 delay
                 triggerBarcodeBroadcast()
+            } else if (mode == "hybrid") {
+                triggerBarcodeBroadcast()
+                bgHandler.post { startInventory() }
             } else {
-                // Chế độ RFID (mặc định): Tuyệt đối chỉ quét RFID, không bắn barcode
+                // Chế độ RFID (mặc định) & Auto: Quét chip RFID UHF
                 bgHandler.post { startInventory() }
             }
 
@@ -938,6 +954,10 @@ class MainActivity : FlutterActivity() {
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 stopBarcodeBroadcast()
+            } else if (mode == "hybrid") {
+                stopBarcodeBroadcast()
+                stopInventory()
+                bgHandler.post { stopInventory() }
             } else {
                 stopInventory()
                 bgHandler.post { stopInventory() }

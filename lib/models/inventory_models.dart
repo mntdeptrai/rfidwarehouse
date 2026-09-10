@@ -116,7 +116,7 @@ class Item {
   /// Người cất kệ hiển thị
   String get putawayByDisplay {
     if (putawayBy != null && putawayBy!.trim().isNotEmpty) return putawayBy!.trim();
-    if (status == ItemStatus.inStock) return 'Thủ kho PDA';
+    if (status == ItemStatus.inStock) return 'Đã cất kệ';
     return 'Chưa cất kệ';
   }
 

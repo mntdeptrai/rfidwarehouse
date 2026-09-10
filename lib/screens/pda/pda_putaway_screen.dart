@@ -149,7 +149,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     final savedCount = await _repo.confirmPdaPutawayByCarton(
       cartonOrOrderBarcode: clean,
       locationId: _selectedLocationId!,
-      performedBy: 'Thủ kho PDA',
+      performedBy: _repo.resolveUserFullName(null, defaultRole: 'handheld'),
     );
 
     if (savedCount > 0) {

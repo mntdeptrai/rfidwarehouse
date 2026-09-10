@@ -198,67 +198,108 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
+        final screenHeight = constraints.maxHeight;
         final isUltraNarrow = screenWidth < 500;
         final isSmallScreen = screenWidth < 800;
         final isMediumScreen = screenWidth < 1200;
         final horizontalPadding = isUltraNarrow ? 8.0 : (isSmallScreen ? 12.0 : (isMediumScreen ? 16.0 : 20.0));
         final verticalPadding = isUltraNarrow ? 8.0 : (isSmallScreen ? 12.0 : 16.0);
 
+        // Khối Header cố định trên cùng (Thanh tiêu đề, KPI Cards & Thanh lọc Toolbar)
+        final headerWidget = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header & Tab Switcher (Tự động co giãn theo chiều rộng cửa sổ)
+            _buildTopHeaderBar(c),
+            const SizedBox(height: 12),
+
+            // KPI Cards & Color Legend Bar (Tự động co giãn)
+            _buildKpiAndLegendBar(
+              c: c,
+              totalShelves: allLocations.length,
+              fullCount: fullCount,
+              almostFullCount: almostFullCount,
+              plentyCount: plentyCount,
+            ),
+            const SizedBox(height: 12),
+
+            // Toolbar Bộ lọc (Zone, Status, Search) với khả năng cuộn ngang an toàn
+            _buildFilterToolbar(c, allLocations),
+            const SizedBox(height: 14),
+          ],
+        );
+
+        final isNarrowOrShort = screenWidth < 700 || screenHeight < 680;
+
+        // Trường hợp 2: Khi màn hình hẹp hoặc chiều cao ngắn (laptop nhỏ, chia đôi cửa sổ, xoay ngang/dọc)
+        // Áp dụng lời khuyên số 2: Bọc nội dung bằng SingleChildScrollView để cuộn toàn bộ trang mượt mà không bao giờ bị lỗi tràn màn hình (RenderFlex overflow)
+        if (isNarrowOrShort) {
+          return Container(
+            color: c.bgDeep,
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  headerWidget,
+                  const SizedBox(height: 10),
+                  if (filteredLocations.isEmpty)
+                    _buildEmptyRackView(c)
+                  else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: screenWidth < 500 ? double.infinity : 300,
+                        mainAxisExtent: 162,
+                        crossAxisSpacing: isSmallScreen ? 10 : 14,
+                        mainAxisSpacing: isSmallScreen ? 10 : 14,
+                      ),
+                      itemCount: filteredLocations.length,
+                      itemBuilder: (context, index) {
+                        final loc = filteredLocations[index];
+                        return _buildShelfCard(loc, c);
+                      },
+                    ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          );
+        }
+
+        // Trường hợp 1 & 3: Khi màn hình làm việc tiêu chuẩn trên Desktop
+        // Cấu trúc giao diện bao gồm phần Header (cố định trên cùng) và phần Body (chứa danh sách kệ hàng).
+        // Bọc khối chứa danh sách bằng Expanded để tự động điền đầy khoảng trống còn lại của màn hình mà không bị tràn.
+        // Sử dụng GridView.builder bên trong để danh sách cuộn mượt mà và tối ưu hóa hiệu suất (chỉ render những thẻ đang hiển thị).
         return Container(
           color: c.bgDeep,
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header & Tab Switcher (Tự động co giãn theo chiều rộng cửa sổ)
-                    _buildTopHeaderBar(c),
-                    const SizedBox(height: 12),
-
-                    // KPI Cards & Color Legend Bar (Tự động co giãn)
-                    _buildKpiAndLegendBar(
-                      c: c,
-                      totalShelves: allLocations.length,
-                      fullCount: fullCount,
-                      almostFullCount: almostFullCount,
-                      plentyCount: plentyCount,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Toolbar Bộ lọc (Zone, Status, Search) với khả năng cuộn ngang an toàn
-                    _buildFilterToolbar(c, allLocations),
-                    const SizedBox(height: 14),
-                  ],
-                ),
-              ),
-
-              // Lưới kệ hàng (SliverGrid - Tự động co giãn thích ứng mọi kích thước, không bao giờ bị tràn đáy)
-              if (filteredLocations.isEmpty)
-                SliverToBoxAdapter(
-                  child: _buildEmptyRackView(c),
-                )
-              else
-                SliverGrid(
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: screenWidth < 500 ? double.infinity : (screenWidth < 700 ? 300 : 330),
-                    mainAxisExtent: 162,
-                    crossAxisSpacing: isSmallScreen ? 10 : 14,
-                    mainAxisSpacing: isSmallScreen ? 10 : 14,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final loc = filteredLocations[index];
-                      return _buildShelfCard(loc, c);
-                    },
-                    childCount: filteredLocations.length,
-                  ),
-                ),
-
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              headerWidget,
+              Expanded(
+                child: filteredLocations.isEmpty
+                    ? _buildEmptyRackView(c)
+                    : GridView.builder(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        physics: const BouncingScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: screenWidth < 700 ? 300 : 330,
+                          mainAxisExtent: 162,
+                          crossAxisSpacing: isSmallScreen ? 10 : 14,
+                          mainAxisSpacing: isSmallScreen ? 10 : 14,
+                        ),
+                        itemCount: filteredLocations.length,
+                        itemBuilder: (context, index) {
+                          final loc = filteredLocations[index];
+                          return _buildShelfCard(loc, c);
+                        },
+                      ),
               ),
             ],
           ),
@@ -3193,11 +3234,31 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                         const SizedBox(height: 12),
                         _buildDetailItem('Ngày kiểm kê', '${s.startedAt.year}-${s.startedAt.month.toString().padLeft(2, '0')}-${s.startedAt.day.toString().padLeft(2, '0')}', c),
                         const SizedBox(height: 12),
-                        _buildDetailItem('Loại kiểm kê', 'Toàn bộ sản phẩm', c),
+                        _buildDetailItem(
+                          'Vị trí kiểm kê',
+                          s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone,
+                          c,
+                        ),
                         const SizedBox(height: 12),
-                        _buildDetailItem('Kho / Khu vực', s.zone, c),
-                        const SizedBox(height: 12),
-                        _buildDetailItem('Trạng thái', s.isCompleted ? 'Completed' : 'Scanning', c),
+                        _buildDetailItem('Trạng thái', s.isCompleted ? 'Đã hoàn tất' : 'Đang kiểm kê', c),
+                        const Divider(height: 24),
+                        Text('SỐ LIỆU ĐỐI CHIẾU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
+                        const SizedBox(height: 8),
+                        _buildDetailItem('Tồn Database', '${s.matchCount + s.missingCount} SP', c),
+                        const SizedBox(height: 8),
+                        _buildDetailItem('Thực tế quét', '${s.actualScannedCount} Chip', c),
+                        const SizedBox(height: 8),
+                        _buildDetailItem('✓ Khớp vị trí', '${s.matchCount} SP', c),
+                        const SizedBox(height: 8),
+                        _buildDetailItem('⚠️ Chưa quét (Thiếu)', '${s.missingCount} SP', c),
+                        if (s.wrongLocationCount > 0) ...[
+                          const SizedBox(height: 8),
+                          _buildDetailItem('⛔ Từ kho khác vào', '${s.wrongLocationCount} SP', c),
+                        ],
+                        if (s.unknownEpcCount > 0) ...[
+                          const SizedBox(height: 8),
+                          _buildDetailItem('❓ Thẻ lạ chưa gán', '${s.unknownEpcCount} Thẻ', c),
+                        ],
                       ],
                     ),
                   ),
@@ -3216,11 +3277,13 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     child: Table(
                       border: TableBorder.all(color: c.border),
                       columnWidths: const {
-                        0: FlexColumnWidth(1),
-                        1: FlexColumnWidth(3),
-                        2: FlexColumnWidth(3),
-                        3: FlexColumnWidth(1.5),
-                        4: FlexColumnWidth(1.5),
+                        0: FlexColumnWidth(0.7),
+                        1: FlexColumnWidth(2.8),
+                        2: FlexColumnWidth(3.0),
+                        3: FlexColumnWidth(2.5),
+                        4: FlexColumnWidth(2.2),
+                        5: FlexColumnWidth(1.8),
+                        6: FlexColumnWidth(1.3),
                       },
                       children: [
                         TableRow(
@@ -3229,7 +3292,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                             Padding(padding: const EdgeInsets.all(10), child: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
                             Padding(padding: const EdgeInsets.all(10), child: Text('Mã EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
                             Padding(padding: const EdgeInsets.all(10), child: Text('Tên sản phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
-                            Padding(padding: const EdgeInsets.all(10), child: Text('Trạng thái', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('Vị trí CSDL', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('Quét thực tế', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
+                            Padding(padding: const EdgeInsets.all(10), child: Text('Đối chiếu', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
                             Padding(padding: const EdgeInsets.all(10), child: Text('Thời gian', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12))),
                           ],
                         ),
@@ -3237,7 +3302,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                           TableRow(
                             children: [
                               Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
-                              Padding(padding: const EdgeInsets.all(12), child: Text('Chưa có dữ liệu quét', style: TextStyle(color: c.textSecondary, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('Chưa có dữ liệu kiểm kê', style: TextStyle(color: c.textSecondary, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
+                              Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
                               Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
                               Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
                               Padding(padding: const EdgeInsets.all(12), child: Text('-', style: TextStyle(color: c.textMuted, fontSize: 12))),
@@ -3256,6 +3323,8 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                 Padding(padding: const EdgeInsets.all(10), child: Text('$idx', style: TextStyle(color: c.textSecondary, fontSize: 12))),
                                 Padding(padding: const EdgeInsets.all(10), child: Text(r.epc, style: TextStyle(color: c.textSecondary, fontFamily: 'Courier', fontSize: 11))),
                                 Padding(padding: const EdgeInsets.all(10), child: Text(prodTitle, style: TextStyle(color: c.textPrimary, fontSize: 12))),
+                                Padding(padding: const EdgeInsets.all(10), child: Text(r.expectedLocation ?? '-', style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                                Padding(padding: const EdgeInsets.all(10), child: Text(r.actualLocation ?? '-', style: TextStyle(color: c.textSecondary, fontSize: 11))),
                                 Padding(
                                   padding: const EdgeInsets.all(10),
                                   child: Text(

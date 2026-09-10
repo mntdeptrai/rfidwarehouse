@@ -536,7 +536,7 @@ class _InboundScreenState extends State<InboundScreen> {
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
-              inboundBy: 'Thủ kho PDA',
+              inboundBy: _repo.resolveUserFullName(null, defaultRole: 'thukho'),
             ));
             itemSeq++;
           }
@@ -561,7 +561,7 @@ class _InboundScreenState extends State<InboundScreen> {
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
-              inboundBy: 'Thủ kho PDA',
+              inboundBy: _repo.resolveUserFullName(null, defaultRole: 'thukho'),
             ));
             itemSeq++;
           }
@@ -2183,7 +2183,7 @@ class _InboundScreenState extends State<InboundScreen> {
         palletCode: palletCode,
         locationId: null, // Lưu tạm chờ xếp kệ
         scannedEpcs: validEpcs,
-        performedBy: 'Thủ kho PDA',
+        performedBy: _repo.resolveUserFullName(null, defaultRole: 'handheld'),
       );
 
       // Cập nhật trạng thái đơn hoàn tất nếu đọc đủ

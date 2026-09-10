@@ -199,7 +199,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
 
     setState(() => _isProcessing = true);
     final user = _auth.currentUser;
-    final performedBy = user?.fullName ?? user?.username ?? 'Thủ kho PDA';
+    final performedBy = user?.fullName ?? user?.username ?? _repo.resolveUserFullName(null, defaultRole: 'handheld');
 
     try {
       final success = await _repo.mergePallets(

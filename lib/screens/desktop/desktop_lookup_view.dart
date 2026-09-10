@@ -110,21 +110,82 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
         return false;
       }
       if (_searchQuery.isEmpty) return true;
-      final q = _searchQuery.toLowerCase();
+
+      final rawQ = _searchQuery.toLowerCase().trim();
+
+      // 1. Chuẩn hóa: bóc tách tiền tố nếu người dùng gõ kiểu 'S/N: ...', 'SN: ...', 'Product ID: ...', 'ID: ...'
+      final cleanQ = rawQ
+          .replaceAll('s/n:', '')
+          .replaceAll('sn:', '')
+          .replaceAll('product_id:', '')
+          .replaceAll('product id:', '')
+          .replaceAll('productid:', '')
+          .replaceAll('prod_id:', '')
+          .replaceAll('prod id:', '')
+          .replaceAll('id:', '')
+          .replaceAll('sku:', '')
+          .replaceAll('rfid:', '')
+          .replaceAll('epc:', '')
+          .trim();
+
+      final q = cleanQ.isNotEmpty ? cleanQ : rawQ;
+      final qNoSpecial = q.replaceAll('-', '').replaceAll('_', '').replaceAll('/', '').replaceAll(' ', '');
+      final qSnReplaced = q.replaceAll('s/n', 'sn');
+
+      final serial = i.serialNumber.toLowerCase();
+      final serialNoSpecial = serial.replaceAll('-', '').replaceAll('_', '').replaceAll('/', '').replaceAll(' ', '');
+      final prodId = i.productId.toLowerCase();
+      final prodIdNoSpecial = prodId.replaceAll('-', '').replaceAll('_', '').replaceAll('/', '').replaceAll(' ', '');
+      final itemId = i.itemId.toLowerCase();
+      final itemIdNoSpecial = itemId.replaceAll('-', '').replaceAll('_', '').replaceAll('/', '').replaceAll(' ', '');
+      final sku = i.sku.toLowerCase();
+      final epc = i.epc.toLowerCase();
+      final name = i.productName.toLowerCase();
+      final order = (i.orderNo ?? '').toLowerCase();
+      final loc = (i.locationId ?? '').toLowerCase();
+      final pallet = (i.palletId ?? '').toLowerCase();
       final supplier = _repo.getItemSupplier(i).toLowerCase();
       final carton = _repo.getItemCartonCode(i).toLowerCase();
       final inboundBy = _repo.getItemInboundBy(i).toLowerCase();
       final putawayBy = _repo.getItemPutawayBy(i).toLowerCase();
 
-      return i.serialNumber.toLowerCase().contains(q) ||
-          i.epc.toLowerCase().contains(q) ||
-          i.sku.toLowerCase().contains(q) ||
-          i.productName.toLowerCase().contains(q) ||
-          (i.orderNo ?? '').toLowerCase().contains(q) ||
+      // Kiểm tra khớp trực tiếp
+      if (serial.contains(q) ||
+          prodId.contains(q) ||
+          itemId.contains(q) ||
+          sku.contains(q) ||
+          epc.contains(q) ||
+          name.contains(q) ||
+          order.contains(q) ||
+          loc.contains(q) ||
+          pallet.contains(q) ||
           carton.contains(q) ||
           supplier.contains(q) ||
           inboundBy.contains(q) ||
-          putawayBy.contains(q);
+          putawayBy.contains(q)) {
+        return true;
+      }
+
+      // Khớp chuẩn hóa S/N <-> SN
+      if (qSnReplaced.isNotEmpty && (serial.contains(qSnReplaced) || prodId.contains(qSnReplaced))) {
+        return true;
+      }
+
+      // Khớp không phân biệt ký tự đặc biệt (gạch ngang, gạch dưới, khoảng trắng)
+      if (qNoSpecial.length >= 2) {
+        if (serialNoSpecial.contains(qNoSpecial) ||
+            prodIdNoSpecial.contains(qNoSpecial) ||
+            itemIdNoSpecial.contains(qNoSpecial)) {
+          return true;
+        }
+      }
+
+      // Khớp từ khóa 's/n' hoặc 'sn' đơn thuần nếu item có số serial
+      if ((rawQ == 's/n' || rawQ == 'sn') && serial.isNotEmpty) {
+        return true;
+      }
+
+      return false;
     }).toList();
 
     // Nhóm theo SKU
@@ -238,7 +299,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                       style: TextStyle(color: c.textPrimary, fontSize: 13),
                       decoration: InputDecoration(
                         icon: Icon(Icons.search, color: c.rfidCyan, size: 18),
-                        hintText: 'Tìm SKU, RFID, NCC, Thùng, Người nhập...',
+                        hintText: 'Tìm S/N, Product ID, SKU, RFID, NCC, Thùng...',
                         hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                         border: InputBorder.none,
                         isDense: true,
@@ -365,7 +426,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
         final supplier = _repo.getItemSupplier(firstItem);
         final inStock = items.where((i) => i.status == ItemStatus.inStock).length;
         final waiting = items.where((i) => i.status == ItemStatus.waitingPutaway).length;
-        final isExpanded = _expandedSkus.contains(sku);
+        final isExpanded = _expandedSkus.contains(sku) || _searchQuery.isNotEmpty;
 
         // Đếm các thùng hàng khác nhau
         final cartonCodes = items.map((i) => _repo.getItemCartonCode(i)).toSet().toList();
@@ -427,6 +488,26 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                                     ),
                                   ),
                                 ),
+                                if (firstItem.productId.isNotEmpty && firstItem.productId != sku) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: c.rfidCyan.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: c.rfidCyan.withValues(alpha: 0.5)),
+                                    ),
+                                    child: Text(
+                                      'ID: ${firstItem.productId}',
+                                      style: TextStyle(
+                                        color: c.rfidCyan,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 10.5,
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -576,19 +657,34 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                         ),
                       ),
 
-                      // 2. MÃ SẢN PHẨM (SKU)
+                      // 2. MÃ SẢN PHẨM (SKU & PRODUCT ID)
                       DataCell(
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5)),
-                          ),
-                          child: Text(
-                            item.sku,
-                            style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace'),
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5)),
+                              ),
+                              child: Text(
+                                item.sku,
+                                style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace'),
+                              ),
+                            ),
+                            if (item.productId.isNotEmpty && item.productId != item.sku)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  item.productId,
+                                  style: TextStyle(color: c.textMuted, fontSize: 10, fontFamily: 'monospace'),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
 
@@ -614,9 +710,21 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
 
                       // SỐ SERIAL
                       DataCell(
-                        Text(
-                          item.serialNumber.isNotEmpty ? item.serialNumber : '--',
-                          style: TextStyle(color: c.textSecondary, fontSize: 11, fontFamily: 'monospace'),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: item.serialNumber.isNotEmpty ? const Color(0xFF0EA5E9).withValues(alpha: 0.1) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            item.serialNumber.isNotEmpty ? item.serialNumber : '--',
+                            style: TextStyle(
+                              color: item.serialNumber.isNotEmpty ? const Color(0xFF0284C7) : c.textSecondary,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              fontWeight: item.serialNumber.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
                         ),
                       ),
 

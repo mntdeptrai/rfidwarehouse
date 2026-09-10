@@ -34,7 +34,7 @@ class UhfService extends ChangeNotifier {
   int _temperature = 0;
 
   // Quản lý chế độ quét (Scan Mode)
-  PdaScanMode _scanMode = PdaScanMode.auto;
+  PdaScanMode _scanMode = PdaScanMode.rfid;
   PdaScanMode get scanMode => _scanMode;
   final List<PdaScanMode> _scanModeStack = [];
 
@@ -63,7 +63,7 @@ class UhfService extends ChangeNotifier {
     if (_scanModeStack.isNotEmpty) {
       scanMode = _scanModeStack.removeLast();
     } else {
-      scanMode = PdaScanMode.auto;
+      scanMode = PdaScanMode.rfid;
     }
   }
 
@@ -123,6 +123,19 @@ class UhfService extends ChangeNotifier {
   final StreamController<String> _barcodeStreamController = StreamController<String>.broadcast();
   Stream<String> get onBarcodeRead => _barcodeStreamController.stream;
 
+  void simulateTag(String epc) {
+    _tagStreamController.add(TagInfo(epc: epc, rssi: '-50', ant: '1', timestamp: DateTime.now()));
+  }
+
+  void simulateBarcode(String barcode) {
+    _barcodeStreamController.add(barcode);
+  }
+
+  void simulateTrigger(bool pressed) {
+    _isTriggerPressed = pressed;
+    _triggerStreamController.add(pressed);
+  }
+
   bool get isInitialized => _isInitialized;
   bool get isScanning => _isScanning;
   int get rfPower => _rfPower;
@@ -143,6 +156,7 @@ class UhfService extends ChangeNotifier {
 
     try {
       await _methodChannel.invokeMethod<bool>('init');
+      setScanMode(PdaScanMode.rfid);
       _isInitialized = true;
       _hardwareVersion = 'PDA UHF Scanner';
       _firmwareVersion = 'v1.0.0';
@@ -153,6 +167,7 @@ class UhfService extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('UhfService.init error: $e');
+      setScanMode(PdaScanMode.rfid);
       _isInitialized = true;
       _hardwareVersion = 'PDA UHF Scanner';
       _firmwareVersion = 'v1.0.0';
@@ -167,7 +182,9 @@ class UhfService extends ChangeNotifier {
       final bool pressed = args?['pressed'] ?? false;
       _isTriggerPressed = pressed;
       _isScanning = pressed;
-      if (!pressed) {
+      if (pressed) {
+        _startRateTimer();
+      } else {
         // Tắt ngay lập tức khi nhả cò súng
         stopInventory();
       }
@@ -331,18 +348,20 @@ class UhfService extends ChangeNotifier {
     _throttledNotify();
   }
 
-  /// Start Continuous Inventory Scan
-  Future<bool> startInventory() async {
-    if (_isScanning) return true;
-
-    _recentReadCount = 0;
-    _readRate = 0.0;
+  void _startRateTimer() {
     _rateTimer?.cancel();
     _rateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _readRate = _recentReadCount.toDouble();
       _recentReadCount = 0;
       notifyListeners();
     });
+  }
+
+  /// Start Continuous Inventory Scan
+  Future<bool> startInventory() async {
+    _recentReadCount = 0;
+    _readRate = 0.0;
+    _startRateTimer();
 
     if (!Platform.isAndroid) {
       _isScanning = true;

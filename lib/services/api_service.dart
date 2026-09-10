@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wms_models.dart';
+import 'warehouse_repository.dart';
 
 /// Sự kiện Realtime từ Cổng RFID Gate Monitor
 class GateRealtimeEvent {
@@ -437,13 +438,16 @@ class ApiService extends ChangeNotifier {
     required String palletCode,
     required String locationCode,
     int itemCount = 0,
-    String performedBy = 'Thủ kho PDA',
+    String? performedBy,
   }) async {
+    final actualPerformer = (performedBy != null && performedBy.isNotEmpty && !performedBy.contains('Thủ kho PDA'))
+        ? WarehouseRepository().resolveUserFullName(performedBy, defaultRole: 'handheld')
+        : WarehouseRepository().resolveUserFullName(null, defaultRole: 'handheld');
     final event = PutawayRealtimeEvent(
       palletCode: palletCode,
       locationCode: locationCode,
       itemCount: itemCount,
-      performedBy: performedBy,
+      performedBy: actualPerformer,
       timestamp: DateTime.now(),
     );
 

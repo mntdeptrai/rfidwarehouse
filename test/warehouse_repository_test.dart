@@ -820,5 +820,74 @@ void main() {
       final backup = await dbService.loadPalletsBackup();
       expect(backup.any((p) => p.palletCode == 'PAL-TO-DELETE'), isFalse);
     });
+
+    test('getItemPutawayBy resolves real user full name from CSDL instead of role string', () async {
+      // Add real user from database
+      final pdaUser = WmsUser(
+        userId: 'USER-1788927505627',
+        username: 'pda123',
+        fullName: 'Ngô Văn Hải',
+        role: 'handheld',
+        isActive: true,
+      );
+      final thukhoUser = WmsUser(
+        userId: 'USER-1788927847866',
+        username: 'thukho1',
+        fullName: 'Nguyễn Vịt Quay',
+        role: 'thukho',
+        isActive: true,
+      );
+      await repo.addUser(pdaUser);
+      await repo.addUser(thukhoUser);
+
+      // 1. Resolve tests
+      expect(repo.resolveUserFullName('pda123'), 'Ngô Văn Hải');
+      expect(repo.resolveUserFullName('USER-1788927505627'), 'Ngô Văn Hải');
+      expect(repo.resolveUserFullName('Thủ kho PDA'), 'Ngô Văn Hải');
+      expect(repo.resolveUserFullName('thukho1'), 'Nguyễn Vịt Quay');
+
+      // 2. Item in stock with no explicit putawayBy returns database handheld user name
+      final inStockItem = Item(
+        itemId: 'ITEM-TEST-PUTAWAY-1',
+        productId: 'PROD-001',
+        sku: 'SKU-ELEC-01',
+        productName: 'Bo mạch IoT',
+        serialNumber: 'SN-TEST-001',
+        epc: 'EPC-TEST-PUTAWAY-1',
+        status: ItemStatus.inStock,
+        locationId: 'LOC-A01-01',
+      );
+      await repo.addItem(inStockItem);
+      expect(repo.getItemPutawayBy(inStockItem), 'Ngô Văn Hải');
+      expect(repo.getItemPutawayBy(inStockItem), isNot('Thủ kho PDA'));
+
+      // 3. Item pending inbound returns 'Chưa cất kệ'
+      final pendingItem = Item(
+        itemId: 'ITEM-TEST-PUTAWAY-2',
+        productId: 'PROD-001',
+        sku: 'SKU-ELEC-01',
+        productName: 'Bo mạch IoT',
+        serialNumber: 'SN-TEST-002',
+        epc: 'EPC-TEST-PUTAWAY-2',
+        status: ItemStatus.pendingInbound,
+      );
+      await repo.addItem(pendingItem);
+      expect(repo.getItemPutawayBy(pendingItem), 'Chưa cất kệ');
+
+      // 4. Item with explicit username in putawayBy resolves to full name
+      final customItem = Item(
+        itemId: 'ITEM-TEST-PUTAWAY-3',
+        productId: 'PROD-001',
+        sku: 'SKU-ELEC-01',
+        productName: 'Bo mạch IoT',
+        serialNumber: 'SN-TEST-003',
+        epc: 'EPC-TEST-PUTAWAY-3',
+        status: ItemStatus.inStock,
+        locationId: 'LOC-A01-01',
+        putawayBy: 'thukho1',
+      );
+      await repo.addItem(customItem);
+      expect(repo.getItemPutawayBy(customItem), 'Nguyễn Vịt Quay');
+    });
   });
 }
