@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/screens/pda/pda_merge_pallets_screen.dart';
 import 'package:uhf/services/warehouse_repository.dart';
@@ -8,8 +7,6 @@ import 'package:uhf/services/uhf_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
 
   group('PDA Pallet Consolidation / Auto-Merge Tests', () {
     late WarehouseRepository repo;

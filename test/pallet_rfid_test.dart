@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uhf/services/warehouse_repository.dart';
 import 'package:uhf/models/inventory_models.dart';
 import 'package:uhf/models/catalog_models.dart';
@@ -8,8 +7,6 @@ import 'package:uhf/services/desktop_uhf_tcp_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
 
   group('Master Pallet RFID Recognition Tests', () {
     late WarehouseRepository repo;

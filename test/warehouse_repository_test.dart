@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uhf/models/tag_info.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/services/database_service.dart';
@@ -9,14 +8,13 @@ import 'package:uhf/services/warehouse_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
 
   group('WarehouseRepository Core Business Engine Tests', () {
     late WarehouseRepository repo;
 
     setUp(() async {
       repo = WarehouseRepository();
+      await repo.ensureInitialized();
       await repo.clearAllData();
 
       await repo.addLocation(Location(locationId: 'LOC-A01-01', locationCode: 'A-01-01', zone: 'Zone A', shelf: 'Kệ 01', level: 'Tầng 1'));

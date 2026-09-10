@@ -4,21 +4,33 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/wms_models.dart';
 
+/// DatabaseService thuần In-Memory (Bộ nhớ RAM) - Đã loại bỏ hoàn toàn SQLite
+/// 
+/// Dữ liệu vận hành thực tế được quản lý trực tiếp qua Supabase Cloud (Single Source of Truth).
+/// DatabaseService đóng vai trò là một in-memory local data store siêu tốc trong RAM,
+/// không tạo bất kỳ file .db nào trên ổ đĩa PC hay thiết bị tay cầm PDA.
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;
   DatabaseService._internal();
 
-  Database? _db;
-
-  Future<Database> get database async {
-    if (_db != null) return _db!;
-    _db = await _initDatabase();
-    return _db!;
-  }
+  // In-Memory Storage Maps
+  final Map<String, Product> _products = {};
+  final Map<String, Location> _locations = {};
+  final Map<String, Pallet> _pallets = {};
+  final Map<String, Item> _items = {};
+  final Map<String, InboundOrder> _inboundOrders = {};
+  final Map<String, OutboundOrder> _outboundOrders = {};
+  final Map<String, WmsUser> _users = {};
+  final Map<String, String> _userPasswords = {};
+  final Map<String, Customer> _customers = {};
+  final Map<String, DeliveryNote> _deliveryNotes = {};
+  final Map<String, InventorySession> _inventorySessions = {};
+  final Map<String, String> _systemConfig = {};
+  final List<Map<String, dynamic>> _syncQueue = [];
+  int _nextQueueId = 1;
 
   Future<String> getDatabaseDirectory() async {
     final isTest = Platform.environment.containsKey('FLUTTER_TEST');
@@ -32,7 +44,6 @@ class DatabaseService {
         }
         return dbDir.path;
       } catch (e) {
-        debugPrint('getApplicationSupportDirectory error: $e, fallback to AppData');
         final appData = Platform.environment['APPDATA'] ?? Platform.environment['USERPROFILE'] ?? '.';
         final dbDir = Directory(p.join(appData, 'RFIDWarehouse', 'databases'));
         if (!dbDir.existsSync()) {
@@ -41,25 +52,45 @@ class DatabaseService {
         return dbDir.path;
       }
     } else {
-      return await getDatabasesPath();
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        return dir.path;
+      } catch (_) {
+        return '';
+      }
     }
   }
 
-  /// Xóa sạch triệt để toàn bộ các file SQLite trên thiết bị tay cầm PDA
-  static Future<void> wipeHandheldSqliteDatabase() async {
+  /// Xóa sạch triệt để toàn bộ các file SQLite vật lý cũ còn sót lại trên thiết bị (cả PDA và Desktop)
+  static Future<void> wipePhysicalSqliteDatabases() async {
     if (kIsWeb || Platform.environment.containsKey('FLUTTER_TEST')) return;
     try {
-      if (Platform.isAndroid || Platform.isIOS) {
-        final dbDir = await getDatabasesPath();
-        final dir = Directory(dbDir);
+      final List<String> dirsToClean = [];
+      try {
+        dirsToClean.add(await DatabaseService().getDatabaseDirectory());
+      } catch (_) {}
+      try {
+        final appData = Platform.environment['APPDATA'];
+        if (appData != null && appData.isNotEmpty) {
+          dirsToClean.add(p.join(appData, 'com.example', 'uhf', 'databases'));
+          dirsToClean.add(p.join(appData, 'RFIDWarehouse', 'databases'));
+        }
+      } catch (_) {}
+      try {
+        final docDir = await getApplicationDocumentsDirectory();
+        dirsToClean.add(p.join(docDir.path, 'databases'));
+      } catch (_) {}
+      dirsToClean.add(p.join(Directory.current.path, '.dart_tool', 'sqflite_common_ffi', 'databases'));
+
+      for (final dirPath in dirsToClean) {
+        final dir = Directory(dirPath);
         if (dir.existsSync()) {
           final files = dir.listSync();
           for (final f in files) {
             if (f is File && (f.path.endsWith('.db') || f.path.endsWith('.db-wal') || f.path.endsWith('.db-shm'))) {
               try {
-                await deleteDatabase(f.path);
-                if (f.existsSync()) f.deleteSync();
-                debugPrint('✓ Đã xóa vĩnh viễn file SQLite trên tay cầm: ${f.path}');
+                f.deleteSync();
+                debugPrint('✓ Đã xóa vĩnh viễn file SQLite vật lý: ${f.path}');
               } catch (e) {
                 debugPrint('Lỗi khi xóa file SQLite ${f.path}: $e');
               }
@@ -68,530 +99,180 @@ class DatabaseService {
         }
       }
     } catch (e) {
-      debugPrint('wipeHandheldSqliteDatabase error: $e');
+      debugPrint('wipePhysicalSqliteDatabases error: $e');
     }
   }
 
-  Future<Database> _initDatabase() async {
-    // Khởi tạo ffi cho môi trường desktop/test nếu không phải Android/iOS
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
-    }
-
-    final isTest = Platform.environment.containsKey('FLUTTER_TEST');
-    // Trên thiết bị tay cầm PDA (Android/iOS): KHÔNG lưu SQLite vật lý vào bộ nhớ máy, chỉ dùng in-memory RAM
-    if (isTest || Platform.isAndroid || Platform.isIOS) {
-      if (Platform.isAndroid || Platform.isIOS) {
-        await wipeHandheldSqliteDatabase();
-        debugPrint('PDA Handheld: Đã xóa file SQLite vật lý, chuyển hoàn toàn sang RAM & Supabase Cloud trực tiếp.');
-      }
-      return await openDatabase(
-        inMemoryDatabasePath,
-        version: 2,
-        onCreate: (db, version) => _createTables(db),
-        onUpgrade: (db, oldVersion, newVersion) => _createTables(db),
-      );
-    }
-
-    // Đường dẫn thư mục CSDL cố định vĩnh viễn (không bao giờ bị xóa khi build clean hoặc đổi working directory)
-    final dbDir = await getDatabaseDirectory();
-    final path = p.join(dbDir, 'c72e_wms_clean_v3.db');
-
-    // Tự động sao chép CSDL từ thư mục cũ (.dart_tool) nếu thư mục mới chưa có file DB
-    try {
-      final targetFile = File(path);
-      if (!targetFile.existsSync()) {
-        final oldPaths = [
-          p.join(Directory.current.path, '.dart_tool', 'sqflite_common_ffi', 'databases', 'c72e_wms_clean_v3.db'),
-          p.join(await getDatabasesPath(), 'c72e_wms_clean_v3.db'),
-        ];
-        for (final oldPath in oldPaths) {
-          final oldFile = File(oldPath);
-          if (oldFile.existsSync() && oldPath != path) {
-            debugPrint('Migrating database from $oldPath to permanent location: $path');
-            await targetFile.parent.create(recursive: true);
-            await oldFile.copy(path);
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Database migration check error: $e');
-    }
-
-    debugPrint('Initializing SQLite Database (isTest=$isTest) at: $path');
-
-    return await openDatabase(
-      path,
-      version: 2,
-      onConfigure: (db) async {
-        try {
-          await db.execute('PRAGMA foreign_keys = ON;');
-        } catch (_) {}
-      },
-      onCreate: (db, version) => _createTables(db),
-      onUpgrade: (db, oldVersion, newVersion) => _createTables(db),
-      onOpen: (db) async {
-        try {
-          if (!isTest) {
-            await db.execute('PRAGMA journal_mode=WAL;');
-            await db.execute('PRAGMA busy_timeout=5000;');
-          }
-          await db.execute('PRAGMA foreign_keys = ON;');
-        } catch (_) {}
-        await _createTables(db);
-      },
-    );
+  /// Alias tương thích ngược cho handheld
+  static Future<void> wipeHandheldSqliteDatabase() async {
+    await wipePhysicalSqliteDatabases();
   }
 
-  Future<void> _createTables(Database db) async {
-    debugPrint('Creating clean SQLite Database tables (No mockdata)...');
-
-    // 1. Bảng Danh mục Sản phẩm (products)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS products (
-        product_id TEXT PRIMARY KEY,
-        sku TEXT NOT NULL UNIQUE,
-        product_name TEXT NOT NULL,
-        unit TEXT NOT NULL,
-        category TEXT NOT NULL,
-        description TEXT
-      )
-    ''');
-
-    // 2. Bảng Vị trí kho (locations)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS locations (
-        location_id TEXT PRIMARY KEY,
-        location_code TEXT NOT NULL UNIQUE,
-        zone TEXT NOT NULL,
-        shelf TEXT NOT NULL,
-        level TEXT NOT NULL,
-        max_pallet_capacity INTEGER DEFAULT 1,
-        current_pallets INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'AVAILABLE',
-        aisle_side TEXT DEFAULT 'LEFT',
-        sort_order INTEGER DEFAULT 0,
-        grid_row INTEGER DEFAULT 0,
-        grid_col INTEGER DEFAULT 0
-      )
-    ''');
-    try {
-      await db.execute('ALTER TABLE locations ADD COLUMN max_pallet_capacity INTEGER DEFAULT 1');
-    } catch (_) {}
-    try {
-      await db.execute("ALTER TABLE locations ADD COLUMN status TEXT DEFAULT 'AVAILABLE'");
-    } catch (_) {}
-    try {
-      await db.execute("ALTER TABLE locations ADD COLUMN aisle_side TEXT DEFAULT 'LEFT'");
-    } catch (_) {}
-    try {
-      await db.execute("ALTER TABLE locations ADD COLUMN sort_order INTEGER DEFAULT 0");
-    } catch (_) {}
-    try {
-      await db.execute("ALTER TABLE locations ADD COLUMN grid_row INTEGER DEFAULT 0");
-    } catch (_) {}
-    try {
-      await db.execute("ALTER TABLE locations ADD COLUMN grid_col INTEGER DEFAULT 0");
-    } catch (_) {}
-
-    // 3. Bảng Pallet lưu kho (pallets)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS pallets (
-        pallet_id TEXT PRIMARY KEY,
-        pallet_code TEXT NOT NULL UNIQUE,
-        rfid_epc TEXT,
-        location_id TEXT,
-        inbound_time TEXT NOT NULL,
-        is_multi_sku INTEGER DEFAULT 0,
-        FOREIGN KEY (location_id) REFERENCES locations (location_id)
-      )
-    ''');
-    try {
-      await db.execute('ALTER TABLE pallets ADD COLUMN rfid_epc TEXT');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE pallets ADD COLUMN placed_by TEXT');
-    } catch (_) {}
-
-    // 4. Bảng Mặt hàng cụ thể gắn thẻ RFID Chip (items)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS items (
-        item_id TEXT PRIMARY KEY,
-        product_id TEXT NOT NULL,
-        sku TEXT NOT NULL,
-        product_name TEXT NOT NULL,
-        serial_number TEXT NOT NULL,
-        epc TEXT NOT NULL UNIQUE,
-        status TEXT NOT NULL,
-        order_no TEXT,
-        pallet_id TEXT,
-        location_id TEXT,
-        inbound_time TEXT,
-        allocated_time TEXT,
-        supplier TEXT,
-        carton_code TEXT,
-        inbound_by TEXT,
-        putaway_by TEXT,
-        FOREIGN KEY (product_id) REFERENCES products (product_id),
-        FOREIGN KEY (pallet_id) REFERENCES pallets (pallet_id),
-        FOREIGN KEY (location_id) REFERENCES locations (location_id)
-      )
-    ''');
-    try {
-      await db.execute('ALTER TABLE items ADD COLUMN order_no TEXT');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE items ADD COLUMN supplier TEXT');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE items ADD COLUMN carton_code TEXT');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE items ADD COLUMN inbound_by TEXT');
-    } catch (_) {}
-    try {
-      await db.execute('ALTER TABLE items ADD COLUMN putaway_by TEXT');
-    } catch (_) {}
-
-    // 5. Bảng Đơn Nhập kho (inbound_orders)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS inbound_orders (
-        inbound_order_id TEXT PRIMARY KEY,
-        order_no TEXT NOT NULL UNIQUE,
-        source_supplier TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    ''');
-
-    // 6. Bảng Chi tiết Đơn Nhập (inbound_order_details)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS inbound_order_details (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        order_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        sku TEXT NOT NULL,
-        product_name TEXT NOT NULL,
-        required_qty INTEGER NOT NULL,
-        received_qty INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY (order_id) REFERENCES inbound_orders (inbound_order_id),
-        FOREIGN KEY (product_id) REFERENCES products (product_id)
-      )
-    ''');
-
-    // 7. Bảng PO Đơn Xuất kho (outbound_orders)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS outbound_orders (
-        outbound_order_id TEXT PRIMARY KEY,
-        po_no TEXT NOT NULL UNIQUE,
-        customer TEXT NOT NULL,
-        status TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    ''');
-
-    // 8. Bảng Chi tiết PO Đơn Xuất (outbound_order_details)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS outbound_order_details (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        order_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        sku TEXT NOT NULL,
-        product_name TEXT NOT NULL,
-        required_qty INTEGER NOT NULL,
-        picked_qty INTEGER NOT NULL DEFAULT 0,
-        FOREIGN KEY (order_id) REFERENCES outbound_orders (outbound_order_id),
-        FOREIGN KEY (product_id) REFERENCES products (product_id)
-      )
-    ''');
-
-    // 9. Bảng Hàng Đợi Đồng Bộ (sync_queue) phục vụ Offline-first SQLite -> Supabase Cloud
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS sync_queue (
-        queue_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        table_name TEXT NOT NULL,
-        record_id TEXT NOT NULL,
-        action TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        status INTEGER DEFAULT 0,
-        retry_count INTEGER DEFAULT 0,
-        error_message TEXT
-      )
-    ''');
-
-    // 10. Bảng Cấu hình hệ thống (system_config)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS system_config (
-        config_key TEXT PRIMARY KEY,
-        config_val TEXT
-      )
-    ''');
-
-    // 11. Bảng Người dùng / Nhân viên (users)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS users (
-        user_id TEXT PRIMARY KEY,
-        username TEXT NOT NULL UNIQUE,
-        full_name TEXT NOT NULL,
-        email TEXT,
-        phone TEXT,
-        role TEXT NOT NULL DEFAULT 'operator',
-        is_active INTEGER DEFAULT 1,
-        password_hash TEXT,
-        created_at TEXT
-      )
-    ''');
-    try {
-      await db.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
-    } catch (_) {}
-
-    // 12. Bảng Khách Hàng (customers)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS customers (
-        customer_id TEXT PRIMARY KEY,
-        customer_code TEXT NOT NULL UNIQUE,
-        customer_name TEXT NOT NULL,
-        phone TEXT,
-        email TEXT,
-        address TEXT,
-        tax_code TEXT,
-        contact_person TEXT,
-        notes TEXT,
-        created_at TEXT
-      )
-    ''');
-
-    // 13. Bảng Phiếu Xuất Hàng / Vận Đơn (delivery_notes)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS delivery_notes (
-        delivery_id TEXT PRIMARY KEY,
-        delivery_no TEXT NOT NULL UNIQUE,
-        po_no TEXT,
-        customer_id TEXT,
-        customer_name TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'DRAFT',
-        carrier TEXT,
-        tracking_no TEXT,
-        total_cartons INTEGER DEFAULT 0,
-        total_qty INTEGER DEFAULT 0,
-        created_by TEXT,
-        shipped_at TEXT,
-        notes TEXT,
-        created_at TEXT,
-        FOREIGN KEY (customer_id) REFERENCES customers (customer_id)
-      )
-    ''');
-
-    // 14. Bảng Chi tiết Phiếu Xuất Hàng (delivery_note_details)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS delivery_note_details (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        delivery_id TEXT NOT NULL,
-        product_id TEXT NOT NULL,
-        sku TEXT NOT NULL,
-        product_name TEXT NOT NULL,
-        quantity INTEGER NOT NULL,
-        carton_code TEXT,
-        FOREIGN KEY (delivery_id) REFERENCES delivery_notes (delivery_id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products (product_id)
-      )
-    ''');
-
-    // 15. Bảng Phiên Kiểm Kê Kho (inventory_sessions)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS inventory_sessions (
-        session_id TEXT PRIMARY KEY,
-        session_code TEXT NOT NULL UNIQUE,
-        zone TEXT NOT NULL,
-        location_code TEXT,
-        started_at TEXT NOT NULL,
-        completed_at TEXT,
-        is_completed INTEGER DEFAULT 0,
-        created_by TEXT,
-        created_at TEXT
-      )
-    ''');
-
-    // 16. Bảng Chi tiết Sai lệch Kiểm Kê (inventory_session_details)
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS inventory_session_details (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT NOT NULL,
-        epc TEXT NOT NULL,
-        sku TEXT,
-        product_name TEXT,
-        expected_location TEXT,
-        actual_location TEXT,
-        result_type TEXT NOT NULL,
-        read_at TEXT,
-        FOREIGN KEY (session_id) REFERENCES inventory_sessions (session_id) ON DELETE CASCADE
-      )
-    ''');
-
-    // 17. B-Tree Indexes siêu tốc cho truy vấn quy mô lớn
-    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_items_epc ON items(epc);');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_order_status ON items(order_no, status);');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_sku ON items(sku);');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_items_location ON items(location_id);');
+  // --- SYSTEM CONFIG ---
+  Future<String?> getSystemConfig(String key) async {
+    return _systemConfig[key];
   }
 
-  /// Kiểm tra nhanh danh sách mã EPC xem đã tồn tại trong CSDL SQLite chưa (Chunked Batch Query theo B-Tree Index)
+  Future<void> setSystemConfig(String key, String value) async {
+    _systemConfig[key] = value;
+  }
+
+  // --- CLEANUP ---
+  Future<void> clearAllData() async {
+    _products.clear();
+    _locations.clear();
+    _pallets.clear();
+    _items.clear();
+    _inboundOrders.clear();
+    _outboundOrders.clear();
+    _users.clear();
+    _userPasswords.clear();
+    _customers.clear();
+    _deliveryNotes.clear();
+    _inventorySessions.clear();
+    _systemConfig.clear();
+    _syncQueue.clear();
+  }
+
+  // --- CHECK EXISTING EPCS ---
   Future<Set<String>> checkExistingEpcs(List<String> epcs) async {
     if (epcs.isEmpty) return {};
-    final db = await database;
-    final Set<String> existing = {};
-    const int chunkSize = 500;
+    final cleanSet = epcs.map((e) => e.trim().toUpperCase()).toSet();
+    final matched = <String>{};
+    for (final item in _items.values) {
+      final epcUpper = item.epc.trim().toUpperCase();
+      if (cleanSet.contains(epcUpper)) {
+        matched.add(epcUpper);
+      }
+    }
+    return matched;
+  }
 
-    for (int i = 0; i < epcs.length; i += chunkSize) {
-      final end = (i + chunkSize < epcs.length) ? i + chunkSize : epcs.length;
-      final chunk = epcs.sublist(i, end).map((e) => e.trim().toUpperCase()).where((e) => e.isNotEmpty).toList();
-      if (chunk.isEmpty) continue;
-      final placeholders = List.filled(chunk.length, '?').join(',');
-      final res = await db.rawQuery(
-        'SELECT epc FROM items WHERE UPPER(epc) IN ($placeholders)',
-        chunk,
-      );
-      for (final row in res) {
-        final epc = row['epc'] as String?;
-        if (epc != null && epc.isNotEmpty) {
-          existing.add(epc.toUpperCase());
+  // --- PRODUCTS ---
+  Future<List<Product>> getProducts() async {
+    return _products.values.toList();
+  }
+
+  Future<void> insertProduct(Product product) async {
+    _products[product.productId] = product;
+    // Map sku as well if needed
+    for (final existing in _products.values.toList()) {
+      if (existing.sku == product.sku && existing.productId != product.productId) {
+        _products.remove(existing.productId);
+      }
+    }
+    _products[product.productId] = product;
+  }
+
+  Future<void> insertProductsBatch(List<Product> products) async {
+    for (final p in products) {
+      await insertProduct(p);
+    }
+  }
+
+  Future<void> insertProducts(List<Product> products) => insertProductsBatch(products);
+
+  Future<int> deleteProduct(String productId) async {
+    final clean = productId.trim();
+    int count = 0;
+    _products.removeWhere((id, p) {
+      if (id == clean || p.sku == clean) {
+        count++;
+        return true;
+      }
+      return false;
+    });
+    return count;
+  }
+
+  // --- ITEMS ---
+  Future<int> deleteItem(String epc) async {
+    final clean = epc.trim().toUpperCase();
+    int count = 0;
+    _items.removeWhere((id, it) {
+      if (it.epc.toUpperCase() == clean) {
+        count++;
+        return true;
+      }
+      return false;
+    });
+    return count;
+  }
+
+  Future<List<Item>> getItems() async {
+    return _items.values.toList();
+  }
+
+  Future<void> insertItem(Item item) async {
+    _items[item.itemId] = item;
+  }
+
+  Future<void> insertItems(List<Item> items) async {
+    for (final it in items) {
+      _items[it.itemId] = it;
+    }
+  }
+
+  Future<void> updateItemLocationAndPallet(String epc, String? locationId, String? palletId, {String? status}) async {
+    final clean = epc.trim().toUpperCase();
+    for (final it in _items.values) {
+      if (it.epc.toUpperCase() == clean) {
+        it.locationId = locationId;
+        it.palletId = palletId;
+        if (status != null) {
+          it.status = ItemStatus.values.firstWhere(
+            (s) => s.code == status,
+            orElse: () => it.status,
+          );
         }
       }
     }
-    return existing;
   }
 
-  Future<String?> getSystemConfig(String key) async {
-    final db = await database;
-    final res = await db.query('system_config', where: 'config_key = ?', whereArgs: [key]);
-    if (res.isNotEmpty) {
-      return res.first['config_val'] as String?;
+  Future<void> updateItemsLocationAndPallet(List<String> epcs, String? locationId, String? palletId, {String? status}) async {
+    final epcSet = epcs.map((e) => e.trim().toUpperCase()).toSet();
+    for (final it in _items.values) {
+      if (epcSet.contains(it.epc.toUpperCase())) {
+        it.locationId = locationId;
+        it.palletId = palletId;
+        if (status != null) {
+          it.status = ItemStatus.values.firstWhere(
+            (s) => s.code == status,
+            orElse: () => it.status,
+          );
+        }
+      }
     }
-    return null;
   }
 
-  Future<void> setSystemConfig(String key, String val) async {
-    final db = await database;
-    await db.insert('system_config', {
-      'config_key': key,
-      'config_val': val,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> clearAllData() async {
-    final db = await database;
-    await db.delete('sync_queue');
-    await db.delete('inventory_session_details');
-    await db.delete('inventory_sessions');
-    await db.delete('delivery_note_details');
-    await db.delete('delivery_notes');
-    await db.delete('outbound_order_details');
-    await db.delete('outbound_orders');
-    await db.delete('inbound_order_details');
-    await db.delete('inbound_orders');
-    await db.delete('items');
-    await db.delete('pallets');
-    await db.delete('locations');
-    await db.delete('products');
-    await db.delete('customers');
-    await db.delete('users');
-  }
-
-  // --- CRUD QUERIES ---
-
-  Future<List<Product>> getProducts() async {
-    final db = await database;
-    final maps = await db.query('products');
-    return maps.map((m) => Product(
-      productId: m['product_id'] as String,
-      sku: m['sku'] as String,
-      productName: m['product_name'] as String,
-      unit: m['unit'] as String,
-      category: m['category'] as String,
-      description: m['description'] as String?,
-    )).toList();
-  }
-
-  Future<void> insertProduct(Product p) async {
-    final db = await database;
-    await db.insert('products', {
-      'product_id': p.productId,
-      'sku': p.sku,
-      'product_name': p.productName,
-      'unit': p.unit,
-      'category': p.category,
-      'description': p.description,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> insertProducts(List<Product> prods) async {
-    if (prods.isEmpty) return;
-    final db = await database;
-    final batch = db.batch();
-    for (final p in prods) {
-      batch.insert('products', {
-        'product_id': p.productId,
-        'sku': p.sku,
-        'product_name': p.productName,
-        'unit': p.unit,
-        'category': p.category,
-        'description': p.description,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+  Future<void> updateItemStatus(String epc, ItemStatus status) async {
+    final clean = epc.trim().toUpperCase();
+    for (final it in _items.values) {
+      if (it.epc.toUpperCase() == clean) {
+        it.status = status;
+      }
     }
-    await batch.commit(noResult: true);
   }
 
-  Future<int> deleteProduct(String productId) async {
-    final db = await database;
-    return await db.delete('products', where: 'product_id = ? OR sku = ?', whereArgs: [productId, productId]);
-  }
-
-  Future<int> deleteItem(String epc) async {
-    final db = await database;
-    return await db.delete('items', where: 'epc = ?', whereArgs: [epc]);
-  }
-
+  // --- LOCATIONS ---
   Future<List<Location>> getLocations() async {
-    final db = await database;
-    final maps = await db.query(
-      'locations',
-      orderBy: 'sort_order ASC, zone ASC, shelf ASC, level ASC, location_code ASC',
-    );
-    return maps.map((m) => Location(
-      locationId: m['location_id'] as String,
-      locationCode: m['location_code'] as String,
-      zone: m['zone'] as String,
-      shelf: m['shelf'] as String,
-      level: m['level'] as String,
-      maxPalletCapacity: (m['max_pallet_capacity'] as int?) ?? 1,
-      currentPallets: (m['current_pallets'] as int?) ?? 0,
-      status: (m['status'] as String?) ?? 'AVAILABLE',
-      aisleSide: (m['aisle_side'] as String?) ?? 'LEFT',
-      sortOrder: (m['sort_order'] as int?) ?? 0,
-      gridRow: (m['grid_row'] as int?) ?? 0,
-      gridCol: (m['grid_col'] as int?) ?? 0,
-    )).toList();
+    final list = _locations.values.toList();
+    list.sort((a, b) {
+      final s = a.sortOrder.compareTo(b.sortOrder);
+      if (s != 0) return s;
+      final z = a.zone.compareTo(b.zone);
+      if (z != 0) return z;
+      final sh = a.shelf.compareTo(b.shelf);
+      if (sh != 0) return sh;
+      final l = a.level.compareTo(b.level);
+      if (l != 0) return l;
+      return a.locationCode.compareTo(b.locationCode);
+    });
+    return list;
   }
 
   Future<void> insertLocation(Location l) async {
-    final db = await database;
-    await db.insert('locations', {
-      'location_id': l.locationId,
-      'location_code': l.locationCode,
-      'zone': l.zone,
-      'shelf': l.shelf,
-      'level': l.level,
-      'max_pallet_capacity': l.maxPalletCapacity,
-      'current_pallets': l.currentPallets,
-      'status': l.status,
-      'aisle_side': l.aisleSide,
-      'sort_order': l.sortOrder,
-      'grid_row': l.gridRow,
-      'grid_col': l.gridCol,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    _locations[l.locationId] = l;
   }
 
   Future<WarehouseFloorPlanConfig> getWarehouseLayoutConfig() async {
@@ -617,355 +298,115 @@ class DatabaseService {
   }
 
   Future<void> updateLocationStatus(String locationId, String status) async {
-    final db = await database;
     final clean = locationId.trim().toUpperCase();
     final stripped = clean.startsWith('LOC-') ? clean.substring(4) : clean;
     final withLoc = clean.startsWith('LOC-') ? clean : 'LOC-$clean';
-    await db.update(
-      'locations',
-      {'status': status},
-      where: 'location_id = ? OR location_code = ? OR UPPER(location_id) = ? OR UPPER(location_code) = ? OR location_id = ? OR location_code = ?',
-      whereArgs: [locationId, locationId, clean, clean, withLoc, stripped],
-    );
+    for (final loc in _locations.values) {
+      final locCode = loc.locationCode.trim().toUpperCase();
+      final locId = loc.locationId.trim().toUpperCase();
+      if (locId == clean || locCode == clean || locId == stripped || locCode == stripped || locId == withLoc || locCode == withLoc) {
+        loc.status = status;
+      }
+    }
   }
 
   Future<void> deleteLocation(String locationIdOrCode) async {
-    final db = await database;
     final clean = locationIdOrCode.trim().toUpperCase();
-    await db.delete(
-      'locations',
-      where: 'location_id = ? OR location_code = ? OR UPPER(location_code) = ?',
-      whereArgs: [locationIdOrCode, locationIdOrCode, clean],
-    );
+    _locations.removeWhere((id, loc) =>
+        id.toUpperCase() == clean || loc.locationCode.toUpperCase() == clean);
   }
 
   Future<void> deleteAllLocations() async {
-    final db = await database;
-    await db.delete('locations');
-    try {
-      await db.rawUpdate('UPDATE pallets SET location_id = NULL');
-      await db.rawUpdate('UPDATE items SET location_id = NULL');
-    } catch (_) {}
+    _locations.clear();
+    for (final p in _pallets.values) {
+      p.locationId = null;
+    }
+    for (final it in _items.values) {
+      it.locationId = null;
+    }
   }
 
+  // --- PALLETS ---
   Future<void> savePalletsBackup(List<Pallet> pallets) async {}
 
   Future<List<Pallet>> loadPalletsBackup() async => [];
 
   Future<List<Pallet>> getPallets() async {
-    final db = await database;
-    final maps = await db.query('pallets');
-    return maps.map((m) {
-      final inbTimeStr = m['inbound_time'] as String?;
-      DateTime inbTime = DateTime.now();
-      if (inbTimeStr != null && inbTimeStr.isNotEmpty) {
-        inbTime = DateTime.tryParse(inbTimeStr) ?? DateTime.now();
-      }
-      return Pallet(
-        palletId: m['pallet_id'] as String,
-        palletCode: m['pallet_code'] as String,
-        rfidEpc: m['rfid_epc'] as String?,
-        locationId: m['location_id'] as String?,
-        inboundTime: inbTime,
-        isMultiSku: (m['is_multi_sku'] as int?) == 1,
-        placedBy: m['placed_by'] as String?,
-      );
-    }).toList();
+    return _pallets.values.toList();
   }
 
   Future<void> insertPallet(Pallet pallet) async {
-    final db = await database;
-    await db.insert('pallets', {
-      'pallet_id': pallet.palletId,
-      'pallet_code': pallet.palletCode,
-      'rfid_epc': pallet.rfidEpc,
-      'location_id': pallet.locationId,
-      'inbound_time': pallet.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
-      'is_multi_sku': pallet.isMultiSku ? 1 : 0,
-      'placed_by': pallet.placedBy,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    _pallets[pallet.palletId] = pallet;
   }
 
   Future<void> updatePalletLocation(String palletId, String? locationId) async {
-    final db = await database;
-    await db.update(
-      'pallets',
-      {'location_id': locationId},
-      where: 'pallet_id = ?',
-      whereArgs: [palletId],
-    );
+    final p = _pallets[palletId];
+    if (p != null) {
+      p.locationId = locationId;
+    }
   }
 
   Future<void> deletePallet(String identifier) async {
-    final db = await database;
     final clean = identifier.trim().toUpperCase();
-    await db.delete(
-      'pallets',
-      where: 'pallet_id = ? OR pallet_code = ? OR pallet_id = ? OR UPPER(pallet_code) = ?',
-      whereArgs: [identifier, identifier, 'PAL-$clean', clean],
-    );
+    _pallets.removeWhere((id, p) =>
+        id.toUpperCase() == clean ||
+        p.palletCode.toUpperCase() == clean ||
+        id.toUpperCase() == 'PAL-$clean');
   }
 
-  Future<List<Item>> getItems() async {
-    final db = await database;
-    final maps = await db.query('items');
-    return maps.map((m) {
-      final statusStr = m['status'] as String;
-      final status = ItemStatus.values.firstWhere(
-        (s) => s.code == statusStr,
-        orElse: () => ItemStatus.inStock,
-      );
-      return Item(
-        itemId: m['item_id'] as String,
-        productId: m['product_id'] as String,
-        sku: m['sku'] as String,
-        productName: m['product_name'] as String,
-        serialNumber: m['serial_number'] as String,
-        epc: m['epc'] as String,
-        status: status,
-        orderNo: m['order_no'] as String?,
-        palletId: m['pallet_id'] as String?,
-        locationId: m['location_id'] as String?,
-        inboundTime: m['inbound_time'] != null ? DateTime.tryParse(m['inbound_time'] as String) : null,
-        allocatedTime: m['allocated_time'] != null ? DateTime.tryParse(m['allocated_time'] as String) : null,
-        supplier: m['supplier'] as String?,
-        cartonCode: m['carton_code'] as String?,
-        inboundBy: m['inbound_by'] as String?,
-        putawayBy: m['putaway_by'] as String?,
-      );
-    }).toList();
-  }
-
-  Future<void> insertItem(Item item) async {
-    final db = await database;
-    await db.insert('items', {
-      'item_id': item.itemId,
-      'product_id': item.productId,
-      'sku': item.sku,
-      'product_name': item.productName,
-      'serial_number': item.serialNumber,
-      'epc': item.epc,
-      'status': item.status.code,
-      'order_no': item.orderNo,
-      'pallet_id': item.palletId,
-      'location_id': item.locationId,
-      'inbound_time': item.inboundTime?.toIso8601String(),
-      'allocated_time': item.allocatedTime?.toIso8601String(),
-      'supplier': item.supplier,
-      'carton_code': item.cartonCode,
-      'inbound_by': item.inboundBy,
-      'putaway_by': item.putawayBy,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<void> insertItems(List<Item> items) async {
-    if (items.isEmpty) return;
-    final db = await database;
-    final batch = db.batch();
-    for (final item in items) {
-      batch.insert('items', {
-        'item_id': item.itemId,
-        'product_id': item.productId,
-        'sku': item.sku,
-        'product_name': item.productName,
-        'serial_number': item.serialNumber,
-        'epc': item.epc,
-        'status': item.status.code,
-        'order_no': item.orderNo,
-        'pallet_id': item.palletId,
-        'location_id': item.locationId,
-        'inbound_time': item.inboundTime?.toIso8601String(),
-        'allocated_time': item.allocatedTime?.toIso8601String(),
-        'supplier': item.supplier,
-        'carton_code': item.cartonCode,
-        'inbound_by': item.inboundBy,
-        'putaway_by': item.putawayBy,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
-    await batch.commit(noResult: true);
-  }
-
-  Future<void> updateItemLocationAndPallet(String epc, String? locationId, String? palletId, {String? status}) async {
-    final db = await database;
-    final Map<String, dynamic> data = {
-      'location_id': locationId,
-      'pallet_id': palletId,
-    };
-    if (status != null) {
-      data['status'] = status;
-    }
-    await db.update(
-      'items',
-      data,
-      where: 'epc = ?',
-      whereArgs: [epc],
-    );
-  }
-
-  Future<void> updateItemsLocationAndPallet(List<String> epcs, String? locationId, String? palletId, {String? status}) async {
-    if (epcs.isEmpty) return;
-    final db = await database;
-    final batch = db.batch();
-    final Map<String, dynamic> data = {
-      'location_id': locationId,
-      'pallet_id': palletId,
-    };
-    if (status != null) {
-      data['status'] = status;
-    }
-    for (final epc in epcs) {
-      batch.update(
-        'items',
-        data,
-        where: 'epc = ?',
-        whereArgs: [epc],
-      );
-    }
-    await batch.commit(noResult: true);
-  }
-
-  Future<void> updateItemStatus(String epc, ItemStatus status) async {
-    final db = await database;
-    await db.update(
-      'items',
-      {'status': status.code},
-      where: 'epc = ?',
-      whereArgs: [epc],
-    );
-  }
-
+  // --- INBOUND ORDERS ---
   Future<List<InboundOrder>> getInboundOrders() async {
-    final db = await database;
-    final orderMaps = await db.query('inbound_orders');
-    final List<InboundOrder> orders = [];
-
-    for (final om in orderMaps) {
-      final orderId = om['inbound_order_id'] as String;
-      final detailMaps = await db.query('inbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
-      final details = detailMaps.map((im) => InboundOrderDetail(
-        productId: im['product_id'] as String,
-        sku: im['sku'] as String,
-        productName: im['product_name'] as String,
-        requiredQty: im['required_qty'] as int,
-        receivedQty: (im['received_qty'] as int?) ?? 0,
-      )).toList();
-
-      final statusStr = om['status'] as String;
-      final status = InboundOrderStatus.values.firstWhere(
-        (s) => s.code == statusStr,
-        orElse: () => InboundOrderStatus.newOrder,
-      );
-
-      orders.add(InboundOrder(
-        inboundOrderId: orderId,
-        orderNo: om['order_no'] as String,
-        sourceSupplier: om['source_supplier'] as String,
-        status: status,
-        createdAt: DateTime.parse(om['created_at'] as String),
-        details: details,
-      ));
-    }
-    return orders;
+    return _inboundOrders.values.toList();
   }
 
   Future<void> insertInboundOrder(InboundOrder order) async {
-    final db = await database;
-    await db.insert('inbound_orders', {
-      'inbound_order_id': order.inboundOrderId,
-      'order_no': order.orderNo,
-      'source_supplier': order.sourceSupplier,
-      'status': order.status.code,
-      'created_at': order.createdAt.toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-
-    for (final d in order.details) {
-      await db.insert('inbound_order_details', {
-        'order_id': order.inboundOrderId,
-        'product_id': d.productId,
-        'sku': d.sku,
-        'product_name': d.productName,
-        'required_qty': d.requiredQty,
-        'received_qty': d.receivedQty,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
+    _inboundOrders[order.inboundOrderId] = order;
   }
 
   Future<void> updateInboundOrderStatus(String inboundOrderId, InboundOrderStatus status, {String? palletId, String? locationId}) async {
-    final db = await database;
-    final values = <String, dynamic>{'status': status.code};
-    await db.update('inbound_orders', values, where: 'inbound_order_id = ?', whereArgs: [inboundOrderId]);
+    final order = _inboundOrders[inboundOrderId];
+    if (order != null) {
+      order.status = status;
+    }
   }
 
+  Future<void> deleteInboundOrder(String orderId) async {
+    final clean = orderId.trim();
+    _inboundOrders.removeWhere((id, o) => id == clean || o.orderNo == clean);
+    _items.removeWhere((id, it) => it.orderNo == clean);
+  }
+
+  // --- OUTBOUND ORDERS ---
   Future<List<OutboundOrder>> getOutboundOrders() async {
-    final db = await database;
-    final maps = await db.query('outbound_orders');
-    final List<OutboundOrder> orders = [];
-
-    for (final m in maps) {
-      final orderId = m['outbound_order_id'] as String;
-      final detailMaps = await db.query('outbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
-      final details = detailMaps.map((dm) => OutboundOrderDetail(
-        productId: dm['product_id'] as String,
-        sku: dm['sku'] as String,
-        productName: dm['product_name'] as String,
-        requiredQty: dm['required_qty'] as int,
-        pickedQty: (dm['picked_qty'] as int?) ?? 0,
-      )).toList();
-
-      final statusStr = m['status'] as String;
-      final status = OutboundOrderStatus.values.firstWhere(
-        (s) => s.code == statusStr,
-        orElse: () => OutboundOrderStatus.newOrder,
-      );
-      orders.add(OutboundOrder(
-        outboundOrderId: orderId,
-        poNo: m['po_no'] as String,
-        customer: m['customer'] as String,
-        status: status,
-        createdAt: DateTime.parse(m['created_at'] as String),
-        details: details,
-      ));
-    }
-    return orders;
+    return _outboundOrders.values.toList();
   }
 
   Future<void> insertOutboundOrder(OutboundOrder order) async {
-    final db = await database;
-    await db.insert('outbound_orders', {
-      'outbound_order_id': order.outboundOrderId,
-      'po_no': order.poNo,
-      'customer': order.customer,
-      'status': order.status.code,
-      'created_at': order.createdAt.toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-
-    for (final d in order.details) {
-      await db.insert('outbound_order_details', {
-        'order_id': order.outboundOrderId,
-        'product_id': d.productId,
-        'sku': d.sku,
-        'product_name': d.productName,
-        'required_qty': d.requiredQty,
-        'picked_qty': d.pickedQty,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    }
+    _outboundOrders[order.outboundOrderId] = order;
   }
 
   Future<void> updateOutboundOrderStatus(String outboundOrderId, OutboundOrderStatus status) async {
-    final db = await database;
-    await db.update('outbound_orders', {'status': status.code}, where: 'outbound_order_id = ?', whereArgs: [outboundOrderId]);
+    final order = _outboundOrders[outboundOrderId];
+    if (order != null) {
+      order.status = status;
+    }
   }
 
-  // --- SYNC QUEUE METHODS (OFFLINE-FIRST) ---
+  Future<void> deleteOutboundOrder(String orderId) async {
+    final clean = orderId.trim();
+    _outboundOrders.removeWhere((id, o) => id == clean || o.poNo == clean);
+  }
 
+  // --- SYNC QUEUE (IN-MEMORY FOR TESTS / TEMPORARY HOLD) ---
   Future<int> enqueueSync({
     required String tableName,
     required String recordId,
     required String action,
     required Map<String, dynamic> payload,
   }) async {
-    final db = await database;
-    return await db.insert('sync_queue', {
+    final qId = _nextQueueId++;
+    _syncQueue.add({
+      'queue_id': qId,
       'table_name': tableName,
       'record_id': recordId,
       'action': action,
@@ -974,15 +415,16 @@ class DatabaseService {
       'status': 0, // PENDING
       'retry_count': 0,
     });
+    return qId;
   }
 
   Future<void> enqueueSyncBatch(List<Map<String, dynamic>> items) async {
     if (items.isEmpty) return;
-    final db = await database;
-    final batch = db.batch();
     final nowStr = DateTime.now().toIso8601String();
     for (final it in items) {
-      batch.insert('sync_queue', {
+      final qId = _nextQueueId++;
+      _syncQueue.add({
+        'queue_id': qId,
         'table_name': it['table_name'],
         'record_id': it['record_id'],
         'action': it['action'],
@@ -992,276 +434,162 @@ class DatabaseService {
         'retry_count': 0,
       });
     }
-    await batch.commit(noResult: true);
   }
 
   Future<List<Map<String, dynamic>>> getPendingSyncItems({int limit = 100}) async {
-    final db = await database;
-    return await db.query(
-      'sync_queue',
-      where: 'status = ?',
-      whereArgs: [0],
-      orderBy: 'queue_id ASC',
-      limit: limit,
-    );
+    final pending = _syncQueue.where((it) => it['status'] == 0).take(limit).toList();
+    return pending;
   }
 
   Future<int> getPendingSyncCount() async {
-    final db = await database;
-    final res = await db.rawQuery('SELECT COUNT(*) as count FROM sync_queue WHERE status = 0');
-    if (res.isNotEmpty && res.first.values.isNotEmpty) {
-      return (res.first.values.first as int?) ?? 0;
-    }
-    return 0;
+    return _syncQueue.where((it) => it['status'] == 0).length;
   }
 
   Future<void> markSyncItemSynced(int queueId) async {
-    final db = await database;
-    await db.update(
-      'sync_queue',
-      {'status': 1}, // SYNCED
-      where: 'queue_id = ?',
-      whereArgs: [queueId],
-    );
+    for (final it in _syncQueue) {
+      if (it['queue_id'] == queueId) {
+        it['status'] = 1; // SYNCED
+        break;
+      }
+    }
   }
 
   Future<void> markSyncItemFailed(int queueId, String error) async {
-    final db = await database;
-    await db.rawUpdate('''
-      UPDATE sync_queue 
-      SET status = 2, retry_count = retry_count + 1, error_message = ?
-      WHERE queue_id = ?
-    ''', [error, queueId]);
+    for (final it in _syncQueue) {
+      if (it['queue_id'] == queueId) {
+        it['status'] = 2; // FAILED
+        it['retry_count'] = ((it['retry_count'] as int?) ?? 0) + 1;
+        it['error_message'] = error;
+        break;
+      }
+    }
   }
 
   Future<void> clearCompletedSyncQueue() async {
-    final db = await database;
-    await db.delete('sync_queue', where: 'status = ?', whereArgs: [1]);
+    _syncQueue.removeWhere((it) => it['status'] == 1);
   }
 
-  Future<void> deleteInboundOrder(String orderId) async {
-    final db = await database;
-    await db.delete('inbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
-    await db.delete('inbound_orders', where: 'inbound_order_id = ?', whereArgs: [orderId]);
-    await db.delete('items', where: 'order_no = ?', whereArgs: [orderId]);
-  }
-
-  Future<void> deleteOutboundOrder(String orderId) async {
-    final db = await database;
-    await db.delete('outbound_order_details', where: 'order_id = ?', whereArgs: [orderId]);
-    await db.delete('outbound_orders', where: 'outbound_order_id = ?', whereArgs: [orderId]);
-  }
-
-  // --- USER QUERIES ---
+  // --- USERS ---
   Future<List<WmsUser>> getUsers() async {
-    final db = await database;
-    final maps = await db.query('users');
-    return maps.map((m) => WmsUser.fromMap(m)).toList();
+    return _users.values.toList();
   }
 
   Future<void> insertUser(WmsUser user) async {
-    final db = await database;
-    final map = user.toMap();
-    final existing = await db.query(
-      'users',
-      columns: ['password_hash'],
-      where: 'user_id = ? OR username = ?',
-      whereArgs: [user.userId, user.username],
-    );
-    if (existing.isNotEmpty && existing.first['password_hash'] != null) {
-      map['password_hash'] = existing.first['password_hash'];
-    }
-    await db.insert('users', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    _users[user.userId] = user;
   }
 
   Future<void> insertUserWithPassword(WmsUser user, String passwordHash) async {
-    final db = await database;
-    final map = user.toMap();
-    map['password_hash'] = passwordHash;
-    await db.insert('users', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    _users[user.userId] = user;
+    _userPasswords[user.userId] = passwordHash;
+    _userPasswords[user.username] = passwordHash;
   }
 
   Future<Map<String, dynamic>?> getUserAuth(String username) async {
-    final db = await database;
     final clean = username.trim().toLowerCase();
-    final maps = await db.query(
-      'users',
-      where: 'LOWER(username) = ? OR LOWER(email) = ?',
-      whereArgs: [clean, clean],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return maps.first;
+    for (final u in _users.values) {
+      if (u.username.toLowerCase() == clean || (u.email != null && u.email!.toLowerCase() == clean)) {
+        final map = u.toMap();
+        map['password_hash'] = _userPasswords[u.userId] ?? _userPasswords[u.username];
+        return map;
+      }
+    }
+    return null;
   }
 
   Future<WmsUser?> getUserById(String userId) async {
-    final db = await database;
-    final maps = await db.query(
-      'users',
-      where: 'user_id = ?',
-      whereArgs: [userId.trim()],
-      limit: 1,
-    );
-    if (maps.isEmpty) return null;
-    return WmsUser.fromMap(maps.first);
+    final clean = userId.trim();
+    return _users[clean];
   }
 
   Future<int> deleteUser(String userId) async {
-    final db = await database;
-    return await db.delete('users', where: 'user_id = ? OR username = ?', whereArgs: [userId, userId]);
+    final clean = userId.trim();
+    int count = 0;
+    _users.removeWhere((id, u) {
+      if (id == clean || u.username == clean) {
+        count++;
+        return true;
+      }
+      return false;
+    });
+    _userPasswords.remove(clean);
+    return count;
   }
 
   Future<void> updateUser(WmsUser user) async {
-    final db = await database;
-    await db.update(
-      'users',
-      {
-        'full_name': user.fullName,
-        'email': user.email,
-        'phone': user.phone,
-        'role': user.role,
-        'is_active': user.isActive ? 1 : 0,
-      },
-      where: 'user_id = ? OR username = ?',
-      whereArgs: [user.userId, user.username],
-    );
+    _users[user.userId] = user;
   }
 
   Future<void> updateUserPassword(String userId, String passwordHash) async {
-    final db = await database;
-    await db.update(
-      'users',
-      {'password_hash': passwordHash},
-      where: 'user_id = ? OR username = ?',
-      whereArgs: [userId, userId],
-    );
+    _userPasswords[userId] = passwordHash;
+    final u = _users[userId];
+    if (u != null) {
+      _userPasswords[u.username] = passwordHash;
+    }
   }
 
-  // --- CUSTOMER QUERIES ---
+  // --- CUSTOMERS ---
   Future<List<Customer>> getCustomers() async {
-    final db = await database;
-    final maps = await db.query('customers');
-    return maps.map((m) => Customer.fromMap(m)).toList();
+    return _customers.values.toList();
   }
 
   Future<void> insertCustomer(Customer customer) async {
-    final db = await database;
-    await db.insert('customers', customer.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    _customers[customer.customerId] = customer;
   }
 
   Future<int> deleteCustomer(String customerId) async {
-    final db = await database;
-    return await db.delete('customers', where: 'customer_id = ? OR customer_code = ?', whereArgs: [customerId, customerId]);
+    final clean = customerId.trim();
+    int count = 0;
+    _customers.removeWhere((id, c) {
+      if (id == clean || c.customerCode == clean) {
+        count++;
+        return true;
+      }
+      return false;
+    });
+    return count;
   }
 
-  // --- DELIVERY NOTE QUERIES ---
+  // --- DELIVERY NOTES ---
   Future<List<DeliveryNote>> getDeliveryNotes() async {
-    final db = await database;
-    final maps = await db.query('delivery_notes');
-    final List<DeliveryNote> list = [];
-    for (final m in maps) {
-      final id = m['delivery_id'] as String;
-      final detMaps = await db.query('delivery_note_details', where: 'delivery_id = ?', whereArgs: [id]);
-      final details = detMaps.map((d) => DeliveryNoteDetail.fromMap(d)).toList();
-      list.add(DeliveryNote.fromMap(m, details: details));
-    }
-    return list;
+    return _deliveryNotes.values.toList();
   }
 
   Future<void> insertDeliveryNote(DeliveryNote note) async {
-    final db = await database;
-    await db.transaction((txn) async {
-      await txn.insert('delivery_notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      await txn.delete('delivery_note_details', where: 'delivery_id = ?', whereArgs: [note.deliveryId]);
-      for (final det in note.details) {
-        await txn.insert('delivery_note_details', det.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-    });
+    _deliveryNotes[note.deliveryId] = note;
   }
 
   Future<int> deleteDeliveryNote(String deliveryId) async {
-    final db = await database;
-    await db.delete('delivery_note_details', where: 'delivery_id = ?', whereArgs: [deliveryId]);
-    return await db.delete('delivery_notes', where: 'delivery_id = ? OR delivery_no = ?', whereArgs: [deliveryId, deliveryId]);
+    final clean = deliveryId.trim();
+    int count = 0;
+    _deliveryNotes.removeWhere((id, d) {
+      if (id == clean || d.deliveryNo == clean) {
+        count++;
+        return true;
+      }
+      return false;
+    });
+    return count;
   }
 
-  // --- INVENTORY SESSION QUERIES ---
+  // --- INVENTORY SESSIONS ---
   Future<List<InventorySession>> getInventorySessions() async {
-    final db = await database;
-    final maps = await db.query('inventory_sessions');
-    final List<InventorySession> list = [];
-    for (final m in maps) {
-      final sId = m['session_id'] as String;
-      final zoneStr = (m['zone'] as String? ?? '').trim();
-      final isAllWh = zoneStr.toLowerCase().contains('toàn bộ') || zoneStr.toUpperCase() == 'ALL' || zoneStr.isEmpty;
-      final detMaps = await db.query('inventory_session_details', where: 'session_id = ?', whereArgs: [sId]);
-      final seenEpcs = <String>{};
-      final uniqueDetMaps = detMaps.where((d) => seenEpcs.add((d['epc'] as String).toUpperCase())).toList();
-      final results = uniqueDetMaps.map((d) {
-        var resType = InventoryVarianceType.values.firstWhere(
-          (v) => v.code == d['result_type'],
-          orElse: () => InventoryVarianceType.match,
-        );
-        if (isAllWh && resType == InventoryVarianceType.wrongLocation) {
-          resType = InventoryVarianceType.match;
-        }
-        return InventoryItemResult(
-          epc: d['epc'] as String,
-          sku: d['sku'] as String?,
-          productName: d['product_name'] as String?,
-          expectedLocation: d['expected_location'] as String?,
-          actualLocation: d['actual_location'] as String?,
-          resultType: resType,
-          readAt: d['read_at'] != null ? DateTime.tryParse(d['read_at'].toString()) ?? DateTime.now() : DateTime.now(),
-        );
-      }).toList();
-
-      list.add(InventorySession(
-        sessionId: sId,
-        sessionCode: m['session_code'] as String,
-        zone: m['zone'] as String,
-        locationCode: m['location_code'] as String?,
-        startedAt: DateTime.tryParse(m['started_at'].toString()) ?? DateTime.now(),
-        completedAt: m['completed_at'] != null ? DateTime.tryParse(m['completed_at'].toString()) : null,
-        isCompleted: m['is_completed'] == 1 || m['is_completed'] == true,
-        results: results,
-      ));
-    }
-    return list;
+    return _inventorySessions.values.toList();
   }
 
   Future<void> insertInventorySession(InventorySession session) async {
-    final db = await database;
-    await db.transaction((txn) async {
-      await txn.insert('inventory_sessions', {
-        'session_id': session.sessionId,
-        'session_code': session.sessionCode,
-        'zone': session.zone,
-        'location_code': session.locationCode,
-        'started_at': session.startedAt.toIso8601String(),
-        'completed_at': session.completedAt?.toIso8601String(),
-        'is_completed': session.isCompleted ? 1 : 0,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-
-      await txn.delete('inventory_session_details', where: 'session_id = ?', whereArgs: [session.sessionId]);
-      for (final r in session.results) {
-        await txn.insert('inventory_session_details', {
-          'session_id': session.sessionId,
-          'epc': r.epc,
-          'sku': r.sku,
-          'product_name': r.productName,
-          'expected_location': r.expectedLocation,
-          'actual_location': r.actualLocation,
-          'result_type': r.resultType.code,
-          'read_at': r.readAt.toIso8601String(),
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-    });
+    _inventorySessions[session.sessionId] = session;
   }
 
   Future<int> deleteInventorySession(String sessionId) async {
-    final db = await database;
-    await db.delete('inventory_session_details', where: 'session_id = ?', whereArgs: [sessionId]);
-    return await db.delete('inventory_sessions', where: 'session_id = ?', whereArgs: [sessionId]);
+    final clean = sessionId.trim();
+    int count = 0;
+    _inventorySessions.removeWhere((id, s) {
+      if (id == clean || s.sessionCode == clean) {
+        count++;
+        return true;
+      }
+      return false;
+    });
+    return count;
   }
 }

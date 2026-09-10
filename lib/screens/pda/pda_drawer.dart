@@ -213,17 +213,17 @@ class PdaDrawer extends StatelessWidget {
                 ),
                 ListTile(
                   leading: Icon(Icons.cleaning_services_rounded, color: c.successEmerald),
-                  title: Text('Xóa SQLite Trên Tay Cầm', style: TextStyle(color: c.textPrimary, fontSize: 14)),
-                  subtitle: Text('Xóa file SQLite cục bộ & nạp thẳng từ Cloud', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
+                  title: Text('Dọn Sạch Cache Cục Bộ', style: TextStyle(color: c.textPrimary, fontSize: 14)),
+                  subtitle: Text('Dọn sạch rác cục bộ & nạp thẳng 100% từ Cloud', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
                   onTap: () async {
                     Navigator.pop(context);
-                    await DatabaseService.wipeHandheldSqliteDatabase();
+                    await DatabaseService.wipePhysicalSqliteDatabases();
                     await WarehouseRepository().reloadFromSqlite();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           backgroundColor: c.successEmerald,
-                          content: const Text('✓ Đã xóa sạch SQLite trên tay cầm! Đang dùng 100% Supabase Cloud.'),
+                          content: const Text('✓ Đã dọn sạch cache cục bộ! Đang dùng 100% Supabase Cloud.'),
                         ),
                       );
                     }

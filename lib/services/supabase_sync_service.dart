@@ -536,43 +536,6 @@ class SupabaseSyncService extends ChangeNotifier {
         }
       }
 
-      // 1b. Đẩy các bản ghi từ bảng sync_queue của SQLite lên Supabase
-      try {
-        final dbPending = await _dbService.getPendingSyncItems(limit: 100);
-        for (final item in dbPending) {
-          final qId = item['queue_id'] as int;
-          final tableName = item['table_name'] as String;
-          final action = item['action'] as String;
-          final recordId = (item['record_id'] ?? '').toString();
-          final payloadRaw = item['payload'];
-          Map<String, dynamic> payload = {};
-          if (payloadRaw is String) {
-            try {
-              payload = jsonDecode(payloadRaw) as Map<String, dynamic>;
-            } catch (_) {}
-          } else if (payloadRaw is Map) {
-            payload = Map<String, dynamic>.from(payloadRaw);
-          }
-          final pkCol = _getPrimaryKeyColumn(tableName);
-          final normalized = _normalizePayloadForSupabase(tableName, payload);
-          try {
-            if (action == 'INSERT' || action.contains('CONFIRM')) {
-              await supa.from(tableName).upsert(normalized);
-            } else if (action == 'UPDATE') {
-              await supa.from(tableName).update(normalized).eq(pkCol, recordId);
-            } else if (action == 'DELETE') {
-              await supa.from(tableName).delete().eq(pkCol, recordId);
-            }
-            await _dbService.markSyncItemSynced(qId);
-          } catch (e) {
-            debugPrint('Failed to sync SQLite queue item $qId: $e');
-            break; // Dừng nếu bảng chưa tạo trên Supabase hoặc mất kết nối
-          }
-        }
-      } catch (e) {
-        debugPrint('SQLite sync_queue processing error: $e');
-      }
-
       // 2. Làm mới toàn bộ dữ liệu ứng dụng trực tiếp từ Supabase Cloud
       await WarehouseRepository().reloadFromSqlite();
 

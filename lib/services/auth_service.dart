@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wms_models.dart';
 import 'database_service.dart';
@@ -139,8 +138,9 @@ class AuthService extends ChangeNotifier {
             if (fetched['is_active'] is bool) {
               fetched['is_active'] = (fetched['is_active'] == true) ? 1 : 0;
             }
-            final db = await _dbService.database;
-            await db.insert('users', fetched, conflictAlgorithm: ConflictAlgorithm.replace);
+            final wUser = WmsUser.fromMap(fetched);
+            final pwdHash = (fetched['password_hash'] ?? '').toString();
+            await _dbService.insertUserWithPassword(wUser, pwdHash);
             userMap = await _dbService.getUserAuth(cleanUsername);
           }
         } catch (e) {

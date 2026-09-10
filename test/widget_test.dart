@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uhf/main.dart';
 import 'package:uhf/screens/desktop/desktop_inventory_view.dart';
 import 'package:uhf/screens/desktop/desktop_goods_receive_view.dart';
@@ -15,8 +14,6 @@ import 'package:uhf/screens/outbound_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
 
   testWidgets('RFID WMS App smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(const RfidWmsApp());

@@ -1,13 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uhf/services/auth_service.dart';
 import 'package:uhf/services/database_service.dart';
 import 'package:uhf/models/wms_models.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
 
   group('AuthService Offline-First Authentication & Admin Management Tests', () {
     late DatabaseService dbService;
@@ -18,9 +15,7 @@ void main() {
       authService = AuthService();
 
       // Reset state
-      final db = await dbService.database;
-      await db.delete('users');
-      await db.delete('system_config');
+      await dbService.clearAllData();
       await authService.logout();
     });
 
@@ -284,10 +279,7 @@ void main() {
         isActive: true,
         createdAt: DateTime.now(),
       );
-      final db = await dbService.database;
-      final map = cloudUser.toMap();
-      map['password_hash'] = null;
-      await db.insert('users', map);
+      await dbService.insertUser(cloudUser);
 
       // Verify password_hash is null initially
       final initialAuth = await dbService.getUserAuth('pda_test');
