@@ -169,7 +169,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '✅ ĐÃ CẤT THÙNG $clean VÀO $locName ($savedCount SP ĐANG TRONG KHO)!',
+                    '✅ ĐÃ LƯU VÀO VỊ TRÍ $locName ($savedCount SP)!',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),

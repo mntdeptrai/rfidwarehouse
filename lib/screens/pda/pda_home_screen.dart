@@ -460,125 +460,243 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
   Widget _buildDesktopOrderNotificationCard(EyeCareColors c, BaseRolePermission role) {
     if (!role.canInbound) return const SizedBox.shrink();
 
-    // Chỉ tìm các sản phẩm THỰC SỰ đã đọc xong qua cổng RFID (ItemStatus.waitingPutaway)
-    // Tuyệt đối không lấy hàng pendingInbound (khi mới import file Excel, pallet còn trống chưa có hàng thực tế)
+    // 1. Hàng đang chờ xếp vào Pallet (nhánh không có mã pallet trong file import)
+    final waitingPalletizeItems = _repo.items.where((it) =>
+        it.status == ItemStatus.waitingPalletize
+    ).toList();
+    final waitingPalletizeOrders = _repo.inboundOrders.where((o) =>
+        o.status == InboundOrderStatus.waitingPalletize
+    ).toList();
+    final hasWaitingPalletize = waitingPalletizeItems.isNotEmpty || waitingPalletizeOrders.isNotEmpty;
+
+    // 2. Hàng đã có Pallet và đang chờ cất vào kệ
     final waitingPutawayItems = _repo.items.where((it) =>
         (it.status == ItemStatus.waitingPutaway ||
          (it.status == ItemStatus.inStock &&
           (it.locationId == null || it.locationId!.isEmpty || it.locationId == 'LOC-GATE-IN'))) &&
         it.status != ItemStatus.pendingInbound &&
+        it.status != ItemStatus.waitingPalletize &&
         (it.palletId != null && it.palletId!.trim().isNotEmpty)
     ).toList();
 
-    // Hoặc các đơn nhập kho thực sự đã qua cổng đối soát đủ và đang ở trạng thái chờ xếp kệ
     final waitingInboundOrders = _repo.inboundOrders.where((o) =>
         o.status == InboundOrderStatus.waitingPutaway
     ).toList();
-
     final hasPutaway = waitingPutawayItems.isNotEmpty || waitingInboundOrders.isNotEmpty;
 
-    // Nếu không có hàng cần cất -> Ẩn hoàn toàn ô này, không hiển thị gì cả
-    if (!hasPutaway) {
+    if (!hasWaitingPalletize && !hasPutaway) {
       return const SizedBox.shrink();
     }
 
-    final targetPallet = waitingPutawayItems.isNotEmpty
-        ? (waitingPutawayItems.first.palletId ?? 'Xe hàng')
-        : (waitingInboundOrders.first.orderNo);
-    final count = waitingPutawayItems.isNotEmpty
-        ? waitingPutawayItems.where((it) => it.palletId == targetPallet).length
-        : waitingInboundOrders.first.details.fold(0, (sum, d) => sum + d.requiredQty);
+    final cards = <Widget>[];
 
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
-        );
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF10B981).withValues(alpha: 0.12),
+    if (hasWaitingPalletize) {
+      final pCount = waitingPalletizeItems.isNotEmpty
+          ? waitingPalletizeItems.length
+          : waitingPalletizeOrders.first.details.fold(0, (sum, d) => sum + d.requiredQty);
+      final orderTitle = waitingPalletizeOrders.isNotEmpty ? waitingPalletizeOrders.first.orderNo : 'Đơn nhập cổng';
+
+      cards.add(
+        InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+            );
+          },
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF10B981), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF10B981).withValues(alpha: 0.1),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.shelves,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      'ĐÃ ĐỌC XONG - CẦN CẤT VÀO KỆ',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.3,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.move_to_inbox,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'CẦN XẾP VÀO PALLET',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$orderTitle • $pCount sản phẩm',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Text(
+                        'Đã qua cổng RFID • Cần xếp vào pallet trước khi cất kệ ➜',
+                        style: TextStyle(
+                          color: Color(0xFFD97706),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Xe: $targetPallet • $count sản phẩm',
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const Text(
-                    'Máy tính đã đọc đủ • Bấm để cất vào kệ ➜',
-                    style: TextStyle(
-                      color: Color(0xFF059669),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: Color(0xFFF59E0B),
+                ),
+              ],
             ),
-            const Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
-              color: Color(0xFF10B981),
-            ),
-          ],
+          ),
         ),
-      ),
+      );
+    }
+
+    if (hasPutaway) {
+      final targetPallet = waitingPutawayItems.isNotEmpty
+          ? (waitingPutawayItems.first.palletId ?? 'Xe hàng')
+          : (waitingInboundOrders.first.orderNo);
+      final count = waitingPutawayItems.isNotEmpty
+          ? waitingPutawayItems.where((it) => it.palletId == targetPallet).length
+          : waitingInboundOrders.first.details.fold(0, (sum, d) => sum + d.requiredQty);
+
+      cards.add(
+        InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+            );
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.shelves,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'ĐÃ ĐỌC XONG - CẦN CẤT VÀO KỆ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Xe: $targetPallet • $count sản phẩm',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Text(
+                        'Máy tính đã đọc đủ • Bấm để cất vào kệ ➜',
+                        style: TextStyle(
+                          color: Color(0xFF059669),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: Color(0xFF10B981),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: cards,
     );
   }
 }

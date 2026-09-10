@@ -1,8 +1,9 @@
 /// Trạng thái của từng sản phẩm vật lý (Item)
 enum ItemStatus {
   pendingInbound('PENDING_INBOUND', 'Chờ nhập kho'),
+  waitingPalletize('WAITING_PALLETIZE', 'Xếp vào pallet'),
   waitingPutaway('WAITING_PUTAWAY', 'Chờ xếp kệ'),
-  inStock('IN_STOCK', 'Trong kho'),
+  inStock('IN_STOCK', 'Đã lưu vào vị trí'),
   allocated('ALLOCATED', 'Đã giữ cho PO'),
   picked('PICKED', 'Đã lấy hàng'),
   waitingShipment('WAITING_SHIPMENT', 'Chờ giao hàng'),
@@ -129,6 +130,17 @@ class Item {
     final h = t.hour.toString().padLeft(2, '0');
     final min = t.minute.toString().padLeft(2, '0');
     return '$d/$m/$y $h:$min';
+  }
+
+  /// Nhãn trạng thái hiển thị chi tiết (ví dụ: "Đã lưu vào vị trí LOC-A01-01")
+  String get statusDisplay {
+    if (status == ItemStatus.inStock) {
+      if (locationId != null && locationId!.trim().isNotEmpty) {
+        return 'Đã lưu vào vị trí ${locationId!.trim()}';
+      }
+      return 'Đã lưu vào vị trí';
+    }
+    return status.label;
   }
 }
 

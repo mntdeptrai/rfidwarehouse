@@ -184,6 +184,7 @@ class ExcelImportService {
     }
 
     int? cartonCol;
+    int? palletCol;
     int? serialCol;
     int? barcodeCol;
     int? nameCol;
@@ -209,12 +210,16 @@ class ExcelImportService {
         serialCol = i;
         hasHeader = true;
       }
-      // 2. Kiểm tra cột Thùng hàng / Kiện / Box / Pallet
+      // 2. Kiểm tra cột Pallet riêng biệt
+      else if (h.contains('pallet')) {
+        palletCol = i;
+        hasHeader = true;
+      }
+      // 3. Kiểm tra cột Thùng hàng / Kiện / Box / Hộp
       else if (h.contains('carton') ||
           h.contains('thung') ||
           h.contains('box') ||
           h.contains('kien') ||
-          h.contains('pallet') ||
           h.contains('hop')) {
         cartonCol = i;
         hasHeader = true;
@@ -292,18 +297,20 @@ class ExcelImportService {
       if (row.isEmpty) continue;
 
       final carton = (cartonCol != null && cartonCol < row.length) ? row[cartonCol].trim() : '';
+      final pallet = (palletCol != null && palletCol < row.length) ? row[palletCol].trim() : '';
       final serial = (serialCol < row.length) ? row[serialCol].trim() : '';
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
       final name = (nameCol < row.length) ? row[nameCol].trim() : '';
       final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
 
-      if (carton.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
+      if (carton.isEmpty && pallet.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
         continue;
       }
 
       validDataRows++;
 
-      final effectiveCarton = carton.isNotEmpty ? carton : 'KIỆN-CHUNG';
+      final effectiveCarton = carton.isNotEmpty ? carton : (pallet.isNotEmpty ? pallet : 'KIỆN-CHUNG');
+      final effectivePallet = pallet.isNotEmpty ? pallet : null;
       final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
 
       // Xác định SKU/Barcode riêng cho từng dòng sản phẩm
@@ -324,6 +331,7 @@ class ExcelImportService {
       if (!cartonMap.containsKey(groupKey)) {
         cartonMap[groupKey] = {
           'cartonBox': effectiveCarton,
+          'palletCode': effectivePallet,
           'productCode': rowBarcode,
           'productName': effectiveName,
           'supplier': supplier.isNotEmpty ? supplier : 'Nhà cung cấp tổng hợp',
@@ -331,8 +339,13 @@ class ExcelImportService {
           'serials': <String>[],
           'serialItems': <Map<String, dynamic>>[],
         };
-      } else if (supplier.isNotEmpty && cartonMap[groupKey]!['supplier'] == 'Nhà cung cấp tổng hợp') {
-        cartonMap[groupKey]!['supplier'] = supplier;
+      } else {
+        if (supplier.isNotEmpty && cartonMap[groupKey]!['supplier'] == 'Nhà cung cấp tổng hợp') {
+          cartonMap[groupKey]!['supplier'] = supplier;
+        }
+        if (cartonMap[groupKey]!['palletCode'] == null && effectivePallet != null) {
+          cartonMap[groupKey]!['palletCode'] = effectivePallet;
+        }
       }
 
       final entry = cartonMap[groupKey]!;
@@ -347,6 +360,7 @@ class ExcelImportService {
             'barcode': rowBarcode,
             'name': effectiveName,
             'carton': effectiveCarton,
+            'pallet': effectivePallet,
             'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
           });
         }

@@ -38,10 +38,11 @@ void main() {
 
       final scannedEpcs = generatedItems.map((i) => i.epc).toList();
 
-      // 2. GIAI ĐOẠN 1: Kiện hàng đi qua Cổng RFID Gate
+      // 2. GIAI ĐOẠN 1: Kiện hàng đi qua Cổng RFID Gate trên xe Pallet
       final gateReceivedCount = await repo.confirmGateReceiveToWaitingPutaway(
         orderNo: testOrderNo,
         scannedEpcs: scannedEpcs,
+        palletCode: 'PAL-$testOrderNo',
         performedBy: 'Trạm Cổng RFID Desktop',
       );
 
@@ -234,6 +235,7 @@ void main() {
       await repo.confirmGateReceiveToWaitingPutaway(
         orderNo: orderNo,
         scannedEpcs: [epc1, epc2],
+        palletCode: hexBarcode,
         cartonCode: hexBarcode,
         performedBy: 'Trạm Cổng RFID Desktop',
       );
@@ -278,6 +280,90 @@ void main() {
       expect(repo.inventorySessions.length, equals(1));
       expect(repo.inventorySessions.first.sessionId, equals(session.sessionId));
       expect(repo.inventorySessions.first.isCompleted, isTrue);
+
+      await repo.clearAllData(alsoClearCloud: false);
+    });
+
+    test('3-Step State Flow: No Pallet in Import -> WAITING_PALLETIZE -> Palletize to WAITING_PUTAWAY -> Putaway to IN_STOCK', () async {
+      final repo = WarehouseRepository();
+      await repo.ensureInitialized();
+      await repo.clearAllData(alsoClearCloud: false);
+
+      final timestamp = DateTime.now().microsecondsSinceEpoch;
+      final orderNo = 'NO-PALLET-$timestamp';
+
+      // 1. Nhập hàng KHÔNG có mã pallet trong file
+      final order = InboundOrder(
+        inboundOrderId: 'INB-$orderNo',
+        orderNo: orderNo,
+        sourceSupplier: 'Nhà Cung Cấp Hàng Lẻ',
+        status: InboundOrderStatus.newOrder,
+        createdAt: DateTime.now(),
+        details: [
+          InboundOrderDetail(
+            productId: 'PROD-NOPAL-01',
+            sku: 'SKU-NOPAL-01',
+            productName: 'Hàng chưa có pallet',
+            requiredQty: 3,
+          ),
+        ],
+      );
+
+      final generatedItems = await repo.addInboundOrder(order, autoGenerateEpcs: true);
+      expect(generatedItems.length, equals(3));
+      expect(generatedItems.every((i) => i.status == ItemStatus.pendingInbound), isTrue);
+      expect(generatedItems.every((i) => i.palletId == null), isTrue);
+
+      final scannedEpcs = generatedItems.map((i) => i.epc).toList();
+
+      // 2. Đi qua cổng RFID quét đối soát (Không có xe Pallet)
+      final gateCount = await repo.confirmGateReceiveToWaitingPutaway(
+        orderNo: orderNo,
+        scannedEpcs: scannedEpcs,
+        performedBy: 'Trạm Cổng RFID Desktop',
+      );
+      expect(gateCount, equals(3));
+
+      // Kiểm tra trạng thái: Xếp vào pallet (WAITING_PALLETIZE)
+      final itemsAfterGate = repo.getItemsByOrderNo(orderNo);
+      expect(itemsAfterGate.every((i) => i.status == ItemStatus.waitingPalletize), isTrue);
+      expect(itemsAfterGate.every((i) => i.palletId == null), isTrue);
+
+      final orderAfterGate = repo.inboundOrders.firstWhere((o) => o.orderNo == orderNo);
+      expect(orderAfterGate.status, equals(InboundOrderStatus.waitingPalletize));
+
+      // 3. Nhân viên xếp hàng vào Pallet (PAL-AUTO-01)
+      final assignedPallet = await repo.assignItemsToPallet(
+        palletCode: 'PAL-AUTO-01',
+        itemEpcs: scannedEpcs,
+      );
+      expect(assignedPallet.palletCode, equals('PAL-AUTO-01'));
+
+      // Kiểm tra trạng thái đã chuyển tiếp sang: Chờ xếp kệ (WAITING_PUTAWAY)
+      final itemsAfterPalletize = repo.getItemsByOrderNo(orderNo);
+      expect(itemsAfterPalletize.every((i) => i.status == ItemStatus.waitingPutaway), isTrue);
+      expect(itemsAfterPalletize.every((i) => i.palletId == 'PAL-AUTO-01'), isTrue);
+
+      final orderAfterPalletize = repo.inboundOrders.firstWhere((o) => o.orderNo == orderNo);
+      expect(orderAfterPalletize.status, equals(InboundOrderStatus.waitingPutaway));
+
+      // 4. Máy cầm tay PDA quét xếp vào kệ LOC-A01-01
+      const shelfLocation = 'LOC-A01-01';
+      final putawayCount = await repo.confirmPdaPutawayByCarton(
+        cartonOrOrderBarcode: 'PAL-AUTO-01',
+        locationId: shelfLocation,
+        performedBy: 'Thủ kho PDA',
+      );
+      expect(putawayCount, equals(3));
+
+      // Kiểm tra trạng thái: Đã lưu vào vị trí (IN_STOCK)
+      final itemsFinal = repo.getItemsByOrderNo(orderNo);
+      expect(itemsFinal.every((i) => i.status == ItemStatus.inStock), isTrue);
+      expect(itemsFinal.every((i) => i.locationId == shelfLocation), isTrue);
+      expect(itemsFinal.every((i) => i.statusDisplay == 'Đã lưu vào vị trí $shelfLocation'), isTrue);
+
+      final orderFinal = repo.inboundOrders.firstWhere((o) => o.orderNo == orderNo);
+      expect(orderFinal.status, equals(InboundOrderStatus.completed));
 
       await repo.clearAllData(alsoClearCloud: false);
     });

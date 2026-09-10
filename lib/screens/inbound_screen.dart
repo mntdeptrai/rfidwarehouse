@@ -475,6 +475,7 @@ class _InboundScreenState extends State<InboundScreen> {
       int itemSeq = 1;
       for (var c in result.cartons) {
         final cartonBox = c['cartonBox']?.toString().trim();
+        final palletCode = c['palletCode']?.toString().trim();
         final serialItems = (c['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         if (serialItems != null && serialItems.isNotEmpty) {
           for (var sItem in serialItems) {
@@ -482,6 +483,8 @@ class _InboundScreenState extends State<InboundScreen> {
             final sBarcode = sItem['barcode']?.toString().trim() ?? c['productCode'];
             final sName = sItem['name']?.toString().trim() ?? c['productName'];
             final sSupplier = (sItem['supplier'] ?? c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
+            final sPallet = (sItem['pallet']?.toString().trim() ?? palletCode);
+            final effectivePallet = (sPallet != null && sPallet.isNotEmpty) ? sPallet : null;
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
@@ -491,7 +494,7 @@ class _InboundScreenState extends State<InboundScreen> {
               epc: sSerial,
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
-              palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              palletId: effectivePallet,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
@@ -502,6 +505,7 @@ class _InboundScreenState extends State<InboundScreen> {
         } else {
           final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim()).toList() ?? [];
           final sSupplier = (c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
+          final effectivePallet = (palletCode != null && palletCode.isNotEmpty) ? palletCode : null;
           for (var serial in serials) {
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
@@ -512,7 +516,7 @@ class _InboundScreenState extends State<InboundScreen> {
               epc: serial,
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
-              palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              palletId: effectivePallet,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,

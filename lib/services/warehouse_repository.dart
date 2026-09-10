@@ -1886,9 +1886,17 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     final updatedEpcs = <String>[];
+    final affectedOrderNos = <String>{};
     for (var it in _items.toList()) {
       if (cleanEpcs.contains(it.epc.toUpperCase())) {
         it.palletId = pallet.palletCode;
+        if (it.status == ItemStatus.waitingPalletize) {
+          it.status = ItemStatus.waitingPutaway;
+          await _dbService.updateItemStatus(it.epc, ItemStatus.waitingPutaway);
+        }
+        if (it.orderNo != null && it.orderNo!.isNotEmpty) {
+          affectedOrderNos.add(it.orderNo!);
+        }
         if (!pallet.itemIds.contains(it.itemId)) {
           pallet.itemIds.add(it.itemId);
         }
@@ -1897,6 +1905,27 @@ class WarehouseRepository extends ChangeNotifier {
     }
     if (updatedEpcs.isNotEmpty) {
       await _dbService.updateItemsLocationAndPallet(updatedEpcs, null, pallet.palletCode);
+    }
+
+    for (var oNo in affectedOrderNos) {
+      final order = _inboundOrders.where((o) => o.orderNo == oNo || o.inboundOrderId == oNo).firstOrNull;
+      if (order != null && order.status == InboundOrderStatus.waitingPalletize) {
+        final orderItems = _items.where((i) => i.orderNo == order.orderNo).toList();
+        if (orderItems.isNotEmpty && orderItems.every((i) => i.status != ItemStatus.waitingPalletize && i.status != ItemStatus.pendingInbound)) {
+          order.status = InboundOrderStatus.waitingPutaway;
+          await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.waitingPutaway);
+          await _syncDirectOrQueue(
+            tableName: 'inbound_orders',
+            recordId: order.inboundOrderId,
+            action: 'UPDATE',
+            payload: {
+              'inbound_order_id': order.inboundOrderId,
+              'status': InboundOrderStatus.waitingPutaway.code,
+              'updated_at': DateTime.now().toIso8601String(),
+            },
+          );
+        }
+      }
     }
 
     await _dbService.insertPallet(pallet);
@@ -1927,11 +1956,19 @@ class WarehouseRepository extends ChangeNotifier {
     );
 
     final updatedCartonEpcs = <String>[];
+    final affectedOrderNos = <String>{};
     for (var it in _items) {
-      final itemCarton = it.palletId?.toUpperCase() ?? '';
+      final itemCarton = it.cartonCode?.toUpperCase() ?? (it.palletId?.toUpperCase() ?? '');
       final itemOrder = it.orderNo?.toUpperCase() ?? '';
       if (cleanCartons.contains(itemCarton) || cleanCartons.contains(itemOrder)) {
         it.palletId = pallet.palletCode;
+        if (it.status == ItemStatus.waitingPalletize) {
+          it.status = ItemStatus.waitingPutaway;
+          await _dbService.updateItemStatus(it.epc, ItemStatus.waitingPutaway);
+        }
+        if (it.orderNo != null && it.orderNo!.isNotEmpty) {
+          affectedOrderNos.add(it.orderNo!);
+        }
         if (!pallet.itemIds.contains(it.itemId)) {
           pallet.itemIds.add(it.itemId);
         }
@@ -1940,6 +1977,27 @@ class WarehouseRepository extends ChangeNotifier {
     }
     if (updatedCartonEpcs.isNotEmpty) {
       await _dbService.updateItemsLocationAndPallet(updatedCartonEpcs, null, pallet.palletCode);
+    }
+
+    for (var oNo in affectedOrderNos) {
+      final order = _inboundOrders.where((o) => o.orderNo == oNo || o.inboundOrderId == oNo).firstOrNull;
+      if (order != null && order.status == InboundOrderStatus.waitingPalletize) {
+        final orderItems = _items.where((i) => i.orderNo == order.orderNo).toList();
+        if (orderItems.isNotEmpty && orderItems.every((i) => i.status != ItemStatus.waitingPalletize && i.status != ItemStatus.pendingInbound)) {
+          order.status = InboundOrderStatus.waitingPutaway;
+          await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.waitingPutaway);
+          await _syncDirectOrQueue(
+            tableName: 'inbound_orders',
+            recordId: order.inboundOrderId,
+            action: 'UPDATE',
+            payload: {
+              'inbound_order_id': order.inboundOrderId,
+              'status': InboundOrderStatus.waitingPutaway.code,
+              'updated_at': DateTime.now().toIso8601String(),
+            },
+          );
+        }
+      }
     }
 
     await _dbService.insertPallet(pallet);
@@ -2144,6 +2202,7 @@ class WarehouseRepository extends ChangeNotifier {
   Future<int> confirmGateReceiveToWaitingPutaway({
     required String orderNo,
     required List<String> scannedEpcs,
+    String? palletCode,
     String? cartonCode,
     String performedBy = 'Cổng RFID Gate',
   }) async {
@@ -2163,6 +2222,9 @@ class WarehouseRepository extends ChangeNotifier {
       return false;
     }).toList();
 
+    final cleanPallet = (palletCode != null && palletCode.trim().isNotEmpty) ? palletCode.trim().toUpperCase() : null;
+    final cleanCarton = (cartonCode != null && cartonCode.trim().isNotEmpty) ? cartonCode.trim().toUpperCase() : null;
+
     // Nếu các mặt hàng này đã có mã Barcode Hex sinh sẵn lúc nạp danh sách nhập hàng, giữ nguyên mã đó
     final existingItemBarcode = matchedItems
         .map((i) => i.sku)
@@ -2170,14 +2232,22 @@ class WarehouseRepository extends ChangeNotifier {
         .firstOrNull;
 
     // Sinh mã Barcode 128 chuẩn Hex (A-F và 0-9) nếu chưa có mã thùng cụ thể
-    final effectiveCartonCode = (cartonCode != null && cartonCode.trim().isNotEmpty)
-        ? cartonCode.trim().toUpperCase()
-        : (existingItemBarcode ?? generateHexBarcode128());
+    final effectiveCartonCode = cleanCarton ?? (existingItemBarcode ?? generateHexBarcode128());
+
+    // Kiểm tra xem đơn/hàng có mã pallet trong file import hoặc được truyền vào
+    final hasPallet = cleanPallet != null || matchedItems.any((it) => it.palletId != null && it.palletId!.trim().isNotEmpty);
+    final targetStatus = hasPallet ? ItemStatus.waitingPutaway : ItemStatus.waitingPalletize;
+    final targetOrderStatus = hasPallet ? InboundOrderStatus.waitingPutaway : InboundOrderStatus.waitingPalletize;
 
     for (var it in matchedItems) {
-      it.status = ItemStatus.waitingPutaway;
-      // Gán mã Barcode thùng/kiện vào palletId để PDA có thể quét cất hàng theo thùng
-      it.palletId = effectiveCartonCode;
+      it.status = targetStatus;
+      if (hasPallet) {
+        it.palletId = (it.palletId != null && it.palletId!.trim().isNotEmpty)
+            ? it.palletId
+            : cleanPallet;
+      } else {
+        it.palletId = null;
+      }
       // Chỉ gán fallback nếu item chưa có SKU hoặc ProductId
       if (it.sku.trim().isEmpty) {
         it.sku = effectiveCartonCode;
@@ -2187,7 +2257,9 @@ class WarehouseRepository extends ChangeNotifier {
       }
       it.locationId = null;
       it.inboundTime = now;
-      it.cartonCode = effectiveCartonCode;
+      if (it.cartonCode == null || it.cartonCode!.trim().isEmpty) {
+        it.cartonCode = effectiveCartonCode;
+      }
       it.inboundBy = performedBy;
       if (order != null && (it.supplier == null || it.supplier!.isEmpty)) {
         it.supplier = order.sourceSupplier;
@@ -2235,7 +2307,7 @@ class WarehouseRepository extends ChangeNotifier {
           'item_id': it.itemId,
           'product_id': it.productId,
           'sku': it.sku,
-          'status': ItemStatus.waitingPutaway.code,
+          'status': it.status.code,
           'location_id': null,
           'pallet_id': it.palletId,
           'order_no': it.orderNo,
@@ -2246,18 +2318,18 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     if (order != null) {
-      order.status = InboundOrderStatus.waitingPutaway;
+      order.status = targetOrderStatus;
       for (var d in order.details) {
         d.receivedQty = d.requiredQty;
       }
-      await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.waitingPutaway);
+      await _dbService.updateInboundOrderStatus(order.inboundOrderId, targetOrderStatus);
       await _syncDirectOrQueue(
         tableName: 'inbound_orders',
         recordId: order.inboundOrderId,
         action: 'UPDATE',
         payload: {
           'inbound_order_id': order.inboundOrderId,
-          'status': InboundOrderStatus.waitingPutaway.code,
+          'status': targetOrderStatus.code,
           'updated_at': now.toIso8601String(),
         },
       );
@@ -2266,10 +2338,12 @@ class WarehouseRepository extends ChangeNotifier {
     await _syncDirectOrQueue(
       tableName: 'inbound_transactions',
       recordId: cleanOrderNo,
-      action: 'GATE_RECEIVE_WAITING_PUTAWAY',
+      action: hasPallet ? 'GATE_RECEIVE_WAITING_PUTAWAY' : 'GATE_RECEIVE_WAITING_PALLETIZE',
       payload: {
         'orderNo': cleanOrderNo,
+        'palletCode': cleanPallet,
         'cartonCode': effectiveCartonCode,
+        'status': targetStatus.code,
         'itemCount': matchedItems.length,
         'performedBy': performedBy,
         'timestamp': now.toIso8601String(),
@@ -2466,27 +2540,38 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    final order = _inboundOrders.where((o) =>
+    final affectedOrderNos = matchedItems.map((i) => i.orderNo).whereType<String>().toSet();
+    final directOrder = _inboundOrders.where((o) =>
       o.orderNo.trim().toUpperCase() == cleanBarcode ||
       o.inboundOrderId.trim().toUpperCase() == cleanBarcode
     ).firstOrNull;
+    if (directOrder != null) affectedOrderNos.add(directOrder.orderNo);
 
-    if (order != null) {
-      order.status = InboundOrderStatus.completed;
-      for (var d in order.details) {
-        d.receivedQty = d.requiredQty;
+    for (final oNo in affectedOrderNos) {
+      final ord = _inboundOrders.where((o) =>
+        o.orderNo.trim().toUpperCase() == oNo.trim().toUpperCase() ||
+        o.inboundOrderId.trim().toUpperCase() == oNo.trim().toUpperCase()
+      ).firstOrNull;
+      if (ord != null) {
+        final orderItems = _items.where((i) => i.orderNo == ord.orderNo).toList();
+        if (orderItems.isNotEmpty && orderItems.every((i) => i.status == ItemStatus.inStock)) {
+          ord.status = InboundOrderStatus.completed;
+          for (var d in ord.details) {
+            d.receivedQty = d.requiredQty;
+          }
+          await _dbService.updateInboundOrderStatus(ord.inboundOrderId, InboundOrderStatus.completed, locationId: loc.locationId);
+          await _syncDirectOrQueue(
+            tableName: 'inbound_orders',
+            recordId: ord.inboundOrderId,
+            action: 'UPDATE',
+            payload: {
+              'inbound_order_id': ord.inboundOrderId,
+              'status': InboundOrderStatus.completed.code,
+              'updated_at': now.toIso8601String(),
+            },
+          );
+        }
       }
-      await _dbService.updateInboundOrderStatus(order.inboundOrderId, InboundOrderStatus.completed, locationId: loc.locationId);
-      await _syncDirectOrQueue(
-        tableName: 'inbound_orders',
-        recordId: order.inboundOrderId,
-        action: 'UPDATE',
-        payload: {
-          'inbound_order_id': order.inboundOrderId,
-          'status': InboundOrderStatus.completed.code,
-          'updated_at': now.toIso8601String(),
-        },
-      );
     }
 
     await _syncDirectOrQueue(
@@ -2495,7 +2580,7 @@ class WarehouseRepository extends ChangeNotifier {
       action: 'PDA_PUTAWAY_CONFIRM',
       payload: {
         'cartonBarcode': cleanBarcode,
-        'orderNo': order?.orderNo ?? cleanBarcode,
+        'orderNo': directOrder?.orderNo ?? (affectedOrderNos.isNotEmpty ? affectedOrderNos.first : cleanBarcode),
         'locationId': loc.locationId,
         'locationCode': loc.locationCode,
         'itemCount': matchedItems.length,

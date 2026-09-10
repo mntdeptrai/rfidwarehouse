@@ -752,13 +752,14 @@ void main() {
       final count = await repo.confirmGateReceiveToWaitingPutaway(
         orderNo: testOrder.orderNo,
         scannedEpcs: epcs,
+        palletCode: 'PALLET-XYZ-999',
         cartonCode: 'CARTON-XYZ-999',
       );
 
       expect(count, 2);
       final receivedItems = repo.items.where((i) => epcs.contains(i.epc)).toList();
       for (final it in receivedItems) {
-        expect(it.palletId, 'CARTON-XYZ-999');
+        expect(it.palletId, 'PALLET-XYZ-999');
         // Original SKU and productId must NOT be overwritten by carton code
         expect(it.sku, 'SKU-ELEC-01');
         expect(it.productId, 'PROD-001');

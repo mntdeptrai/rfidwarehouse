@@ -1,9 +1,10 @@
 /// Trạng thái Lệnh Nhập kho
 enum InboundOrderStatus {
   newOrder('NEW', 'Mới tạo'),
-  waitingPutaway('WAITING_PUTAWAY', 'Chờ xếp kho'),
+  waitingPalletize('WAITING_PALLETIZE', 'Xếp vào pallet'),
+  waitingPutaway('WAITING_PUTAWAY', 'Chờ xếp kệ'),
   processing('PROCESSING', 'Đang xử lý'),
-  completed('COMPLETED', 'Trong kho'),
+  completed('COMPLETED', 'Đã lưu vào vị trí'),
   cancelled('CANCELLED', 'Đã hủy');
 
   final String code;

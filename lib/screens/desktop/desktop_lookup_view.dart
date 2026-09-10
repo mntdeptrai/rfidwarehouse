@@ -47,10 +47,12 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
     switch (status) {
       case ItemStatus.pendingInbound:
         return const Color(0xFFF59E0B); // Vàng cam: Chờ nhập kho
+      case ItemStatus.waitingPalletize:
+        return const Color(0xFFF97316); // Cam tươi: Xếp vào pallet
       case ItemStatus.waitingPutaway:
         return const Color(0xFF06B6D4); // Xanh dương nhạt: Chờ xếp kệ
       case ItemStatus.inStock:
-        return const Color(0xFF10B981); // Xanh lá: Đã lưu trong kho
+        return const Color(0xFF10B981); // Xanh lá: Đã lưu vào vị trí
       case ItemStatus.allocated:
         return const Color(0xFF8B5CF6); // Tím: Đã giữ hàng
       case ItemStatus.picked:
@@ -66,10 +68,12 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
     switch (status) {
       case ItemStatus.pendingInbound:
         return 'CHƯA NHẬP (DỰ KIẾN)';
+      case ItemStatus.waitingPalletize:
+        return 'XẾP VÀO PALLET';
       case ItemStatus.waitingPutaway:
         return 'CHỜ XẾP KỆ';
       case ItemStatus.inStock:
-        return 'TRONG KHO';
+        return 'ĐÃ LƯU VÀO VỊ TRÍ';
       case ItemStatus.allocated:
         return 'ĐÃ GIỮ PO';
       case ItemStatus.picked:
@@ -97,6 +101,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
     final totalCount = allItems.length;
     final inStockCount = allItems.where((i) => i.status == ItemStatus.inStock).length;
     final waitingPutawayCount = allItems.where((i) => i.status == ItemStatus.waitingPutaway).length;
+    final waitingPalletizeCount = allItems.where((i) => i.status == ItemStatus.waitingPalletize).length;
     final pendingInboundCount = allItems.where((i) => i.status == ItemStatus.pendingInbound).length;
     final distinctSkusCount = allItems.map((i) => i.sku).toSet().length;
 
@@ -170,8 +175,9 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                     children: [
                       _buildStatBadge('Mặt hàng: $distinctSkusCount SKU', c.rfidCyan, c),
                       _buildStatBadge('Tổng chip: $totalCount', const Color(0xFF8B5CF6), c),
-                      _buildStatBadge('Trong kho: $inStockCount', const Color(0xFF10B981), c),
+                      _buildStatBadge('Đã lưu vị trí: $inStockCount', const Color(0xFF10B981), c),
                       _buildStatBadge('Chờ xếp kệ: $waitingPutawayCount', const Color(0xFF06B6D4), c),
+                      _buildStatBadge('Xếp vào pallet: $waitingPalletizeCount', const Color(0xFFF97316), c),
                       _buildStatBadge('Chưa nhập: $pendingInboundCount', const Color(0xFFF59E0B), c),
                     ],
                   ),
@@ -260,9 +266,11 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                   children: [
                     _buildFilterChip('Tất cả (${filteredItems.length})', null, c),
                     const SizedBox(width: 8),
-                    _buildFilterChip('Trong kho ($inStockCount)', ItemStatus.inStock, c),
+                    _buildFilterChip('Đã lưu vị trí ($inStockCount)', ItemStatus.inStock, c),
                     const SizedBox(width: 8),
                     _buildFilterChip('Chờ xếp kệ ($waitingPutawayCount)', ItemStatus.waitingPutaway, c),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Xếp vào pallet ($waitingPalletizeCount)', ItemStatus.waitingPalletize, c),
                     const SizedBox(width: 8),
                     _buildFilterChip('Chưa nhập kho ($pendingInboundCount)', ItemStatus.pendingInbound, c),
                   ],

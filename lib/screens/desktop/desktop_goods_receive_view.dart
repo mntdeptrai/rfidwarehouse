@@ -413,24 +413,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final expectedCount = expectedSerials.length;
     final scannedCount = _wizardScannedTags.length;
 
-    // Nếu chưa tự động nhận diện được xe Pallet qua cổng, tự chọn xe đầu tiên trong CSDL hoặc yêu cầu
-    if (_wizardDetectedPallet == null) {
-      if (_repo.pallets.isNotEmpty) {
-        setState(() {
-          _wizardDetectedPallet = _repo.pallets.first;
-          _wizardDetectedPalletTag = _wizardDetectedPallet!.rfidEpc;
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng cho xe Pallet qua cổng quét hoặc khai báo mã xe Pallet!')),
-        );
-        return;
-      }
-    }
-
-    final palletCode = _wizardDetectedPallet!.palletCode;
-    final rfidEpc = _wizardDetectedPalletTag ?? _wizardDetectedPallet!.rfidEpc;
-
     // Chặn hoàn toàn nếu có chip lạ
     final unexpList = _getFilteredUnexpectedTags();
     if (unexpList.isNotEmpty) {
@@ -443,6 +425,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       );
       return;
     }
+
+    final palletCode = _wizardDetectedPallet?.palletCode;
+    final rfidEpc = _wizardDetectedPalletTag ?? _wizardDetectedPallet?.rfidEpc;
 
     // Cảnh báo nếu chưa đủ số lượng
     if (expectedCount > 0 && scannedCount < expectedCount) {
@@ -459,7 +444,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             ],
           ),
           content: Text(
-            'Hệ thống mới quét được $scannedCount / $expectedCount sản phẩm (còn thiếu ${expectedCount - scannedCount} sản phẩm).\n\nBạn có chắc chắn muốn hoàn tất nhập kho cho xe $palletCode với số lượng này không?',
+            'Hệ thống mới quét được $scannedCount / $expectedCount sản phẩm (còn thiếu ${expectedCount - scannedCount} sản phẩm).\n\nBạn có chắc chắn muốn hoàn tất nhập kho với số lượng này không?',
             style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13),
           ),
           actions: [
@@ -486,37 +471,53 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           ? _getWizardExpectedSerials().toList()
           : _wizardScannedTags.keys.toList();
 
-      await _repo.assignItemsToPallet(
-        palletCode: palletCode,
-        rfidEpc: rfidEpc,
-        itemEpcs: itemEpcs,
-      );
+      final targetItems = _repo.items.where((it) =>
+        itemEpcs.contains(it.epc) ||
+        (_wizardSelectedCartons.isNotEmpty && it.orderNo != null && _wizardSelectedCartons.contains(it.orderNo))
+      ).toList();
 
-      if (_wizardSelectedCartons.isNotEmpty) {
-        await _repo.assignCartonsToPallet(
+      // Kiểm tra đơn hàng / các sản phẩm này đã có mã Pallet trong file import hoặc từ xe quét qua cổng
+      final hasPallet = palletCode != null || targetItems.any((it) => it.palletId != null && it.palletId!.isNotEmpty);
+
+      if (palletCode != null) {
+        await _repo.assignItemsToPallet(
           palletCode: palletCode,
           rfidEpc: rfidEpc,
-          cartonCodes: _wizardSelectedCartons.toList(),
+          itemEpcs: itemEpcs,
         );
-      }
 
-      // Cập nhật trạng thái inStock và vị trí lưu kho
-      for (final it in _repo.items) {
-        if ((it.palletId != null && it.palletId!.toUpperCase() == palletCode.toUpperCase()) ||
-            itemEpcs.contains(it.epc) ||
-            (it.orderNo != null && _wizardSelectedCartons.contains(it.orderNo))) {
-          it.status = ItemStatus.inStock;
-          it.palletId = palletCode;
+        if (_wizardSelectedCartons.isNotEmpty) {
+          await _repo.assignCartonsToPallet(
+            palletCode: palletCode,
+            rfidEpc: rfidEpc,
+            cartonCodes: _wizardSelectedCartons.toList(),
+          );
         }
       }
 
-      // Cập nhật InboundOrder hoàn tất nếu toàn bộ sản phẩm đơn đã nhập
-      for (final order in _repo.inboundOrders) {
-        final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
-        if (orderItems.isNotEmpty && orderItems.every((i) => i.status == ItemStatus.inStock)) {
-          order.status = InboundOrderStatus.completed;
-          _pendingLoadedOrderNos.remove(order.orderNo);
+      final affectedOrders = _repo.inboundOrders.where((order) =>
+        _wizardSelectedCartons.contains(order.orderNo) ||
+        targetItems.any((i) => i.orderNo == order.orderNo)
+      ).toList();
+
+      if (affectedOrders.isNotEmpty) {
+        for (final order in affectedOrders) {
+          final orderEpcs = targetItems.where((i) => i.orderNo == order.orderNo).map((i) => i.epc).toList();
+          await _repo.confirmGateReceiveToWaitingPutaway(
+            orderNo: order.orderNo,
+            scannedEpcs: orderEpcs.isNotEmpty ? orderEpcs : itemEpcs,
+            palletCode: palletCode,
+            performedBy: 'Cổng RFID Gate',
+          );
         }
+      } else {
+        final orderNo = _wizardSelectedCartons.isNotEmpty ? _wizardSelectedCartons.first : 'GATE-${DateTime.now().millisecondsSinceEpoch}';
+        await _repo.confirmGateReceiveToWaitingPutaway(
+          orderNo: orderNo,
+          scannedEpcs: itemEpcs,
+          palletCode: palletCode,
+          performedBy: 'Cổng RFID Gate',
+        );
       }
 
       if (!mounted) return;
@@ -529,10 +530,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           backgroundColor: _eyeCare.colors.bgCard,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+            side: BorderSide(
+              color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF97316),
+              width: 1.5,
+            ),
           ),
           content: SizedBox(
-            width: 420,
+            width: 440,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -540,19 +544,29 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    color: (hasPallet ? const Color(0xFF10B981) : const Color(0xFFF97316)).withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check_circle, size: 50, color: Color(0xFF10B981)),
+                  child: Icon(
+                    hasPallet ? Icons.shelves : Icons.move_to_inbox,
+                    size: 50,
+                    color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF97316),
+                  ),
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'XÁC NHẬN ĐỌC ĐỦ THÀNH CÔNG!',
-                  style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+                  hasPallet ? 'CHỜ XẾP KỆ' : 'XẾP VÀO PALLET',
+                  style: TextStyle(
+                    color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF97316),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Đã đối soát đủ $scannedCount/$expectedCount sản phẩm • Không có chip lạ.\nDữ liệu đã được lưu CSDL và sẵn sàng đồng bộ sang máy PDA.',
+                  hasPallet
+                      ? 'Đã đối soát đủ $scannedCount/$expectedCount sản phẩm • Không có chip lạ.\nĐơn hàng đã có mã Pallet ➔ Trạng thái: CHỜ XẾP KỆ (sẵn sàng cất kệ bằng PDA).'
+                      : 'Đã đối soát đủ $scannedCount/$expectedCount sản phẩm • Không có chip lạ.\nĐơn hàng chưa có mã Pallet ➔ Trạng thái: XẾP VÀO PALLET.\nVui lòng xếp hàng vào Pallet trước khi cất kệ.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 12.5),
                 ),
@@ -578,13 +592,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     Expanded(
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
+                          backgroundColor: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF97316),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         icon: const Icon(Icons.refresh, size: 16),
-                        label: const Text('QUÉT TIẾP XE KHÁC', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                        label: const Text('QUÉT TIẾP ĐƠN KHÁC', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                         onPressed: () {
                           Navigator.of(dialogCtx).pop();
                           setState(() {
@@ -1139,6 +1153,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       int itemSeq = 1;
       for (var c in result.cartons) {
         final cartonBox = c['cartonBox']?.toString().trim();
+        final palletCode = c['palletCode']?.toString().trim();
         final serialItems = (c['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         if (serialItems != null && serialItems.isNotEmpty) {
           for (var sItem in serialItems) {
@@ -1146,6 +1161,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             final sBarcode = sItem['barcode']?.toString().trim() ?? c['productCode'];
             final sName = sItem['name']?.toString().trim() ?? c['productName'];
             final sSupplier = (sItem['supplier'] ?? c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
+            final sPallet = (sItem['pallet']?.toString().trim() ?? palletCode);
+            final effectivePallet = (sPallet != null && sPallet.isNotEmpty) ? sPallet : null;
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
@@ -1155,7 +1172,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               epc: sSerial,
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
-              palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              palletId: effectivePallet,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
@@ -1166,6 +1183,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         } else {
           final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim()).toList() ?? [];
           final sSupplier = (c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
+          final effectivePallet = (palletCode != null && palletCode.isNotEmpty) ? palletCode : null;
           for (var serial in serials) {
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
@@ -1176,7 +1194,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               epc: serial,
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
-              palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              palletId: effectivePallet,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
