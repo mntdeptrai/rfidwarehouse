@@ -205,11 +205,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           sku = (sItem['barcode'] ?? sku).toString();
           prodName = (sItem['name'] ?? prodName).toString();
         }
+        final sSupplier = (i < sItems.length ? sItems[i]['supplier'] : null) ?? cBox['supplier'] ?? 'Nhà cung cấp tổng hợp';
         flat.add({
           'boxCode': boxCode,
           'sku': sku,
           'productName': prodName,
           'serial': serial,
+          'supplier': sSupplier.toString(),
         });
       }
     }
@@ -1143,6 +1145,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             final sSerial = sItem['serial'].toString().trim();
             final sBarcode = sItem['barcode']?.toString().trim() ?? c['productCode'];
             final sName = sItem['name']?.toString().trim() ?? c['productName'];
+            final sSupplier = (sItem['supplier'] ?? c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
@@ -1153,11 +1156,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
               palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              supplier: sSupplier,
+              inboundTime: now,
+              inboundBy: 'Cổng RFID Gate',
             ));
             itemSeq++;
           }
         } else {
           final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim()).toList() ?? [];
+          final sSupplier = (c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
           for (var serial in serials) {
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
@@ -1169,6 +1177,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
               palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              supplier: sSupplier,
+              inboundTime: now,
+              inboundBy: 'Cổng RFID Gate',
             ));
             itemSeq++;
           }
@@ -1321,6 +1333,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               'sku': sku,
             });
 
+            final poSupplier = (r['supplier'] ?? 'Nhà cung cấp PO').toString().trim();
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sku,
@@ -1331,6 +1344,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               status: ItemStatus.pendingInbound,
               orderNo: poNo,
               palletId: poNo,
+              cartonCode: poNo,
+              supplier: poSupplier,
+              inboundTime: now,
+              inboundBy: 'Cổng RFID Gate',
             ));
             itemSeq++;
 
@@ -1866,9 +1883,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         ),
                         SizedBox(width: 45, child: Text('STT', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
-                        SizedBox(width: 145, child: Text('MÃ THÙNG HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        SizedBox(width: 140, child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
-                        SizedBox(width: 180, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        SizedBox(width: 130, child: Text('MÃ THÙNG HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        const SizedBox(width: 8),
+                        SizedBox(width: 160, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
                         Expanded(flex: 3, child: Text('TÊN SẢN PHẨM / QUY CÁCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
@@ -1985,7 +2004,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                           ),
                                           const SizedBox(width: 8),
                                           SizedBox(
-                                            width: 145,
+                                            width: 140,
+                                            child: Text(
+                                              (item['supplier'] ?? 'Nhà cung cấp tổng hợp').toString(),
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            width: 130,
                                             child: Align(
                                               alignment: Alignment.centerLeft,
                                               child: Container(
@@ -2005,7 +2033,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                           ),
                                           const SizedBox(width: 8),
                                           SizedBox(
-                                            width: 180,
+                                            width: 160,
                                             child: Align(
                                               alignment: Alignment.centerLeft,
                                               child: Container(

@@ -2403,49 +2403,84 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                         child: Text('Pallet rỗng, chưa có chip RFID nào.', style: TextStyle(color: c.textMuted, fontSize: 12)),
                       ),
                     )
-                  : Table(
-                      border: TableBorder.symmetric(inside: BorderSide(color: c.border)),
-                      columnWidths: const {
-                        0: FixedColumnWidth(40),
-                        1: FlexColumnWidth(2),
-                        2: FlexColumnWidth(3),
-                        3: FlexColumnWidth(2),
-                        4: FlexColumnWidth(3),
-                        5: FlexColumnWidth(1.5),
-                      },
-                      children: [
-                        TableRow(
-                          decoration: BoxDecoration(color: c.bgCardElevated),
-                          children: [
-                            Padding(padding: const EdgeInsets.all(8), child: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                            Padding(padding: const EdgeInsets.all(8), child: Text('Mã SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                            Padding(padding: const EdgeInsets.all(8), child: Text('Tên sản phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                            Padding(padding: const EdgeInsets.all(8), child: Text('Serial', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                            Padding(padding: const EdgeInsets.all(8), child: Text('RFID EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                            Padding(padding: const EdgeInsets.all(8), child: Text('Trạng thái', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          ],
-                        ),
-                        ...pItems.asMap().entries.map((e) {
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowHeight: 36,
+                        dataRowMinHeight: 36,
+                        dataRowMaxHeight: 44,
+                        horizontalMargin: 10,
+                        columnSpacing: 14,
+                        headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
+                        columns: [
+                          DataColumn(label: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('MÃ SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('MÃ THÙNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('NGƯỜI CẤT KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('SERIAL', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                        ],
+                        rows: pItems.asMap().entries.map((e) {
                           final idx = e.key + 1;
                           final it = e.value;
-                          return TableRow(
-                            children: [
-                              Padding(padding: const EdgeInsets.all(8), child: Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
-                              Padding(padding: const EdgeInsets.all(8), child: Text(it.sku, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600, fontSize: 11))),
-                              Padding(padding: const EdgeInsets.all(8), child: Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11))),
-                              Padding(padding: const EdgeInsets.all(8), child: Text(it.serialNumber, style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'Courier'))),
-                              Padding(padding: const EdgeInsets.all(8), child: Text(it.epc, style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'Courier'))),
-                              Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Text(
-                                  it.status.label,
-                                  style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
+                          final supplier = _repo.getItemSupplier(it);
+                          final carton = _repo.getItemCartonCode(it);
+                          final inBy = _repo.getItemInboundBy(it);
+                          final putBy = _repo.getItemPutawayBy(it);
+                          final inTime = _repo.getItemInboundTime(it);
+                          final inTimeStr = '${inTime.day.toString().padLeft(2, '0')}/${inTime.month.toString().padLeft(2, '0')}/${inTime.year} ${inTime.hour.toString().padLeft(2, '0')}:${inTime.minute.toString().padLeft(2, '0')}';
+
+                          return DataRow(
+                            cells: [
+                              DataCell(Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
+                              DataCell(Text(supplier, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                              DataCell(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5)),
+                                  ),
+                                  child: Text(it.sku, style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
+                                ),
+                              ),
+                              DataCell(Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11.5))),
+                              DataCell(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.5)),
+                                  ),
+                                  child: Text(carton, style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11)),
+                                ),
+                              ),
+                              DataCell(Text(inTimeStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                              DataCell(Text(inBy, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                              DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : c.textMuted, fontSize: 11, fontWeight: FontWeight.w500))),
+                              DataCell(Text(it.epc, style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold))),
+                              DataCell(Text(it.serialNumber.isNotEmpty ? it.serialNumber : '--', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'monospace'))),
+                              DataCell(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(it.status.label, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10)),
                                 ),
                               ),
                             ],
                           );
-                        }),
-                      ],
+                        }).toList(),
+                      ),
                     ),
             ),
         ],
@@ -2475,40 +2510,71 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             ],
           ),
           const SizedBox(height: 12),
-          Table(
-            border: TableBorder.all(color: c.border),
-            columnWidths: const {
-              0: FixedColumnWidth(40),
-              1: FlexColumnWidth(2),
-              2: FlexColumnWidth(3),
-              3: FlexColumnWidth(3),
-              4: FlexColumnWidth(1.5),
-            },
-            children: [
-              TableRow(
-                decoration: BoxDecoration(color: c.bgCardElevated),
-                children: [
-                  Padding(padding: const EdgeInsets.all(8), child: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  Padding(padding: const EdgeInsets.all(8), child: Text('Mã SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  Padding(padding: const EdgeInsets.all(8), child: Text('Tên sản phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  Padding(padding: const EdgeInsets.all(8), child: Text('Mã Thẻ RFID (EPC)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  Padding(padding: const EdgeInsets.all(8), child: Text('Trạng thái', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                ],
-              ),
-              ...looseItems.asMap().entries.map((e) {
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowHeight: 36,
+              dataRowMinHeight: 36,
+              dataRowMaxHeight: 44,
+              horizontalMargin: 10,
+              columnSpacing: 14,
+              headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
+              columns: [
+                DataColumn(label: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('MÃ SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('MÃ THÙNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('NGƯỜI CẤT KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+              ],
+              rows: looseItems.asMap().entries.map((e) {
                 final idx = e.key + 1;
                 final it = e.value;
-                return TableRow(
-                  children: [
-                    Padding(padding: const EdgeInsets.all(8), child: Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
-                    Padding(padding: const EdgeInsets.all(8), child: Text(it.sku, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
-                    Padding(padding: const EdgeInsets.all(8), child: Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11))),
-                    Padding(padding: const EdgeInsets.all(8), child: Text(it.epc, style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'Courier'))),
-                    Padding(padding: const EdgeInsets.all(8), child: Text(it.status.label, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11))),
+                final supplier = _repo.getItemSupplier(it);
+                final carton = _repo.getItemCartonCode(it);
+                final inBy = _repo.getItemInboundBy(it);
+                final putBy = _repo.getItemPutawayBy(it);
+                final inTime = _repo.getItemInboundTime(it);
+                final inTimeStr = '${inTime.day.toString().padLeft(2, '0')}/${inTime.month.toString().padLeft(2, '0')}/${inTime.year} ${inTime.hour.toString().padLeft(2, '0')}:${inTime.minute.toString().padLeft(2, '0')}';
+
+                return DataRow(
+                  cells: [
+                    DataCell(Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
+                    DataCell(Text(supplier, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(it.sku, style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
+                      ),
+                    ),
+                    DataCell(Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11.5))),
+                    DataCell(Text(carton, style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11))),
+                    DataCell(Text(inTimeStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                    DataCell(Text(inBy, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                    DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : c.textMuted, fontSize: 11))),
+                    DataCell(Text(it.epc, style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold))),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(it.status.label, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10)),
+                      ),
+                    ),
                   ],
                 );
-              }),
-            ],
+              }).toList(),
+            ),
           ),
         ],
       ),

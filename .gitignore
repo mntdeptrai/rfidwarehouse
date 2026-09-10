@@ -54,5 +54,4 @@ app.*.map.json
 *.env
 *.env.json
 supabase_secrets.json
-lib/config/secrets.dart
 

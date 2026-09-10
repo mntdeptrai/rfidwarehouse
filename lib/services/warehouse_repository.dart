@@ -1434,6 +1434,87 @@ class WarehouseRepository extends ChangeNotifier {
     return DateTime.now();
   }
 
+  /// Lấy thông tin Nhà cung cấp của một Item (Ưu tiên thuộc tính trên Item -> Tra cứu Đơn PO)
+  String getItemSupplier(Item item) {
+    if (item.supplier != null && item.supplier!.trim().isNotEmpty) {
+      return item.supplier!.trim();
+    }
+    if (item.orderNo != null && item.orderNo!.trim().isNotEmpty) {
+      final ord = _inboundOrders.where((o) =>
+        o.orderNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase() ||
+        o.inboundOrderId.trim().toUpperCase() == item.orderNo!.trim().toUpperCase()
+      ).firstOrNull;
+      if (ord != null && ord.sourceSupplier.trim().isNotEmpty) {
+        return ord.sourceSupplier.trim();
+      }
+    }
+    return 'Nhà cung cấp tổng hợp';
+  }
+
+  /// Lấy mã thùng hàng của Item
+  String getItemCartonCode(Item item) {
+    if (item.cartonCode != null && item.cartonCode!.trim().isNotEmpty) {
+      return item.cartonCode!.trim();
+    }
+    if (item.palletId != null && item.palletId!.trim().isNotEmpty) {
+      return item.palletId!.trim();
+    }
+    return 'Chưa đóng thùng';
+  }
+
+  /// Lấy người nhập kho của Item
+  String getItemInboundBy(Item item) {
+    if (item.inboundBy != null && item.inboundBy!.trim().isNotEmpty) {
+      return item.inboundBy!.trim();
+    }
+    if (item.orderNo != null && item.orderNo!.trim().isNotEmpty) {
+      final tx = _transactions.where((t) =>
+        t.documentNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase() &&
+        (t.type == TransactionType.inbound || t.transactionId.contains('INBOUND') || t.transactionId.contains('GATE'))
+      ).firstOrNull;
+      if (tx != null && tx.performedBy.trim().isNotEmpty) {
+        return tx.performedBy.trim();
+      }
+    }
+    return 'Cổng RFID Gate';
+  }
+
+  /// Lấy người cất kệ của Item
+  String getItemPutawayBy(Item item) {
+    if (item.putawayBy != null && item.putawayBy!.trim().isNotEmpty) {
+      return item.putawayBy!.trim();
+    }
+    if (item.palletId != null && item.palletId!.trim().isNotEmpty) {
+      final pal = _pallets.where((p) =>
+        p.palletId.toUpperCase() == item.palletId!.toUpperCase() ||
+        p.palletCode.toUpperCase() == item.palletId!.toUpperCase()
+      ).firstOrNull;
+      if (pal != null && pal.placedBy != null && pal.placedBy!.trim().isNotEmpty) {
+        return pal.placedBy!.trim();
+      }
+    }
+    final tx = _transactions.where((t) =>
+      t.sku == item.sku &&
+      (t.type == TransactionType.movement || t.transactionId.contains('PUTAWAY'))
+    ).firstOrNull;
+    if (tx != null && tx.performedBy.trim().isNotEmpty) {
+      return tx.performedBy.trim();
+    }
+    return item.status == ItemStatus.inStock ? 'Thủ kho PDA' : 'Chưa cất kệ';
+  }
+
+  /// Lấy thời gian nhập kho của Item
+  DateTime getItemInboundTime(Item item) {
+    if (item.inboundTime != null) return item.inboundTime!;
+    if (item.orderNo != null && item.orderNo!.trim().isNotEmpty) {
+      final ord = _inboundOrders.where((o) =>
+        o.orderNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase()
+      ).firstOrNull;
+      if (ord != null) return ord.createdAt;
+    }
+    return DateTime.now();
+  }
+
   /// Tra cứu bất đồng bộ có đối soát trực tiếp với SQLite để chống mất pallet
   Future<Pallet?> findPalletByRfidAsync(String epc) async {
     final direct = findPalletByRfid(epc);
@@ -1879,6 +1960,11 @@ class WarehouseRepository extends ChangeNotifier {
       }
       it.locationId = null;
       it.inboundTime = now;
+      it.cartonCode = effectiveCartonCode;
+      it.inboundBy = performedBy;
+      if (order != null && (it.supplier == null || it.supplier!.isEmpty)) {
+        it.supplier = order.sourceSupplier;
+      }
       if (it.orderNo == null || it.orderNo!.isEmpty) {
         it.orderNo = cleanOrderNo;
       }
@@ -2115,6 +2201,7 @@ class WarehouseRepository extends ChangeNotifier {
       final oldLoc = it.locationId ?? 'LOC-GATE-IN';
       it.status = ItemStatus.inStock;
       it.locationId = loc.locationId;
+      it.putawayBy = performedBy;
       it.inboundTime ??= now;
 
       await _dbService.insertItem(it);
@@ -2238,6 +2325,17 @@ class WarehouseRepository extends ChangeNotifier {
         item.locationId = locationId;
         item.palletId = pallet.palletId;
         item.inboundTime = now;
+        item.inboundBy = performedBy;
+        if (locationId != null) {
+          item.putawayBy = performedBy;
+        }
+        if (item.cartonCode == null || item.cartonCode!.isEmpty) {
+          item.cartonCode = palletCode;
+        }
+        if (orderNo != null && (item.supplier == null || item.supplier!.isEmpty)) {
+          final ord = _inboundOrders.where((o) => o.orderNo == orderNo).firstOrNull;
+          if (ord != null) item.supplier = ord.sourceSupplier;
+        }
         await _dbService.insertItem(item);
         await _syncDirectOrQueue(
           tableName: 'items',

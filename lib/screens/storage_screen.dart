@@ -53,6 +53,108 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
 
   // --- DIALOGS ---
 
+  void _showSkuRfidDetailsDialog(Product prod, EyeCareColors c) {
+    final items = _repo.items.where((i) => i.sku == prod.sku || i.productId == prod.productId).toList();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: c.border)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: c.rfidCyan.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+              child: Icon(Icons.nfc, color: c.rfidCyan, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Chi Tiết Hàng Hóa: ${prod.sku}', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text('${prod.productName}  •  ${items.length} Mã RFID Chip', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 900,
+          child: items.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(child: Text('Chưa có mã chip RFID nào thuộc mặt hàng này trong kho.', style: TextStyle(color: c.textMuted))),
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowHeight: 36,
+                    dataRowMinHeight: 36,
+                    dataRowMaxHeight: 44,
+                    columnSpacing: 16,
+                    headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
+                    columns: [
+                      DataColumn(label: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('MÃ SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('MÃ THÙNG HÀNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('NGƯỜI CẤT KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                    ],
+                    rows: items.asMap().entries.map((e) {
+                      final idx = e.key + 1;
+                      final it = e.value;
+                      final supplier = _repo.getItemSupplier(it);
+                      final carton = _repo.getItemCartonCode(it);
+                      final inBy = _repo.getItemInboundBy(it);
+                      final putBy = _repo.getItemPutawayBy(it);
+                      final inTime = _repo.getItemInboundTime(it);
+                      final inTimeStr = '${inTime.day.toString().padLeft(2, '0')}/${inTime.month.toString().padLeft(2, '0')}/${inTime.year} ${inTime.hour.toString().padLeft(2, '0')}:${inTime.minute.toString().padLeft(2, '0')}';
+                      final pallet = _repo.pallets.where((p) => p.palletId == it.palletId || p.palletCode == it.palletId).firstOrNull;
+                      final loc = it.locationId != null
+                          ? _repo.locations.where((l) => l.locationId == it.locationId || l.locationCode == it.locationId).firstOrNull
+                          : (pallet != null ? _repo.locations.where((l) => l.locationId == pallet.locationId || l.locationCode == pallet.locationId).firstOrNull : null);
+                      final locDisplay = loc?.displayName ?? (loc?.locationCode ?? (it.locationId ?? 'Chưa có vị trí'));
+
+                      return DataRow(
+                        cells: [
+                          DataCell(Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
+                          DataCell(Text(supplier, style: TextStyle(color: c.textPrimary, fontSize: 11.5))),
+                          DataCell(Text(it.sku, style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace'))),
+                          DataCell(Text(carton, style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataCell(Text(inTimeStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                          DataCell(Text(inBy, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                          DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : c.textMuted, fontSize: 11))),
+                          DataCell(Text(it.epc, style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold))),
+                          DataCell(Text(locDisplay, style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(it.status.label, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10)),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('ĐÓNG')),
+        ],
+      ),
+    );
+  }
+
   void _showAddProductDialog() {
     final c = _eyeCare.colors;
     final skuController = TextEditingController();
@@ -1196,6 +1298,11 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                         child: Text(prod.category, style: TextStyle(color: c.textSecondary, fontSize: 11)),
                       ),
                       const SizedBox(width: 4),
+                      IconButton(
+                        icon: Icon(Icons.table_view_rounded, color: c.rfidCyan, size: 19),
+                        tooltip: 'Xem chi tiết các mã RFID',
+                        onPressed: () => _showSkuRfidDetailsDialog(prod, c),
+                      ),
                       IconButton(
                         icon: Icon(Icons.edit_outlined, color: c.rfidCyan, size: 18),
                         tooltip: 'Chỉnh sửa SKU',

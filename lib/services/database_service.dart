@@ -198,6 +198,10 @@ class DatabaseService {
         location_id TEXT,
         inbound_time TEXT,
         allocated_time TEXT,
+        supplier TEXT,
+        carton_code TEXT,
+        inbound_by TEXT,
+        putaway_by TEXT,
         FOREIGN KEY (product_id) REFERENCES products (product_id),
         FOREIGN KEY (pallet_id) REFERENCES pallets (pallet_id),
         FOREIGN KEY (location_id) REFERENCES locations (location_id)
@@ -205,6 +209,18 @@ class DatabaseService {
     ''');
     try {
       await db.execute('ALTER TABLE items ADD COLUMN order_no TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE items ADD COLUMN supplier TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE items ADD COLUMN carton_code TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE items ADD COLUMN inbound_by TEXT');
+    } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE items ADD COLUMN putaway_by TEXT');
     } catch (_) {}
 
     // 5. Bảng Đơn Nhập kho (inbound_orders)
@@ -737,6 +753,10 @@ class DatabaseService {
         locationId: m['location_id'] as String?,
         inboundTime: m['inbound_time'] != null ? DateTime.tryParse(m['inbound_time'] as String) : null,
         allocatedTime: m['allocated_time'] != null ? DateTime.tryParse(m['allocated_time'] as String) : null,
+        supplier: m['supplier'] as String?,
+        cartonCode: m['carton_code'] as String?,
+        inboundBy: m['inbound_by'] as String?,
+        putawayBy: m['putaway_by'] as String?,
       );
     }).toList();
   }
@@ -756,6 +776,10 @@ class DatabaseService {
       'location_id': item.locationId,
       'inbound_time': item.inboundTime?.toIso8601String(),
       'allocated_time': item.allocatedTime?.toIso8601String(),
+      'supplier': item.supplier,
+      'carton_code': item.cartonCode,
+      'inbound_by': item.inboundBy,
+      'putaway_by': item.putawayBy,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -777,6 +801,10 @@ class DatabaseService {
         'location_id': item.locationId,
         'inbound_time': item.inboundTime?.toIso8601String(),
         'allocated_time': item.allocatedTime?.toIso8601String(),
+        'supplier': item.supplier,
+        'carton_code': item.cartonCode,
+        'inbound_by': item.inboundBy,
+        'putaway_by': item.putawayBy,
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     }
     await batch.commit(noResult: true);

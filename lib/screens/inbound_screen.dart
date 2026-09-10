@@ -52,6 +52,7 @@ class _InboundScreenState extends State<InboundScreen> {
   Pallet? _detectedPallet;
   bool _isScanning = false;
   bool _isSaving = false;
+  bool _autoConfirmedThisSession = false; // Chặn auto-confirm trùng lặp trong 1 phiên quét
   String _activeFilter = 'ALL'; // 'ALL', 'MATCHED', 'PENDING', 'UNEXPECTED'
 
   StreamSubscription<TagInfo>? _tagSubscription;
@@ -211,6 +212,10 @@ class _InboundScreenState extends State<InboundScreen> {
           _unexpectedTags.remove(cleanEpc);
           if (_uhf.hapticEnabled) HapticFeedback.selectionClick();
           _scheduleUiRefresh();
+
+          // ★ AUTO-CONFIRM: Khi quét liên tục, nếu đã đọc đủ 100% và không có chip lạ
+          //   → Tự động xác nhận nhập kho ngay lập tức mà không cần dừng quét
+          _checkAndAutoConfirm();
         }
       } else {
         // Kiểm tra xem có phải mã Pallet đang chọn hay không
@@ -268,8 +273,38 @@ class _InboundScreenState extends State<InboundScreen> {
       _scannedTags.clear();
       _unexpectedTags.clear();
       _detectedPallet = null;
+      _autoConfirmedThisSession = false; // Reset cờ auto-confirm khi làm mới
       _uhf.clearTags();
     });
+  }
+
+  /// Kiểm tra điều kiện tự động xác nhận nhập kho khi đang quét liên tục:
+  /// - Đã quét đủ 100% số lượng mã hàng khai báo
+  /// - Tất cả mã EPC quét được đều trùng khớp với danh sách khai báo
+  /// - Không có bất kỳ chip lạ nào ngoài đơn
+  /// - Chưa auto-confirm trong phiên quét hiện tại
+  void _checkAndAutoConfirm() {
+    if (_autoConfirmedThisSession) return; // Đã auto-confirm rồi
+    if (_isSaving) return; // Đang lưu CSDL
+    if (_unexpectedTags.isNotEmpty) return; // Có chip lạ → không auto
+
+    final expectedCount = _selectedEpcs.length;
+    if (expectedCount == 0) return;
+
+    final scannedCount = _scannedTags.keys
+        .where((epc) => _selectedEpcs.contains(epc.toUpperCase()))
+        .length;
+
+    if (scannedCount >= expectedCount) {
+      // ★ ĐỌC ĐỦ 100% + KHÔNG CÓ CHIP LẠ → Auto-confirm ngay!
+      _autoConfirmedThisSession = true;
+      // Cho UI kịp cập nhật thanh tiến độ 100% trước khi chạy confirm
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (!mounted) return;
+        if (_isSaving) return;
+        _confirmGoodsReceiveAtGate();
+      });
+    }
   }
 
   // ---------- HELPER METHODS NẠP FILE & LÀM MỚI (ĐỒNG BỘ DESKTOP) ----------
@@ -446,6 +481,7 @@ class _InboundScreenState extends State<InboundScreen> {
             final sSerial = sItem['serial'].toString().trim();
             final sBarcode = sItem['barcode']?.toString().trim() ?? c['productCode'];
             final sName = sItem['name']?.toString().trim() ?? c['productName'];
+            final sSupplier = (sItem['supplier'] ?? c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
@@ -456,11 +492,16 @@ class _InboundScreenState extends State<InboundScreen> {
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
               palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              supplier: sSupplier,
+              inboundTime: now,
+              inboundBy: 'Thủ kho PDA',
             ));
             itemSeq++;
           }
         } else {
           final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim()).toList() ?? [];
+          final sSupplier = (c['supplier'] ?? 'Nhà cung cấp tổng hợp').toString().trim();
           for (var serial in serials) {
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
@@ -472,6 +513,10 @@ class _InboundScreenState extends State<InboundScreen> {
               status: ItemStatus.pendingInbound,
               orderNo: inboundOrderNo,
               palletId: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
+              supplier: sSupplier,
+              inboundTime: now,
+              inboundBy: 'Thủ kho PDA',
             ));
             itemSeq++;
           }
@@ -1459,6 +1504,7 @@ class _InboundScreenState extends State<InboundScreen> {
                         if (_palletController.text.trim().isEmpty) {
                           _palletController.text = 'PALLET-01';
                         }
+                        _autoConfirmedThisSession = false; // Reset cờ auto-confirm khi bắt đầu phiên quét mới
                         setState(() => _wizardStep = 2);
                       },
               ),

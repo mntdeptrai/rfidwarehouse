@@ -75,6 +75,11 @@ class Item {
   DateTime? inboundTime;
   DateTime? allocatedTime;
 
+  String? supplier;
+  String? cartonCode;
+  String? inboundBy;
+  String? putawayBy;
+
   Item({
     required this.itemId,
     required this.productId,
@@ -88,7 +93,43 @@ class Item {
     this.locationId,
     this.inboundTime,
     this.allocatedTime,
+    this.supplier,
+    this.cartonCode,
+    this.inboundBy,
+    this.putawayBy,
   });
+
+  /// Tên nhà cung cấp hiển thị
+  String get supplierDisplay => (supplier != null && supplier!.trim().isNotEmpty) ? supplier!.trim() : 'Chưa khai báo';
+
+  /// Mã thùng hàng hiển thị
+  String get cartonDisplay {
+    if (cartonCode != null && cartonCode!.trim().isNotEmpty) return cartonCode!.trim();
+    if (palletId != null && palletId!.trim().isNotEmpty) return palletId!.trim();
+    return 'Chưa đóng thùng';
+  }
+
+  /// Người nhập kho hiển thị
+  String get inboundByDisplay => (inboundBy != null && inboundBy!.trim().isNotEmpty) ? inboundBy!.trim() : 'Cổng RFID Gate';
+
+  /// Người cất kệ hiển thị
+  String get putawayByDisplay {
+    if (putawayBy != null && putawayBy!.trim().isNotEmpty) return putawayBy!.trim();
+    if (status == ItemStatus.inStock) return 'Thủ kho PDA';
+    return 'Chưa cất kệ';
+  }
+
+  /// Ngày giờ nhập hiển thị
+  String get formattedInboundDate {
+    if (inboundTime == null) return '--';
+    final t = inboundTime!;
+    final d = t.day.toString().padLeft(2, '0');
+    final m = t.month.toString().padLeft(2, '0');
+    final y = t.year.toString();
+    final h = t.hour.toString().padLeft(2, '0');
+    final min = t.minute.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min';
+  }
 }
 
 /// Pallet lưu trữ hàng hóa

@@ -187,6 +187,7 @@ class ExcelImportService {
     int? serialCol;
     int? barcodeCol;
     int? nameCol;
+    int? supplierCol;
     int startRow = 0;
 
     final firstRow = rawGrid.first;
@@ -243,6 +244,15 @@ class ExcelImportService {
         nameCol = i;
         hasHeader = true;
       }
+      // 5. Kiểm tra cột Nhà cung cấp / Supplier / NCC / Vendor
+      else if (h.contains('supplier') ||
+          h.contains('ncc') ||
+          h.contains('nha cung cap') ||
+          h.contains('nhà cung cấp') ||
+          h.contains('vendor')) {
+        supplierCol = i;
+        hasHeader = true;
+      }
     }
 
     if (hasHeader) {
@@ -285,6 +295,7 @@ class ExcelImportService {
       final serial = (serialCol < row.length) ? row[serialCol].trim() : '';
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
       final name = (nameCol < row.length) ? row[nameCol].trim() : '';
+      final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
 
       if (carton.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
         continue;
@@ -315,10 +326,13 @@ class ExcelImportService {
           'cartonBox': effectiveCarton,
           'productCode': rowBarcode,
           'productName': effectiveName,
+          'supplier': supplier.isNotEmpty ? supplier : 'Nhà cung cấp tổng hợp',
           'quantity': 0,
           'serials': <String>[],
           'serialItems': <Map<String, dynamic>>[],
         };
+      } else if (supplier.isNotEmpty && cartonMap[groupKey]!['supplier'] == 'Nhà cung cấp tổng hợp') {
+        cartonMap[groupKey]!['supplier'] = supplier;
       }
 
       final entry = cartonMap[groupKey]!;
@@ -333,6 +347,7 @@ class ExcelImportService {
             'barcode': rowBarcode,
             'name': effectiveName,
             'carton': effectiveCarton,
+            'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
           });
         }
       } else {
