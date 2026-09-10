@@ -369,7 +369,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   }
                 },
               ),
-              const SizedBox(width: 10),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.rfidCyan,
@@ -381,6 +380,58 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 label: const Text('+ THÊM KỆ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 onPressed: () => _showAddShelfDialog(c),
               ),
+              if (_repo.locations.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                PopupMenuButton<String>(
+                  tooltip: 'Tùy chọn',
+                  icon: Icon(Icons.more_vert, color: c.textSecondary, size: 20),
+                  color: c.bgCard,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  onSelected: (val) async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    if (val == 'clear_all') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: c.bgCard,
+                          title: const Text('Xác nhận xóa toàn bộ kệ', style: TextStyle(fontWeight: FontWeight.bold)),
+                          content: Text(
+                            'Bạn có chắc chắn muốn xóa toàn bộ ${_repo.locations.length} kệ hàng hiện tại trong kho không?\n(Sau khi xóa, bạn có thể tự thêm lại kệ mới theo ý muốn).',
+                            style: TextStyle(color: c.textPrimary),
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('XÓA HẾT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await _repo.deleteAllLocations();
+                        if (mounted) setState(() {});
+                        messenger.showSnackBar(
+                          const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xóa sạch toàn bộ kệ trong kho!')),
+                        );
+                      }
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    const PopupMenuItem(
+                      value: 'clear_all',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_sweep_outlined, color: Color(0xFFEF4444), size: 18),
+                          SizedBox(width: 8),
+                          Text('Xóa toàn bộ kệ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12.5)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         );
@@ -1304,13 +1355,229 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
               ),
             ),
             actions: [
+              TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: const Color(0xFFEF4444)),
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: const Text('XÓA KỆ', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final confirm = await showDialog<bool>(
+                    context: ctx,
+                    builder: (confirmCtx) => AlertDialog(
+                      backgroundColor: c.bgCard,
+                      title: const Text('Xác nhận xóa kệ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      content: Text(
+                        'Bạn có chắc chắn muốn xóa kệ ${loc.displayName} (${loc.locationCode}) khỏi hệ thống không?',
+                        style: TextStyle(color: c.textPrimary),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(confirmCtx, false),
+                          child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                          onPressed: () => Navigator.pop(confirmCtx, true),
+                          child: const Text('XÓA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await _repo.deleteLocation(loc.locationId);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (mounted) setState(() {});
+                    messenger.showSnackBar(
+                      SnackBar(
+                        backgroundColor: const Color(0xFF10B981),
+                        content: Text('Đã xóa kệ ${loc.displayName} thành công!'),
+                      ),
+                    );
+                  }
+                },
+              ),
+              const Spacer(),
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text('ĐÓNG', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.bold)),
               ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: c.rfidCyan,
+                  foregroundColor: const Color(0xFF2C251E),
+                ),
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('SỬA KỆ', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _showEditShelfDialog(loc, c);
+                },
+              ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // 5B. SỬA THÔNG TIN KỆ
+  // ===========================================================================
+  void _showEditShelfDialog(Location loc, EyeCareColors c) {
+    final messenger = ScaffoldMessenger.of(context);
+    final codeCtrl = TextEditingController(text: loc.locationCode);
+    final shelfCtrl = TextEditingController(text: loc.shelf);
+    final zoneCtrl = TextEditingController(text: loc.zone);
+    final levelCtrl = TextEditingController(text: loc.level);
+    final capCtrl = TextEditingController(text: loc.maxPalletCapacity.toString());
+    String selectedStatus = loc.status;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          backgroundColor: c.bgCard,
+          title: Text(
+            'Sửa Thông Tin Kệ: ${loc.displayName}',
+            style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: codeCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Mã Vị Trí (Location Code)',
+                    hintText: 'Ví dụ: LOC-A3-01',
+                    labelStyle: TextStyle(color: c.textSecondary),
+                  ),
+                  style: TextStyle(color: c.textPrimary),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: shelfCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Tên Kệ (Shelf)',
+                    hintText: 'Ví dụ: Kệ A3',
+                    labelStyle: TextStyle(color: c.textSecondary),
+                  ),
+                  style: TextStyle(color: c.textPrimary),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: zoneCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Khu Vực (Zone)',
+                    hintText: 'Ví dụ: Khu A',
+                    labelStyle: TextStyle(color: c.textSecondary),
+                  ),
+                  style: TextStyle(color: c.textPrimary),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: levelCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Tầng (Level)',
+                    hintText: 'Ví dụ: Tầng 1',
+                    labelStyle: TextStyle(color: c.textSecondary),
+                  ),
+                  style: TextStyle(color: c.textPrimary),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: capCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Sức chứa tối đa (Pallet)',
+                    labelStyle: TextStyle(color: c.textSecondary),
+                  ),
+                  style: TextStyle(color: c.textPrimary),
+                ),
+                const SizedBox(height: 14),
+                Text('Trạng thái kệ:', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('CÒN TRỐNG'),
+                      selected: selectedStatus == 'AVAILABLE',
+                      selectedColor: const Color(0xFF10B981).withValues(alpha: 0.2),
+                      labelStyle: TextStyle(
+                        color: selectedStatus == 'AVAILABLE' ? const Color(0xFF10B981) : c.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                      onSelected: (_) => setDialogState(() => selectedStatus = 'AVAILABLE'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('SẮP HẾT'),
+                      selected: selectedStatus == 'NEAR_FULL',
+                      selectedColor: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                      labelStyle: TextStyle(
+                        color: selectedStatus == 'NEAR_FULL' ? const Color(0xFFF59E0B) : c.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                      onSelected: (_) => setDialogState(() => selectedStatus = 'NEAR_FULL'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('ĐẦY'),
+                      selected: selectedStatus == 'FULL',
+                      selectedColor: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                      labelStyle: TextStyle(
+                        color: selectedStatus == 'FULL' ? const Color(0xFFEF4444) : c.textSecondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                      onSelected: (_) => setDialogState(() => selectedStatus = 'FULL'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+              onPressed: () async {
+                final code = codeCtrl.text.trim();
+                final shelf = shelfCtrl.text.trim();
+                if (code.isEmpty || shelf.isEmpty) return;
+
+                final cap = int.tryParse(capCtrl.text.trim()) ?? loc.maxPalletCapacity;
+                await _repo.updateLocationDetails(
+                  locationId: loc.locationId,
+                  locationCode: code,
+                  zone: zoneCtrl.text.trim(),
+                  shelf: shelf,
+                  level: levelCtrl.text.trim(),
+                  maxCapacity: cap,
+                  status: selectedStatus,
+                  aisleSide: loc.aisleSide,
+                  sortOrder: loc.sortOrder,
+                );
+
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) setState(() {});
+                messenger.showSnackBar(
+                  SnackBar(
+                    backgroundColor: const Color(0xFF10B981),
+                    content: Text('Đã cập nhật thông tin kệ $shelf thành công!'),
+                  ),
+                );
+              },
+              child: const Text('CẬP NHẬT', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1350,6 +1617,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   // 6. THÊM KỆ MỚI
   // ===========================================================================
   void _showAddShelfDialog(EyeCareColors c) {
+    final messenger = ScaffoldMessenger.of(context);
     final codeCtrl = TextEditingController();
     final shelfCtrl = TextEditingController();
     final zoneCtrl = TextEditingController(text: 'Khu A');
@@ -1431,6 +1699,13 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
               await _repo.addLocation(newLoc);
               if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) setState(() {});
+              messenger.showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFF10B981),
+                  content: Text('Đã thêm kệ ${newLoc.displayName} thành công!'),
+                ),
+              );
             },
             child: const Text('LƯU KỆ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),

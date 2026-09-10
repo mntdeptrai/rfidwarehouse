@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../models/catalog_models.dart';
 import '../models/wms_models.dart';
 import '../services/warehouse_repository.dart';
 import '../theme/eye_care_theme.dart';
@@ -60,6 +59,9 @@ class WarehouseLocationGridWidget extends StatefulWidget {
   final String? selectedLocationId;
   final ValueChanged<String?>? onLocationSelected;
   final VoidCallback? onLocationDataChanged;
+  final double? maxGridHeight;
+  final bool isCollapsible;
+  final bool initialCollapsed;
 
   const WarehouseLocationGridWidget({
     super.key,
@@ -67,6 +69,9 @@ class WarehouseLocationGridWidget extends StatefulWidget {
     this.selectedLocationId,
     this.onLocationSelected,
     this.onLocationDataChanged,
+    this.maxGridHeight,
+    this.isCollapsible = true,
+    this.initialCollapsed = false,
   });
 
   @override
@@ -76,8 +81,22 @@ class WarehouseLocationGridWidget extends StatefulWidget {
 class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidget> {
   final WarehouseRepository _repo = WarehouseRepository();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
+  final ScrollController _scrollController = ScrollController();
+  late bool _isCollapsed;
   String _selectedStatusFilter = 'ALL'; // ALL, FULL, NEAR_FULL, AVAILABLE
-  String _selectedZoneFilter = 'ALL';
+  final String _selectedZoneFilter = 'ALL';
+
+  @override
+  void initState() {
+    super.initState();
+    _isCollapsed = widget.initialCollapsed;
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   ShelfStatusType _getShelfStatus(Location loc) {
     final s = loc.status.toUpperCase();
@@ -107,9 +126,6 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
       if (st == ShelfStatusType.plentyAvailable) plentyCount++;
     }
 
-    // Danh sách khu vực
-    final zones = {'ALL', ...allLocations.map((l) => (l.zone ?? 'Khu A').trim()).where((z) => z.isNotEmpty)}.toList();
-
     // Lọc ô kệ
     final filteredLocations = allLocations.where((loc) {
       final st = _getShelfStatus(loc);
@@ -118,7 +134,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
       if (_selectedStatusFilter == 'AVAILABLE' && st != ShelfStatusType.plentyAvailable) return false;
 
       if (_selectedZoneFilter != 'ALL') {
-        final z = (loc.zone ?? '').trim().toUpperCase();
+        final z = loc.zone.trim().toUpperCase();
         if (z != _selectedZoneFilter.trim().toUpperCase()) return false;
       }
       return true;
@@ -146,87 +162,133 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: c.bgDeep,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-              border: Border(bottom: BorderSide(color: c.border)),
+              borderRadius: _isCollapsed && selectedLoc == null
+                  ? BorderRadius.circular(14)
+                  : const BorderRadius.vertical(top: Radius.circular(14)),
+              border: _isCollapsed && selectedLoc == null
+                  ? null
+                  : Border(bottom: BorderSide(color: c.border)),
             ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(
-                children: [
-                  Icon(Icons.shelves, color: c.rfidCyan, size: 19),
-                  const SizedBox(width: 8),
-                  Text(
-                    'SƠ ĐỒ 10 VỊ TRÍ KHO HÀNG (CÁC Ô KỆ)',
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12.5,
-                      letterSpacing: 0.3,
+            child: Row(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: [
+                        Icon(Icons.shelves, color: c.rfidCyan, size: 19),
+                        const SizedBox(width: 8),
+                        Text(
+                          allLocations.length == 10
+                              ? 'SƠ ĐỒ 10 VỊ TRÍ KHO HÀNG (CÁC Ô KỆ)'
+                              : 'SƠ ĐỒ VỊ TRÍ KHO HÀNG (${allLocations.length} Ô KỆ)',
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: c.rfidCyan.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${allLocations.length} Ô KỆ',
+                            style: TextStyle(
+                              color: c.rfidCyan,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+
+                        // Chú thích màu sắc chuẩn Kiểm Kho
+                        _buildLegendPill(
+                          color: ShelfStatusType.full.color,
+                          label: 'Kệ đầy ($fullCount)',
+                          value: 'FULL',
+                          c: c,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildLegendPill(
+                          color: ShelfStatusType.almostFull.color,
+                          label: 'Sắp hết ($almostFullCount)',
+                          value: 'NEAR_FULL',
+                          c: c,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildLegendPill(
+                          color: ShelfStatusType.plentyAvailable.color,
+                          label: 'Còn trống ($plentyCount)',
+                          value: 'AVAILABLE',
+                          c: c,
+                        ),
+                        const SizedBox(width: 10),
+
+                        // Nút Thêm kệ
+                        IconButton(
+                          tooltip: 'Thêm ô kệ mới',
+                          icon: const Icon(Icons.add_circle_outline, size: 20),
+                          color: const Color(0xFF10B981),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _showAddLocationDialog(context, c),
+                        ),
+                        const SizedBox(width: 8),
+                        // Nút Làm mới danh sách kệ
+                        IconButton(
+                          tooltip: 'Làm mới danh sách kệ',
+                          icon: const Icon(Icons.refresh_rounded, size: 20),
+                          color: c.textSecondary,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () async {
+                            await _repo.reloadFromSqlite();
+                            setState(() {});
+                            widget.onLocationDataChanged?.call();
+                          },
+                        ),
+                      ],
                     ),
                   ),
+                ),
+                if (widget.isCollapsible) ...[
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: c.rfidCyan.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${allLocations.length} Ô KỆ',
-                      style: TextStyle(
-                        color: c.rfidCyan,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                  InkWell(
+                    onTap: () => setState(() => _isCollapsed = !_isCollapsed),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isCollapsed ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
+                            size: 16,
+                            color: c.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _isCollapsed ? 'Mở rộng sơ đồ' : 'Thu gọn sơ đồ',
+                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 14),
-
-                  // Chú thích màu sắc chuẩn Kiểm Kho
-                  _buildLegendPill(
-                    color: ShelfStatusType.full.color,
-                    label: 'Kệ đầy ($fullCount)',
-                    value: 'FULL',
-                    c: c,
-                  ),
-                  const SizedBox(width: 6),
-                  _buildLegendPill(
-                    color: ShelfStatusType.almostFull.color,
-                    label: 'Sắp hết ($almostFullCount)',
-                    value: 'NEAR_FULL',
-                    c: c,
-                  ),
-                  const SizedBox(width: 6),
-                  _buildLegendPill(
-                    color: ShelfStatusType.plentyAvailable.color,
-                    label: 'Còn trống ($plentyCount)',
-                    value: 'AVAILABLE',
-                    c: c,
-                  ),
-                  const SizedBox(width: 10),
-
-                  // Nút Thêm kệ
-                  IconButton(
-                    tooltip: 'Thêm ô kệ mới',
-                    icon: const Icon(Icons.add_circle_outline, size: 20),
-                    color: const Color(0xFF10B981),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () => _showAddLocationDialog(context, c),
-                  ),
-                  const SizedBox(width: 8),
-                  // Nút Đặt lại 10 kệ mẫu
-                  IconButton(
-                    tooltip: 'Đặt lại 10 kệ mẫu mặc định',
-                    icon: const Icon(Icons.restart_alt_rounded, size: 20),
-                    color: c.textSecondary,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () => _confirmResetLocations(context, c),
-                  ),
                 ],
-              ),
+              ],
             ),
           ),
 
@@ -243,7 +305,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                     child: Text(
                       widget.mode == WarehouseLocationGridMode.outbound
                           ? 'Đang lọc sản phẩm tại [${selectedLoc.displayName}] (${_repo.getItemsAtLocation(selectedLoc).length} SP) • Bấm lại ô kệ để xem toàn bộ kho'
-                          : 'Đã chọn vị trí cất hàng: [${selectedLoc.displayName}] (${selectedLoc.zone ?? 'Khu A'} • ${selectedLoc.shelf ?? 'Tầng 1'})',
+                          : 'Đã chọn vị trí cất hàng: [${selectedLoc.displayName}] (${selectedLoc.zone.isNotEmpty ? selectedLoc.zone : 'Khu A'} • ${selectedLoc.shelf.isNotEmpty ? selectedLoc.shelf : 'Tầng 1'})',
                       style: const TextStyle(
                         color: Color(0xFF10B981),
                         fontSize: 11.5,
@@ -270,46 +332,102 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
               ),
             ),
 
-          // ==================== 3. LƯỚI CÁC Ô KỆ (GIỐNG HỆT GIAO DIỆN KIỂM KHO) ====================
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: filteredLocations.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Text(
-                        'Không tìm thấy ô kệ nào khớp với bộ lọc.',
-                        style: TextStyle(color: c.textSecondary, fontSize: 13),
+          // ==================== 3. LƯỚI CÁC Ô KỆ ====================
+          if (!_isCollapsed)
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: allLocations.isEmpty
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: c.bgDeep,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: c.border.withValues(alpha: 0.5)),
                       ),
-                    ),
-                  )
-                : LayoutBuilder(
-                    builder: (context, constraints) {
-                      final availableWidth = constraints.maxWidth;
-                      int crossAxisCount = 5;
-                      if (availableWidth < 650) {
-                        crossAxisCount = 2;
-                      } else if (availableWidth < 900) {
-                        crossAxisCount = 3;
-                      } else if (availableWidth < 1200) {
-                        crossAxisCount = 4;
-                      }
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.shelves, size: 36, color: c.textMuted.withValues(alpha: 0.6)),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Chưa có ô vị trí / kệ nào trong kho',
+                            style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Dữ liệu kho do bạn tự thêm và quản lý. Bấm nút bên dưới để tạo ô kệ đầu tiên.',
+                            style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('➕ THÊM Ô KỆ MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () => _showAddLocationDialog(context, c),
+                          ),
+                        ],
+                      ),
+                    )
+                  : filteredLocations.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Text(
+                              'Không tìm thấy ô kệ nào khớp với bộ lọc.',
+                              style: TextStyle(color: c.textSecondary, fontSize: 13),
+                            ),
+                          ),
+                        )
+                      : ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: widget.maxGridHeight ?? 245.0,
+                          ),
+                          child: Scrollbar(
+                            controller: _scrollController,
+                            thumbVisibility: true,
+                            child: SingleChildScrollView(
+                              controller: _scrollController,
+                              physics: const BouncingScrollPhysics(),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final availableWidth = constraints.maxWidth - 12;
+                                  int crossAxisCount = 5;
+                                  if (availableWidth < 650) {
+                                    crossAxisCount = 2;
+                                  } else if (availableWidth < 900) {
+                                    crossAxisCount = 3;
+                                  } else if (availableWidth < 1200) {
+                                    crossAxisCount = 4;
+                                  }
 
-                      final itemWidth = (availableWidth - (crossAxisCount - 1) * 8) / crossAxisCount;
+                                  final itemWidth = (availableWidth - (crossAxisCount - 1) * 8) / crossAxisCount;
 
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: filteredLocations.map((loc) {
-                          return SizedBox(
-                            width: itemWidth,
-                            child: _buildShelfCard(loc, selectedLoc, c),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-          ),
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: filteredLocations.map((loc) {
+                                        return SizedBox(
+                                          width: itemWidth,
+                                          child: _buildShelfCard(loc, selectedLoc, c),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+            ),
         ],
       ),
     );
@@ -543,7 +661,18 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                         ],
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () => _showEditLocationDialog(context, loc, c),
+                      child: Tooltip(
+                        message: 'Sửa / Xóa kệ này',
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          child: Icon(Icons.edit_outlined, size: isCompact ? 13 : 14, color: c.textSecondary),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
                     InkWell(
                       onTap: () => _showShelfDetailDialog(loc, status, itemsOnShelf.length, itemsOnShelf, c),
                       child: Text(
@@ -864,9 +993,9 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
   // ---------- DIALOG SỬA THÔNG TIN Ô KỆ ----------
   void _showEditLocationDialog(BuildContext context, Location loc, EyeCareColors c) {
     final codeCtrl = TextEditingController(text: loc.locationCode);
-    final zoneCtrl = TextEditingController(text: loc.zone ?? 'Khu A');
-    final shelfCtrl = TextEditingController(text: loc.shelf ?? 'Kệ A1');
-    final levelCtrl = TextEditingController(text: loc.level ?? 'Tầng 1');
+    final zoneCtrl = TextEditingController(text: loc.zone.isNotEmpty ? loc.zone : 'Khu A');
+    final shelfCtrl = TextEditingController(text: loc.shelf.isNotEmpty ? loc.shelf : 'Kệ A1');
+    final levelCtrl = TextEditingController(text: loc.level.isNotEmpty ? loc.level : 'Tầng 1');
     final capCtrl = TextEditingController(text: '${loc.maxPalletCapacity > 0 ? loc.maxPalletCapacity : 20}');
     String selectedStatus = loc.status;
 
@@ -925,7 +1054,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedStatus,
+                    initialValue: selectedStatus,
                     decoration: InputDecoration(
                       labelText: 'Trạng thái kệ',
                       labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
@@ -945,6 +1074,41 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
             ),
           ),
           actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFFEF4444)),
+              label: const Text('XÓA KỆ NÀY', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: ctx,
+                  builder: (confirmCtx) => AlertDialog(
+                    backgroundColor: c.bgCard,
+                    title: Text('Xác nhận xóa ô kệ?', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
+                    content: Text(
+                      'Bạn có chắc chắn muốn xóa ô kệ "${loc.displayName}" (${loc.locationCode}) khỏi sơ đồ kho không?',
+                      style: TextStyle(color: c.textSecondary),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(confirmCtx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                        onPressed: () => Navigator.pop(confirmCtx, true),
+                        child: const Text('XÓA KỆ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await _repo.deleteLocation(loc.locationId);
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  if (widget.selectedLocationId == loc.locationId || widget.selectedLocationId == loc.locationCode) {
+                    widget.onLocationSelected?.call(null);
+                  }
+                  setState(() {});
+                  widget.onLocationDataChanged?.call();
+                }
+              },
+            ),
+            const SizedBox(width: 8),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
               child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
@@ -967,7 +1131,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                   aisleSide: loc.aisleSide,
                   sortOrder: loc.sortOrder,
                 );
-                Navigator.of(ctx).pop();
+                if (ctx.mounted) Navigator.of(ctx).pop();
                 setState(() {});
                 widget.onLocationDataChanged?.call();
               },
@@ -1070,7 +1234,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
               );
 
               await _repo.addCustomLocation(newLoc);
-              Navigator.of(ctx).pop();
+              if (ctx.mounted) Navigator.of(ctx).pop();
               setState(() {});
               widget.onLocationDataChanged?.call();
             },
@@ -1079,31 +1243,5 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
         ],
       ),
     );
-  }
-
-  // ---------- XÁC NHẬN ĐẶT LẠI 10 KỆ MẪU ----------
-  Future<void> _confirmResetLocations(BuildContext context, EyeCareColors c) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: c.bgCard,
-        title: Text('Đặt lại 10 kệ mặc định?', style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
-        content: Text('Hệ thống sẽ sắp xếp lại 10 kệ mẫu A-01..A-05 và B-01..B-05.', style: TextStyle(color: c.textSecondary, fontSize: 13)),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('HỦY')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('XÁC NHẬN'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _repo.ensureDefault10Locations();
-      setState(() {});
-      widget.onLocationDataChanged?.call();
-    }
   }
 }

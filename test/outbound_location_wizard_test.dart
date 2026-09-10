@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:uhf/models/catalog_models.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/screens/desktop/desktop_goods_delivery_view.dart';
 import 'package:uhf/services/warehouse_repository.dart';

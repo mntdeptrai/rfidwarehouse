@@ -82,7 +82,7 @@ class PdaDrawer extends StatelessWidget {
                     color: c.successEmerald,
                   ),
                   title: Text(
-                    'Xếp Kho / Cất Hàng (Putaway)',
+                    'Cất Hàng Vào Kệ',
                     style: TextStyle(
                       color: c.textPrimary,
                       fontSize: 14,

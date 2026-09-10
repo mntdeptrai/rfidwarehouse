@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../services/auth_service.dart';
-import '../../models/roles/role_registry.dart';
+import '../../services/warehouse_repository.dart';
+import '../../models/wms_models.dart';
 import '../../theme/eye_care_theme.dart';
 import 'pda_drawer.dart';
 import 'pda_goods_delivery_screen.dart';
@@ -23,6 +24,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
   final _syncService = SupabaseSyncService();
   final _eyeCare = EyeCareThemeService();
   final _authService = AuthService();
+  final _repo = WarehouseRepository();
 
   @override
   void initState() {
@@ -30,6 +32,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     _syncService.addListener(_onStateChange);
     _eyeCare.addListener(_onStateChange);
     _authService.addListener(_onStateChange);
+    _repo.addListener(_onStateChange);
   }
 
   void _onStateChange() {
@@ -41,6 +44,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     _syncService.removeListener(_onStateChange);
     _eyeCare.removeListener(_onStateChange);
     _authService.removeListener(_onStateChange);
+    _repo.removeListener(_onStateChange);
     super.dispose();
   }
 
@@ -185,62 +189,8 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           padding: EdgeInsets.symmetric(horizontal: isUltraNarrow ? 8 : 18, vertical: isUltraNarrow ? 8 : 14),
           child: Column(
             children: [
-              // Prominent Putaway Banner Card (Chỉ hiển thị cho người có quyền)
-              if (role.canInbound)
-                InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    margin: const EdgeInsets.only(bottom: 14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0284C7).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: const Color(0xFF0284C7),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0284C7),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.shelves,
-                            color: Color(0xFF2C251E),
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'CẤT HÀNG LÊN KỆ (PUTAWAY)',
-                            style: TextStyle(
-                              color: Color(0xFF0284C7),
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                        const Icon(
-                          Icons.arrow_forward_ios,
-                          size: 14,
-                          color: Color(0xFF0284C7),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              // Ô thông tin khi nhận lệnh nhập hoặc xuất từ app desktop (WMS Dispatch Notification)
+              _buildDesktopOrderNotificationCard(c, role),
 
               Expanded(
                 child: LayoutBuilder(
@@ -501,6 +451,129 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopOrderNotificationCard(EyeCareColors c, BaseRolePermission role) {
+    if (!role.canInbound) return const SizedBox.shrink();
+
+    // Tìm các sản phẩm / kiện hàng đã đọc xong từ máy tính nhưng chưa cất lên kệ (Chờ cất vào kệ)
+    final waitingPutawayItems = _repo.items.where((it) =>
+        it.status == ItemStatus.waitingPutaway ||
+        (it.palletId != null &&
+            it.palletId!.isNotEmpty &&
+            (it.locationId == null || it.locationId!.isEmpty || it.locationId == 'LOC-GATE-IN'))
+    ).toList();
+
+    // Hoặc các đơn nhập kho đang ở trạng thái chờ xếp kệ
+    final waitingInboundOrders = _repo.inboundOrders.where((o) =>
+        o.status == InboundOrderStatus.waitingPutaway
+    ).toList();
+
+    final hasPutaway = waitingPutawayItems.isNotEmpty || waitingInboundOrders.isNotEmpty;
+
+    // Nếu không có hàng cần cất -> Ẩn hoàn toàn ô này, không hiển thị gì cả
+    if (!hasPutaway) {
+      return const SizedBox.shrink();
+    }
+
+    final targetPallet = waitingPutawayItems.isNotEmpty
+        ? (waitingPutawayItems.first.palletId ?? 'Xe hàng')
+        : (waitingInboundOrders.first.orderNo);
+    final count = waitingPutawayItems.isNotEmpty
+        ? waitingPutawayItems.where((it) => it.palletId == targetPallet).length
+        : waitingInboundOrders.first.details.fold(0, (sum, d) => sum + d.requiredQty);
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10B981).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF10B981).withValues(alpha: 0.1),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.shelves,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'ĐÃ ĐỌC XONG - CẦN CẤT VÀO KỆ',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Xe: $targetPallet • $count sản phẩm',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Text(
+                    'Máy tính đã đọc đủ • Bấm để cất vào kệ ➜',
+                    style: TextStyle(
+                      color: Color(0xFF059669),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Color(0xFF10B981),
+            ),
+          ],
         ),
       ),
     );

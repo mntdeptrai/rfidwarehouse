@@ -585,6 +585,15 @@ class DatabaseService {
     );
   }
 
+  Future<void> deleteAllLocations() async {
+    final db = await database;
+    await db.delete('locations');
+    try {
+      await db.rawUpdate('UPDATE pallets SET location_id = NULL');
+      await db.rawUpdate('UPDATE items SET location_id = NULL');
+    } catch (_) {}
+  }
+
   Future<File?> _getPalletBackupFile() async {
     final isTest = Platform.environment.containsKey('FLUTTER_TEST');
     if (isTest) return null;

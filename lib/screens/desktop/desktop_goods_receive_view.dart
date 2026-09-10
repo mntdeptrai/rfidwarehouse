@@ -9,9 +9,6 @@ import '../../services/tower_light_service.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../services/excel_import_service.dart';
 import '../../theme/eye_care_theme.dart';
-import '../../widgets/warehouse_floor_plan_widget.dart';
-import '../../widgets/warehouse_floor_plan_editor_dialog.dart';
-import '../../widgets/warehouse_location_grid_widget.dart';
 
 /// Màn hình Quản Lý Nhập Kho Desktop với Quy Trình 5 Bước Tuần Tự (Guided Inbound & Putaway Wizard)
 class DesktopGoodsReceiveView extends StatefulWidget {
@@ -37,12 +34,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final List<Map<String, dynamic>> _receiptCartons = [];
   final Set<String> _wizardSelectedCartons = {};
   final Set<String> _wizardSelectedEpcs = {};
+  final List<String> _pendingLoadedOrderNos = [];
 
   // Pallet tự động nhận diện từ CSDL hoặc chọn nhanh
   Pallet? _wizardDetectedPallet;
   String? _wizardDetectedPalletTag;
-  String? _targetPutawayLocationId;
-  bool _showFloorPlanPutaway = true;
 
   final Map<String, TagInfo> _wizardScannedTags = {};
   final Map<String, TagInfo> _wizardUnexpectedTags = {};
@@ -509,13 +505,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             (it.orderNo != null && _wizardSelectedCartons.contains(it.orderNo))) {
           it.status = ItemStatus.inStock;
           it.palletId = palletCode;
-          if (_targetPutawayLocationId != null) {
-            it.locationId = _targetPutawayLocationId;
-          }
         }
-      }
-      if (_wizardDetectedPallet != null && _targetPutawayLocationId != null) {
-        _wizardDetectedPallet!.locationId = _targetPutawayLocationId;
       }
 
       // Cập nhật InboundOrder hoàn tất nếu toàn bộ sản phẩm đơn đã nhập
@@ -523,6 +513,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         final orderItems = _repo.items.where((i) => i.orderNo == order.orderNo).toList();
         if (orderItems.isNotEmpty && orderItems.every((i) => i.status == ItemStatus.inStock)) {
           order.status = InboundOrderStatus.completed;
+          _pendingLoadedOrderNos.remove(order.orderNo);
         }
       }
 
@@ -632,10 +623,109 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _wizardSelectedCartons.clear();
       _wizardSelectedEpcs.clear();
       _wizardScannedTags.clear();
+      _wizardUnexpectedTags.clear();
+      _receiptCartons.clear();
       _wizardCartonSearchQuery = '';
       _invalidateCartonCaches();
       _wizardStep = 1;
     });
+  }
+
+  /// Dọn dẹp các đơn hàng nháp và chip tạm thời được nạp từ file nếu chưa xác nhận hoàn tất nhập kho
+  Future<void> _cleanupPendingDraftOrders() async {
+    try {
+      final ordersToDelete = <String>{..._pendingLoadedOrderNos};
+      for (final c in _receiptCartons) {
+        final ord = c['_orderNo']?.toString();
+        if (ord != null && ord.isNotEmpty) ordersToDelete.add(ord);
+      }
+
+      for (final ordNo in ordersToDelete) {
+        final existingOrder = _repo.inboundOrders.where((o) => o.orderNo == ordNo || o.inboundOrderId == ordNo).firstOrNull;
+        if (existingOrder != null && existingOrder.status == InboundOrderStatus.newOrder) {
+          await _repo.deleteInboundOrder(ordNo);
+        }
+      }
+
+      final epcsToClean = <String>{
+        ..._wizardSelectedEpcs,
+        for (final c in _receiptCartons)
+          ...((c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim().toUpperCase()) ?? [])
+      };
+      if (epcsToClean.isNotEmpty) {
+        final itemsToDelete = _repo.items
+            .where((i) => epcsToClean.contains(i.epc.toUpperCase()) && i.status == ItemStatus.pendingInbound)
+            .map((i) => i.epc)
+            .toList();
+        if (itemsToDelete.isNotEmpty) {
+          await _repo.deleteItemsByEpcs(itemsToDelete);
+        }
+      }
+    } catch (e) {
+      debugPrint('Lỗi dọn dẹp đơn hàng nạp file nháp: $e');
+    } finally {
+      _pendingLoadedOrderNos.clear();
+    }
+  }
+
+  /// Xử lý bấm nút LÀM MỚI: Xóa sạch dữ liệu file đã nạp để người dùng chọn lại file khác
+  Future<void> _handleRefreshOrClearFile() async {
+    if (_isImporting) return;
+    setState(() => _isImporting = true);
+    try {
+      final messenger = ScaffoldMessenger.of(context);
+      final hadLoadedData = _receiptCartons.isNotEmpty ||
+          _pendingLoadedOrderNos.isNotEmpty ||
+          _wizardSelectedEpcs.isNotEmpty;
+
+      // 1. Dọn dẹp đơn hàng nháp và chip tạm trong CSDL
+      await _cleanupPendingDraftOrders();
+
+      // 2. Dừng quét và xóa sạch dữ liệu trên giao diện
+      _wizardCountdownTimer?.cancel();
+      _uhf.stopInventory();
+      _desktopUhf.stopInventory();
+
+      _receiptCartons.clear();
+      _wizardSelectedCartons.clear();
+      _wizardSelectedEpcs.clear();
+      _wizardScannedTags.clear();
+      _wizardUnexpectedTags.clear();
+      _wizardDetectedPallet = null;
+      _wizardDetectedPalletTag = null;
+      _wizardCartonSearchQuery = '';
+      _wizardIsScanning = false;
+      _wizardScanCountdown = _wizardScanDuration;
+      _wizardStep = 1;
+      _invalidateCartonCaches();
+
+      // 3. Tải lại và đồng bộ CSDL
+      await _supabaseSync.syncNow();
+      await _repo.reloadFromSqlite();
+
+      if (mounted) {
+        setState(() {});
+        messenger.showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 2),
+            content: Text(
+              hadLoadedData
+                  ? 'Đã xóa dữ liệu file đã nạp. Bạn có thể chọn nạp file mới!'
+                  : 'Đã làm mới và đồng bộ dữ liệu kho thành công!',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi làm mới: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
   }
 
   void _showPalletManagementDialog() {
@@ -1029,15 +1119,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       final result = await _excelService.pickAndParseGoodsReceiveExcel();
       if (result == null) return;
 
+      // Xóa và dọn dẹp các đơn hàng nháp cũ chưa xác nhận trước khi nạp file mới
+      await _cleanupPendingDraftOrders();
+
+      final now = DateTime.now();
+      final inboundOrderNo = 'NK-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+
       for (var carton in result.cartons) {
+        carton['_orderNo'] = inboundOrderNo;
         final rawCode = carton['productCode']?.toString().trim() ?? '';
         if (!RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(rawCode)) {
           carton['productCode'] = _repo.generateHexBarcode128();
         }
       }
-
-      final now = DateTime.now();
-      final inboundOrderNo = 'NK-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
       final List<Item> explicitItems = [];
       int itemSeq = 1;
@@ -1118,7 +1212,25 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _invalidateCartonCaches();
       });
 
-      // 2. Lưu trữ cơ sở dữ liệu an toàn qua Batch (siêu tốc < 10ms)
+      // 2. Đăng ký toàn bộ các sản phẩm mới vào danh mục trước (bảo đảm Foreign Key hợp lệ 100%)
+      final seenSkus = <String>{};
+      final newProducts = <Product>[];
+      for (var item in explicitItems) {
+        if (item.sku.isNotEmpty && seenSkus.add(item.sku)) {
+          newProducts.add(Product(
+            productId: item.productId,
+            sku: item.sku,
+            productName: item.productName,
+            category: 'Hàng nhập qua cổng RFID',
+            unit: 'Cái',
+          ));
+        }
+      }
+      if (newProducts.isNotEmpty) {
+        await _repo.addProductsBatch(newProducts);
+      }
+
+      // 3. Lưu trữ cơ sở dữ liệu an toàn qua Batch (siêu tốc < 10ms)
       var order = _repo.inboundOrders.where((o) => o.orderNo == inboundOrderNo).firstOrNull;
       if (order == null) {
         order = InboundOrder(
@@ -1139,23 +1251,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         }
       }
 
-      // Đăng ký toàn bộ các sản phẩm mới vào danh mục theo Batch
-      final seenSkus = <String>{};
-      final newProducts = <Product>[];
-      for (var item in explicitItems) {
-        if (item.sku.isNotEmpty && seenSkus.add(item.sku)) {
-          newProducts.add(Product(
-            productId: item.productId,
-            sku: item.sku,
-            productName: item.productName,
-            category: 'Hàng nhập qua cổng RFID',
-            unit: 'Cái',
-          ));
-        }
-      }
-      if (newProducts.isNotEmpty) {
-        await _repo.addProductsBatch(newProducts);
-      }
+      _pendingLoadedOrderNos.clear();
+      _pendingLoadedOrderNos.add(inboundOrderNo);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1182,6 +1279,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     try {
       final rows = await _excelService.pickAndParseBatchOrdersExcel();
       if (rows == null || rows.isEmpty) return;
+
+      // Xóa và dọn dẹp các đơn hàng nháp cũ chưa xác nhận trước khi nạp file mới
+      await _cleanupPendingDraftOrders();
 
       final now = DateTime.now();
       final List<Item> explicitItems = [];
@@ -1254,6 +1354,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         }
 
         cartons.add({
+          '_orderNo': poNo,
           'cartonBox': poNo,
           'code': poNo,
           'productCode': poRows.first['sku'] ?? '--',
@@ -1279,7 +1380,25 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _invalidateCartonCaches();
       });
 
-      // 2. Lưu trữ cơ sở dữ liệu an toàn qua Batch (siêu tốc < 10ms)
+      // 2. Đăng ký toàn bộ các sản phẩm mới vào danh mục trước (bảo đảm Foreign Key hợp lệ 100%)
+      final seenSkus = <String>{};
+      final newProducts = <Product>[];
+      for (var item in explicitItems) {
+        if (item.sku.isNotEmpty && seenSkus.add(item.sku)) {
+          newProducts.add(Product(
+            productId: item.productId,
+            sku: item.sku,
+            productName: item.productName,
+            category: 'Hàng nhập đơn PO',
+            unit: 'Cái',
+          ));
+        }
+      }
+      if (newProducts.isNotEmpty) {
+        await _repo.addProductsBatch(newProducts);
+      }
+
+      // 3. Lưu trữ cơ sở dữ liệu an toàn qua Batch (siêu tốc < 10ms)
       for (var entry in poGroup.entries) {
         final poNo = entry.key;
         var order = _repo.inboundOrders.where((o) => o.orderNo == poNo).firstOrNull;
@@ -1298,23 +1417,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       await _repo.insertDirectItems(explicitItems);
 
-      // Đăng ký toàn bộ các sản phẩm mới vào danh mục theo Batch
-      final seenSkus = <String>{};
-      final newProducts = <Product>[];
-      for (var item in explicitItems) {
-        if (item.sku.isNotEmpty && seenSkus.add(item.sku)) {
-          newProducts.add(Product(
-            productId: item.productId,
-            sku: item.sku,
-            productName: item.productName,
-            category: 'Hàng nhập đơn PO',
-            unit: 'Cái',
-          ));
-        }
-      }
-      if (newProducts.isNotEmpty) {
-        await _repo.addProductsBatch(newProducts);
-      }
+      _pendingLoadedOrderNos.clear();
+      _pendingLoadedOrderNos.addAll(poGroup.keys);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1515,39 +1619,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         ),
                       ),
 
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: c.textPrimary,
-                          side: BorderSide(color: c.border),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      Tooltip(
+                        message: 'Xóa dữ liệu file đã nạp để chọn lại file mới',
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: c.textPrimary,
+                            side: BorderSide(color: c.border),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: Icon(Icons.refresh, size: 16, color: c.textPrimary),
+                          label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: _isImporting ? null : _handleRefreshOrClearFile,
                         ),
-                        icon: Icon(Icons.refresh, size: 16, color: c.textPrimary),
-                        label: Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
-                        onPressed: _isImporting
-                            ? null
-                            : () async {
-                                if (_isImporting) return;
-                                setState(() => _isImporting = true);
-                                try {
-                                  final messenger = ScaffoldMessenger.of(context);
-                                  await _supabaseSync.syncNow();
-                                  await _repo.reloadFromSqlite();
-                                  if (mounted) {
-                                    _invalidateCartonCaches();
-                                    setState(() {});
-                                    messenger.showSnackBar(
-                                      const SnackBar(
-                                        backgroundColor: Color(0xFF10B981),
-                                        duration: Duration(seconds: 2),
-                                        content: Text('Đã làm mới và đồng bộ dữ liệu kho thành công!'),
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  if (mounted) setState(() => _isImporting = false);
-                                }
-                              },
                       ),
                     ],
                   ),
@@ -2405,58 +2489,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
-
-          // SƠ ĐỒ CÁC Ô VỊ TRÍ KHO DỄ NHÌN (CHỌN VỊ TRÍ CẤT HÀNG)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: c.bgDeep,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: c.border),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.grid_view_rounded, color: Color(0xFF10B981), size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _targetPutawayLocationId != null
-                        ? 'ĐÃ CHỌN VỊ TRÍ CẤT PALLET: $_targetPutawayLocationId • BẤM ĐỔI VỊ TRÍ NẾU CẦN'
-                        : 'CHỌN Ô VỊ TRÍ KỆ ĐỂ CẤT HÀNG / PALLET NHẬP KHO',
-                    style: const TextStyle(color: Color(0xFF10B981), fontSize: 11.5, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                InkWell(
-                  onTap: () => setState(() => _showFloorPlanPutaway = !_showFloorPlanPutaway),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_showFloorPlanPutaway ? 'Thu gọn các ô kệ' : 'Mở xem các ô kệ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                        Icon(_showFloorPlanPutaway ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 16, color: c.textSecondary),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_showFloorPlanPutaway) ...[
-            const SizedBox(height: 8),
-            WarehouseLocationGridWidget(
-              mode: WarehouseLocationGridMode.inbound,
-              selectedLocationId: _targetPutawayLocationId,
-              onLocationSelected: (locId) {
-                setState(() => _targetPutawayLocationId = locId);
-              },
-              onLocationDataChanged: () {
-                setState(() {});
-              },
-            ),
-          ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
           // Realtime Inspection Table
           Expanded(

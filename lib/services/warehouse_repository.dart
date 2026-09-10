@@ -194,6 +194,34 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deleteItem(String epc) async {
+    final cleanEpc = epc.trim().toUpperCase();
+    await _dbService.deleteItem(cleanEpc);
+    _items.removeWhere((i) => i.epc.toUpperCase() == cleanEpc);
+    await _syncDirectOrQueue(
+      tableName: 'items',
+      recordId: cleanEpc,
+      action: 'DELETE',
+      payload: {'epc': cleanEpc},
+    );
+    notifyListeners();
+  }
+
+  Future<void> deleteItemsByEpcs(Iterable<String> epcs) async {
+    final epcSet = epcs.map((e) => e.trim().toUpperCase()).toSet();
+    for (final epc in epcSet) {
+      await _dbService.deleteItem(epc);
+      await _syncDirectOrQueue(
+        tableName: 'items',
+        recordId: epc,
+        action: 'DELETE',
+        payload: {'epc': epc},
+      );
+    }
+    _items.removeWhere((i) => epcSet.contains(i.epc.toUpperCase()));
+    notifyListeners();
+  }
+
   Future<void> updateProduct(Product updatedProd) async {
     await _dbService.insertProduct(updatedProd);
     final idx = _products.indexWhere((p) => p.productId == updatedProd.productId || p.sku == updatedProd.sku);
@@ -479,6 +507,18 @@ class WarehouseRepository extends ChangeNotifier {
   }
 
   Future<void> insertDirectItem(Item item) async {
+    final existingProd = _products.where((p) => p.productId == item.productId).firstOrNull;
+    if (existingProd == null) {
+      final newProd = Product(
+        productId: item.productId,
+        sku: item.sku,
+        productName: item.productName,
+        category: 'Hàng hoá',
+        unit: 'Cái',
+      );
+      _products.add(newProd);
+      await _dbService.insertProduct(newProd);
+    }
     _items.removeWhere((i) => i.epc == item.epc);
     _items.add(item);
     await _dbService.insertItem(item);
@@ -506,6 +546,28 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> insertDirectItems(List<Item> items) async {
     if (items.isEmpty) return;
+
+    // Tự động bảo đảm toàn bộ sản phẩm của các item đã tồn tại trong bảng products để ngăn lỗi Foreign Key
+    final existingProdIds = _products.map((p) => p.productId).toSet();
+    final missingProducts = <Product>[];
+    final seen = <String>{};
+    for (var item in items) {
+      if (!existingProdIds.contains(item.productId) && seen.add(item.productId)) {
+        final newProd = Product(
+          productId: item.productId,
+          sku: item.sku,
+          productName: item.productName,
+          category: 'Hàng hoá',
+          unit: 'Cái',
+        );
+        missingProducts.add(newProd);
+        _products.add(newProd);
+      }
+    }
+    if (missingProducts.isNotEmpty) {
+      await _dbService.insertProducts(missingProducts);
+    }
+
     final epcSet = items.map((i) => i.epc.toUpperCase()).toSet();
     _items.removeWhere((i) => epcSet.contains(i.epc.toUpperCase()));
     _items.addAll(items);
@@ -658,6 +720,19 @@ class WarehouseRepository extends ChangeNotifier {
       payload: {'location_id': clean, 'location_code': clean},
     );
     _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  /// Xóa toàn bộ danh sách kệ trong kho (CSDL và bộ nhớ) để người dùng tự thiết lập lại
+  Future<void> deleteAllLocations() async {
+    await _dbService.deleteAllLocations();
+    _locations.clear();
+    for (final p in _pallets) {
+      p.locationId = null;
+    }
+    for (final it in _items) {
+      it.locationId = null;
+    }
     notifyListeners();
   }
 
@@ -1593,7 +1668,7 @@ class WarehouseRepository extends ChangeNotifier {
   }) {
     final order = _inboundOrders.firstWhere((o) => o.orderNo == orderNo);
     final pallet = _pallets.firstWhere((p) => p.palletCode == palletCode);
-    final location = _locations.firstWhere((l) => l.locationId == locationId);
+    final location = _locations.where((l) => l.locationId == locationId || l.locationCode == locationId).firstOrNull;
 
     for (var itemId in pallet.itemIds) {
       final item = _items.firstWhere((it) => it.itemId == itemId);
@@ -1612,7 +1687,7 @@ class WarehouseRepository extends ChangeNotifier {
 
     pallet.locationId = locationId;
     _dbService.updatePalletLocation(pallet.palletId, locationId);
-    location.currentPallets++;
+    if (location != null) location.currentPallets++;
 
     for (var d in order.details) {
       _transactions.insert(
@@ -1624,7 +1699,7 @@ class WarehouseRepository extends ChangeNotifier {
           sku: d.sku,
           productName: d.productName,
           quantity: d.requiredQty,
-          toLocation: location.locationCode,
+          toLocation: location?.locationCode ?? locationId,
           palletCode: palletCode,
           performedBy: performedBy,
           timestamp: DateTime.now(),
@@ -2735,12 +2810,12 @@ class WarehouseRepository extends ChangeNotifier {
   }) {
     final pallet = _pallets.firstWhere((p) => p.palletId == palletId);
     final oldLocation = _locations.firstWhere((l) => l.locationId == pallet.locationId, orElse: () => Location(locationId: '', locationCode: 'N/A', zone: '', shelf: '', level: ''));
-    final newLocation = _locations.firstWhere((l) => l.locationId == newLocationId);
+    final newLocation = _locations.where((l) => l.locationId == newLocationId || l.locationCode == newLocationId).firstOrNull;
 
     pallet.locationId = newLocationId;
     _dbService.updatePalletLocation(palletId, newLocationId);
     if (oldLocation.currentPallets > 0) oldLocation.currentPallets--;
-    newLocation.currentPallets++;
+    if (newLocation != null) newLocation.currentPallets++;
 
     for (var itemId in pallet.itemIds) {
       final item = _items.firstWhere((it) => it.itemId == itemId);
@@ -2758,11 +2833,11 @@ class WarehouseRepository extends ChangeNotifier {
         productName: 'Di chuyển ${pallet.itemIds.length} Items',
         quantity: pallet.itemIds.length,
         fromLocation: oldLocation.locationCode,
-        toLocation: newLocation.locationCode,
+        toLocation: newLocation?.locationCode ?? newLocationId,
         palletCode: pallet.palletCode,
         performedBy: performedBy,
         timestamp: DateTime.now(),
-        notes: 'Di chuyển Pallet từ ${oldLocation.locationCode} sang ${newLocation.locationCode}',
+        notes: 'Di chuyển Pallet từ ${oldLocation.locationCode} sang ${newLocation?.locationCode ?? newLocationId}',
       ),
     );
 
@@ -2774,7 +2849,7 @@ class WarehouseRepository extends ChangeNotifier {
         'palletId': palletId,
         'palletCode': pallet.palletCode,
         'fromLocation': oldLocation.locationCode,
-        'toLocation': newLocation.locationCode,
+        'toLocation': newLocation?.locationCode ?? newLocationId,
         'itemCount': pallet.itemIds.length,
         'performedBy': performedBy,
         'timestamp': DateTime.now().toIso8601String(),
