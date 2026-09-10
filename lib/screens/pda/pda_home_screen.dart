@@ -460,15 +460,17 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
   Widget _buildDesktopOrderNotificationCard(EyeCareColors c, BaseRolePermission role) {
     if (!role.canInbound) return const SizedBox.shrink();
 
-    // Tìm các sản phẩm / kiện hàng đã đọc xong từ máy tính nhưng chưa cất lên kệ (Chờ cất vào kệ)
+    // Chỉ tìm các sản phẩm THỰC SỰ đã đọc xong qua cổng RFID (ItemStatus.waitingPutaway)
+    // Tuyệt đối không lấy hàng pendingInbound (khi mới import file Excel, pallet còn trống chưa có hàng thực tế)
     final waitingPutawayItems = _repo.items.where((it) =>
-        it.status == ItemStatus.waitingPutaway ||
-        (it.palletId != null &&
-            it.palletId!.isNotEmpty &&
-            (it.locationId == null || it.locationId!.isEmpty || it.locationId == 'LOC-GATE-IN'))
+        (it.status == ItemStatus.waitingPutaway ||
+         (it.status == ItemStatus.inStock &&
+          (it.locationId == null || it.locationId!.isEmpty || it.locationId == 'LOC-GATE-IN'))) &&
+        it.status != ItemStatus.pendingInbound &&
+        (it.palletId != null && it.palletId!.trim().isNotEmpty)
     ).toList();
 
-    // Hoặc các đơn nhập kho đang ở trạng thái chờ xếp kệ
+    // Hoặc các đơn nhập kho thực sự đã qua cổng đối soát đủ và đang ở trạng thái chờ xếp kệ
     final waitingInboundOrders = _repo.inboundOrders.where((o) =>
         o.status == InboundOrderStatus.waitingPutaway
     ).toList();
