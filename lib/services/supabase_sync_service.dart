@@ -407,6 +407,18 @@ class SupabaseSyncService extends ChangeNotifier {
             map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
           }
           if (tableName == 'locations') {
+            if (!Platform.isAndroid && !Platform.isIOS) {
+              final exists = await db.query(
+                'locations',
+                columns: ['location_id'],
+                where: 'location_id = ? OR location_code = ?',
+                whereArgs: [map['location_id'], map['location_code']],
+                limit: 1,
+              );
+              if (exists.isEmpty) {
+                return; // Kệ này không tồn tại trên Desktop -> không tự chèn thêm vào SQLite
+              }
+            }
             if (map['status'] == null) {
               final localLoc = await db.query(
                 'locations',
@@ -537,7 +549,12 @@ class SupabaseSyncService extends ChangeNotifier {
           }
         } else if (action == 'DELETE') {
           final pkCol = _getPrimaryKeyColumn(targetTable);
-          await supa.from(targetTable).delete().eq(pkCol, recordId);
+          if (targetTable == 'locations') {
+            final altId = recordId.startsWith('LOC-') ? recordId.substring(4) : 'LOC-$recordId';
+            await supa.from(targetTable).delete().or('$pkCol.eq.$recordId,$pkCol.eq.$altId,location_code.eq.$recordId,location_code.eq.$altId');
+          } else {
+            await supa.from(targetTable).delete().eq(pkCol, recordId);
+          }
         }
         return;
       } catch (e) {
@@ -646,7 +663,12 @@ class SupabaseSyncService extends ChangeNotifier {
             } else if (action == 'DELETE') {
               final pkCol = _getPrimaryKeyColumn(tableName);
               final recId = item['record_id'] as String;
-              await supa.from(tableName).delete().eq(pkCol, recId);
+              if (tableName == 'locations') {
+                final altId = recId.startsWith('LOC-') ? recId.substring(4) : 'LOC-$recId';
+                await supa.from(tableName).delete().or('$pkCol.eq.$recId,$pkCol.eq.$altId,location_code.eq.$recId,location_code.eq.$altId');
+              } else {
+                await supa.from(tableName).delete().eq(pkCol, recId);
+              }
             }
 
             await _dbService.markSyncItemSynced(queueId);
@@ -671,6 +693,25 @@ class SupabaseSyncService extends ChangeNotifier {
       // Tự động đẩy toàn bộ Master Data, Kệ, Pallet, Sản phẩm và Thẻ RFID từ PDA/Desktop lên Supabase Cloud theo Batch
       try {
         final localLocs = await _dbService.getLocations();
+
+        // Đồng bộ dọn dẹp các kệ đã bị xóa khỏi SQLite cục bộ, không để tồn đọng trên Supabase Cloud
+        try {
+          final localIds = localLocs.map((l) => l.locationId.trim().toUpperCase()).toSet();
+          final localCodes = localLocs.map((l) => l.locationCode.trim().toUpperCase()).toSet();
+          final cloudLocs = await supa.from('locations').select('location_id, location_code');
+          for (final cl in cloudLocs) {
+            final cId = (cl['location_id'] ?? '').toString().trim().toUpperCase();
+            final cCode = (cl['location_code'] ?? '').toString().trim().toUpperCase();
+            final strippedId = cId.startsWith('LOC-') ? cId.substring(4) : cId;
+            final exists = localIds.contains(cId) || localCodes.contains(cCode) || localCodes.contains(strippedId);
+            if (!exists && cId.isNotEmpty) {
+              await supa.from('locations').delete().eq('location_id', cl['location_id']);
+            }
+          }
+        } catch (e) {
+          debugPrint('Cloud prune locations error: $e');
+        }
+
         if (localLocs.isNotEmpty) {
           final locBatch = localLocs.map((loc) => {
             'location_id': loc.locationId,
@@ -792,7 +833,9 @@ class SupabaseSyncService extends ChangeNotifier {
       }
 
       // 2. PULL DỮ LIỆU TỪ SUPABASE VỀ SQLITE (DANH MỤC SẢN PHẨM, VỊ TRÍ, LỆNH NHẬP/XUẤT, NGƯỜI DÙNG, KHÁCH HÀNG, PHIẾU XUẤT, KIỂM KÊ)
-      await _pullTableFromSupabase('locations');
+      if (Platform.isAndroid || Platform.isIOS) {
+        await _pullTableFromSupabase('locations');
+      }
       await _pullTableFromSupabase('products');
       await _pullTableFromSupabase('pallets');
       await _pullTableFromSupabase('items');
