@@ -5,13 +5,14 @@ import '../services/uhf_service.dart';
 import '../widgets/hardware_status_appbar.dart';
 import '../widgets/pda_location_barcode_card.dart';
 import '../theme/eye_care_theme.dart';
+import 'pda/pda_merge_pallets_screen.dart';
 
 class StorageScreen extends StatefulWidget {
   final bool enablePalletMerge;
 
   const StorageScreen({
     super.key,
-    this.enablePalletMerge = false,
+    this.enablePalletMerge = true,
   });
 
   @override
@@ -791,6 +792,99 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     );
   }
 
+  void _openMergePalletFlow([Pallet? sourcePallet]) {
+    final c = _eyeCare.colors;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: c.bgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.call_merge_rounded, color: Color(0xFFF59E0B), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Chức Năng Gộp Pallet (Chuyển Kho)',
+                          style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          sourcePallet != null ? 'Pallet nguồn: ${sourcePallet.palletCode}' : 'Dồn hàng hóa giữa 2 Pallet trong kho',
+                          style: TextStyle(color: c.textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.barcode_reader, color: c.rfidCyan, size: 22),
+                ),
+                title: Text('Bóp cò súng PDA quét Barcode / RFID', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Text('Dùng đầu đọc laser PDA quét nhanh mã Pallet nguồn & đích', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                trailing: Icon(Icons.chevron_right, color: c.textMuted),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PdaMergePalletsScreen(initialSourcePallet: sourcePallet),
+                    ),
+                  );
+                },
+              ),
+              Divider(color: c.border),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.touch_app_outlined, color: Color(0xFF10B981), size: 22),
+                ),
+                title: Text('Chọn thủ công từ danh sách Pallet', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Text('Chọn Pallet nguồn và Pallet đích từ hộp thoại', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                trailing: Icon(Icons.chevron_right, color: c.textMuted),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showMergePalletsDialog(sourcePallet);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _confirmDeletePallet(Pallet pallet) {
     final c = _eyeCare.colors;
     final itemsCount = _repo.items.where((it) => it.palletId == pallet.palletId).length;
@@ -914,13 +1008,13 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                         if (widget.enablePalletMerge)
                           ElevatedButton.icon(
                             icon: const Icon(Icons.call_merge, size: 16, color: Color(0xFF2C251E)),
-                            label: const Text('GỘP 2 PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                            label: const Text('GỘP PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF59E0B),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                             ),
-                            onPressed: () => _showMergePalletsDialog(),
+                            onPressed: () => _openMergePalletFlow(),
                           ),
                         ElevatedButton.icon(
                           icon: const Icon(Icons.add_box, size: 16, color: Color(0xFF2C251E)),
@@ -1165,7 +1259,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                               side: const BorderSide(color: Color(0xFFF59E0B)),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             ),
-                            onPressed: () => _showMergePalletsDialog(pallet),
+                            onPressed: () => _openMergePalletFlow(pallet),
                           ),
                         const Spacer(),
                         IconButton(

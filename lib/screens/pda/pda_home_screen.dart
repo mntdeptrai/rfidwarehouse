@@ -12,7 +12,6 @@ import '../storage_screen.dart';
 import 'pda_putaway_screen.dart';
 import 'pda_shelf_status_screen.dart';
 import 'pda_lookup_screen.dart';
-import 'pda_merge_pallets_screen.dart';
 
 class PdaHomeScreen extends StatefulWidget {
   const PdaHomeScreen({super.key});
@@ -251,21 +250,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                               );
                             },
                           ),
-                        if (role.canTransfer)
-                          _buildPdaActionTile(
-                            context,
-                            title: 'Gộp Pallet',
-                            icon: Icons.call_merge_rounded,
-                            accentColor: const Color(0xFFF59E0B),
-                            badgeColor: const Color(0xFFF59E0B),
-                            colors: c,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const PdaMergePalletsScreen()),
-                              );
-                            },
-                          ),
+
                         if (role.canAudit)
                           _buildPdaActionTile(
                             context,
