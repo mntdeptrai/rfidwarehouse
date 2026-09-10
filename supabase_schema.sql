@@ -43,11 +43,15 @@ ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS grid_col INTEGER DEFAULT 0
 CREATE TABLE IF NOT EXISTS public.pallets (
     pallet_id TEXT PRIMARY KEY,
     pallet_code TEXT NOT NULL UNIQUE,
+    rfid_epc TEXT,
     location_id TEXT REFERENCES public.locations (location_id) ON DELETE SET NULL,
     inbound_time TEXT NOT NULL,
     is_multi_sku INTEGER DEFAULT 0,
+    placed_by TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.pallets ADD COLUMN IF NOT EXISTS rfid_epc TEXT;
+ALTER TABLE public.pallets ADD COLUMN IF NOT EXISTS placed_by TEXT;
 
 -- 4. Bảng Mặt hàng cụ thể gắn thẻ RFID Chip (items)
 -- FK: product_id -> products(product_id)
@@ -66,8 +70,16 @@ CREATE TABLE IF NOT EXISTS public.items (
     location_id TEXT REFERENCES public.locations (location_id) ON DELETE SET NULL,
     inbound_time TEXT,
     allocated_time TEXT,
+    supplier TEXT,
+    carton_code TEXT,
+    inbound_by TEXT,
+    putaway_by TEXT,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.items ADD COLUMN IF NOT EXISTS carton_code TEXT;
+ALTER TABLE public.items ADD COLUMN IF NOT EXISTS supplier TEXT;
+ALTER TABLE public.items ADD COLUMN IF NOT EXISTS inbound_by TEXT;
+ALTER TABLE public.items ADD COLUMN IF NOT EXISTS putaway_by TEXT;
 
 -- Tạo Index để truy vấn thẻ RFID EPC và đơn hàng siêu nhanh
 CREATE INDEX IF NOT EXISTS idx_items_epc ON public.items (epc);

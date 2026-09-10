@@ -1824,6 +1824,7 @@ class WarehouseRepository extends ChangeNotifier {
       payload: {
         'pallet_id': palToSync.palletId,
         'pallet_code': palToSync.palletCode,
+        'rfid_epc': palToSync.rfidEpc,
         'location_id': palToSync.locationId,
         'inbound_time': palToSync.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
         'is_multi_sku': palToSync.isMultiSku ? 1 : 0,
