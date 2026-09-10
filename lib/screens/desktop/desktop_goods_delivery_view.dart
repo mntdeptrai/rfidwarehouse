@@ -74,11 +74,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _desktopUhf.addListener(_onDesktopUhfUpdate);
 
     _initTagListeners();
-
-    // Khởi tạo 10 vị trí mặc định nếu chưa đủ
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _repo.ensureDefault10Locations();
-    });
   }
 
   void _resetForm() {
@@ -900,7 +895,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                 onPressed: () async {
                   await _repo.reloadFromSqlite();
-                  await _repo.ensureDefault10Locations();
                   if (mounted) setState(() {});
                 },
               ),
