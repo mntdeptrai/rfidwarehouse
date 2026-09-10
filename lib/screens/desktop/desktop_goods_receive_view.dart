@@ -184,94 +184,150 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   Set<String> _getWizardExpectedSerials() {
     if (_cachedExpectedSerials != null) return _cachedExpectedSerials!;
-    if (_activeExpectedItems.isNotEmpty) {
-      _cachedExpectedSerials = _activeExpectedItems.map((i) => i.epc.trim().toUpperCase()).toSet();
-      return _cachedExpectedSerials!;
-    }
-    if (_wizardSelectedEpcs.isNotEmpty) {
-      _cachedExpectedSerials = Set<String>.from(_wizardSelectedEpcs.map((e) => e.trim().toUpperCase()));
-      return _cachedExpectedSerials!;
-    }
-    final cartons = _getAvailableCartons();
     final Set<String> set = {};
-    for (var c in cartons) {
-      final box = (c['cartonBox'] ?? c['code'] ?? '').toString().trim();
-      if (_wizardSelectedCartons.contains(box)) {
-        final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim().toUpperCase()).toList() ?? [];
-        set.addAll(serials);
+    if (_activeExpectedItems.isNotEmpty) {
+      set.addAll(_activeExpectedItems.map((i) => i.epc.trim().toUpperCase()));
+    } else if (_wizardSelectedEpcs.isNotEmpty) {
+      set.addAll(_wizardSelectedEpcs.map((e) => e.trim().toUpperCase()));
+    } else {
+      final cartons = _getAvailableCartons();
+      for (var c in cartons) {
+        final box = (c['cartonBox'] ?? c['code'] ?? '').toString().trim();
+        if (_wizardSelectedCartons.contains(box)) {
+          final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim().toUpperCase()).toList() ?? [];
+          set.addAll(serials);
+        }
       }
     }
+
+    // Nếu xe Pallet đang đối soát có gắn chip RFID, bắt buộc đối soát ĐỦ cả chip Pallet (10 chip hàng + 1 chip Pallet = 11 chip)
+    var p = _activePallet ?? _wizardDetectedPallet;
+    if (p == null && _activeExpectedItems.isNotEmpty) {
+      final pId = _activeExpectedItems.first.palletId;
+      if (pId != null && pId.isNotEmpty) {
+        p = _repo.pallets.where((item) =>
+          item.palletId.toUpperCase() == pId.toUpperCase() ||
+          item.palletCode.toUpperCase() == pId.toUpperCase() ||
+          item.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}' ||
+          'PAL-${item.palletCode.toUpperCase()}' == pId.toUpperCase()
+        ).firstOrNull;
+      }
+    }
+    if (p == null && _receiptCartons.isNotEmpty) {
+      final pCode = _receiptCartons.first['palletCode']?.toString();
+      final pEpc = _receiptCartons.first['palletEpc']?.toString();
+      if (pCode != null && pCode.isNotEmpty) {
+        p = _repo.pallets.where((item) =>
+          item.palletCode.toUpperCase() == pCode.toUpperCase() ||
+          item.palletId.toUpperCase() == pCode.toUpperCase() ||
+          item.palletId.toUpperCase() == 'PAL-${pCode.toUpperCase()}' ||
+          'PAL-${item.palletCode.toUpperCase()}' == pCode.toUpperCase()
+        ).firstOrNull;
+      }
+      if (p == null && pEpc != null && pEpc.isNotEmpty) {
+        p = _repo.findPalletByRfid(pEpc);
+      }
+    }
+    final palletEpc = (p?.rfidEpc ?? _wizardDetectedPalletTag ?? _activePalletTag ?? _receiptCartons.firstOrNull?['palletEpc']?.toString())?.trim().toUpperCase();
+    if (palletEpc != null && palletEpc.isNotEmpty) {
+      set.add(palletEpc);
+    }
+
     _cachedExpectedSerials = set;
     return set;
   }
 
   List<Map<String, dynamic>> _getStep1DetailedItems() {
     if (_cachedStep1DetailedItems != null) return _cachedStep1DetailedItems!;
+    final List<Map<String, dynamic>> list = [];
     if (_activeExpectedItems.isNotEmpty) {
-      final list = _activeExpectedItems.map((i) => {
-        'boxCode': i.cartonCode ?? '--',
-        'sku': i.sku,
-        'productName': i.productName,
-        'serial': i.epc,
-        'supplier': i.supplier ?? '--',
-      }).toList();
-      _cachedStep1DetailedItems = list;
-      return list;
-    }
-    final cartons = _getAvailableCartons();
-    final List<Map<String, dynamic>> flat = [];
-    for (var cBox in cartons) {
-      final boxCode = (cBox['cartonBox'] ?? cBox['code'] ?? '').toString();
-      final serials = (cBox['serials'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-      final sItems = (cBox['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [];
-      for (int i = 0; i < serials.length; i++) {
-        final serial = serials[i];
-        String sku = (cBox['productCode'] ?? '--').toString();
-        String prodName = (cBox['productName'] ?? 'Sản phẩm').toString();
-        if (i < sItems.length) {
-          final sItem = sItems[i];
-          sku = (sItem['barcode'] ?? sku).toString();
-          prodName = (sItem['name'] ?? prodName).toString();
-        }
-        final sSupplier = (i < sItems.length ? sItems[i]['supplier'] : null) ?? cBox['supplier'] ?? 'Nhà cung cấp tổng hợp';
-        flat.add({
-          'boxCode': boxCode,
-          'sku': sku,
-          'productName': prodName,
-          'serial': serial,
-          'supplier': sSupplier.toString(),
-        });
-      }
-    }
-    _cachedStep1DetailedItems = flat;
-    return flat;
-  }
-
-  List<Map<String, dynamic>> _getStep2FlatInspectionItems() {
-    if (_cachedStep2FlatItems != null) return _cachedStep2FlatItems!;
-    if (_activeExpectedItems.isNotEmpty) {
-      final list = _activeExpectedItems.map((i) => {
+      list.addAll(_activeExpectedItems.map((i) => {
         'boxCode': i.cartonCode ?? '--',
         'sku': i.sku,
         'productName': i.productName,
         'serial': i.epc,
         'supplier': i.supplier ?? '--',
         'orderNo': i.orderNo ?? '--',
-      }).toList();
-      _cachedStep2FlatItems = list;
-      return list;
-    }
-    final expectedEpcs = _getWizardExpectedSerials();
-    final allItems = _getStep1DetailedItems();
-    final List<Map<String, dynamic>> filtered = [];
-    for (var it in allItems) {
-      final s = (it['serial'] ?? '').toString().trim().toUpperCase();
-      if (expectedEpcs.contains(s)) {
-        filtered.add(it);
+      }));
+    } else {
+      final cartons = _getAvailableCartons();
+      for (var cBox in cartons) {
+        final boxCode = (cBox['cartonBox'] ?? cBox['code'] ?? '').toString();
+        final serials = (cBox['serials'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+        final sItems = (cBox['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [];
+        for (int i = 0; i < serials.length; i++) {
+          final serial = serials[i];
+          String sku = (cBox['productCode'] ?? '--').toString();
+          String prodName = (cBox['productName'] ?? 'Sản phẩm').toString();
+          if (i < sItems.length) {
+            final sItem = sItems[i];
+            sku = (sItem['barcode'] ?? sku).toString();
+            prodName = (sItem['name'] ?? prodName).toString();
+          }
+          final sSupplier = (i < sItems.length ? sItems[i]['supplier'] : null) ?? cBox['supplier'] ?? 'Nhà cung cấp tổng hợp';
+          list.add({
+            'boxCode': boxCode,
+            'sku': sku,
+            'productName': prodName,
+            'serial': serial,
+            'supplier': sSupplier.toString(),
+            'orderNo': (cBox['_orderNo'] ?? '--').toString(),
+          });
+        }
       }
     }
-    _cachedStep2FlatItems = filtered;
-    return filtered;
+
+    // Đưa thẻ RFID Xe Pallet vào bảng đối soát ở vị trí đầu tiên
+    var p = _activePallet ?? _wizardDetectedPallet;
+    if (p == null && _activeExpectedItems.isNotEmpty) {
+      final pId = _activeExpectedItems.first.palletId;
+      if (pId != null && pId.isNotEmpty) {
+        p = _repo.pallets.where((item) =>
+          item.palletId.toUpperCase() == pId.toUpperCase() ||
+          item.palletCode.toUpperCase() == pId.toUpperCase() ||
+          item.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}' ||
+          'PAL-${item.palletCode.toUpperCase()}' == pId.toUpperCase()
+        ).firstOrNull;
+      }
+    }
+    if (p == null && _receiptCartons.isNotEmpty) {
+      final pCode = _receiptCartons.first['palletCode']?.toString();
+      final pEpc = _receiptCartons.first['palletEpc']?.toString();
+      if (pCode != null && pCode.isNotEmpty) {
+        p = _repo.pallets.where((item) =>
+          item.palletCode.toUpperCase() == pCode.toUpperCase() ||
+          item.palletId.toUpperCase() == pCode.toUpperCase() ||
+          item.palletId.toUpperCase() == 'PAL-${pCode.toUpperCase()}' ||
+          'PAL-${item.palletCode.toUpperCase()}' == pCode.toUpperCase()
+        ).firstOrNull;
+      }
+      if (p == null && pEpc != null && pEpc.isNotEmpty) {
+        p = _repo.findPalletByRfid(pEpc);
+      }
+    }
+    final palletEpc = (p?.rfidEpc ?? _wizardDetectedPalletTag ?? _activePalletTag ?? _receiptCartons.firstOrNull?['palletEpc']?.toString())?.trim().toUpperCase();
+    final palletCode = p?.palletCode ?? _receiptCartons.firstOrNull?['palletCode']?.toString() ?? 'Xe Pallet';
+    if (palletEpc != null && palletEpc.isNotEmpty && !list.any((e) => (e['serial'] ?? '').toString().toUpperCase() == palletEpc)) {
+      list.insert(0, {
+        'boxCode': 'PALLET: $palletCode',
+        'sku': palletCode,
+        'productName': '🏷️ Chip RFID Xe Pallet ($palletCode)',
+        'serial': palletEpc,
+        'supplier': list.isNotEmpty ? list.first['supplier'] : 'Xe Pallet WMS',
+        'orderNo': _activeOrderNo ?? '--',
+        'isPallet': true,
+      });
+    }
+
+    _cachedStep1DetailedItems = list;
+    return list;
+  }
+
+  List<Map<String, dynamic>> _getStep2FlatInspectionItems() {
+    if (_cachedStep2FlatItems != null) return _cachedStep2FlatItems!;
+    final list = _getStep1DetailedItems();
+    _cachedStep2FlatItems = list;
+    return list;
   }
 
   void _toggleWizardScan() {
@@ -359,22 +415,39 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _successBannerTimer?.cancel();
     }
 
-    // 1. TỰ ĐỘNG NHẬN DIỆN XE PALLET (ƯU TIÊN TUYỆT ĐỐI: Không bao giờ để chip Pallet thành chip lạ)
-    if (_wizardDetectedPallet != null || _activePallet != null) {
-      final p = _activePallet ?? _wizardDetectedPallet;
-      final curPalletEpc = (p?.rfidEpc ?? '').trim().toUpperCase();
-      if (curPalletEpc == cleanEpc || _wizardDetectedPalletTag == cleanEpc || _activePalletTag == cleanEpc || p?.palletCode.toUpperCase() == cleanEpc) {
-        _wizardUnexpectedTags.remove(cleanEpc);
-        return; // Thuộc về xe Pallet đang chọn, không tính là sản phẩm hay chip lạ!
+    // 1. TỰ ĐỘNG NHẬN DIỆN XE PALLET
+    // 1.1 Kiểm tra nếu đây là chip của xe Pallet đang active
+    final curPalletEpc = (_activePallet?.rfidEpc ?? _wizardDetectedPalletTag ?? _wizardDetectedPallet?.rfidEpc)?.trim().toUpperCase();
+    if (curPalletEpc != null && curPalletEpc.isNotEmpty && (curPalletEpc == cleanEpc || _wizardDetectedPalletTag == cleanEpc || _activePalletTag == cleanEpc)) {
+      _wizardUnexpectedTags.remove(cleanEpc);
+      if (!_wizardScannedTags.containsKey(cleanEpc)) {
+        _wizardScannedTags[cleanEpc] = tag;
+        final expectedSerials = _getWizardExpectedSerials();
+        if (expectedSerials.isNotEmpty && _wizardScannedTags.length >= expectedSerials.length && _getFilteredUnexpectedTags().isEmpty) {
+          _tagBatchUiTimer?.cancel();
+          _tagBatchUiTimer = null;
+          final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? 'Xe Pallet';
+          _towerLight.triggerPass(reason: 'Pallet $pCode: Đã quét đủ ${expectedSerials.length} chip (gồm cả chip Pallet) qua cổng!');
+          _triggerPassSuccess();
+        } else {
+          if (_tagBatchUiTimer == null || !_tagBatchUiTimer!.isActive) {
+            _tagBatchUiTimer = Timer(const Duration(milliseconds: 60), () {
+              if (mounted) setState(() {});
+            });
+          }
+        }
       }
+      return;
     }
 
+    // 1.2 Kiểm tra nếu chip quét được là chip của một xe Pallet trong CSDL
     final matchedPallet = _repo.findPalletByRfid(cleanEpc);
     if (matchedPallet != null) {
       _wizardUnexpectedTags.remove(cleanEpc);
       if (matchedPallet.rfidEpc != null) {
         _wizardUnexpectedTags.remove(matchedPallet.rfidEpc!.trim().toUpperCase());
       }
+      _wizardScannedTags[cleanEpc] = tag;
 
       if (_wizardDetectedPallet?.palletCode != matchedPallet.palletCode || _activePallet?.palletCode != matchedPallet.palletCode) {
         setState(() {
@@ -399,11 +472,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   _wizardSelectedCartons.add(it.cartonCode!);
                 }
               }
-              _invalidateCartonCaches();
             }
           }
+          _invalidateCartonCaches();
         });
         _towerLight.triggerPass(reason: 'Đã nhận diện xe Pallet ${matchedPallet.palletCode} từ CSDL!');
+      }
+
+      final expectedSerials = _getWizardExpectedSerials();
+      if (expectedSerials.isNotEmpty && _wizardScannedTags.length >= expectedSerials.length && _getFilteredUnexpectedTags().isEmpty) {
+        _tagBatchUiTimer?.cancel();
+        _tagBatchUiTimer = null;
+        final pCode = matchedPallet.palletCode;
+        _towerLight.triggerPass(reason: 'Pallet $pCode: Đã quét đủ ${expectedSerials.length} chip (gồm cả chip Pallet) qua cổng!');
+        _triggerPassSuccess();
       }
       return;
     }
@@ -506,19 +588,23 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final orderNo = _activeOrderNo ?? (_wizardSelectedCartons.isNotEmpty ? _wizardSelectedCartons.first : 'NK-${DateTime.now().millisecondsSinceEpoch}');
 
     final itemEpcs = _wizardScannedTags.keys.toList();
+    final cleanPalletEpc = rfidEpc?.trim().toUpperCase();
+    final productEpcs = (cleanPalletEpc != null && cleanPalletEpc.isNotEmpty)
+        ? itemEpcs.where((e) => e.toUpperCase() != cleanPalletEpc).toList()
+        : itemEpcs;
 
     try {
       if (palletCode != null) {
         await _repo.assignItemsToPallet(
           palletCode: palletCode,
           rfidEpc: rfidEpc,
-          itemEpcs: itemEpcs,
+          itemEpcs: productEpcs,
         );
       }
 
       await _repo.confirmGateReceiveToWaitingPutaway(
         orderNo: orderNo,
-        scannedEpcs: itemEpcs,
+        scannedEpcs: productEpcs,
         palletCode: palletCode,
         performedBy: 'Cổng RFID Gate',
       );
@@ -585,6 +671,34 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   void _reportDiscrepancyError() {
     final missing = _activeExpectedItems.where((i) => !_wizardScannedTags.containsKey(i.epc.trim().toUpperCase())).toList();
     final unexp = _getFilteredUnexpectedTags();
+
+    var p = _activePallet ?? _wizardDetectedPallet;
+    if (p == null && _activeExpectedItems.isNotEmpty) {
+      final pId = _activeExpectedItems.first.palletId;
+      if (pId != null && pId.isNotEmpty) {
+        p = _repo.pallets.where((item) =>
+          item.palletId.toUpperCase() == pId.toUpperCase() ||
+          item.palletCode.toUpperCase() == pId.toUpperCase() ||
+          item.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}' ||
+          'PAL-${item.palletCode.toUpperCase()}' == pId.toUpperCase()
+        ).firstOrNull;
+      }
+    }
+    final palletEpc = (p?.rfidEpc ?? _wizardDetectedPalletTag ?? _activePalletTag)?.trim().toUpperCase();
+    if (palletEpc != null && palletEpc.isNotEmpty && !_wizardScannedTags.containsKey(palletEpc)) {
+      final palletCode = p?.palletCode ?? 'Xe Pallet';
+      missing.insert(0, Item(
+        itemId: 'PALLET-$palletCode',
+        productId: palletCode,
+        sku: palletCode,
+        productName: '🏷️ Thẻ RFID Xe Pallet ($palletCode)',
+        serialNumber: palletEpc,
+        epc: palletEpc,
+        status: ItemStatus.pendingInbound,
+        orderNo: _activeOrderNo,
+        cartonCode: 'PALLET: $palletCode',
+      ));
+    }
 
     _towerLight.triggerWarningRed(withBuzzer: true, reason: 'Sai sót tại đơn ${_activeOrderNo ?? "--"}: Thiếu ${missing.length} chip, có ${unexp.length} chip lạ!');
 
@@ -731,12 +845,27 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         final ord = c['_orderNo']?.toString();
         if (ord != null && ord.isNotEmpty) ordersToDelete.add(ord);
       }
+      // Dọn dẹp bất kỳ đơn nháp cũ nào còn tồn ở trạng thái newOrder
+      for (final o in _repo.inboundOrders.where((ord) => ord.status == InboundOrderStatus.newOrder)) {
+        ordersToDelete.add(o.inboundOrderId);
+        ordersToDelete.add(o.orderNo);
+      }
 
       for (final ordNo in ordersToDelete) {
         final existingOrder = _repo.inboundOrders.where((o) => o.orderNo == ordNo || o.inboundOrderId == ordNo).firstOrNull;
         if (existingOrder != null && existingOrder.status == InboundOrderStatus.newOrder) {
           await _repo.deleteInboundOrder(ordNo);
         }
+      }
+
+      // Xóa triệt để các chip pendingInbound mồ côi (không thuộc đơn hợp lệ nào)
+      final activeOrderNos = _repo.inboundOrders.map((o) => o.orderNo).toSet();
+      final orphanItems = _repo.items
+          .where((i) => i.status == ItemStatus.pendingInbound && (i.orderNo == null || !activeOrderNos.contains(i.orderNo)))
+          .map((i) => i.epc)
+          .toList();
+      if (orphanItems.isNotEmpty) {
+        await _repo.deleteItemsByEpcs(orphanItems);
       }
 
       final epcsToClean = <String>{
@@ -1368,12 +1497,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
 
       // 3. Lưu trữ cơ sở dữ liệu an toàn qua Batch (siêu tốc < 10ms)
+      final firstSupplier = explicitItems.map((i) => i.supplier).where((s) => s != null && s.isNotEmpty && s != 'Nhà cung cấp tổng hợp').firstOrNull;
+      final effectiveSupplier = firstSupplier ?? 'File: ${result.fileName}';
+
       var order = _repo.inboundOrders.where((o) => o.orderNo == inboundOrderNo).firstOrNull;
       if (order == null) {
         order = InboundOrder(
           inboundOrderId: inboundOrderNo,
           orderNo: inboundOrderNo,
-          sourceSupplier: 'File: ${result.fileName}',
+          sourceSupplier: effectiveSupplier,
           status: InboundOrderStatus.newOrder,
           createdAt: now,
           details: detailMap.values.toList(),
@@ -1391,12 +1523,18 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _pendingLoadedOrderNos.clear();
       _pendingLoadedOrderNos.add(inboundOrderNo);
 
+      final palletCountWithTag = palletsToRegister.values.where((rfid) => rfid != null && rfid.isNotEmpty).length;
+      final totalExpectedChips = explicitItems.length + palletCountWithTag;
+      final chipDesc = palletCountWithTag > 0
+          ? '$totalExpectedChips chip (${explicitItems.length} hàng + $palletCountWithTag pallet)'
+          : '$totalExpectedChips chip';
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF10B981),
           duration: const Duration(seconds: 4),
-          content: Text('✅ Đã nạp file "${result.fileName}" (${explicitItems.length} chip) vào hệ thống! Cổng RFID sẵn sàng đối soát khi xe qua cổng.'),
+          content: Text('✅ Đã nạp file "${result.fileName}" ($chipDesc) vào hệ thống! Cổng RFID sẵn sàng đối soát khi xe qua cổng.'),
         ),
       );
     } catch (e) {
@@ -2067,6 +2205,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     required bool hasUnexpectedTags,
   }) {
     final activeItems = _getStep2FlatInspectionItems();
+    final hasPalletTagInExpected = (_activePallet?.rfidEpc != null && _activePallet!.rfidEpc!.trim().isNotEmpty);
+    final countDesc = hasPalletTagInExpected
+        ? '$expectedCount chip (${expectedCount - 1} hàng + 1 pallet)'
+        : '$expectedCount chip';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2143,7 +2285,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Mã Đơn: ${_activeOrderNo ?? "--"} • RFID Pallet: ${_activePalletTag ?? _wizardDetectedPalletTag ?? _activePallet?.rfidEpc ?? "--"} • Danh mục: $expectedCount sản phẩm cần nhận diện',
+                      'Mã Đơn: ${_activeOrderNo ?? "--"} • RFID Pallet: ${_activePalletTag ?? _wizardDetectedPalletTag ?? _activePallet?.rfidEpc ?? "--"} • Cần nhận diện: $countDesc',
                       style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                     ),
                   ],
@@ -2265,7 +2407,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'sản phẩm',
+                      'chip',
                       style: TextStyle(fontSize: 11, color: c.textSecondary),
                     ),
                   ],
@@ -2418,13 +2560,42 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   // ---------- 4. MÀN HÌNH CHỜ QUÉT TỰ ĐỘNG KHI CHƯA CÓ XE QUA CỔNG ----------
   Widget _buildIdleGateMonitor(EyeCareColors c) {
     // Lấy dữ liệu thực tế từ Database/Repository (KHÔNG mock data)
+    final validInboundOrders = _repo.inboundOrders.where((o) => o.status == InboundOrderStatus.newOrder).toList();
     final pendingItems = _repo.items.where((i) => i.status == ItemStatus.pendingInbound).toList();
     final Map<String, List<Item>> pendingOrdersMap = {};
+    for (var order in validInboundOrders) {
+      final ordItems = pendingItems.where((i) => i.orderNo == order.orderNo || i.orderNo == order.inboundOrderId).toList();
+      if (ordItems.isNotEmpty) {
+        pendingOrdersMap[order.orderNo] = ordItems;
+      }
+    }
+    // Fallback CHỈ KHI item có orderNo trùng với một đơn newOrder hợp lệ (không tự sinh đơn giả từ item mồ côi)
     for (var item in pendingItems) {
-      final ordNo = item.orderNo ?? (item.cartonCode != null ? 'Lô-${item.cartonCode}' : 'NK-CHƯA-RÕ');
-      pendingOrdersMap.putIfAbsent(ordNo, () => []).add(item);
+      final ordNo = item.orderNo;
+      if (ordNo != null && ordNo.isNotEmpty && !pendingOrdersMap.containsKey(ordNo)) {
+        final matchingOrder = _repo.inboundOrders.where((o) => (o.orderNo == ordNo || o.inboundOrderId == ordNo) && o.status == InboundOrderStatus.newOrder).firstOrNull;
+        if (matchingOrder != null) {
+          pendingOrdersMap.putIfAbsent(ordNo, () => []).add(item);
+        }
+      }
     }
     final pendingPalletsCount = pendingItems.map((i) => i.palletId).where((p) => p != null && p.isNotEmpty).toSet().length;
+
+    int totalPendingPalletTags = 0;
+    for (var ordItems in pendingOrdersMap.values) {
+      final palletCode = ordItems.first.palletId;
+      if (palletCode != null && palletCode.isNotEmpty) {
+        final pObj = _repo.pallets.where((p) =>
+          p.palletCode.toUpperCase() == palletCode.toUpperCase() ||
+          p.palletId.toUpperCase() == palletCode.toUpperCase() ||
+          p.palletId.toUpperCase() == 'PAL-${palletCode.toUpperCase()}' ||
+          'PAL-${p.palletCode.toUpperCase()}' == palletCode.toUpperCase()
+        ).firstOrNull;
+        if (pObj != null && pObj.rfidEpc != null && pObj.rfidEpc!.trim().isNotEmpty) {
+          totalPendingPalletTags++;
+        }
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2536,7 +2707,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 iconColor: const Color(0xFF3B82F6),
                 title: 'ĐƠN CHỜ QUA CỔNG',
                 value: '${pendingOrdersMap.length} Đơn',
-                subtitle: '${pendingItems.length} chip sản phẩm',
+                subtitle: totalPendingPalletTags > 0
+                    ? '${pendingItems.length + totalPendingPalletTags} chip (${pendingItems.length} hàng + $totalPendingPalletTags pallet)'
+                    : '${pendingItems.length} chip sản phẩm',
                 c: c,
               ),
             ),
@@ -2626,7 +2799,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Expanded(flex: 2, child: Text('MÃ ĐƠN HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                       Expanded(flex: 3, child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                       SizedBox(width: 100, child: Text('SỐ THÙNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 110, child: Text('SỐ LƯỢNG CHIP', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                      SizedBox(width: 160, child: Text('SỐ LƯỢNG CHIP', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                       Expanded(flex: 2, child: Text('PALLET ĐÍCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                       SizedBox(width: 130, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     ],
@@ -2659,10 +2832,27 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                           itemBuilder: (ctx, idx) {
                             final ordNo = pendingOrdersMap.keys.elementAt(idx);
                             final ordItems = pendingOrdersMap[ordNo]!;
-                            final supplier = ordItems.first.supplierDisplay;
+                            final matchingOrder = _repo.inboundOrders.where((o) => o.orderNo == ordNo || o.inboundOrderId == ordNo).firstOrNull;
+                            final supplier = (matchingOrder != null && matchingOrder.sourceSupplier.isNotEmpty)
+                                ? matchingOrder.sourceSupplier
+                                : ordItems.first.supplierDisplay;
                             final cartonCount = ordItems.map((i) => i.cartonCode).where((b) => b != null && b.isNotEmpty).toSet().length;
                             final palletCode = ordItems.first.palletId;
                             final hasPallet = palletCode != null && palletCode.isNotEmpty;
+                            final pObj = hasPallet
+                                ? _repo.pallets.where((p) =>
+                                    p.palletCode.toUpperCase() == palletCode.toUpperCase() ||
+                                    p.palletId.toUpperCase() == palletCode.toUpperCase() ||
+                                    p.palletId.toUpperCase() == 'PAL-${palletCode.toUpperCase()}' ||
+                                    'PAL-${p.palletCode.toUpperCase()}' == palletCode.toUpperCase()
+                                  ).firstOrNull
+                                : null;
+                            final hasPalletTag = pObj != null && (pObj.rfidEpc != null && pObj.rfidEpc!.trim().isNotEmpty);
+                            final totalOrderChips = ordItems.length + (hasPalletTag ? 1 : 0);
+                            final String displayPalletCode = pObj?.palletCode ??
+                                (palletCode != null
+                                    ? (palletCode.startsWith('PAL-') ? palletCode.substring(4) : palletCode)
+                                    : '--');
 
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -2690,7 +2880,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                     ),
                                   ),
                                   SizedBox(
-                                    width: 110,
+                                    width: 160,
                                     child: Center(
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -2700,7 +2890,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                           border: Border.all(color: c.border),
                                         ),
                                         child: Text(
-                                          '${ordItems.length} chip',
+                                          hasPalletTag ? '$totalOrderChips chip (${ordItems.length} hàng + 1 pallet)' : '$totalOrderChips chip',
                                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
                                         ),
                                       ),
@@ -2717,7 +2907,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
-                                          hasPallet ? palletCode : 'Xếp sau cổng',
+                                          hasPallet ? displayPalletCode : 'Xếp sau cổng',
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: hasPallet ? FontWeight.bold : FontWeight.normal,
