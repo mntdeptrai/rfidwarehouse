@@ -66,6 +66,8 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
   InventoryViewTab _activeTab = InventoryViewTab.rackGrid;
   InventorySession? _selectedSession;
+  Location? _selectedShelfDetail;
+  final Set<String> _expandedPalletIds = {};
 
   String _selectedZoneFilter = 'ALL';
   String _selectedStatusFilter = 'ALL';
@@ -123,6 +125,15 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   @override
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
+
+    // Trang chi tiết chuyên sâu khi nhấn vào ô kệ (Liệt kê Pallet, Người đặt, Thời gian đặt)
+    if (_selectedShelfDetail != null) {
+      final liveShelf = _repo.locations.firstWhere(
+        (l) => l.locationId == _selectedShelfDetail!.locationId || l.locationCode == _selectedShelfDetail!.locationCode,
+        orElse: () => _selectedShelfDetail!,
+      );
+      return _buildShelfDetailPage(liveShelf, c);
+    }
 
     if (_activeTab == InventoryViewTab.auditSessions) {
       if (_selectedSession != null) {
@@ -911,7 +922,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   // ===========================================================================
   Widget _buildShelfCard(Location loc, EyeCareColors c) {
     final status = _getShelfStatus(loc);
-    final currentCount = _getShelfCurrentCount(loc);
 
     final locCode = loc.locationCode.trim().toUpperCase();
     final locId = loc.locationId.trim().toUpperCase();
@@ -936,7 +946,8 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
         final badgeText = isCompact ? status.shortLabel : status.label;
 
         return InkWell(
-          onTap: () => _showShelfDetailDialog(loc, status, currentCount, itemsOnShelf, c),
+          onTap: () => setState(() => _selectedShelfDetail = loc),
+          onDoubleTap: () => _showShelfDetailDialog(loc, status, _getShelfCurrentCount(loc), itemsOnShelf, c),
           borderRadius: BorderRadius.circular(14),
           child: Container(
             padding: EdgeInsets.all(isCompact ? 10 : 13),
@@ -1078,9 +1089,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'Chi tiết →',
-                      style: TextStyle(color: c.rfidCyan, fontSize: isCompact ? 10.5 : 11, fontWeight: FontWeight.bold),
+                    InkWell(
+                      onTap: () => setState(() => _selectedShelfDetail = loc),
+                      child: Text(
+                        'Chi tiết →',
+                        style: TextStyle(color: c.rfidCyan, fontSize: isCompact ? 10.5 : 11, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ),
@@ -1609,6 +1623,1162 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // TRANG CHI TIẾT KỆ KHO (SHELF DETAIL VIEW)
+  // LIỆT KÊ DANH SÁCH PALLET, NGƯỜI ĐẶT, THỜI GIAN ĐẶT VÀ HÀNG HÓA
+  // ===========================================================================
+  String _formatDateTime(DateTime dt) {
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final y = dt.year.toString();
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    final s = dt.second.toString().padLeft(2, '0');
+    return '$d/$m/$y $h:$min:$s';
+  }
+
+  String _formatRelativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Vừa xong';
+    if (diff.inMinutes < 60) return 'Cách đây ${diff.inMinutes} phút';
+    if (diff.inHours < 24) return 'Cách đây ${diff.inHours} giờ';
+    if (diff.inDays < 30) return 'Cách đây ${diff.inDays} ngày';
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+  }
+
+  Widget _buildShelfDetailPage(Location loc, EyeCareColors c) {
+    final curStatus = _getShelfStatus(loc);
+    final locCode = loc.locationCode.trim().toUpperCase();
+    final locId = loc.locationId.trim().toUpperCase();
+
+    // Lấy toàn bộ Pallet đang đặt tại kệ này
+    final palletsOnShelf = _repo.pallets.where((p) {
+      final pLoc = p.locationId?.trim().toUpperCase();
+      if (pLoc == null || pLoc.isEmpty) return false;
+      return pLoc == locCode || pLoc == locId;
+    }).toList();
+
+    // Lấy toàn bộ Hàng hóa / Chip RFID trên kệ
+    final itemsOnShelf = _repo.items.where((i) {
+      final itemLoc = i.locationId?.trim().toUpperCase();
+      if (itemLoc == null || itemLoc.isEmpty) return false;
+      return itemLoc == locCode || itemLoc == locId;
+    }).toList();
+
+    // Chủng loại SKU duy nhất
+    final distinctSkus = itemsOnShelf.map((i) => i.sku).toSet().toList();
+
+    // Lọc hàng hóa lẻ không nằm trong bất kỳ Pallet nào trên kệ
+    final palletItemIds = palletsOnShelf.expand((p) => p.itemIds).toSet();
+    final palletIdsSet = palletsOnShelf.map((p) => p.palletId.toUpperCase()).toSet();
+    final palletCodesSet = palletsOnShelf.map((p) => p.palletCode.toUpperCase()).toSet();
+    final looseItems = itemsOnShelf.where((i) {
+      if (palletItemIds.contains(i.itemId)) return false;
+      if (i.palletId != null &&
+          (palletIdsSet.contains(i.palletId!.toUpperCase()) ||
+           palletCodesSet.contains(i.palletId!.toUpperCase()))) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    // Lịch sử biến động liên quan đến kệ này
+    final shelfTransactions = _repo.transactions.where((t) {
+      final from = t.fromLocation?.trim().toUpperCase() ?? '';
+      final to = t.toLocation?.trim().toUpperCase() ?? '';
+      return from == locCode || from == locId || to == locCode || to == locId;
+    }).toList();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final isNarrow = w < 850;
+        final horizontalPadding = isNarrow ? 12.0 : 20.0;
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Navigation Header & Breadcrumb
+              _buildShelfDetailNavHeader(loc, c),
+              const SizedBox(height: 16),
+
+              // 2. Banner Thông Tin Kệ & Nút Đổi Trạng Thái
+              _buildShelfDetailBanner(loc, curStatus, palletsOnShelf.length, itemsOnShelf.length, c),
+              const SizedBox(height: 16),
+
+              // 3. 4 Thẻ KPI Tổng Quan
+              _buildShelfDetailKpis(loc, palletsOnShelf, itemsOnShelf, distinctSkus, isNarrow, c),
+              const SizedBox(height: 20),
+
+              // 4. KHỐI TRỌNG TÂM: DANH SÁCH PALLET ĐANG ĐẶT TRÊN KỆ
+              _buildPalletsOnShelfSection(loc, palletsOnShelf, c),
+              const SizedBox(height: 24),
+
+              // 5. Khối Hàng Hóa Lẻ Trên Kệ (Nếu có)
+              if (looseItems.isNotEmpty) ...[
+                _buildLooseItemsSection(loc, looseItems, c),
+                const SizedBox(height: 24),
+              ],
+
+              // 6. Lịch Sử Biến Động / Đặt Kệ Gần Đây
+              _buildShelfTransactionSection(loc, shelfTransactions, c),
+              const SizedBox(height: 32),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShelfDetailNavHeader(Location loc, EyeCareColors c) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 650;
+        final backAndBreadcrumb = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: c.textPrimary,
+                side: BorderSide(color: c.border),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                backgroundColor: c.bgCard,
+              ),
+              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+              label: const Text('QUAY LẠI SƠ ĐỒ KỆ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              onPressed: () => setState(() => _selectedShelfDetail = null),
+            ),
+            const SizedBox(width: 14),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('QUẢN LÝ KHO', style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text('  /  ', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                      Text('SƠ ĐỒ LƯỚI KỆ', style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
+                      Text('  /  ', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                      Text('CHI TIẾT KỆ', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Chi Tiết Kệ Kho: ${loc.displayName}',
+                    style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+
+        final actionButtons = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: c.textPrimary,
+                side: BorderSide(color: c.border),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                backgroundColor: c.bgCard,
+              ),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              onPressed: () async {
+                await _repo.refreshFromDatabase();
+                setState(() {});
+              },
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.rfidCyan,
+                foregroundColor: const Color(0xFF2C251E),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.add_to_photos_rounded, size: 18),
+              label: const Text('+ XẾP PALLET VÀO KỆ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              onPressed: () => _showAssignPalletToShelfDialog(loc, c),
+            ),
+          ],
+        );
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              backAndBreadcrumb,
+              const SizedBox(height: 12),
+              actionButtons,
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(child: backAndBreadcrumb),
+            const SizedBox(width: 16),
+            actionButtons,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildShelfDetailBanner(
+    Location loc,
+    ShelfStatusType curStatus,
+    int palletCount,
+    int itemCount,
+    EyeCareColors c,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: curStatus.color.withValues(alpha: 0.8), width: 1.8),
+        boxShadow: [
+          BoxShadow(
+            color: curStatus.color.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: curStatus.bgLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.shelves, color: curStatus.color, size: 30),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          loc.displayName,
+                          style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: c.bgCardElevated,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: c.border),
+                          ),
+                          child: Text(
+                            'Mã: ${loc.locationCode}',
+                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, fontFamily: 'Courier'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${loc.displaySubtitle}  •  Sức chứa tối đa: ${loc.maxPalletCapacity} Pallet  •  Dãy: ${loc.aisleSide == 'RIGHT' ? 'Dãy Phải' : (loc.aisleSide == 'LEFT' ? 'Dãy Trái' : loc.aisleSide)}  •  Thứ tự lối đi: #${loc.sortOrder}',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: curStatus.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: curStatus.color),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 8, height: 8, decoration: BoxDecoration(color: curStatus.color, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Text(
+                      curStatus.label,
+                      style: TextStyle(color: curStatus.color, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShelfDetailKpis(
+    Location loc,
+    List<Pallet> pallets,
+    List<Item> items,
+    List<String> distinctSkus,
+    bool isNarrow,
+    EyeCareColors c,
+  ) {
+    final cap = loc.maxPalletCapacity > 0 ? loc.maxPalletCapacity : 1;
+    final percent = ((pallets.length / cap) * 100).toInt();
+
+    final cardPallets = _buildKpiCard(
+      title: 'SỐ PALLET TRÊN KỆ',
+      value: '${pallets.length} / ${loc.maxPalletCapacity} Pallet',
+      subtitle: '$percent% Công suất lưu trữ',
+      icon: Icons.pallet,
+      color: c.rfidCyan,
+      c: c,
+      isCompact: false,
+    );
+
+    final cardItems = _buildKpiCard(
+      title: 'TỔNG CHIP RFID / KIỆN HÀNG',
+      value: '${items.length} Thẻ RFID',
+      subtitle: items.isNotEmpty ? 'Đang lưu trữ thực tế' : 'Kệ đang trống',
+      icon: Icons.nfc_rounded,
+      color: const Color(0xFF10B981),
+      c: c,
+      isCompact: false,
+    );
+
+    final cardSkus = _buildKpiCard(
+      title: 'CHỦNG LOẠI SẢN PHẨM (SKU)',
+      value: '${distinctSkus.length} Loại SKU',
+      subtitle: distinctSkus.isNotEmpty ? distinctSkus.take(2).join(', ') : 'Chưa có hàng',
+      icon: Icons.category_outlined,
+      color: const Color(0xFF8B5CF6),
+      c: c,
+      isCompact: false,
+    );
+
+    final lastPallet = pallets.isNotEmpty ? pallets.first : null;
+    final cardLatest = _buildKpiCard(
+      title: 'LẦN ĐẶT PALLET GẦN NHẤT',
+      value: lastPallet != null ? _formatRelativeTime(_repo.getPalletPlacedTime(lastPallet)) : 'Chưa có',
+      subtitle: lastPallet != null ? 'Bởi ${_repo.getPalletPlacedBy(lastPallet)}' : 'Chưa có pallet',
+      icon: Icons.history_rounded,
+      color: const Color(0xFFF59E0B),
+      c: c,
+      isCompact: false,
+    );
+
+    if (isNarrow) {
+      return Column(
+        children: [
+          Row(children: [Expanded(child: cardPallets), const SizedBox(width: 8), Expanded(child: cardItems)]),
+          const SizedBox(height: 8),
+          Row(children: [Expanded(child: cardSkus), const SizedBox(width: 8), Expanded(child: cardLatest)]),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: cardPallets),
+        const SizedBox(width: 12),
+        Expanded(child: cardItems),
+        const SizedBox(width: 12),
+        Expanded(child: cardSkus),
+        const SizedBox(width: 12),
+        Expanded(child: cardLatest),
+      ],
+    );
+  }
+
+  Widget _buildPalletsOnShelfSection(Location loc, List<Pallet> pallets, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.pallet, color: c.rfidCyan, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'DANH SÁCH PALLET ĐANG ĐẶT TẠI KỆ (${pallets.length})',
+                      style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'Chi tiết thông tin từng Pallet, người đặt, thời gian đặt và các kiện hàng / chip RFID bên trong',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          if (pallets.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+              decoration: BoxDecoration(
+                color: c.bgCardElevated,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: c.border),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.pallet, size: 52, color: c.textMuted),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Kệ hiện chưa có Pallet nào được xếp vào.',
+                    style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Bạn có thể bấm "+ Xếp Pallet Vào Kệ Này" ở góc trên hoặc dùng máy quét cầm tay PDA để chuyển pallet đến.',
+                    style: TextStyle(color: c.textMuted, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: c.rfidCyan,
+                      foregroundColor: const Color(0xFF2C251E),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.add_to_photos_rounded, size: 16),
+                    label: const Text('+ XẾP PALLET VÀO KỆ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: () => _showAssignPalletToShelfDialog(loc, c),
+                  ),
+                ],
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: pallets.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 14),
+              itemBuilder: (ctx, idx) {
+                final p = pallets[idx];
+                return _buildPalletCard(p, loc, c);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPalletCard(Pallet p, Location loc, EyeCareColors c) {
+    final placedBy = _repo.getPalletPlacedBy(p);
+    final placedTime = _repo.getPalletPlacedTime(p);
+    final pItems = _repo.items.where((i) =>
+      p.itemIds.contains(i.itemId) ||
+      i.palletId == p.palletId ||
+      i.palletId == p.palletCode
+    ).toList();
+    final isExpanded = _expandedPalletIds.contains(p.palletId);
+
+    // Group items by product/SKU for brief summary
+    final skuCounts = <String, int>{};
+    for (final it in pItems) {
+      final key = it.productName.isNotEmpty ? it.productName : it.sku;
+      skuCounts[key] = (skuCounts[key] ?? 0) + 1;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: c.bgCardElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border, width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Pallet Card Header
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.pallet, color: Color(0xFF10B981), size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'PALLET: ${p.palletCode}',
+                            style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: p.isMultiSku
+                                  ? const Color(0xFF8B5CF6).withValues(alpha: 0.15)
+                                  : const Color(0xFF10B981).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: p.isMultiSku ? const Color(0xFF8B5CF6) : const Color(0xFF10B981),
+                              ),
+                            ),
+                            child: Text(
+                              p.isMultiSku ? 'ĐA SKU (MULTI-SKU)' : 'ĐƠN SKU',
+                              style: TextStyle(
+                                color: p.isMultiSku ? const Color(0xFF8B5CF6) : const Color(0xFF10B981),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: c.rfidCyan.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${pItems.length} Kiện hàng / RFID',
+                              style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        p.rfidEpc != null && p.rfidEpc!.isNotEmpty
+                            ? 'Mã RFID Thẻ Pallet: ${p.rfidEpc}'
+                            : 'Mã Pallet ID: ${p.palletId}  •  Chưa gắn thẻ RFID Pallet',
+                        style: TextStyle(color: c.textMuted, fontSize: 11, fontFamily: 'Courier'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.textPrimary,
+                    side: BorderSide(color: c.border),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.drive_file_move_outlined, size: 16),
+                  label: const Text('CHUYỂN KỆ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  onPressed: () => _showMovePalletDialog(p, loc, c),
+                ),
+              ],
+            ),
+          ),
+
+          // 2. KHỐI THÔNG TIN NGƯỜI ĐẶT & THỜI GIAN ĐẶT (ĐÚNG THEO YÊU CẦU CỦA USER)
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: c.bgCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              children: [
+                // Khối Người đặt
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: c.rfidCyan.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.person_pin_rounded, color: c.rfidCyan, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'NGƯỜI ĐẶT PALLET',
+                              style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              placedBy,
+                              style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Container(width: 1, height: 34, color: c.border),
+                const SizedBox(width: 16),
+
+                // Khối Thời gian đặt
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.schedule_rounded, color: Color(0xFFF59E0B), size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'THỜI GIAN ĐẶT LÊN KỆ',
+                              style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Text(
+                                  _formatDateTime(placedTime),
+                                  style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    _formatRelativeTime(placedTime),
+                                    style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 3. Khối Hàng Hóa Trong Pallet
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 16, color: c.textSecondary),
+                const SizedBox(width: 6),
+                Text(
+                  'Hàng hóa bên trong Pallet (${pItems.length} chip RFID):',
+                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                  icon: Icon(
+                    isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: c.rfidCyan,
+                    size: 18,
+                  ),
+                  label: Text(
+                    isExpanded ? 'Thu gọn' : 'Xem chi tiết từng kiện (${pItems.length})',
+                    style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      if (isExpanded) {
+                        _expandedPalletIds.remove(p.palletId);
+                      } else {
+                        _expandedPalletIds.add(p.palletId);
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // Tóm tắt nhanh các SKU nếu chưa mở rộng
+          if (!isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+              child: skuCounts.isEmpty
+                  ? Text('Pallet rỗng, chưa gán kiện hàng nào.', style: TextStyle(color: c.textMuted, fontSize: 11.5))
+                  : Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: skuCounts.entries.map((e) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: c.bgCard,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: c.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.label_outline, size: 12, color: c.rfidCyan),
+                              const SizedBox(width: 4),
+                              Text('${e.key}: ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                              Text('${e.value} cái', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11)),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+            ),
+
+          // Bảng chi tiết từng kiện hàng nếu mở rộng
+          if (isExpanded)
+            Container(
+              margin: const EdgeInsets.fromLTRB(14, 6, 14, 14),
+              decoration: BoxDecoration(
+                color: c.bgCard,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: c.border),
+              ),
+              child: pItems.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Center(
+                        child: Text('Pallet rỗng, chưa có chip RFID nào.', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                      ),
+                    )
+                  : Table(
+                      border: TableBorder.symmetric(inside: BorderSide(color: c.border)),
+                      columnWidths: const {
+                        0: FixedColumnWidth(40),
+                        1: FlexColumnWidth(2),
+                        2: FlexColumnWidth(3),
+                        3: FlexColumnWidth(2),
+                        4: FlexColumnWidth(3),
+                        5: FlexColumnWidth(1.5),
+                      },
+                      children: [
+                        TableRow(
+                          decoration: BoxDecoration(color: c.bgCardElevated),
+                          children: [
+                            Padding(padding: const EdgeInsets.all(8), child: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text('Mã SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text('Tên sản phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text('Serial', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text('RFID EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                            Padding(padding: const EdgeInsets.all(8), child: Text('Trạng thái', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          ],
+                        ),
+                        ...pItems.asMap().entries.map((e) {
+                          final idx = e.key + 1;
+                          final it = e.value;
+                          return TableRow(
+                            children: [
+                              Padding(padding: const EdgeInsets.all(8), child: Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
+                              Padding(padding: const EdgeInsets.all(8), child: Text(it.sku, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600, fontSize: 11))),
+                              Padding(padding: const EdgeInsets.all(8), child: Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                              Padding(padding: const EdgeInsets.all(8), child: Text(it.serialNumber, style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'Courier'))),
+                              Padding(padding: const EdgeInsets.all(8), child: Text(it.epc, style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'Courier'))),
+                              Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Text(
+                                  it.status.label,
+                                  style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 10.5),
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLooseItemsSection(Location loc, List<Item> looseItems, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.inventory_rounded, color: Color(0xFFF59E0B), size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'KIỆN HÀNG LẺ TRÊN KỆ (CHƯA ĐÓNG PALLET: ${looseItems.length} MẶT HÀNG)',
+                style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Table(
+            border: TableBorder.all(color: c.border),
+            columnWidths: const {
+              0: FixedColumnWidth(40),
+              1: FlexColumnWidth(2),
+              2: FlexColumnWidth(3),
+              3: FlexColumnWidth(3),
+              4: FlexColumnWidth(1.5),
+            },
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: c.bgCardElevated),
+                children: [
+                  Padding(padding: const EdgeInsets.all(8), child: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                  Padding(padding: const EdgeInsets.all(8), child: Text('Mã SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                  Padding(padding: const EdgeInsets.all(8), child: Text('Tên sản phẩm', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                  Padding(padding: const EdgeInsets.all(8), child: Text('Mã Thẻ RFID (EPC)', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                  Padding(padding: const EdgeInsets.all(8), child: Text('Trạng thái', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                ],
+              ),
+              ...looseItems.asMap().entries.map((e) {
+                final idx = e.key + 1;
+                final it = e.value;
+                return TableRow(
+                  children: [
+                    Padding(padding: const EdgeInsets.all(8), child: Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text(it.sku, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text(it.epc, style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'Courier'))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text(it.status.label, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11))),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShelfTransactionSection(Location loc, List<InventoryTransaction> transactions, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history_rounded, color: c.rfidCyan, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'NHẬT KÝ BIẾN ĐỘNG / DI CHUYỂN TẠI KỆ NÀY (${transactions.length})',
+                style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (transactions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: Text('Chưa có lịch sử giao dịch phát sinh tại kệ này.', style: TextStyle(color: c.textMuted, fontSize: 12)),
+              ),
+            )
+          else
+            Table(
+              border: TableBorder.all(color: c.border),
+              columnWidths: const {
+                0: FlexColumnWidth(2),
+                1: FlexColumnWidth(1.5),
+                2: FlexColumnWidth(2),
+                3: FlexColumnWidth(3),
+                4: FlexColumnWidth(2),
+              },
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(color: c.bgCardElevated),
+                  children: [
+                    Padding(padding: const EdgeInsets.all(8), child: Text('Thời gian', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text('Loại biến động', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text('Mã Pallet / CT', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text('Chi tiết', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                    Padding(padding: const EdgeInsets.all(8), child: Text('Người thực hiện', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                  ],
+                ),
+                ...transactions.take(10).map((t) {
+                  return TableRow(
+                    children: [
+                      Padding(padding: const EdgeInsets.all(8), child: Text(_formatDateTime(t.timestamp), style: TextStyle(color: c.textMuted, fontSize: 11))),
+                      Padding(padding: const EdgeInsets.all(8), child: Text(t.type.label, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600, fontSize: 11))),
+                      Padding(padding: const EdgeInsets.all(8), child: Text(t.palletCode ?? t.documentNo, style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                      Padding(padding: const EdgeInsets.all(8), child: Text('${t.fromLocation ?? '-'} → ${t.toLocation ?? '-'} (${t.quantity} SP)', style: TextStyle(color: c.textSecondary, fontSize: 11))),
+                      Padding(padding: const EdgeInsets.all(8), child: Text(t.performedBy, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                    ],
+                  );
+                }),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showMovePalletDialog(Pallet pallet, Location currentLoc, EyeCareColors c) {
+    Location? targetLoc;
+    final otherLocations = _repo.locations.where((l) =>
+      l.locationId != currentLoc.locationId && l.locationCode != currentLoc.locationCode
+    ).toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: c.bgCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.drive_file_move_rounded, color: c.rfidCyan, size: 22),
+                const SizedBox(width: 10),
+                Text('Chuyển Kệ Pallet: ${pallet.palletCode}', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Vị trí hiện tại:', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.shelves, color: c.rfidCyan, size: 18),
+                        const SizedBox(width: 8),
+                        Text('${currentLoc.displayName} (${currentLoc.locationCode})', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Chọn Kệ Đích Cần Chuyển Đến:', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: c.bgCardElevated,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<Location>(
+                        isExpanded: true,
+                        value: targetLoc,
+                        hint: Text('Chọn kệ đến...', style: TextStyle(color: c.textMuted, fontSize: 13)),
+                        dropdownColor: c.bgCard,
+                        items: otherLocations.map((l) {
+                          return DropdownMenuItem<Location>(
+                            value: l,
+                            child: Text('${l.displayName} - ${l.displaySubtitle}', style: TextStyle(color: c.textPrimary, fontSize: 13)),
+                          );
+                        }).toList(),
+                        onChanged: (val) => setDialogState(() => targetLoc = val),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+                onPressed: targetLoc == null
+                    ? null
+                    : () {
+                        final performedBy = _auth.currentUser?.fullName ?? 'Thủ kho (Admin)';
+                        _repo.movePallet(
+                          palletId: pallet.palletId,
+                          newLocationId: targetLoc!.locationId,
+                          performedBy: performedBy,
+                        );
+                        Navigator.pop(ctx);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFF10B981),
+                            content: Text('Đã chuyển Pallet ${pallet.palletCode} sang ${targetLoc!.displayName}'),
+                          ),
+                        );
+                      },
+                child: const Text('XÁC NHẬN CHUYỂN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAssignPalletToShelfDialog(Location loc, EyeCareColors c) {
+    Pallet? selectedPallet;
+    final availablePallets = _repo.pallets.where((p) =>
+      p.locationId?.trim().toUpperCase() != loc.locationCode.trim().toUpperCase() &&
+      p.locationId?.trim().toUpperCase() != loc.locationId.trim().toUpperCase()
+    ).toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: c.bgCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(Icons.add_to_photos_rounded, color: c.rfidCyan, size: 22),
+                const SizedBox(width: 10),
+                Text('Xếp Pallet Vào ${loc.displayName}', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Chọn một Pallet hiện có trong kho để xếp vào kệ này:', style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
+                  const SizedBox(height: 12),
+                  if (availablePallets.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8)),
+                      child: Text('Hiện không có Pallet nào khác sẵn sàng để xếp.', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<Pallet>(
+                          isExpanded: true,
+                          value: selectedPallet,
+                          hint: Text('Chọn Pallet cần xếp vào kệ...', style: TextStyle(color: c.textMuted, fontSize: 13)),
+                          dropdownColor: c.bgCard,
+                          items: availablePallets.map((p) {
+                            final pItems = _repo.items.where((i) => p.itemIds.contains(i.itemId) || i.palletId == p.palletId).length;
+                            final currentLoc = p.locationId != null ? ' (Đang ở: ${p.locationId})' : ' (Chưa có vị trí)';
+                            return DropdownMenuItem<Pallet>(
+                              value: p,
+                              child: Text('${p.palletCode} - $pItems SP$currentLoc', style: TextStyle(color: c.textPrimary, fontSize: 13)),
+                            );
+                          }).toList(),
+                          onChanged: (val) => setDialogState(() => selectedPallet = val),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+                onPressed: selectedPallet == null
+                    ? null
+                    : () {
+                        final performedBy = _auth.currentUser?.fullName ?? 'Thủ kho (Admin)';
+                        _repo.movePallet(
+                          palletId: selectedPallet!.palletId,
+                          newLocationId: loc.locationId,
+                          performedBy: performedBy,
+                        );
+                        Navigator.pop(ctx);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFF10B981),
+                            content: Text('Đã xếp Pallet ${selectedPallet!.palletCode} vào ${loc.displayName}'),
+                          ),
+                        );
+                      },
+                child: const Text('XẾP VÀO KỆ NÀY', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

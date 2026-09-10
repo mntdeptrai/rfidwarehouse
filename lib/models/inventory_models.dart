@@ -100,6 +100,7 @@ class Pallet {
   DateTime? inboundTime;
   bool isMultiSku;
   List<String> itemIds;
+  String? placedBy;
 
   Pallet({
     required this.palletId,
@@ -109,6 +110,7 @@ class Pallet {
     this.inboundTime,
     this.isMultiSku = false,
     List<String>? itemIds,
+    this.placedBy,
   }) : itemIds = itemIds ?? [];
 }
 

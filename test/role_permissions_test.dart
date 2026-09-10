@@ -4,16 +4,32 @@ import 'package:uhf/models/user_models.dart';
 
 void main() {
   group('Role Permissions & Hardware Configuration Lock Tests', () {
-    test('Admin role has full hardware configuration and administrative rights', () {
+    test('Admin role has administrative user management rights but NOT hardware configuration', () {
       final role = AdminRole();
       expect(role.code, equals('admin'));
       expect(role.name, equals('Quản Trị Viên (Admin)'));
-      expect(role.canConfigureHardware, isTrue);
-      expect(role.canManageUsers, isTrue);
+      // Machine parameter screens now belong to Technician (Kỹ thuật)
+      expect(role.canConfigureHardware, isFalse);
+      expect(role.canManageUsers, isTrue); // Admin provisions & manages accounts
       expect(role.canInbound, isTrue);
       expect(role.canOutbound, isTrue);
       expect(role.canTransfer, isTrue);
       expect(role.canAudit, isTrue);
+      expect(role.canViewReports, isTrue);
+    });
+
+    test('Technician (Kỹ thuật) role has full hardware configuration rights', () {
+      final role = TechnicianRole();
+      expect(role.code, equals('kythuat'));
+      expect(role.name, contains('Kỹ Thuật'));
+      // Hardware configuration permission granted to Technician
+      expect(role.canConfigureHardware, isTrue);
+      expect(role.canManageUsers, isFalse);
+      expect(role.canInbound, isTrue);
+      expect(role.canOutbound, isTrue);
+      expect(role.canTransfer, isTrue);
+      expect(role.canAudit, isTrue);
+      expect(role.canLookup, isTrue);
       expect(role.canViewReports, isTrue);
     });
 
@@ -62,25 +78,33 @@ void main() {
       expect(role.canViewReports, isTrue);
     });
 
-    test('CRITICAL SECURITY: Non-admin roles (thukho, camtay, seller) must all have canConfigureHardware == false', () {
-      final roles = [
+    test('CRITICAL SECURITY: Only Technician role has canConfigureHardware == true; others must be false', () {
+      final nonTechRoles = [
+        AdminRole(),
         WarehouseKeeperRole(),
         HandheldRole(),
         SellerRole(),
       ];
 
-      for (final role in roles) {
+      for (final role in nonTechRoles) {
         expect(
           role.canConfigureHardware,
           isFalse,
           reason: '${role.name} (${role.code}) must not have permission to modify machine parameters!',
         );
       }
+
+      expect(TechnicianRole().canConfigureHardware, isTrue);
     });
 
     test('RoleRegistry correctly resolves all role aliases and fallback', () {
       expect(RoleRegistry.fromCode('admin'), isA<AdminRole>());
       expect(RoleRegistry.fromCode('administrator'), isA<AdminRole>());
+
+      expect(RoleRegistry.fromCode('kythuat'), isA<TechnicianRole>());
+      expect(RoleRegistry.fromCode('technician'), isA<TechnicianRole>());
+      expect(RoleRegistry.fromCode('tech'), isA<TechnicianRole>());
+      expect(RoleRegistry.fromCode('it'), isA<TechnicianRole>());
 
       expect(RoleRegistry.fromCode('thukho'), isA<WarehouseKeeperRole>());
       expect(RoleRegistry.fromCode('operator'), isA<WarehouseKeeperRole>());
@@ -100,19 +124,21 @@ void main() {
       expect(fallback.canConfigureHardware, isFalse);
     });
 
-    test('RoleRegistry.allRoles contains exactly the 4 distinct system roles', () {
+    test('RoleRegistry.allRoles contains exactly the 5 distinct system roles', () {
       final all = RoleRegistry.allRoles;
-      expect(all.length, equals(4));
-      expect(all.map((r) => r.code).toList(), containsAll(['admin', 'thukho', 'handheld', 'seller']));
+      expect(all.length, equals(5));
+      expect(all.map((r) => r.code).toList(), containsAll(['admin', 'kythuat', 'thukho', 'handheld', 'seller']));
     });
 
     test('WmsUser.canConfigureHardware matches role permission directly', () {
       final adminUser = WmsUser(userId: 'u1', username: 'admin', fullName: 'Admin', role: 'admin');
-      final thukhoUser = WmsUser(userId: 'u2', username: 'thukho', fullName: 'Thủ kho', role: 'thukho');
-      final camtayUser = WmsUser(userId: 'u3', username: 'camtay', fullName: 'Cầm tay', role: 'camtay');
-      final sellerUser = WmsUser(userId: 'u4', username: 'seller', fullName: 'Seller', role: 'seller');
+      final techUser = WmsUser(userId: 'u2', username: 'kythuat', fullName: 'Kỹ thuật', role: 'kythuat');
+      final thukhoUser = WmsUser(userId: 'u3', username: 'thukho', fullName: 'Thủ kho', role: 'thukho');
+      final camtayUser = WmsUser(userId: 'u4', username: 'camtay', fullName: 'Cầm tay', role: 'camtay');
+      final sellerUser = WmsUser(userId: 'u5', username: 'seller', fullName: 'Seller', role: 'seller');
 
-      expect(adminUser.canConfigureHardware, isTrue);
+      expect(adminUser.canConfigureHardware, isFalse);
+      expect(techUser.canConfigureHardware, isTrue);
       expect(thukhoUser.canConfigureHardware, isFalse);
       expect(camtayUser.canConfigureHardware, isFalse);
       expect(sellerUser.canConfigureHardware, isFalse);

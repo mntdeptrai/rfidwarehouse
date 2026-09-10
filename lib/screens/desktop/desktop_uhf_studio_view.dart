@@ -134,7 +134,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
         ),
         content: Text(
           'Tài khoản của bạn (${user?.rolePermission.name ?? "Nhân viên"}) không được phép thực hiện:\n"$actionName".\n\n'
-          'Chỉ Quản trị viên (Admin) mới có quyền thay đổi thông số phần cứng, anten, cấu hình mạng IP và ghi/hủy thẻ chip RFID.',
+          'Chỉ Kỹ thuật viên (Kỹ thuật) mới có quyền thay đổi thông số phần cứng, anten, cấu hình mạng IP và ghi/hủy thẻ chip RFID.',
           style: TextStyle(color: c.textPrimary, fontSize: 13, height: 1.4),
         ),
         actions: [
@@ -186,7 +186,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                     if (!isNarrow) ...[
                       const SizedBox(height: 2),
                       Text(
-                        'Tài khoản này không có quyền hiệu chỉnh thông số máy (cổng kết nối, công suất Anten, ghi/khóa/hủy chip RFID, cấu hình IP). Vui lòng đăng nhập tài khoản Quản trị viên (Admin) để cấu hình.',
+                        'Tài khoản này không có quyền hiệu chỉnh thông số máy (cổng kết nối, công suất Anten, ghi/khóa/hủy chip RFID, cấu hình IP). Vui lòng đăng nhập tài khoản Kỹ thuật viên (Kỹ thuật) để cấu hình.',
                         style: TextStyle(color: c.textSecondary, fontSize: 11),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -324,7 +324,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               if (!canConfigure) ...[
                 const SizedBox(width: 6),
                 Tooltip(
-                  message: 'Thông số cấu hình máy bị khóa (Chỉ dành cho Quản trị viên)',
+                  message: 'Thông số cấu hình máy bị khóa (Chỉ dành cho Kỹ thuật viên)',
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(

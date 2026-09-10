@@ -78,10 +78,22 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
 
   Future<void> _updateStatus(Location loc, String newStatus) async {
     HapticFeedback.heavyImpact();
-    await _repo.updateLocationStatus(loc.locationId, newStatus);
     setState(() {
       loc.status = newStatus;
+      if (_selectedLocation != null &&
+          (_selectedLocation!.locationId == loc.locationId ||
+           _selectedLocation!.locationCode == loc.locationCode)) {
+        _selectedLocation!.status = newStatus;
+      }
+      final match = _repo.locations.where((l) =>
+        l.locationId == loc.locationId || l.locationCode == loc.locationCode
+      ).firstOrNull;
+      if (match != null) {
+        match.status = newStatus;
+      }
     });
+
+    await _repo.updateLocationStatus(loc.locationId, newStatus);
 
     if (!mounted) return;
     String statusName = 'CÒN TRỐNG NHIỀU';
@@ -119,6 +131,12 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
     final allLocations = _repo.locations;
+
+    // Luôn giữ liên kết động với đối tượng mới nhất trong danh mục kệ
+    final activeSelectedLocation = allLocations.where((l) =>
+      l.locationId == _selectedLocation?.locationId ||
+      l.locationCode == _selectedLocation?.locationCode
+    ).firstOrNull ?? _selectedLocation;
 
     final zones = {'ALL', ...allLocations.map((l) => l.zone.trim()).where((z) => z.isNotEmpty)}.toList();
 
@@ -163,8 +181,8 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
         child: Column(
           children: [
             // 1. Khối Kệ Đang Chọn & 3 Nút Cập Nhật Lớn
-            if (_selectedLocation != null)
-              _buildSelectedShelfPanel(_selectedLocation!, c)
+            if (activeSelectedLocation != null)
+              _buildSelectedShelfPanel(activeSelectedLocation, c)
             else
               Container(
                 margin: const EdgeInsets.all(14),
@@ -256,7 +274,8 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
                       itemCount: filteredLocations.length,
                       itemBuilder: (ctx, idx) {
                         final loc = filteredLocations[idx];
-                        final isSelected = _selectedLocation?.locationId == loc.locationId;
+                        final isSelected = activeSelectedLocation?.locationId == loc.locationId ||
+                                           activeSelectedLocation?.locationCode == loc.locationCode;
                         return _buildShelfListItem(loc, isSelected, c);
                       },
                     ),

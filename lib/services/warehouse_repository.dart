@@ -991,23 +991,31 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> updateLocationStatus(String locationId, String status) async {
     final cleanId = locationId.trim().toUpperCase();
+    final stripped = cleanId.startsWith('LOC-') ? cleanId.substring(4) : cleanId;
+    final withLoc = cleanId.startsWith('LOC-') ? cleanId : 'LOC-$cleanId';
+
     final loc = _locations.where((l) =>
         l.locationId.trim().toUpperCase() == cleanId ||
-        l.locationCode.trim().toUpperCase() == cleanId
+        l.locationCode.trim().toUpperCase() == cleanId ||
+        l.locationId.trim().toUpperCase() == withLoc ||
+        l.locationCode.trim().toUpperCase() == stripped
     ).firstOrNull;
 
     if (loc != null) {
       loc.status = status;
     }
 
-    await _dbService.updateLocationStatus(locationId, status);
+    final targetId = loc?.locationId ?? locationId;
+    final targetCode = loc?.locationCode ?? stripped;
+    await _dbService.updateLocationStatus(targetId, status);
 
     await _syncDirectOrQueue(
       tableName: 'locations',
-      recordId: loc?.locationId ?? locationId,
+      recordId: targetId,
       action: 'UPDATE',
       payload: {
-        'locationId': loc?.locationId ?? locationId,
+        'location_id': targetId,
+        'location_code': targetCode,
         'status': status,
       },
     );
@@ -1212,18 +1220,68 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addUser(WmsUser user) async {
-    await _dbService.insertUser(user);
+  Future<void> addUser(WmsUser user, {String? passwordHash}) async {
+    if (passwordHash != null && passwordHash.isNotEmpty) {
+      await _dbService.insertUserWithPassword(user, passwordHash);
+    } else {
+      await _dbService.insertUser(user);
+    }
     _users.removeWhere((u) => u.userId == user.userId);
     _users.add(user);
+
+    final payload = user.toMap();
+    final hashToSync = passwordHash ?? (await _dbService.getUserAuth(user.username))?['password_hash'];
+    if (hashToSync != null) {
+      payload['password_hash'] = hashToSync;
+    }
+
     await _syncDirectOrQueue(
       tableName: 'users',
       recordId: user.userId,
       action: 'INSERT',
-      payload: user.toMap(),
+      payload: payload,
     );
     _triggerBackgroundSync();
     notifyListeners();
+  }
+
+  Future<void> updateUser(WmsUser user, {String? passwordHash}) async {
+    await _dbService.updateUser(user);
+    final idx = _users.indexWhere((u) => u.userId == user.userId || u.username == user.username);
+    if (idx >= 0) {
+      _users[idx] = user;
+    } else {
+      _users.add(user);
+    }
+
+    final payload = user.toMap();
+    final hashToSync = passwordHash ?? (await _dbService.getUserAuth(user.username))?['password_hash'];
+    if (hashToSync != null) {
+      payload['password_hash'] = hashToSync;
+    }
+
+    await _syncDirectOrQueue(
+      tableName: 'users',
+      recordId: user.userId,
+      action: 'UPDATE',
+      payload: payload,
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<void> syncUserPassword(String userId, String passwordHash) async {
+    await _dbService.updateUserPassword(userId, passwordHash);
+    await _syncDirectOrQueue(
+      tableName: 'users',
+      recordId: userId,
+      action: 'UPDATE',
+      payload: {
+        'user_id': userId,
+        'password_hash': passwordHash,
+      },
+    );
+    _triggerBackgroundSync();
   }
 
   Future<void> deleteUser(String userId) async {
@@ -1270,6 +1328,7 @@ class WarehouseRepository extends ChangeNotifier {
     required String palletCode,
     String? locationId,
     required List<Item> newItems,
+    String? placedBy,
   }) {
     Pallet? pallet = _pallets.firstWhere(
       (p) => p.palletCode.toUpperCase() == palletCode.toUpperCase(),
@@ -1280,6 +1339,7 @@ class WarehouseRepository extends ChangeNotifier {
           locationId: locationId,
           inboundTime: DateTime.now(),
           isMultiSku: newItems.map((e) => e.sku).toSet().length > 1,
+          placedBy: placedBy ?? 'Thủ kho (Admin)',
         );
         _pallets.add(newP);
         return newP;
@@ -1287,6 +1347,9 @@ class WarehouseRepository extends ChangeNotifier {
     );
 
     pallet.locationId = locationId;
+    if (placedBy != null && placedBy.isNotEmpty) {
+      pallet.placedBy = placedBy;
+    }
     for (var item in newItems) {
       item.palletId = pallet.palletId;
       item.locationId = locationId;
@@ -1328,6 +1391,47 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  /// Lấy thông tin người đặt Pallet lên kệ
+  String getPalletPlacedBy(Pallet p) {
+    if (p.placedBy != null && p.placedBy!.trim().isNotEmpty) {
+      return p.placedBy!;
+    }
+    // Tra cứu trong nhật ký giao dịch biến động kho của pallet này
+    final tx = _transactions.where((t) =>
+      (t.palletCode != null && t.palletCode!.toUpperCase() == p.palletCode.toUpperCase()) ||
+      (t.documentNo.toUpperCase() == p.palletCode.toUpperCase())
+    ).firstOrNull;
+    if (tx != null && tx.performedBy.trim().isNotEmpty) {
+      return tx.performedBy;
+    }
+    // Tra cứu từ đơn nhập kho của các mặt hàng trong pallet
+    for (final itId in p.itemIds) {
+      final item = _items.where((i) => i.itemId == itId).firstOrNull;
+      if (item?.orderNo != null) {
+        final ord = _inboundOrders.where((o) => o.orderNo == item!.orderNo).firstOrNull;
+        if (ord != null && ord.sourceSupplier.trim().isNotEmpty) {
+          return 'Nhập từ: ${ord.sourceSupplier}';
+        }
+      }
+    }
+    return 'Thủ kho (Admin)';
+  }
+
+  /// Lấy thời gian đặt Pallet lên kệ
+  DateTime getPalletPlacedTime(Pallet p) {
+    if (p.inboundTime != null) {
+      return p.inboundTime!;
+    }
+    final tx = _transactions.where((t) =>
+      (t.palletCode != null && t.palletCode!.toUpperCase() == p.palletCode.toUpperCase()) ||
+      (t.documentNo.toUpperCase() == p.palletCode.toUpperCase())
+    ).firstOrNull;
+    if (tx != null) {
+      return tx.timestamp;
+    }
+    return DateTime.now();
   }
 
   /// Tra cứu bất đồng bộ có đối soát trực tiếp với SQLite để chống mất pallet
@@ -2813,7 +2917,10 @@ class WarehouseRepository extends ChangeNotifier {
     final newLocation = _locations.where((l) => l.locationId == newLocationId || l.locationCode == newLocationId).firstOrNull;
 
     pallet.locationId = newLocationId;
+    pallet.placedBy = performedBy;
+    pallet.inboundTime = DateTime.now();
     _dbService.updatePalletLocation(palletId, newLocationId);
+    _dbService.insertPallet(pallet);
     if (oldLocation.currentPallets > 0) oldLocation.currentPallets--;
     if (newLocation != null) newLocation.currentPallets++;
 
@@ -2937,9 +3044,20 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // Làm rỗng Pallet nguồn
+    // Làm rỗng Pallet nguồn: Mặc định chuyển về trạng thái trống hàng (0 items)
     sourcePallet.itemIds.clear();
     sourcePallet.isMultiSku = false;
+
+    // Đảm bảo Pallet nguồn luôn lưu giữ vị trí được cập nhật lần cuối cùng của nó
+    if (sourcePallet.locationId == null || sourcePallet.locationId!.trim().isEmpty) {
+      final lastTx = _transactions.where((t) =>
+        (t.palletCode != null && t.palletCode!.toUpperCase() == sourcePallet.palletCode.toUpperCase()) ||
+        (t.documentNo.toUpperCase() == sourcePallet.palletCode.toUpperCase())
+      ).firstOrNull;
+      if (lastTx != null) {
+        sourcePallet.locationId = lastTx.toLocation ?? lastTx.fromLocation;
+      }
+    }
 
     // Đánh giá lại isMultiSku cho Pallet đích
     final allTargetItems = _items.where((it) => it.palletId == targetPallet.palletId).toList();
@@ -2958,7 +3076,7 @@ class WarehouseRepository extends ChangeNotifier {
       },
     );
 
-    // Xử lý Pallet nguồn sau gộp
+    // Xử lý Pallet nguồn sau gộp: Mặc định luôn giữ lại làm Pallet rỗng tại vị trí cập nhật lần cuối
     if (deleteSourcePallet) {
       _pallets.removeWhere((p) => p.palletId == sourcePallet.palletId);
       await _dbService.deletePallet(sourcePallet.palletId);
@@ -2971,6 +3089,7 @@ class WarehouseRepository extends ChangeNotifier {
       );
     } else {
       await _dbService.insertPallet(sourcePallet);
+      await _dbService.savePalletsBackup(_pallets);
       await _syncDirectOrQueue(
         tableName: 'pallets',
         recordId: sourcePallet.palletId,

@@ -23,8 +23,20 @@ CREATE TABLE IF NOT EXISTS public.locations (
     shelf TEXT NOT NULL,
     level TEXT NOT NULL,
     current_pallets INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'AVAILABLE',
+    max_pallet_capacity INTEGER DEFAULT 1,
+    aisle_side TEXT DEFAULT 'LEFT',
+    sort_order INTEGER DEFAULT 0,
+    grid_row INTEGER DEFAULT 0,
+    grid_col INTEGER DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'AVAILABLE';
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS max_pallet_capacity INTEGER DEFAULT 1;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS aisle_side TEXT DEFAULT 'LEFT';
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS grid_row INTEGER DEFAULT 0;
+ALTER TABLE public.locations ADD COLUMN IF NOT EXISTS grid_col INTEGER DEFAULT 0;
 
 -- 3. Bảng Pallet lưu kho (pallets)
 -- FK: location_id -> locations(location_id)
@@ -200,11 +212,13 @@ CREATE TABLE IF NOT EXISTS public.users (
     full_name TEXT NOT NULL,
     email TEXT,
     phone TEXT,
-    role TEXT NOT NULL DEFAULT 'operator', -- 'admin', 'manager', 'operator', 'forklift'
+    role TEXT NOT NULL DEFAULT 'thukho', -- 'admin', 'kythuat', 'thukho', 'handheld', 'seller'
+    password_hash TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 CREATE INDEX IF NOT EXISTS idx_users_username ON public.users (username);
 
 -- 15. Bảng Lịch sử Đồng bộ (sync_logs)

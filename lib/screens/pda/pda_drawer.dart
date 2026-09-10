@@ -3,9 +3,11 @@ import '../../services/auth_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
+import 'pda_merge_pallets_screen.dart';
 import 'pda_putaway_screen.dart';
 import 'pda_shelf_status_screen.dart';
 import '../radar_locate_screen.dart';
+import '../desktop/desktop_user_management_view.dart';
 
 class PdaDrawer extends StatelessWidget {
   const PdaDrawer({super.key});
@@ -97,6 +99,22 @@ class PdaDrawer extends StatelessWidget {
                     );
                   },
                 ),
+              if (user?.rolePermission.canTransfer != false)
+                ListTile(
+                  leading: const Icon(Icons.call_merge_rounded, color: Color(0xFFF59E0B)),
+                  title: Text(
+                    'Gộp 2 Pallet (PDA)',
+                    style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text('Bóp cò quét Barcode/RFID dồn hàng 2 pallet', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const PdaMergePalletsScreen()),
+                    );
+                  },
+                ),
               ListTile(
                 leading: Icon(Icons.tune_rounded, color: c.warningAmber),
                 title: Text(
@@ -136,6 +154,31 @@ class PdaDrawer extends StatelessWidget {
               ),
               if (user?.rolePermission.canManageUsers == true) ...[
                 Divider(color: c.border),
+                ListTile(
+                  leading: Icon(Icons.manage_accounts_rounded, color: c.rfidCyan),
+                  title: Text('Quản Lý & Cấp Tài Khoản', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                  subtitle: Text('Cấp mới, phân quyền, đổi mật khẩu', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => Scaffold(
+                          appBar: AppBar(
+                            backgroundColor: c.bgCard,
+                            elevation: 0,
+                            leading: IconButton(
+                              icon: Icon(Icons.arrow_back, color: c.textPrimary),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            title: Text('CẤP TÀI KHOẢN NHÂN VIÊN', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
+                          ),
+                          body: const DesktopUserManagementView(),
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 ListTile(
                   leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
                   title: Text('Xóa Sạch Dữ Liệu', style: TextStyle(color: c.errorCoral, fontSize: 14)),

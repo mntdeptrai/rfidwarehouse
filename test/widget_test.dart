@@ -132,6 +132,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(DesktopMainLayout), findsOneWidget);
+    await tester.pump(const Duration(seconds: 11));
   });
 
   testWidgets('PdaHomeScreen renders without overflow in ultra-narrow window', (WidgetTester tester) async {

@@ -179,6 +179,9 @@ class DatabaseService {
     try {
       await db.execute('ALTER TABLE pallets ADD COLUMN rfid_epc TEXT');
     } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE pallets ADD COLUMN placed_by TEXT');
+    } catch (_) {}
 
     // 4. Bảng Mặt hàng cụ thể gắn thẻ RFID Chip (items)
     await db.execute('''
@@ -567,11 +570,14 @@ class DatabaseService {
 
   Future<void> updateLocationStatus(String locationId, String status) async {
     final db = await database;
+    final clean = locationId.trim().toUpperCase();
+    final stripped = clean.startsWith('LOC-') ? clean.substring(4) : clean;
+    final withLoc = clean.startsWith('LOC-') ? clean : 'LOC-$clean';
     await db.update(
       'locations',
       {'status': status},
-      where: 'location_id = ? OR location_code = ?',
-      whereArgs: [locationId, locationId],
+      where: 'location_id = ? OR location_code = ? OR UPPER(location_id) = ? OR UPPER(location_code) = ? OR location_id = ? OR location_code = ?',
+      whereArgs: [locationId, locationId, clean, clean, withLoc, stripped],
     );
   }
 
@@ -646,6 +652,7 @@ class DatabaseService {
           locationId: map['location_id'] as String?,
           inboundTime: inbTime,
           isMultiSku: map['is_multi_sku'] == 1 || map['is_multi_sku'] == true,
+          placedBy: map['placed_by'] as String?,
         );
       }).where((p) => p.palletCode.isNotEmpty).toList();
     } catch (e) {
@@ -670,6 +677,7 @@ class DatabaseService {
         locationId: m['location_id'] as String?,
         inboundTime: inbTime,
         isMultiSku: (m['is_multi_sku'] as int?) == 1,
+        placedBy: m['placed_by'] as String?,
       );
     }).toList();
   }
@@ -683,6 +691,7 @@ class DatabaseService {
       'location_id': pallet.locationId,
       'inbound_time': pallet.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
       'is_multi_sku': pallet.isMultiSku ? 1 : 0,
+      'placed_by': pallet.placedBy,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -1097,6 +1106,32 @@ class DatabaseService {
   Future<int> deleteUser(String userId) async {
     final db = await database;
     return await db.delete('users', where: 'user_id = ? OR username = ?', whereArgs: [userId, userId]);
+  }
+
+  Future<void> updateUser(WmsUser user) async {
+    final db = await database;
+    await db.update(
+      'users',
+      {
+        'full_name': user.fullName,
+        'email': user.email,
+        'phone': user.phone,
+        'role': user.role,
+        'is_active': user.isActive ? 1 : 0,
+      },
+      where: 'user_id = ? OR username = ?',
+      whereArgs: [user.userId, user.username],
+    );
+  }
+
+  Future<void> updateUserPassword(String userId, String passwordHash) async {
+    final db = await database;
+    await db.update(
+      'users',
+      {'password_hash': passwordHash},
+      where: 'user_id = ? OR username = ?',
+      whereArgs: [userId, userId],
+    );
   }
 
   // --- CUSTOMER QUERIES ---

@@ -73,6 +73,7 @@ class SupabaseSyncService extends ChangeNotifier {
   final List<SupabaseLogEntry> _logs = [];
 
   Timer? _autoSyncTimer;
+  Timer? _reloadDebounceTimer;
   RealtimeChannel? _realtimeChannel;
   bool _isInitialized = false;
 
@@ -264,6 +265,7 @@ class SupabaseSyncService extends ChangeNotifier {
           message: 'Kết nối thành công tới Supabase Cloud: ${config.url}',
         );
         notifyListeners();
+        syncUserPasswordsToCloud();
       }
       return true;
     } catch (e) {
@@ -460,12 +462,19 @@ class SupabaseSyncService extends ChangeNotifier {
         isSuccess: true,
         message: 'Nhận sự kiện Realtime thay đổi từ $tableName (${payload.eventType})',
       );
-      await WarehouseRepository().reloadFromSqlite();
+      _scheduleReloadFromSqlite();
     } catch (e) {
       debugPrint('Realtime handling error on $tableName: $e');
       await _pullTableFromSupabase(tableName);
-      await WarehouseRepository().reloadFromSqlite();
+      _scheduleReloadFromSqlite();
     }
+  }
+
+  void _scheduleReloadFromSqlite() {
+    _reloadDebounceTimer?.cancel();
+    _reloadDebounceTimer = Timer(const Duration(milliseconds: 300), () async {
+      await WarehouseRepository().reloadFromSqlite();
+    });
   }
 
   Map<String, dynamic> _normalizePayloadForSupabase(String tableName, Map<String, dynamic> input) {
@@ -711,10 +720,32 @@ class SupabaseSyncService extends ChangeNotifier {
             'shelf': loc.shelf,
             'level': loc.level,
             'current_pallets': loc.currentPallets,
+            'status': loc.status,
+            'max_pallet_capacity': loc.maxPalletCapacity,
+            'aisle_side': loc.aisleSide,
+            'sort_order': loc.sortOrder,
+            'grid_row': loc.gridRow,
+            'grid_col': loc.gridCol,
           }).toList();
           for (var i = 0; i < locBatch.length; i += 100) {
             final chunk = locBatch.sublist(i, (i + 100 > locBatch.length) ? locBatch.length : i + 100);
-            await supa.from('locations').upsert(chunk);
+            try {
+              await supa.from('locations').upsert(chunk);
+            } catch (e) {
+              debugPrint('Warning upserting locations with status to Supabase: $e');
+              // Fallback nếu Supabase chưa chạy ALTER TABLE thêm status
+              final fallbackChunk = chunk.map((m) => {
+                'location_id': m['location_id'],
+                'location_code': m['location_code'],
+                'zone': m['zone'],
+                'shelf': m['shelf'],
+                'level': m['level'],
+                'current_pallets': m['current_pallets'],
+              }).toList();
+              try {
+                await supa.from('locations').upsert(fallbackChunk);
+              } catch (_) {}
+            }
           }
         }
 
@@ -876,12 +907,32 @@ class SupabaseSyncService extends ChangeNotifier {
         if (tableName == 'inventory_sessions' && map['is_completed'] is bool) {
           map['is_completed'] = (map['is_completed'] == true) ? 1 : 0;
         }
+        if (tableName == 'locations') {
+          if (map['status'] == null) {
+            final localLoc = await db.query(
+              'locations',
+              columns: ['status'],
+              where: 'location_id = ? OR location_code = ?',
+              whereArgs: [map['location_id'], map['location_code']],
+              limit: 1,
+            );
+            if (localLoc.isNotEmpty && localLoc.first['status'] != null) {
+              map['status'] = localLoc.first['status'];
+            }
+          }
+        }
         if (tableName == 'users') {
           if (map['is_active'] is bool) {
             map['is_active'] = (map['is_active'] == true) ? 1 : 0;
           }
           if (map['password_hash'] == null) {
-            final localUsers = await db.query('users', columns: ['password_hash'], where: 'user_id = ?', whereArgs: [map['user_id']], limit: 1);
+            final localUsers = await db.query(
+              'users',
+              columns: ['password_hash'],
+              where: 'user_id = ? OR username = ?',
+              whereArgs: [map['user_id'], map['username']],
+              limit: 1,
+            );
             if (localUsers.isNotEmpty && localUsers.first['password_hash'] != null) {
               map['password_hash'] = localUsers.first['password_hash'];
             }
@@ -892,6 +943,26 @@ class SupabaseSyncService extends ChangeNotifier {
       await batch.commit(noResult: true);
     } catch (e) {
       debugPrint('Pull table $tableName from Supabase warning: $e');
+    }
+  }
+
+  /// Đẩy các password_hash của người dùng từ SQLite cục bộ lên Supabase Cloud nếu Cloud chưa có
+  Future<void> syncUserPasswordsToCloud() async {
+    if (!_isOnline || Platform.environment.containsKey('FLUTTER_TEST')) return;
+    try {
+      final supa = Supabase.instance.client;
+      final localUsers = await _dbService.getUsers();
+      for (final u in localUsers) {
+        final authRecord = await _dbService.getUserAuth(u.username);
+        final passHash = authRecord?['password_hash'] as String?;
+        if (passHash != null && passHash.isNotEmpty) {
+          try {
+            await supa.from('users').update({'password_hash': passHash}).eq('user_id', u.userId);
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      debugPrint('syncUserPasswordsToCloud error: $e');
     }
   }
 

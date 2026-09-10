@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wms_models.dart';
 import 'database_service.dart';
+import 'supabase_sync_service.dart';
 import 'warehouse_repository.dart';
 
 class AuthService extends ChangeNotifier {
@@ -36,8 +39,18 @@ class AuthService extends ChangeNotifier {
     if (_isInitialized && !force) return;
 
     try {
-      // 1. Kiểm tra và khởi tạo tài khoản mặc định nếu CSDL chưa có người dùng nào
+      // 1. Khởi tạo tài khoản Quản Trị Viên gốc nếu CSDL hoàn toàn chưa có người dùng
       await _seedDefaultUsersIfEmpty();
+
+      // Dọn dẹp triệt để các tài khoản mẫu (mockdata) cũ nếu còn tồn tại trong CSDL
+      const legacyMockUserIds = ['USER-TECH-001', 'USER-OP-001', 'USER-PDA-001', 'USER-SEL-001'];
+      for (final mockId in legacyMockUserIds) {
+        final existingMock = await _dbService.getUserById(mockId);
+        if (existingMock != null) {
+          await _dbService.deleteUser(mockId);
+        }
+      }
+      await WarehouseRepository().reloadFromSqlite();
 
       // 2. Khôi phục phiên đăng nhập trước đó từ SQLite system_config
       final savedUserId = await _dbService.getSystemConfig('active_user_id');
@@ -58,14 +71,14 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  /// Khởi tạo 4 tài khoản mẫu theo từng Role nếu CSDL chưa có người dùng
+  /// Khởi tạo duy nhất tài khoản Quản Trị Viên gốc (Root Admin) nếu CSDL hoàn toàn trống (Không dùng mockdata)
   Future<void> _seedDefaultUsersIfEmpty() async {
     try {
       final existingUsers = await _dbService.getUsers();
       if (existingUsers.isEmpty) {
-        debugPrint('AuthService: CSDL chưa có người dùng. Đang khởi tạo tài khoản mẫu (admin, thukho, camtay, seller)...');
+        debugPrint('AuthService: CSDL chưa có người dùng nào. Khởi tạo tài khoản Quản Trị Viên gốc (admin)...');
 
-        // 1. Quản Trị Viên (Toàn quyền, chỉnh được thông số máy)
+        // Chỉ tạo 1 tài khoản root Admin ban đầu để đăng nhập và cấp phát tài khoản nhân sự
         final adminUser = WmsUser(
           userId: 'USER-ADMIN-001',
           username: 'admin',
@@ -76,48 +89,11 @@ class AuthService extends ChangeNotifier {
           isActive: true,
           createdAt: DateTime.now(),
         );
-        await _dbService.insertUserWithPassword(adminUser, hashPassword('admin123'));
+        final adminPassHash = hashPassword('admin123');
+        await _dbService.insertUserWithPassword(adminUser, adminPassHash);
+        await WarehouseRepository().addUser(adminUser, passwordHash: adminPassHash);
 
-        // 2. Thủ Kho (Không chỉnh thông số máy)
-        final thukhoUser = WmsUser(
-          userId: 'USER-OP-001',
-          username: 'thukho',
-          fullName: 'Thủ Kho Trưởng',
-          email: 'thukho@rfidwarehouse.com',
-          phone: '0987654321',
-          role: 'thukho',
-          isActive: true,
-          createdAt: DateTime.now(),
-        );
-        await _dbService.insertUserWithPassword(thukhoUser, hashPassword('123456'));
-
-        // 3. Máy Cầm Tay PDA (Không chỉnh thông số máy)
-        final handheldUser = WmsUser(
-          userId: 'USER-PDA-001',
-          username: 'camtay',
-          fullName: 'Nhân Viên Cầm Tay PDA',
-          email: 'pda@rfidwarehouse.com',
-          phone: '0912345678',
-          role: 'handheld',
-          isActive: true,
-          createdAt: DateTime.now(),
-        );
-        await _dbService.insertUserWithPassword(handheldUser, hashPassword('123456'));
-
-        // 4. Nhân Viên Bán Hàng / Seller (Không chỉnh thông số máy)
-        final sellerUser = WmsUser(
-          userId: 'USER-SEL-001',
-          username: 'seller',
-          fullName: 'Nhân Viên Bán Hàng',
-          email: 'seller@rfidwarehouse.com',
-          phone: '0933445566',
-          role: 'seller',
-          isActive: true,
-          createdAt: DateTime.now(),
-        );
-        await _dbService.insertUserWithPassword(sellerUser, hashPassword('123456'));
-
-        // Kích hoạt đồng bộ các tài khoản lên Supabase Cloud
+        // Kích hoạt đồng bộ tài khoản admin lên Supabase Cloud nếu có cấu hình
         WarehouseRepository().triggerBackgroundSync();
       }
     } catch (e) {
@@ -145,7 +121,32 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final userMap = await _dbService.getUserAuth(cleanUsername);
+      Map<String, dynamic>? userMap = await _dbService.getUserAuth(cleanUsername);
+
+      // Nếu trong SQLite cục bộ chưa có user, nhưng máy đang online kết nối Supabase, tìm trực tiếp trên Cloud
+      if (userMap == null && SupabaseSyncService().isOnline) {
+        try {
+          final supa = Supabase.instance.client;
+          final List<dynamic> supaUsers = await supa
+              .from('users')
+              .select()
+              .or('username.ilike.$cleanUsername,email.ilike.$cleanUsername')
+              .limit(1);
+
+          if (supaUsers.isNotEmpty) {
+            final fetched = Map<String, dynamic>.from(supaUsers.first as Map);
+            fetched.remove('updated_at');
+            if (fetched['is_active'] is bool) {
+              fetched['is_active'] = (fetched['is_active'] == true) ? 1 : 0;
+            }
+            final db = await _dbService.database;
+            await db.insert('users', fetched, conflictAlgorithm: ConflictAlgorithm.replace);
+            userMap = await _dbService.getUserAuth(cleanUsername);
+          }
+        } catch (e) {
+          debugPrint('Auth online lookup error: $e');
+        }
+      }
 
       if (userMap == null) {
         _authError = 'Tài khoản "$cleanUsername" không tồn tại trong hệ thống.';
@@ -162,12 +163,31 @@ class AuthService extends ChangeNotifier {
         return false;
       }
 
-      final savedHash = userMap['password_hash'] as String?;
+      String? savedHash = userMap['password_hash'] as String?;
       final inputHash = hashPassword(cleanPassword);
 
-      // Kiểm tra mật khẩu (hỗ trợ cả hash SHA-256 và mật khẩu mẫu)
+      // Nếu tài khoản cục bộ chưa có hash nhưng máy có kết nối Supabase, kiểm tra password_hash từ Supabase
+      if (savedHash == null && SupabaseSyncService().isOnline) {
+        try {
+          final supa = Supabase.instance.client;
+          final List<dynamic> supaUsers = await supa
+              .from('users')
+              .select('password_hash')
+              .or('username.ilike.$cleanUsername,email.ilike.$cleanUsername')
+              .limit(1);
+
+          if (supaUsers.isNotEmpty && supaUsers.first['password_hash'] != null) {
+            savedHash = supaUsers.first['password_hash'] as String;
+            await _dbService.updateUserPassword(userMap['user_id'] as String, savedHash);
+          }
+        } catch (e) {
+          debugPrint('Auth remote password_hash check error: $e');
+        }
+      }
+
+      // Kiểm tra mật khẩu (hỗ trợ cả hash SHA-256 và mật khẩu mẫu khi tài khoản chưa có hash)
       final bool isPasswordCorrect = (savedHash != null && savedHash == inputHash) ||
-          (savedHash == null && (cleanPassword == 'admin123' || cleanPassword == '123456'));
+          (savedHash == null && (cleanPassword == 'admin123' || cleanPassword == '123456' || cleanPassword == '12345678'));
 
       if (!isPasswordCorrect) {
         _authError = 'Mật khẩu không chính xác. Vui lòng kiểm tra lại.';
@@ -176,13 +196,14 @@ class AuthService extends ChangeNotifier {
         return false;
       }
 
-      // Cập nhật lại hash nếu trước đó chưa có
+      final user = WmsUser.fromMap(userMap);
+
+      // Tự động chữa lành: Cập nhật lại hash vào SQLite và Supabase Cloud nếu trước đó tài khoản chưa có hash
       if (savedHash == null) {
-        final updatedUser = WmsUser.fromMap(userMap);
-        await _dbService.insertUserWithPassword(updatedUser, inputHash);
+        await _dbService.insertUserWithPassword(user, inputHash);
+        await WarehouseRepository().syncUserPassword(user.userId, inputHash);
       }
 
-      final user = WmsUser.fromMap(userMap);
       _currentUser = user;
 
       // Lưu phiên làm việc nếu chọn Ghi nhớ
@@ -274,7 +295,7 @@ class AuthService extends ChangeNotifier {
       await _dbService.insertUserWithPassword(newUser, hashedPass);
 
       // 4. Đẩy vào WarehouseRepository và đồng bộ lên Supabase Cloud
-      await WarehouseRepository().addUser(newUser);
+      await WarehouseRepository().addUser(newUser, passwordHash: hashedPass);
 
       // 5. Tự động đăng nhập
       if (autoLogin) {
@@ -289,6 +310,159 @@ class AuthService extends ChangeNotifier {
     } catch (e) {
       _authError = 'Lỗi đăng ký tài khoản: $e';
       _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Quản trị viên cấp tài khoản mới cho nhân viên
+  Future<bool> adminCreateUser({
+    required String username,
+    required String password,
+    required String fullName,
+    String? email,
+    String? phone,
+    required String role,
+    bool isActive = true,
+  }) async {
+    final cleanUsername = username.trim();
+    final cleanPassword = password.trim();
+    final cleanFullName = fullName.trim();
+
+    if (cleanUsername.isEmpty) {
+      _authError = 'Vui lòng nhập tên đăng nhập.';
+      notifyListeners();
+      return false;
+    }
+
+    if (cleanUsername.length < 3) {
+      _authError = 'Tên đăng nhập phải có ít nhất 3 ký tự.';
+      notifyListeners();
+      return false;
+    }
+
+    if (cleanFullName.isEmpty) {
+      _authError = 'Vui lòng nhập họ và tên nhân viên.';
+      notifyListeners();
+      return false;
+    }
+
+    if (cleanPassword.length < 6) {
+      _authError = 'Mật khẩu phải có tối thiểu 6 ký tự.';
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    _authError = null;
+    notifyListeners();
+
+    try {
+      final existing = await _dbService.getUserAuth(cleanUsername);
+      if (existing != null) {
+        _authError = 'Tên đăng nhập "$cleanUsername" đã có người sử dụng. Vui lòng chọn tên khác.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final now = DateTime.now();
+      final newUser = WmsUser(
+        userId: 'USER-${now.millisecondsSinceEpoch}',
+        username: cleanUsername,
+        fullName: cleanFullName,
+        email: email?.trim().isNotEmpty == true ? email!.trim() : null,
+        phone: phone?.trim().isNotEmpty == true ? phone!.trim() : null,
+        role: role,
+        isActive: isActive,
+        createdAt: now,
+      );
+
+      final hashedPass = hashPassword(cleanPassword);
+      await _dbService.insertUserWithPassword(newUser, hashedPass);
+      await WarehouseRepository().addUser(newUser, passwordHash: hashedPass);
+
+      _authError = null;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _authError = 'Lỗi cấp tài khoản: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Quản trị viên cập nhật thông tin tài khoản nhân viên
+  Future<bool> adminUpdateUser(WmsUser user) async {
+    try {
+      await WarehouseRepository().updateUser(user);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('AuthService.adminUpdateUser error: $e');
+      return false;
+    }
+  }
+
+  /// Quản trị viên đặt lại mật khẩu cho tài khoản nhân viên
+  Future<bool> adminResetPassword(String userId, String newPassword) async {
+    final cleanPass = newPassword.trim();
+    if (cleanPass.length < 6) {
+      _authError = 'Mật khẩu mới phải có tối thiểu 6 ký tự.';
+      notifyListeners();
+      return false;
+    }
+    try {
+      final hashedPass = hashPassword(cleanPass);
+      await WarehouseRepository().syncUserPassword(userId, hashedPass);
+      _authError = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _authError = 'Lỗi đặt lại mật khẩu: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Quản trị viên khóa hoặc mở khóa tài khoản
+  Future<bool> adminToggleUserActive(WmsUser user) async {
+    try {
+      final updated = WmsUser(
+        userId: user.userId,
+        username: user.username,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isActive: !user.isActive,
+        createdAt: user.createdAt,
+      );
+      await WarehouseRepository().updateUser(updated);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('AuthService.adminToggleUserActive error: $e');
+      return false;
+    }
+  }
+
+  /// Quản trị viên xóa tài khoản nhân viên
+  Future<bool> adminDeleteUser(String userId) async {
+    if (_currentUser?.userId == userId) {
+      _authError = 'Không thể tự xóa tài khoản quản trị viên đang đăng nhập.';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await WarehouseRepository().deleteUser(userId);
+      _authError = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _authError = 'Lỗi xóa tài khoản: $e';
       notifyListeners();
       return false;
     }
