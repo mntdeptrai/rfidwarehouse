@@ -44,5 +44,57 @@ void main() {
       expect(matched!.locationCode, equals(testBarcode));
       expect(matched.zone, equals('Zone C'));
     });
+
+    test('Pallet transfer matches by palletCode, PAL-prefix, and moves items to destination location', () async {
+      final repo = WarehouseRepository();
+      await repo.ensureInitialized();
+      
+      // Create a test location
+      const destLocId = 'LOC-DEST-01';
+      final destLoc = Location(
+        locationId: destLocId,
+        locationCode: 'DEST-01',
+        zone: 'Zone Transfer',
+        shelf: 'Kệ T1',
+        level: 'Tầng 1',
+      );
+      await repo.addLocation(destLoc);
+
+      const testPalletCode = 'PL-TEST-BC-99';
+      final testItem = Item(
+        itemId: 'ITEM-TEST-TRF-01',
+        productId: 'SKU-001',
+        sku: 'SKU-001',
+        productName: 'Sản phẩm test',
+        serialNumber: 'SN-TEST-001',
+        epc: 'E280ITEMTEST001',
+        status: ItemStatus.inStock,
+        locationId: 'LOC-OLD',
+      );
+
+      final pallet = repo.createOrAssignPallet(
+        palletCode: testPalletCode,
+        locationId: 'LOC-OLD',
+        newItems: [testItem],
+      );
+      pallet.rfidEpc = 'E28099887766554433221100';
+
+      // Transfer using palletCode (as scanned via Barcode)
+      final movedCount = await repo.transferPalletToLocation(
+        palletEpc: testPalletCode,
+        newLocationId: destLocId,
+        performedBy: 'Test PDA Scanner',
+      );
+
+      expect(movedCount, greaterThan(0));
+
+      // Verify pallet location updated
+      final updatedPallet = repo.pallets.firstWhere((p) => p.palletCode == testPalletCode);
+      expect(updatedPallet.locationId, equals(destLocId));
+
+      // Verify item location updated
+      final updatedItem = repo.items.firstWhere((i) => i.itemId == 'ITEM-TEST-TRF-01');
+      expect(updatedItem.locationId, equals(destLocId));
+    });
   });
 }

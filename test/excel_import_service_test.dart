@@ -127,5 +127,96 @@ void main() {
       expect(serialItems[1]['barcode'], equals('SKU-JEAN-02'));
       expect(serialItems[1]['name'], equals('Quần Jean Ống Đứng'));
     });
+
+    test('Parses Excel file with 2 distinct Pallets and their respective RFIDs correctly without dropping either', () {
+      final service = ExcelImportService();
+      final excel = Excel.createExcel();
+      final sheet = excel['Sheet1'];
+
+      // Header: MÃ PALLET | RFID PALLET | THÙNG | MÃ EPC | TÊN SẢN PHẨM
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = TextCellValue('MÃ PALLET');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 0)).value = TextCellValue('RFID PALLET');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 0)).value = TextCellValue('THÙNG');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 0)).value = TextCellValue('MÃ EPC');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 0)).value = TextCellValue('TÊN SẢN PHẨM');
+
+      // Pallet 1: PL-01 with RFID E28011111111111111111111
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue('PL-01');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1)).value = TextCellValue('E28011111111111111111111');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1)).value = TextCellValue('THUNG-01');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 1)).value = TextCellValue('EPC000000000000000000001');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 1)).value = TextCellValue('Áo Polo');
+
+      // Pallet 2: PL-02 with RFID E28022222222222222222222
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 2)).value = TextCellValue('PL-02');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 2)).value = TextCellValue('E28022222222222222222222');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 2)).value = TextCellValue('THUNG-02');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 2)).value = TextCellValue('EPC000000000000000000002');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 2)).value = TextCellValue('Quần Jeans');
+
+      final bytes = Uint8List.fromList(excel.encode()!);
+      final (cartons, rowCount) = service.parseBytes(bytes);
+
+      expect(rowCount, equals(2));
+      expect(cartons.length, equals(2)); // Both cartons/pallets preserved!
+
+      final c1 = cartons.firstWhere((c) => c['palletId'] == 'PL-01');
+      expect(c1['palletRfid'], equals('E28011111111111111111111'));
+      expect((c1['serialItems'] as List).first['palletId'], equals('PL-01'));
+      expect((c1['serialItems'] as List).first['palletRfid'], equals('E28011111111111111111111'));
+
+      final c2 = cartons.firstWhere((c) => c['palletId'] == 'PL-02');
+      expect(c2['palletRfid'], equals('E28022222222222222222222'));
+      expect((c2['serialItems'] as List).first['palletId'], equals('PL-02'));
+      expect((c2['serialItems'] as List).first['palletRfid'], equals('E28022222222222222222222'));
+    });
+
+    test('Parses exact user format: CARTON CODE, EPC, NAME, NCC, BARCODE PALET, EPC PALLET', () {
+      final service = ExcelImportService();
+      final excel = Excel.createExcel();
+      final sheet = excel['Sheet1'];
+
+      // Exact user header
+      final headers = ['CARTON CODE', 'EPC', 'NAME', 'NCC', 'BARCODE PALET', 'EPC PALLET'];
+      for (int c = 0; c < headers.length; c++) {
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 0)).value = TextCellValue(headers[c]);
+      }
+
+      // 10 rows: rows 1-5 have Pallet 945321545, rows 6-10 have Pallet 945321988
+      final rowsData = [
+        ['CARTONTEST0001', 'E280689400005024B0765C56', 'Điều hoà Daikin', 'PEPSICO', '945321545', 'AB2600100000000000000200'],
+        ['CARTONTEST0002', 'E280689400005024B0765C55', 'Điều hoà Daikin 2', 'PEPSICO', '945321545', 'AB2600100000000000000200'],
+        ['CARTONTEST0003', 'E280689400004024B0765C57', 'Server', 'PEPSICO', '945321545', 'AB2600100000000000000200'],
+        ['CARTONTEST0004', 'B00000000003', 'Server 2', 'PEPSICO', '945321545', 'AB2600100000000000000200'],
+        ['CARTONTEST0005', 'B00000000002', 'Cuộn cáp quang', 'PEPSICO', '945321545', 'AB2600100000000000000200'],
+        ['CARTONTEST0006', '202604010000000000000001', 'Cuộn cáp quang', 'PEPSICO', '945321988', 'E2806A960000502C4760454E'],
+        ['CARTONTEST0007', '202604010000000000000002', 'Tủ nguồn', 'PEPSICO', '945321988', 'E2806A960000502C4760454E'],
+        ['CARTONTEST0008', '2024011814546A01105001BC', 'Tủ nguồn 2', 'PEPSICO', '945321988', 'E2806A960000502C4760454E'],
+        ['CARTONTEST0009', 'FFFFFAFF0000000000000005', 'Tủ nguồn 3', 'PEPSICO', '945321988', 'E2806A960000502C4760454E'],
+        ['CARTONTEST0010', '2024102610306A031A904F10', 'Tủ nguồn 4', 'PEPSICO', '945321988', 'E2806A960000502C4760454E'],
+      ];
+
+      for (int r = 0; r < rowsData.length; r++) {
+        for (int c = 0; c < rowsData[r].length; c++) {
+          sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1)).value = TextCellValue(rowsData[r][c]);
+        }
+      }
+
+      final bytes = Uint8List.fromList(excel.encode()!);
+      final (cartons, rowCount) = service.parseBytes(bytes);
+
+      expect(rowCount, equals(10));
+      // Extract unique pallets
+      final uniquePallets = cartons.map((c) => c['palletCode']?.toString()).toSet();
+      expect(uniquePallets.contains('945321545'), isTrue);
+      expect(uniquePallets.contains('945321988'), isTrue);
+      expect(uniquePallets.length, equals(2));
+
+      // Extract unique pallet RFIDs
+      final uniquePalletRfids = cartons.map((c) => c['palletEpc']?.toString()).toSet();
+      expect(uniquePalletRfids.contains('AB2600100000000000000200'), isTrue);
+      expect(uniquePalletRfids.contains('E2806A960000502C4760454E'), isTrue);
+      expect(uniquePalletRfids.length, equals(2));
+    });
   });
 }

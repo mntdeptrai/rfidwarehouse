@@ -200,37 +200,58 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
     }
 
-    // Nếu xe Pallet đang đối soát có gắn chip RFID, bắt buộc đối soát ĐỦ cả chip Pallet (10 chip hàng + 1 chip Pallet = 11 chip)
-    var p = _activePallet ?? _wizardDetectedPallet;
-    if (p == null && _activeExpectedItems.isNotEmpty) {
-      final pId = _activeExpectedItems.first.palletId;
-      if (pId != null && pId.isNotEmpty) {
-        p = _repo.pallets.where((item) =>
-          item.palletId.toUpperCase() == pId.toUpperCase() ||
+    // Gom tất cả các xe Pallet có gắn chip RFID liên quan đến đợt hàng (hỗ trợ cả 1, 2 hay nhiều Pallet cùng lúc)
+    final Set<Pallet> relevantPallets = {};
+    if (_activePallet != null) relevantPallets.add(_activePallet!);
+    if (_wizardDetectedPallet != null) relevantPallets.add(_wizardDetectedPallet!);
+
+    // Lấy tất cả pallet từ _activeExpectedItems
+    if (_activeExpectedItems.isNotEmpty) {
+      final pIds = _activeExpectedItems.map((i) => i.palletId).where((id) => id != null && id.isNotEmpty).toSet();
+      for (final pId in pIds) {
+        final pFound = _repo.pallets.where((item) =>
+          item.palletId.toUpperCase() == pId!.toUpperCase() ||
           item.palletCode.toUpperCase() == pId.toUpperCase() ||
           item.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}' ||
           'PAL-${item.palletCode.toUpperCase()}' == pId.toUpperCase()
         ).firstOrNull;
+        if (pFound != null) relevantPallets.add(pFound);
       }
     }
-    if (p == null && _receiptCartons.isNotEmpty) {
-      final pCode = _receiptCartons.first['palletCode']?.toString();
-      final pEpc = _receiptCartons.first['palletEpc']?.toString();
-      if (pCode != null && pCode.isNotEmpty) {
-        p = _repo.pallets.where((item) =>
-          item.palletCode.toUpperCase() == pCode.toUpperCase() ||
-          item.palletId.toUpperCase() == pCode.toUpperCase() ||
-          item.palletId.toUpperCase() == 'PAL-${pCode.toUpperCase()}' ||
-          'PAL-${item.palletCode.toUpperCase()}' == pCode.toUpperCase()
-        ).firstOrNull;
-      }
-      if (p == null && pEpc != null && pEpc.isNotEmpty) {
-        p = _repo.findPalletByRfid(pEpc);
+
+    // Lấy tất cả pallet từ _receiptCartons
+    if (_receiptCartons.isNotEmpty) {
+      for (final c in _receiptCartons) {
+        final pCode = c['palletCode']?.toString();
+        final pEpc = c['palletEpc']?.toString();
+        if (pCode != null && pCode.isNotEmpty) {
+          final pFound = _repo.pallets.where((item) =>
+            item.palletCode.toUpperCase() == pCode.toUpperCase() ||
+            item.palletId.toUpperCase() == pCode.toUpperCase() ||
+            item.palletId.toUpperCase() == 'PAL-${pCode.toUpperCase()}' ||
+            'PAL-${item.palletCode.toUpperCase()}' == pCode.toUpperCase()
+          ).firstOrNull;
+          if (pFound != null) relevantPallets.add(pFound);
+        }
+        if (pEpc != null && pEpc.isNotEmpty) {
+          final pFound = _repo.findPalletByRfid(pEpc);
+          if (pFound != null) relevantPallets.add(pFound);
+        }
       }
     }
-    final palletEpc = (p?.rfidEpc ?? _wizardDetectedPalletTag ?? _activePalletTag ?? _receiptCartons.firstOrNull?['palletEpc']?.toString())?.trim().toUpperCase();
-    if (palletEpc != null && palletEpc.isNotEmpty) {
-      set.add(palletEpc);
+
+    // Thêm RFID của tất cả Pallet liên quan vào danh sách cần đối soát
+    for (final pal in relevantPallets) {
+      final epc = (pal.rfidEpc ?? '').trim().toUpperCase();
+      if (epc.isNotEmpty) {
+        set.add(epc);
+      }
+    }
+    if (_wizardDetectedPalletTag != null && _wizardDetectedPalletTag!.isNotEmpty) {
+      set.add(_wizardDetectedPalletTag!.trim().toUpperCase());
+    }
+    if (_activePalletTag != null && _activePalletTag!.isNotEmpty) {
+      set.add(_activePalletTag!.trim().toUpperCase());
     }
 
     _cachedExpectedSerials = set;
@@ -277,46 +298,59 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
     }
 
-    // Đưa thẻ RFID Xe Pallet vào bảng đối soát ở vị trí đầu tiên
-    var p = _activePallet ?? _wizardDetectedPallet;
-    if (p == null && _activeExpectedItems.isNotEmpty) {
-      final pId = _activeExpectedItems.first.palletId;
-      if (pId != null && pId.isNotEmpty) {
-        p = _repo.pallets.where((item) =>
-          item.palletId.toUpperCase() == pId.toUpperCase() ||
+    // Đưa thẻ RFID của TẤT CẢ các Xe Pallet liên quan vào đầu bảng đối soát
+    final Set<Pallet> relevantPallets = {};
+    if (_activePallet != null) relevantPallets.add(_activePallet!);
+    if (_wizardDetectedPallet != null) relevantPallets.add(_wizardDetectedPallet!);
+
+    if (_activeExpectedItems.isNotEmpty) {
+      final pIds = _activeExpectedItems.map((i) => i.palletId).where((id) => id != null && id.isNotEmpty).toSet();
+      for (final pId in pIds) {
+        final pFound = _repo.pallets.where((item) =>
+          item.palletId.toUpperCase() == pId!.toUpperCase() ||
           item.palletCode.toUpperCase() == pId.toUpperCase() ||
           item.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}' ||
           'PAL-${item.palletCode.toUpperCase()}' == pId.toUpperCase()
         ).firstOrNull;
+        if (pFound != null) relevantPallets.add(pFound);
       }
     }
-    if (p == null && _receiptCartons.isNotEmpty) {
-      final pCode = _receiptCartons.first['palletCode']?.toString();
-      final pEpc = _receiptCartons.first['palletEpc']?.toString();
-      if (pCode != null && pCode.isNotEmpty) {
-        p = _repo.pallets.where((item) =>
-          item.palletCode.toUpperCase() == pCode.toUpperCase() ||
-          item.palletId.toUpperCase() == pCode.toUpperCase() ||
-          item.palletId.toUpperCase() == 'PAL-${pCode.toUpperCase()}' ||
-          'PAL-${item.palletCode.toUpperCase()}' == pCode.toUpperCase()
-        ).firstOrNull;
-      }
-      if (p == null && pEpc != null && pEpc.isNotEmpty) {
-        p = _repo.findPalletByRfid(pEpc);
+
+    if (_receiptCartons.isNotEmpty) {
+      for (final c in _receiptCartons) {
+        final pCode = c['palletCode']?.toString();
+        final pEpc = c['palletEpc']?.toString();
+        if (pCode != null && pCode.isNotEmpty) {
+          final pFound = _repo.pallets.where((item) =>
+            item.palletCode.toUpperCase() == pCode.toUpperCase() ||
+            item.palletId.toUpperCase() == pCode.toUpperCase() ||
+            item.palletId.toUpperCase() == 'PAL-${pCode.toUpperCase()}' ||
+            'PAL-${item.palletCode.toUpperCase()}' == pCode.toUpperCase()
+          ).firstOrNull;
+          if (pFound != null) relevantPallets.add(pFound);
+        }
+        if (pEpc != null && pEpc.isNotEmpty) {
+          final pFound = _repo.findPalletByRfid(pEpc);
+          if (pFound != null) relevantPallets.add(pFound);
+        }
       }
     }
-    final palletEpc = (p?.rfidEpc ?? _wizardDetectedPalletTag ?? _activePalletTag ?? _receiptCartons.firstOrNull?['palletEpc']?.toString())?.trim().toUpperCase();
-    final palletCode = p?.palletCode ?? _receiptCartons.firstOrNull?['palletCode']?.toString() ?? 'Xe Pallet';
-    if (palletEpc != null && palletEpc.isNotEmpty && !list.any((e) => (e['serial'] ?? '').toString().toUpperCase() == palletEpc)) {
-      list.insert(0, {
-        'boxCode': 'PALLET: $palletCode',
-        'sku': palletCode,
-        'productName': '🏷️ Chip RFID Xe Pallet ($palletCode)',
-        'serial': palletEpc,
-        'supplier': list.isNotEmpty ? list.first['supplier'] : 'Xe Pallet WMS',
-        'orderNo': _activeOrderNo ?? '--',
-        'isPallet': true,
-      });
+
+    int insertIdx = 0;
+    for (final pal in relevantPallets) {
+      final pEpc = (pal.rfidEpc ?? '').trim().toUpperCase();
+      final pCode = pal.palletCode;
+      if (pEpc.isNotEmpty && !list.any((e) => (e['serial'] ?? '').toString().toUpperCase() == pEpc)) {
+        list.insert(insertIdx++, {
+          'boxCode': 'PALLET: $pCode',
+          'sku': pCode,
+          'productName': '🏷️ Chip RFID Xe Pallet ($pCode)',
+          'serial': pEpc,
+          'supplier': list.isNotEmpty ? list.first['supplier'] : 'Xe Pallet WMS',
+          'orderNo': _activeOrderNo ?? '--',
+          'isPallet': true,
+        });
+      }
     }
 
     _cachedStep1DetailedItems = list;
@@ -1404,6 +1438,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             final assignedPalletId = effectivePallet != null
                 ? (_repo.pallets.where((p) => p.palletCode.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == 'PAL-${effectivePallet.toUpperCase()}').firstOrNull?.palletId ?? (effectivePallet.toUpperCase().startsWith('PAL-') ? effectivePallet : 'PAL-$effectivePallet'))
                 : null;
+            final assignedOrderNo = (effectivePallet != null && palletsToRegister.length > 1)
+                ? '$inboundOrderNo-$effectivePallet'
+                : inboundOrderNo;
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
@@ -1412,7 +1449,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               serialNumber: sSerial,
               epc: sSerial,
               status: ItemStatus.pendingInbound,
-              orderNo: inboundOrderNo,
+              orderNo: assignedOrderNo,
               palletId: assignedPalletId,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
@@ -1428,6 +1465,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           final assignedPalletId = effectivePallet != null
               ? (_repo.pallets.where((p) => p.palletCode.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == 'PAL-${effectivePallet.toUpperCase()}').firstOrNull?.palletId ?? (effectivePallet.toUpperCase().startsWith('PAL-') ? effectivePallet : 'PAL-$effectivePallet'))
               : null;
+          final assignedOrderNo = (effectivePallet != null && palletsToRegister.length > 1)
+              ? '$inboundOrderNo-$effectivePallet'
+              : inboundOrderNo;
           for (var serial in serials) {
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
@@ -1437,7 +1477,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               serialNumber: serial,
               epc: serial,
               status: ItemStatus.pendingInbound,
-              orderNo: inboundOrderNo,
+              orderNo: assignedOrderNo,
               palletId: assignedPalletId,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
@@ -1449,9 +1489,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         }
       }
 
-      // Gom chi tiết đơn theo từng SKU riêng biệt
-      final Map<String, InboundOrderDetail> detailMap = {};
+      // Gom chi tiết đơn theo từng đơn hàng (từng xe Pallet) và từng SKU riêng biệt
+      final Map<String, Map<String, InboundOrderDetail>> ordersDetailMap = {};
       for (var item in explicitItems) {
+        final ord = item.orderNo ?? inboundOrderNo;
+        ordersDetailMap.putIfAbsent(ord, () => {});
+        final detailMap = ordersDetailMap[ord]!;
         if (detailMap.containsKey(item.sku)) {
           final old = detailMap[item.sku]!;
           detailMap[item.sku] = InboundOrderDetail(
@@ -1500,28 +1543,31 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       final firstSupplier = explicitItems.map((i) => i.supplier).where((s) => s != null && s.isNotEmpty && s != 'Nhà cung cấp tổng hợp').firstOrNull;
       final effectiveSupplier = firstSupplier ?? 'File: ${result.fileName}';
 
-      var order = _repo.inboundOrders.where((o) => o.orderNo == inboundOrderNo).firstOrNull;
-      if (order == null) {
-        order = InboundOrder(
-          inboundOrderId: inboundOrderNo,
-          orderNo: inboundOrderNo,
-          sourceSupplier: effectiveSupplier,
-          status: InboundOrderStatus.newOrder,
-          createdAt: now,
-          details: detailMap.values.toList(),
-        );
-        await _repo.addInboundOrder(order, autoGenerateEpcs: false);
-        await _repo.insertDirectItems(explicitItems);
-      } else {
-        final existingEpcs = _repo.items.map((i) => i.epc.toUpperCase()).toSet();
-        final newItems = explicitItems.where((item) => !existingEpcs.contains(item.epc.toUpperCase())).toList();
-        if (newItems.isNotEmpty) {
-          await _repo.insertDirectItems(newItems);
+      _pendingLoadedOrderNos.clear();
+      for (final entry in ordersDetailMap.entries) {
+        final currentOrderNo = entry.key;
+        final currentDetailMap = entry.value;
+
+        var order = _repo.inboundOrders.where((o) => o.orderNo == currentOrderNo).firstOrNull;
+        if (order == null) {
+          order = InboundOrder(
+            inboundOrderId: currentOrderNo,
+            orderNo: currentOrderNo,
+            sourceSupplier: effectiveSupplier,
+            status: InboundOrderStatus.newOrder,
+            createdAt: now,
+            details: currentDetailMap.values.toList(),
+          );
+          await _repo.addInboundOrder(order, autoGenerateEpcs: false);
         }
+        _pendingLoadedOrderNos.add(currentOrderNo);
       }
 
-      _pendingLoadedOrderNos.clear();
-      _pendingLoadedOrderNos.add(inboundOrderNo);
+      final existingEpcs = _repo.items.map((i) => i.epc.toUpperCase()).toSet();
+      final newItems = explicitItems.where((item) => !existingEpcs.contains(item.epc.toUpperCase())).toList();
+      if (newItems.isNotEmpty) {
+        await _repo.insertDirectItems(newItems);
+      }
 
       final palletCountWithTag = palletsToRegister.values.where((rfid) => rfid != null && rfid.isNotEmpty).length;
       final totalExpectedChips = explicitItems.length + palletCountWithTag;
@@ -2285,7 +2331,29 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Mã Đơn: ${_activeOrderNo ?? "--"} • RFID Pallet: ${_activePalletTag ?? _wizardDetectedPalletTag ?? _activePallet?.rfidEpc ?? "--"} • Cần nhận diện: $countDesc',
+                      () {
+                        final palNames = <String>[];
+                        if (_activePallet != null) palNames.add('${_activePallet!.palletCode} (${_activePallet!.rfidEpc ?? "--"})');
+                        if (_wizardDetectedPallet != null && _wizardDetectedPallet != _activePallet) {
+                          palNames.add('${_wizardDetectedPallet!.palletCode} (${_wizardDetectedPallet!.rfidEpc ?? "--"})');
+                        }
+                        if (_activeExpectedItems.isNotEmpty) {
+                          final pIds = _activeExpectedItems.map((i) => i.palletId).where((id) => id != null && id.isNotEmpty).toSet();
+                          for (final pId in pIds) {
+                            final p = _repo.pallets.where((item) =>
+                              item.palletId.toUpperCase() == pId!.toUpperCase() ||
+                              item.palletCode.toUpperCase() == pId.toUpperCase() ||
+                              item.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}'
+                            ).firstOrNull;
+                            if (p != null) {
+                              final desc = '${p.palletCode} (${p.rfidEpc ?? "--"})';
+                              if (!palNames.contains(desc)) palNames.add(desc);
+                            }
+                          }
+                        }
+                        final palDesc = palNames.isNotEmpty ? palNames.join(' • ') : (_activePalletTag ?? _wizardDetectedPalletTag ?? '--');
+                        return 'Mã Đơn: ${_activeOrderNo ?? "--"} • RFID Pallet: $palDesc • Cần nhận diện: $countDesc';
+                      }(),
                       style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                     ),
                   ],
@@ -2582,18 +2650,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final pendingPalletsCount = pendingItems.map((i) => i.palletId).where((p) => p != null && p.isNotEmpty).toSet().length;
 
     int totalPendingPalletTags = 0;
-    for (var ordItems in pendingOrdersMap.values) {
-      final palletCode = ordItems.first.palletId;
-      if (palletCode != null && palletCode.isNotEmpty) {
-        final pObj = _repo.pallets.where((p) =>
-          p.palletCode.toUpperCase() == palletCode.toUpperCase() ||
-          p.palletId.toUpperCase() == palletCode.toUpperCase() ||
-          p.palletId.toUpperCase() == 'PAL-${palletCode.toUpperCase()}' ||
-          'PAL-${p.palletCode.toUpperCase()}' == palletCode.toUpperCase()
-        ).firstOrNull;
-        if (pObj != null && pObj.rfidEpc != null && pObj.rfidEpc!.trim().isNotEmpty) {
-          totalPendingPalletTags++;
-        }
+    final allPendingPalletIds = pendingItems.map((i) => i.palletId).where((p) => p != null && p.isNotEmpty).toSet();
+    for (final pId in allPendingPalletIds) {
+      final pObj = _repo.pallets.where((p) =>
+        p.palletCode.toUpperCase() == pId!.toUpperCase() ||
+        p.palletId.toUpperCase() == pId.toUpperCase() ||
+        p.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}' ||
+        'PAL-${p.palletCode.toUpperCase()}' == pId.toUpperCase()
+      ).firstOrNull;
+      if (pObj != null && pObj.rfidEpc != null && pObj.rfidEpc!.trim().isNotEmpty) {
+        totalPendingPalletTags++;
       }
     }
 
@@ -2837,22 +2903,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 ? matchingOrder.sourceSupplier
                                 : ordItems.first.supplierDisplay;
                             final cartonCount = ordItems.map((i) => i.cartonCode).where((b) => b != null && b.isNotEmpty).toSet().length;
-                            final palletCode = ordItems.first.palletId;
-                            final hasPallet = palletCode != null && palletCode.isNotEmpty;
-                            final pObj = hasPallet
-                                ? _repo.pallets.where((p) =>
-                                    p.palletCode.toUpperCase() == palletCode.toUpperCase() ||
-                                    p.palletId.toUpperCase() == palletCode.toUpperCase() ||
-                                    p.palletId.toUpperCase() == 'PAL-${palletCode.toUpperCase()}' ||
-                                    'PAL-${p.palletCode.toUpperCase()}' == palletCode.toUpperCase()
-                                  ).firstOrNull
-                                : null;
-                            final hasPalletTag = pObj != null && (pObj.rfidEpc != null && pObj.rfidEpc!.trim().isNotEmpty);
-                            final totalOrderChips = ordItems.length + (hasPalletTag ? 1 : 0);
-                            final String displayPalletCode = pObj?.palletCode ??
-                                (palletCode != null
-                                    ? (palletCode.startsWith('PAL-') ? palletCode.substring(4) : palletCode)
-                                    : '--');
+                            final palletCodes = ordItems.map((i) => i.palletId).where((b) => b != null && b.isNotEmpty).toSet().toList();
+                            final pObjs = palletCodes.map((palletCode) => _repo.pallets.where((p) =>
+                              p.palletCode.toUpperCase() == palletCode!.toUpperCase() ||
+                              p.palletId.toUpperCase() == palletCode.toUpperCase() ||
+                              p.palletId.toUpperCase() == 'PAL-${palletCode.toUpperCase()}' ||
+                              'PAL-${p.palletCode.toUpperCase()}' == palletCode.toUpperCase()
+                            ).firstOrNull).whereType<Pallet>().toList();
+                            final palletTagCount = pObjs.where((p) => p.rfidEpc != null && p.rfidEpc!.trim().isNotEmpty).length;
+                            final totalOrderChips = ordItems.length + palletTagCount;
+                            final bool hasPallet = palletCodes.isNotEmpty;
+                            final bool hasPalletTag = palletTagCount > 0;
+                            final String displayPalletCode = pObjs.isNotEmpty
+                                ? pObjs.map((p) => '${p.palletCode}${p.rfidEpc != null && p.rfidEpc!.isNotEmpty ? " (${p.rfidEpc})" : ""}').join(' • ')
+                                : (palletCodes.isNotEmpty ? palletCodes.join(', ') : '--');
 
                             return Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -2868,7 +2932,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                   ),
                                   Expanded(
                                     flex: 3,
-                                    child: Text(supplier, style: TextStyle(color: c.textPrimary, fontSize: 12)),
+                                    child: Text(
+                                      supplier,
+                                      style: TextStyle(color: c.textPrimary, fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   SizedBox(
                                     width: 100,

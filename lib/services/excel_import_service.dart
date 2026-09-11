@@ -275,6 +275,12 @@ class ExcelImportService {
       }
     }
 
+    // Nếu file có cột Pallet và cột RFID/EPC nhưng cột RFID chưa có chữ 'pallet' (Ví dụ: cột 1 là "Pallet", cột 2 là "RFID")
+    if (palletCol != null && palletEpcCol == null && serialCol != null) {
+      palletEpcCol = serialCol;
+      serialCol = null;
+    }
+
     if (hasHeader) {
       startRow = 1;
     } else {
@@ -291,14 +297,25 @@ class ExcelImportService {
 
     // Default fallback cho serialCol và nameCol nếu chưa khớp
     if (serialCol == null) {
-      if (headers.length >= 3) {
-        serialCol = 1;
-        nameCol ??= 2;
-      } else if (headers.length == 2) {
-        serialCol = 0;
-        nameCol ??= 1;
+      if (palletCol != null && palletEpcCol != null) {
+        // File chỉ tập trung vào Pallet + RFID Pallet (không có cột serial riêng)
+        // Tìm xem có cột nào khác làm serial hay không
+        for (int i = 0; i < headers.length; i++) {
+          if (i != palletCol && i != palletEpcCol && i != cartonCol && i != barcodeCol && i != nameCol) {
+            serialCol = i;
+            break;
+          }
+        }
       } else {
-        serialCol = 0;
+        if (headers.length >= 3) {
+          serialCol = 1;
+          nameCol ??= 2;
+        } else if (headers.length == 2) {
+          serialCol = 0;
+          nameCol ??= 1;
+        } else {
+          serialCol = 0;
+        }
       }
     }
     nameCol ??= (serialCol == 1 ? 2 : 1);
@@ -314,7 +331,7 @@ class ExcelImportService {
       final carton = (cartonCol != null && cartonCol < row.length) ? row[cartonCol].trim() : '';
       final pallet = (palletCol != null && palletCol < row.length) ? row[palletCol].trim() : '';
       final palletEpc = (palletEpcCol != null && palletEpcCol < row.length) ? row[palletEpcCol].trim() : '';
-      final serial = (serialCol < row.length) ? row[serialCol].trim() : '';
+      final serial = (serialCol != null && serialCol < row.length) ? row[serialCol].trim() : '';
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
       final name = (nameCol < row.length) ? row[nameCol].trim() : '';
       final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
@@ -328,7 +345,9 @@ class ExcelImportService {
       final effectiveCarton = carton.isNotEmpty ? carton : (pallet.isNotEmpty ? pallet : 'KIỆN-CHUNG');
       final effectivePallet = pallet.isNotEmpty ? pallet : (palletEpc.isNotEmpty ? palletEpc : null);
       final effectivePalletEpc = palletEpc.isNotEmpty ? palletEpc : null;
-      final effectiveName = name.isNotEmpty ? name : (serial.isNotEmpty ? 'Sản phẩm $serial' : 'Sản phẩm mới');
+      final effectiveName = name.isNotEmpty
+          ? name
+          : (serial.isNotEmpty ? 'Sản phẩm $serial' : (effectivePallet != null ? 'Pallet $effectivePallet' : 'Sản phẩm mới'));
 
       // Xác định SKU/Barcode riêng cho từng dòng sản phẩm
       String rowBarcode = barcode;
@@ -343,13 +362,18 @@ class ExcelImportService {
         rowBarcode = rowBarcode.toUpperCase();
       }
 
-      final groupKey = effectiveCarton;
+      // Đảm bảo không gộp chung 2 Pallet khác nhau vào cùng 1 key để tránh thất lạc Pallet
+      final groupKey = (effectivePallet != null && effectivePallet.isNotEmpty)
+          ? '$effectiveCarton-PL-$effectivePallet'
+          : effectiveCarton;
 
       if (!cartonMap.containsKey(groupKey)) {
         cartonMap[groupKey] = {
           'cartonBox': effectiveCarton,
           'palletCode': effectivePallet,
+          'palletId': effectivePallet,
           'palletEpc': effectivePalletEpc,
+          'palletRfid': effectivePalletEpc,
           'productCode': rowBarcode,
           'productName': effectiveName,
           'supplier': supplier.isNotEmpty ? supplier : 'Nhà cung cấp tổng hợp',
@@ -363,9 +387,11 @@ class ExcelImportService {
         }
         if (cartonMap[groupKey]!['palletCode'] == null && effectivePallet != null) {
           cartonMap[groupKey]!['palletCode'] = effectivePallet;
+          cartonMap[groupKey]!['palletId'] = effectivePallet;
         }
         if (cartonMap[groupKey]!['palletEpc'] == null && effectivePalletEpc != null) {
           cartonMap[groupKey]!['palletEpc'] = effectivePalletEpc;
+          cartonMap[groupKey]!['palletRfid'] = effectivePalletEpc;
         }
       }
 
@@ -382,12 +408,35 @@ class ExcelImportService {
             'name': effectiveName,
             'carton': effectiveCarton,
             'pallet': effectivePallet,
+            'palletId': effectivePallet,
             'palletEpc': effectivePalletEpc,
+            'palletRfid': effectivePalletEpc,
             'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
           });
         }
       } else {
         entry['quantity'] = (entry['quantity'] as int) + 1;
+        // Nếu dòng không có serial riêng lẻ (ví dụ chỉ có Pallet & RFID Pallet)
+        // Vẫn ghi nhận vào serialItems để downstream nhận diện được pallet và chip
+        final serialItemsList = entry['serialItems'] as List<Map<String, dynamic>>;
+        final effectiveItemSerial = effectivePalletEpc ?? effectivePallet ?? 'PL-ITEM-$validDataRows';
+        if (!serialItemsList.any((it) => it['serial'] == effectiveItemSerial)) {
+          serialItemsList.add({
+            'serial': effectiveItemSerial,
+            'barcode': rowBarcode,
+            'name': effectiveName,
+            'carton': effectiveCarton,
+            'pallet': effectivePallet,
+            'palletId': effectivePallet,
+            'palletEpc': effectivePalletEpc,
+            'palletRfid': effectivePalletEpc,
+            'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
+          });
+          final serialsList = entry['serials'] as List<String>;
+          if (!serialsList.contains(effectiveItemSerial)) {
+            serialsList.add(effectiveItemSerial);
+          }
+        }
       }
     }
 

@@ -2370,6 +2370,8 @@ class WarehouseRepository extends ChangeNotifier {
     final cleanOrderNo = orderNo.trim().toUpperCase();
     final uniqueEpcs = scannedEpcs.toSet().toList();
     final now = DateTime.now();
+    final cleanPallet = (palletCode != null && palletCode.trim().isNotEmpty) ? palletCode.trim().toUpperCase() : null;
+    final cleanCarton = (cartonCode != null && cartonCode.trim().isNotEmpty) ? cartonCode.trim().toUpperCase() : null;
 
     final order = _inboundOrders.where((o) =>
       o.orderNo.trim().toUpperCase() == cleanOrderNo ||
@@ -2377,14 +2379,18 @@ class WarehouseRepository extends ChangeNotifier {
     ).firstOrNull;
 
     final matchedItems = _items.where((it) {
-      if (uniqueEpcs.contains(it.epc)) return true;
+      if (uniqueEpcs.isNotEmpty) {
+        return uniqueEpcs.contains(it.epc);
+      }
+      if (cleanPallet != null) {
+        return it.palletId != null &&
+            (it.palletId!.trim().toUpperCase() == cleanPallet ||
+             it.palletId!.trim().toUpperCase() == 'PAL-$cleanPallet');
+      }
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanOrderNo) return true;
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanOrderNo) return true;
       return false;
     }).toList();
-
-    final cleanPallet = (palletCode != null && palletCode.trim().isNotEmpty) ? palletCode.trim().toUpperCase() : null;
-    final cleanCarton = (cartonCode != null && cartonCode.trim().isNotEmpty) ? cartonCode.trim().toUpperCase() : null;
 
     // Nếu các mặt hàng này đã có mã Barcode Hex sinh sẵn lúc nạp danh sách nhập hàng, giữ nguyên mã đó
     final existingItemBarcode = matchedItems
@@ -3661,10 +3667,12 @@ class WarehouseRepository extends ChangeNotifier {
   }) async {
     final cleanEpc = palletEpc.trim().toUpperCase();
 
-    // Tìm pallet qua rfidEpc hoặc palletId
+    // Tìm pallet qua rfidEpc, palletId hoặc palletCode
     Pallet? pallet = _pallets.where((p) {
       final epcMatch = (p.rfidEpc ?? '').toUpperCase() == cleanEpc ||
-          p.palletId.toUpperCase() == cleanEpc;
+          p.palletId.toUpperCase() == cleanEpc ||
+          p.palletCode.toUpperCase() == cleanEpc ||
+          'PAL-${p.palletCode.toUpperCase()}' == cleanEpc;
       return epcMatch;
     }).firstOrNull;
 

@@ -44,9 +44,9 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   final List<Item> _scannedItems = [];
   final Set<String> _scannedEpcs = {};
   final TextEditingController _manualInputCtrl = TextEditingController();
+  final TextEditingController _palletInputCtrl = TextEditingController();
 
   // --- Chung ---
-  String? _lastScannedEpc;
   String? _errorMessage;
   bool _isProcessing = false;
   bool _isSuccess = false;
@@ -57,7 +57,9 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     super.initState();
     _selectedLocationId =
         _repo.locations.isNotEmpty ? _repo.locations.first.locationId : null;
-    _currentScanMode = _uhf.scanMode;
+    // Mặc định ở chế độ chuyển Pallet, dùng mắt đọc Barcode để quét tem pallet nhanh và chuẩn xác
+    _uhf.setScanMode(PdaScanMode.barcode);
+    _currentScanMode = PdaScanMode.barcode;
     _eyeCare.addListener(_onStateChange);
     _repo.addListener(_onStateChange);
 
@@ -67,7 +69,6 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       final it = widget.initialItem!;
       _scannedItems.add(it);
       _scannedEpcs.add(it.epc.toUpperCase());
-      _lastScannedEpc = it.epc;
     }
 
     _subscribeHardwareScanner();
@@ -142,6 +143,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   @override
   void dispose() {
     _manualInputCtrl.dispose();
+    _palletInputCtrl.dispose();
     _rfidSub?.cancel();
     _barcodeSub?.cancel();
     _triggerSub?.cancel();
@@ -152,28 +154,86 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   }
 
   void _handleScan(String rawCode, {String source = 'RFID'}) {
-    if (_isProcessing || _isSuccess) return;
+    if (_isProcessing) return;
+    if (_isSuccess) {
+      // Tự động khởi tạo phiên chuyển mới khi có mã quét mới
+      _reset();
+    }
     final clean = rawCode.trim();
     if (clean.isEmpty) return;
 
+    // 1. Kiểm tra nếu mã quét được là mã vị trí kệ kho đích (LOC-... hoặc trùng mã locationCode/locationId)
+    final cleanUpper = clean.toUpperCase();
+    final matchedLoc = _repo.locations.where((l) =>
+        l.locationCode.toUpperCase() == cleanUpper ||
+        l.locationId.toUpperCase() == cleanUpper ||
+        'LOC-${l.locationCode.toUpperCase()}' == cleanUpper ||
+        'LOC-${l.locationId.toUpperCase()}' == cleanUpper).firstOrNull;
+
+    if (matchedLoc != null) {
+      HapticFeedback.lightImpact();
+      setState(() {
+        _selectedLocationId = matchedLoc.locationId;
+        _errorMessage = null;
+      });
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF00E5FF),
+          duration: const Duration(milliseconds: 1500),
+          content: Text(
+            '✓ Đã chọn kệ kho đích: ${matchedLoc.displayName} (${matchedLoc.locationCode})',
+            style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+      return;
+    }
+
     if (_mode == _TransferMode.pallet) {
-      _handlePalletScan(clean);
+      _handlePalletScan(clean, source: source);
     } else {
       _handleItemScan(clean, source: source);
     }
   }
 
-  void _handlePalletScan(String code) {
+  void _handlePalletScan(String code, {String source = 'RFID'}) {
     final cleanUpper = code.toUpperCase();
-    final pallet = _repo.pallets.where((p) {
+
+    // 1. Tìm trực tiếp theo rfidEpc, palletId, palletCode
+    Pallet? pallet = _repo.pallets.where((p) {
       return (p.rfidEpc ?? '').toUpperCase() == cleanUpper ||
           p.palletId.toUpperCase() == cleanUpper ||
-          p.palletCode.toUpperCase() == cleanUpper;
+          p.palletCode.toUpperCase() == cleanUpper ||
+          'PAL-${p.palletCode.toUpperCase()}' == cleanUpper;
     }).firstOrNull;
 
+    // 2. Nếu chưa thấy, kiểm tra xem mã quét được có phải là của 1 sản phẩm nằm trên Pallet nào đó hay không
     if (pallet == null) {
+      final matchedItem = _repo.items.where((it) {
+        final epc = it.epc.toUpperCase();
+        final sn = it.serialNumber.toUpperCase();
+        final sku = it.sku.toUpperCase();
+        return epc == cleanUpper || sn == cleanUpper || sku == cleanUpper;
+      }).firstOrNull;
+
+      if (matchedItem != null && matchedItem.palletId != null && matchedItem.palletId!.isNotEmpty) {
+        final pId = matchedItem.palletId!.toUpperCase();
+        pallet = _repo.pallets.where((p) =>
+          p.palletId.toUpperCase() == pId ||
+          p.palletCode.toUpperCase() == pId ||
+          'PAL-${p.palletCode.toUpperCase()}' == pId
+        ).firstOrNull;
+      }
+    }
+
+    if (pallet == null) {
+      // Khi quét bằng sóng RFID UHF, không xóa Pallet đang có nếu chỉ là chip sản phẩm ngẫu nhiên trong không khí
+      if (source == 'RFID') {
+        return;
+      }
+
       setState(() {
-        _lastScannedEpc = code;
         _foundPallet = null;
         _palletItems = [];
         _errorMessage = 'Không tìm thấy pallet nào với mã: $code';
@@ -183,13 +243,13 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
 
     final items = _repo.items
         .where((it) =>
-            it.palletId == pallet.palletId ||
-            it.palletId == pallet.palletCode)
+            it.palletId == pallet!.palletId ||
+            it.palletId == pallet.palletCode ||
+            it.palletId == 'PAL-${pallet.palletCode}')
         .toList();
 
     HapticFeedback.mediumImpact();
     setState(() {
-      _lastScannedEpc = code;
       _foundPallet = pallet;
       _palletItems = items;
       _errorMessage = null;
@@ -238,7 +298,6 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     if (item == null) {
       if (source != 'RFID' || _errorMessage == null) {
         setState(() {
-          _lastScannedEpc = rawCode;
           _errorMessage = 'Không tìm thấy sản phẩm với mã: $rawCode';
         });
       }
@@ -249,7 +308,6 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     if (_scannedEpcs.contains(epcUpper)) {
       if (source != 'RFID') {
         setState(() {
-          _lastScannedEpc = rawCode;
           _errorMessage = 'Sản phẩm "${item.productName}" (${item.sku}) đã có trong danh sách.';
         });
       }
@@ -258,11 +316,142 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
 
     HapticFeedback.mediumImpact();
     setState(() {
-      _lastScannedEpc = rawCode;
       _scannedItems.add(item);
       _scannedEpcs.add(epcUpper);
       _errorMessage = null;
     });
+  }
+
+  void _openPalletPicker(EyeCareColors c) {
+    final searchCtrl = TextEditingController();
+    List<Pallet> filtered = List.from(_repo.pallets);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: c.bgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              top: 16,
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: SizedBox(
+              height: 480,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.layers, color: Color(0xFF10B981), size: 22),
+                      const SizedBox(width: 8),
+                      Text('Chọn Pallet Cần Chuyển',
+                          style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.close, color: c.textMuted),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: searchCtrl,
+                    style: TextStyle(color: c.textPrimary, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Tìm theo mã Pallet, RFID, vị trí...',
+                      hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
+                      prefixIcon: const Icon(Icons.search, color: Color(0xFF10B981), size: 18),
+                      filled: true,
+                      fillColor: c.bgDeep,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: c.border),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      final q = val.trim().toLowerCase();
+                      setModalState(() {
+                        filtered = _repo.pallets.where((p) {
+                          if (q.isEmpty) return true;
+                          return p.palletCode.toLowerCase().contains(q) ||
+                              p.palletId.toLowerCase().contains(q) ||
+                              (p.rfidEpc ?? '').toLowerCase().contains(q) ||
+                              (p.locationId ?? '').toLowerCase().contains(q);
+                        }).toList();
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(child: Text('Không tìm thấy Pallet phù hợp', style: TextStyle(color: c.textMuted)))
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, _) => Divider(color: c.border, height: 1),
+                            itemBuilder: (_, idx) {
+                              final p = filtered[idx];
+                              final isSelected = _foundPallet?.palletCode == p.palletCode;
+                              final loc = _repo.locations.where((l) => l.locationId == p.locationId || l.locationCode == p.locationId).firstOrNull;
+                              final locText = loc?.displayName ?? (p.locationId ?? 'Chưa có kệ');
+                              final pItems = _repo.items.where((it) => it.palletId == p.palletId || it.palletId == p.palletCode).toList();
+
+                              return ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                leading: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFF10B981).withValues(alpha: 0.2) : c.bgDeep,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Icon(
+                                    isSelected ? Icons.check_circle : Icons.layers_outlined,
+                                    color: isSelected ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                    size: 18,
+                                  ),
+                                ),
+                                title: Text(p.palletCode,
+                                    style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis),
+                                subtitle: Text('Kệ: $locText • ${pItems.length} SP${p.rfidEpc != null && p.rfidEpc!.isNotEmpty ? " • RFID: ${p.rfidEpc}" : ""}',
+                                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                    overflow: TextOverflow.ellipsis),
+                                trailing: isSelected
+                                    ? const Text('Đã chọn', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold))
+                                    : ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF10B981),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                        ),
+                                        onPressed: () {
+                                          _handlePalletScan(p.palletCode, source: 'Picker');
+                                          Navigator.pop(ctx);
+                                        },
+                                        child: const Text('CHỌN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _openItemPicker(EyeCareColors c) {
@@ -477,7 +666,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       _scannedItems.clear();
       _scannedEpcs.clear();
       _manualInputCtrl.clear();
-      _lastScannedEpc = null;
+      _palletInputCtrl.clear();
       _errorMessage = null;
       _isProcessing = false;
       _isSuccess = false;
@@ -492,6 +681,14 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       _mode = mode;
       _reset();
     });
+    // Tự động chuyển chế độ quét phần cứng: Pallet -> Barcode (nhanh & chính xác); Hàng riêng lẻ -> RFID
+    if (mode == _TransferMode.pallet) {
+      _uhf.setScanMode(PdaScanMode.barcode);
+      setState(() => _currentScanMode = PdaScanMode.barcode);
+    } else {
+      _uhf.setScanMode(PdaScanMode.rfid);
+      setState(() => _currentScanMode = PdaScanMode.rfid);
+    }
   }
 
   bool _hasDataToTransfer() {
@@ -704,10 +901,97 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
 
   Widget _buildPalletScanContent(EyeCareColors c) {
     if (_foundPallet == null) {
-      return _buildScanPrompt(
-        c,
-        'Bóp cò súng PDA hoặc quét thẻ RFID Pallet...',
-        Icons.inventory_2_outlined,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildScanPrompt(
+            c,
+            _currentScanMode == PdaScanMode.barcode
+                ? 'Bóp cò súng PDA quét Barcode/QR Pallet hoặc nhập mã...'
+                : 'Bóp cò súng PDA quét thẻ RFID Pallet...',
+            _currentScanMode == PdaScanMode.barcode ? Icons.qr_code_scanner : Icons.nfc,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _palletInputCtrl,
+                  style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
+                    hintText: 'Quét Barcode hoặc nhập mã Pallet...',
+                    hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
+                    prefixIcon: Icon(
+                      _currentScanMode == PdaScanMode.barcode ? Icons.qr_code_scanner : Icons.nfc,
+                      color: const Color(0xFF10B981),
+                      size: 18,
+                    ),
+                    filled: true,
+                    fillColor: c.bgDeep,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                    focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8)), borderSide: BorderSide(color: Color(0xFF10B981))),
+                  ),
+                  onSubmitted: (val) {
+                    if (val.trim().isNotEmpty) {
+                      _handleScan(val, source: 'Manual/Barcode');
+                      _palletInputCtrl.clear();
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  if (_palletInputCtrl.text.trim().isNotEmpty) {
+                    _handleScan(_palletInputCtrl.text, source: 'Manual/Barcode');
+                    _palletInputCtrl.clear();
+                  }
+                },
+                child: const Icon(Icons.check, color: Colors.white, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF10B981),
+                    side: const BorderSide(color: Color(0xFF10B981)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  icon: const Icon(Icons.layers, size: 16),
+                  label: const Text('CHỌN TỪ DANH SÁCH PALLET', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () => _openPalletPicker(c),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _currentScanMode == PdaScanMode.barcode ? const Color(0xFF10B981) : const Color(0xFF00E5FF),
+                  side: BorderSide(color: _currentScanMode == PdaScanMode.barcode ? const Color(0xFF10B981) : const Color(0xFF00E5FF)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+                icon: Icon(_currentScanMode == PdaScanMode.barcode ? Icons.qr_code_scanner : Icons.nfc, size: 16),
+                label: Text(
+                  _currentScanMode == PdaScanMode.barcode ? 'Barcode' : 'RFID',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                onPressed: _toggleScanMode,
+              ),
+            ],
+          ),
+        ],
       );
     }
 
@@ -719,7 +1003,12 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildEpcChip(c, _lastScannedEpc ?? ''),
+        _buildEpcChip(
+          c,
+          _foundPallet!.palletCode,
+          subtitle: _foundPallet!.rfidEpc != null && _foundPallet!.rfidEpc!.isNotEmpty ? 'Chip RFID: ${_foundPallet!.rfidEpc}' : 'Quét qua Barcode Pallet',
+          icon: _currentScanMode == PdaScanMode.barcode ? Icons.qr_code_scanner : Icons.layers,
+        ),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(12),
@@ -733,7 +1022,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.inventory_2_rounded, color: const Color(0xFF10B981), size: 18),
+                  const Icon(Icons.inventory_2_rounded, color: Color(0xFF10B981), size: 18),
                   const SizedBox(width: 8),
                   Text(_foundPallet!.palletCode,
                       style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
@@ -1068,7 +1357,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     );
   }
 
-  Widget _buildEpcChip(EyeCareColors c, String epc) {
+  Widget _buildEpcChip(EyeCareColors c, String epc, {String? subtitle, IconData? icon}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1078,10 +1367,19 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.nfc, color: c.rfidCyan, size: 16),
+          Icon(icon ?? Icons.nfc, color: c.rfidCyan, size: 16),
           const SizedBox(width: 6),
-          Expanded(child: Text(epc,
-              style: TextStyle(color: c.rfidCyan, fontSize: 11.5, fontFamily: 'monospace', fontWeight: FontWeight.bold))),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(epc,
+                    style: TextStyle(color: c.rfidCyan, fontSize: 11.5, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                if (subtitle != null && subtitle.isNotEmpty)
+                  Text(subtitle, style: TextStyle(color: c.textMuted, fontSize: 10.5)),
+              ],
+            ),
+          ),
         ],
       ),
     );
