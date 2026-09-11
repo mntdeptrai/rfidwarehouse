@@ -15,7 +15,7 @@ class AdminRole extends BaseRolePermission {
   String get description => 'Toàn quyền quản trị hệ thống, cấp và phân quyền tài khoản nhân viên';
 
   @override
-  bool get canConfigureHardware => false; // Màn hình chỉnh thông số máy thuộc về role Kỹ thuật
+  bool get canConfigureHardware => false; // Quản trị viên chỉ quản trị tài khoản người dùng, kỹ thuật viên mới cấu hình kết nối & phần cứng
 
   @override
   bool get canInbound => true;

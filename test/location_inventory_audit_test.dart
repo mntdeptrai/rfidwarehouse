@@ -292,7 +292,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Bấm nút tạo phiếu kiểm kê mới để mở dialog
-      final createBtn = find.text('+ TẠO PHIẾU KIỂM KÊ MỚI');
+      final createBtn = find.text('TẠO PHIẾU KIỂM KÊ');
       expect(createBtn, findsOneWidget);
       await tester.tap(createBtn);
       await tester.pumpAndSettle();
@@ -300,8 +300,8 @@ void main() {
       // Ban đầu mặc định chọn mục 1 (Icons.radio_button_checked = 1 cái)
       expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
 
-      // Bấm vào mục 2: Theo Phân Khu / Khu vực (Zone)
-      final option2 = find.textContaining('Theo Phân Khu / Khu vực');
+      // Bấm vào mục 2: Theo Phân Khu (Zone)
+      final option2 = find.textContaining('Theo Phân Khu');
       expect(option2, findsOneWidget);
       await tester.tap(option2);
       await tester.pumpAndSettle();
@@ -309,8 +309,8 @@ void main() {
       // Kiểm tra mục 2 đã được tick chọn (radio_button_checked vẫn là 1 cái)
       expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
 
-      // Bấm vào mục 3: Kiểm kê toàn bộ kho hàng
-      final option3 = find.textContaining('Kiểm kê toàn bộ kho hàng');
+      // Bấm vào mục 3: Toàn Bộ Kho Hàng
+      final option3 = find.textContaining('Toàn Bộ Kho Hàng');
       expect(option3, findsOneWidget);
       await tester.tap(option3);
       await tester.pumpAndSettle();

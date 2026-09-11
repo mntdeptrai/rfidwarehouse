@@ -305,12 +305,6 @@ class PutawayBarcodeModal extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: barcode));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: const Color(0xFF047857),
-                          content: Text('Đã sao chép mã Barcode "$barcode" vào bộ nhớ tạm!'),
-                        ),
-                      );
                     },
                     icon: const Icon(Icons.copy, size: 16),
                     label: const Text('Sao chép mã'),

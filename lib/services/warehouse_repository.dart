@@ -206,9 +206,21 @@ class WarehouseRepository extends ChangeNotifier {
       // 2. Pallets
       final loadedPallets = palRows.map((m) {
         final inbTimeStr = m['inbound_time'] as String?;
+        final pId = (m['pallet_id'] ?? '').toString();
+        final pCode = (m['pallet_code'] ?? '').toString();
+        // Giữ lại tên pallet đã lưu cục bộ nếu Supabase trả về null/rỗng
+        final existingLocal = _pallets.where((p) =>
+            (pId.isNotEmpty && p.palletId == pId) ||
+            (pCode.isNotEmpty && p.palletCode.toUpperCase() == pCode.toUpperCase())).firstOrNull;
+        final rawName = m['pallet_name'] as String?;
+        final effectiveName = (rawName != null && rawName.trim().isNotEmpty)
+            ? rawName.trim()
+            : existingLocal?.palletName;
+
         return Pallet(
-          palletId: (m['pallet_id'] ?? '').toString(),
-          palletCode: (m['pallet_code'] ?? '').toString(),
+          palletId: pId,
+          palletCode: pCode,
+          palletName: effectiveName,
           rfidEpc: m['rfid_epc'] as String?,
           locationId: m['location_id'] as String?,
           inboundTime: inbTimeStr != null ? DateTime.tryParse(inbTimeStr) : null,
@@ -216,6 +228,25 @@ class WarehouseRepository extends ChangeNotifier {
           placedBy: m['placed_by'] as String?,
         );
       }).toList();
+
+      // Loại bỏ bản ghi trùng lặp mã Pallet từ Supabase nếu có
+      final Map<String, Pallet> uniquePalletsMap = {};
+      for (final p in loadedPallets) {
+        final key = p.palletCode.trim().toUpperCase();
+        if (key.isEmpty) continue;
+        if (!uniquePalletsMap.containsKey(key)) {
+          uniquePalletsMap[key] = p;
+        } else {
+          final ex = uniquePalletsMap[key]!;
+          if ((ex.palletName == null || ex.palletName!.isEmpty) && p.palletName != null && p.palletName!.isNotEmpty) {
+            ex.palletName = p.palletName;
+          }
+          if ((ex.rfidEpc == null || ex.rfidEpc!.isEmpty) && p.rfidEpc != null && p.rfidEpc!.isNotEmpty) {
+            ex.rfidEpc = p.rfidEpc;
+          }
+        }
+      }
+      final cleanLoadedPallets = uniquePalletsMap.values.toList();
 
       // 3. Products
       final loadedProds = prodRows.map((m) => Product(
@@ -355,7 +386,7 @@ class WarehouseRepository extends ChangeNotifier {
       _locations.addAll(loadedLocs);
 
       _pallets.clear();
-      _pallets.addAll(loadedPallets);
+      _pallets.addAll(cleanLoadedPallets);
 
       _products.clear();
       _products.addAll(loadedProds);
@@ -401,22 +432,67 @@ class WarehouseRepository extends ChangeNotifier {
     return matched;
   }
 
-  Future<void> deleteInboundOrder(String orderId) async {
+  Future<void> deleteInboundOrder(String orderId, {List<String>? itemEpcs}) async {
     final cleanId = orderId.trim();
     final targetOrder = _inboundOrders.where((o) => o.inboundOrderId == cleanId || o.orderNo == cleanId).firstOrNull;
     final orderNo = targetOrder?.orderNo ?? cleanId;
     final orderIdVal = targetOrder?.inboundOrderId ?? cleanId;
 
+    final targetEpcs = itemEpcs?.map((e) => e.trim().toUpperCase()).toSet() ?? <String>{};
+    final matchingItems = _items.where((i) =>
+        i.orderNo == orderNo ||
+        i.orderNo == orderIdVal ||
+        i.orderNo == cleanId ||
+        (i.orderNo != null && (i.orderNo!.startsWith('$orderNo-') || i.orderNo!.startsWith('$orderIdVal-'))) ||
+        targetEpcs.contains(i.epc.trim().toUpperCase())).toList();
+
+    for (final it in matchingItems) {
+      targetEpcs.add(it.epc.trim().toUpperCase());
+    }
+
     await _dbService.deleteInboundOrder(orderIdVal);
-    _inboundOrders.removeWhere((o) => o.inboundOrderId == orderIdVal || o.orderNo == orderNo);
-    _items.removeWhere((i) => i.orderNo == orderNo || i.orderNo == orderIdVal || i.orderNo == cleanId);
+    await _dbService.deleteInboundOrder(orderNo);
+    for (final epc in targetEpcs) {
+      await _dbService.deleteItem(epc);
+    }
+
+    _inboundOrders.removeWhere((o) =>
+        o.inboundOrderId == orderIdVal ||
+        o.orderNo == orderNo ||
+        o.inboundOrderId == cleanId ||
+        o.orderNo == cleanId ||
+        (o.orderNo.startsWith('$orderNo-')));
+
+    _items.removeWhere((i) =>
+        i.orderNo == orderNo ||
+        i.orderNo == orderIdVal ||
+        i.orderNo == cleanId ||
+        (i.orderNo != null && (i.orderNo!.startsWith('$orderNo-') || i.orderNo!.startsWith('$orderIdVal-'))) ||
+        targetEpcs.contains(i.epc.trim().toUpperCase()));
 
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       try {
         final supa = Supabase.instance.client;
         await supa.from('inbound_order_details').delete().eq('order_id', orderIdVal);
-        await supa.from('inbound_orders').delete().or('inbound_order_id.eq.$orderIdVal,order_no.eq.$orderNo');
-        await supa.from('items').delete().or('order_no.eq.$orderNo,order_no.eq.$orderIdVal');
+        if (orderNo != orderIdVal) {
+          await supa.from('inbound_order_details').delete().eq('order_id', orderNo);
+        }
+        await supa.from('inbound_orders').delete().eq('inbound_order_id', orderIdVal);
+        await supa.from('inbound_orders').delete().eq('order_no', orderNo);
+        if (cleanId != orderNo && cleanId != orderIdVal) {
+          await supa.from('inbound_orders').delete().eq('order_no', cleanId);
+        }
+        await supa.from('items').delete().eq('order_no', orderNo);
+        if (orderIdVal != orderNo) {
+          await supa.from('items').delete().eq('order_no', orderIdVal);
+        }
+        if (targetEpcs.isNotEmpty) {
+          final epcList = targetEpcs.toList();
+          for (var i = 0; i < epcList.length; i += 100) {
+            final chunk = epcList.sublist(i, i + 100 > epcList.length ? epcList.length : i + 100);
+            await supa.from('items').delete().inFilter('epc', chunk);
+          }
+        }
       } catch (e) {
         debugPrint('deleteInboundOrder Supabase direct error: $e');
       }
@@ -430,6 +506,95 @@ class WarehouseRepository extends ChangeNotifier {
     );
 
     notifyListeners();
+  }
+
+  /// Xóa triệt để toàn bộ các đơn hàng nháp (NEW) và chip tạm (PENDING_INBOUND) khỏi SQLite, RAM và Supabase Cloud
+  Future<void> wipeAllPendingInboundOrdersAndItems() async {
+    final draftOrders = _inboundOrders.where((o) => o.status == InboundOrderStatus.newOrder).toList();
+    final pendingItems = _items.where((i) => i.status == ItemStatus.pendingInbound).toList();
+
+    final orderNos = <String>{
+      for (final o in draftOrders) ...[o.orderNo, o.inboundOrderId],
+      for (final it in pendingItems) if (it.orderNo != null && it.orderNo!.isNotEmpty) it.orderNo!,
+    };
+    final epcs = <String>{
+      for (final it in pendingItems) it.epc.trim().toUpperCase(),
+    };
+
+    // 1. Xóa SQLite
+    for (final ordNo in orderNos) {
+      await _dbService.deleteInboundOrder(ordNo);
+    }
+    for (final epc in epcs) {
+      await _dbService.deleteItem(epc);
+    }
+
+    // 2. Xóa RAM
+    _inboundOrders.removeWhere((o) => o.status == InboundOrderStatus.newOrder || orderNos.contains(o.orderNo) || orderNos.contains(o.inboundOrderId));
+    _items.removeWhere((i) => i.status == ItemStatus.pendingInbound || epcs.contains(i.epc.trim().toUpperCase()));
+    notifyListeners();
+
+    // 3. Xóa Supabase Cloud ngầm siêu tốc (không chặn luồng UI hay file import)
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      Future.microtask(() async {
+        try {
+          final supa = Supabase.instance.client;
+
+          // Truy vấn trực tiếp Supabase để quét sạch các đơn NEW và item PENDING_INBOUND còn sót từ trước
+          try {
+            final supaOrders = await supa.from('inbound_orders').select('inbound_order_id, order_no').eq('status', 'NEW').timeout(const Duration(seconds: 4));
+            for (final row in supaOrders) {
+              final id = row['inbound_order_id']?.toString();
+              final no = row['order_no']?.toString();
+              if (id != null && id.isNotEmpty) orderNos.add(id);
+              if (no != null && no.isNotEmpty) orderNos.add(no);
+            }
+          } catch (_) {}
+
+          try {
+            final supaPendingItems = await supa.from('items').select('epc, order_no').eq('status', 'PENDING_INBOUND').timeout(const Duration(seconds: 4));
+            for (final row in supaPendingItems) {
+              final e = row['epc']?.toString();
+              final no = row['order_no']?.toString();
+              if (e != null && e.isNotEmpty) epcs.add(e.trim().toUpperCase());
+              if (no != null && no.isNotEmpty) orderNos.add(no);
+            }
+          } catch (_) {}
+
+          // Xóa items có trạng thái PENDING_INBOUND
+          try { await supa.from('items').delete().eq('status', 'PENDING_INBOUND').timeout(const Duration(seconds: 4)); } catch (_) {}
+          try { await supa.from('items').delete().eq('status', 'pending_inbound').timeout(const Duration(seconds: 4)); } catch (_) {}
+
+          // Xóa chi tiết đơn và các đơn hàng liên quan theo lô siêu tốc
+          if (orderNos.isNotEmpty) {
+            final ordList = orderNos.toList();
+            for (var i = 0; i < ordList.length; i += 100) {
+              final chunk = ordList.sublist(i, i + 100 > ordList.length ? ordList.length : i + 100);
+              await Future.wait([
+                supa.from('inbound_order_details').delete().inFilter('order_id', chunk).catchError((_) {}),
+                supa.from('items').delete().inFilter('order_no', chunk).catchError((_) {}),
+                supa.from('inbound_orders').delete().inFilter('order_no', chunk).catchError((_) {}),
+                supa.from('inbound_orders').delete().inFilter('inbound_order_id', chunk).catchError((_) {}),
+              ]).timeout(const Duration(seconds: 4), onTimeout: () => []);
+            }
+          }
+          try { await supa.from('inbound_orders').delete().eq('status', 'NEW').timeout(const Duration(seconds: 4)); } catch (_) {}
+
+          // Xóa từng chunk 100 EPC song song
+          final epcList = epcs.toList();
+          if (epcList.isNotEmpty) {
+            final futures = <Future>[];
+            for (var i = 0; i < epcList.length; i += 100) {
+              final chunk = epcList.sublist(i, i + 100 > epcList.length ? epcList.length : i + 100);
+              futures.add(supa.from('items').delete().inFilter('epc', chunk).catchError((_) {}));
+            }
+            await Future.wait(futures).timeout(const Duration(seconds: 4), onTimeout: () => []);
+          }
+        } catch (e) {
+          debugPrint('wipeAllPendingInboundOrdersAndItems Supabase direct error: $e');
+        }
+      });
+    }
   }
 
   Future<void> deleteItem(String epc) async {
@@ -1928,35 +2093,69 @@ class WarehouseRepository extends ChangeNotifier {
   /// Đăng ký hoặc cập nhật mã thẻ RFID, mã xe Pallet (lưu cố định vĩnh viễn vào Database)
   Future<void> registerOrUpdatePallet({
     required String palletCode,
+    String? palletName,
     required String rfidEpc,
     String? locationId,
     String? oldPalletCode,
+    String? oldPalletId,
   }) async {
     final cleanCode = palletCode.trim().toUpperCase();
+    final cleanName = palletName?.trim();
     final cleanEpc = rfidEpc.trim().toUpperCase();
     final cleanOldCode = oldPalletCode?.trim().toUpperCase();
+    final cleanOldId = oldPalletId?.trim().toUpperCase();
 
-    // Nếu sửa đổi tên/mã từ một Pallet cũ đã có
-    if (cleanOldCode != null && cleanOldCode.isNotEmpty && cleanOldCode != cleanCode) {
-      await _dbService.deletePallet(cleanOldCode);
+    // 1. Nếu sửa đổi mã Barcode/ID từ Pallet cũ sang mã mới
+    final isCodeChanged = (cleanOldCode != null && cleanOldCode.isNotEmpty && cleanOldCode != cleanCode) ||
+                          (cleanOldId != null && cleanOldId.isNotEmpty && cleanOldId != cleanCode && cleanOldId != 'PAL-$cleanCode');
+
+    if (isCodeChanged) {
+      if (cleanOldId != null && cleanOldId.isNotEmpty) {
+        await _dbService.deletePallet(cleanOldId);
+      }
+      if (cleanOldCode != null && cleanOldCode.isNotEmpty) {
+        await _dbService.deletePallet(cleanOldCode);
+      }
       _pallets.removeWhere((p) =>
-          p.palletCode.toUpperCase() == cleanOldCode ||
-          p.palletId.toUpperCase() == cleanOldCode ||
-          p.palletId.toUpperCase() == 'PAL-$cleanOldCode');
+          (cleanOldId != null && cleanOldId.isNotEmpty && p.palletId.toUpperCase() == cleanOldId) ||
+          (cleanOldCode != null && cleanOldCode.isNotEmpty && p.palletCode.toUpperCase() == cleanOldCode));
+
+      // Xóa pallet cũ khỏi Supabase Cloud để không bị thành bản ghi rác
+      final oldSyncId = (cleanOldId != null && cleanOldId.isNotEmpty) ? cleanOldId : (cleanOldCode != null ? 'PAL-$cleanOldCode' : '');
+      if (oldSyncId.isNotEmpty) {
+        await _syncDirectOrQueue(
+          tableName: 'pallets',
+          recordId: oldSyncId,
+          action: 'DELETE',
+          payload: {
+            'pallet_id': oldSyncId,
+            'pallet_code': cleanOldCode ?? '',
+          },
+        );
+      }
 
       // Chuyển quyền sở hữu các Item sang mã Pallet mới
-      for (final item in _items.where((it) => it.palletId == 'PAL-$cleanOldCode' || it.palletId == cleanOldCode)) {
+      for (final item in _items.where((it) =>
+          (cleanOldId != null && it.palletId == cleanOldId) ||
+          (cleanOldCode != null && (it.palletId == cleanOldCode || it.palletId == 'PAL-$cleanOldCode')))) {
         item.palletId = 'PAL-$cleanCode';
         await _dbService.insertItem(item);
       }
     }
 
-    final existing = _pallets.where((p) =>
+    // 2. Tìm pallet đang sửa hoặc tìm theo mã
+    Pallet? existing;
+    if (cleanOldId != null && cleanOldId.isNotEmpty) {
+      existing = _pallets.where((p) => p.palletId.toUpperCase() == cleanOldId).firstOrNull;
+    }
+    existing ??= _pallets.where((p) =>
         p.palletCode.toUpperCase() == cleanCode ||
         p.palletId.toUpperCase() == cleanCode ||
         p.palletId.toUpperCase() == 'PAL-$cleanCode').firstOrNull;
+
     if (existing != null) {
       existing.palletCode = cleanCode;
+      existing.palletName = cleanName?.isNotEmpty == true ? cleanName : null;
       existing.rfidEpc = cleanEpc;
       if (locationId != null) existing.locationId = locationId;
       await _dbService.insertPallet(existing);
@@ -1964,6 +2163,7 @@ class WarehouseRepository extends ChangeNotifier {
       final newP = Pallet(
         palletId: 'PAL-$cleanCode',
         palletCode: cleanCode,
+        palletName: cleanName?.isNotEmpty == true ? cleanName : null,
         rfidEpc: cleanEpc,
         locationId: locationId,
         inboundTime: DateTime.now(),
@@ -1977,45 +2177,86 @@ class WarehouseRepository extends ChangeNotifier {
 
     // Đồng bộ lên Supabase nếu có mạng
     final palToSync = _pallets.firstWhere((p) => p.palletCode.toUpperCase() == cleanCode);
+    final payload = <String, dynamic>{
+      'pallet_id': palToSync.palletId,
+      'pallet_code': palToSync.palletCode,
+      'rfid_epc': palToSync.rfidEpc,
+      'location_id': palToSync.locationId,
+      'inbound_time': palToSync.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      'is_multi_sku': palToSync.isMultiSku ? 1 : 0,
+    };
+    if (palToSync.palletName != null && palToSync.palletName!.isNotEmpty) {
+      payload['pallet_name'] = palToSync.palletName;
+    }
     await _syncDirectOrQueue(
       tableName: 'pallets',
       recordId: palToSync.palletId,
       action: 'INSERT',
-      payload: {
-        'pallet_id': palToSync.palletId,
-        'pallet_code': palToSync.palletCode,
-        'rfid_epc': palToSync.rfidEpc,
-        'location_id': palToSync.locationId,
-        'inbound_time': palToSync.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
-        'is_multi_sku': palToSync.isMultiSku ? 1 : 0,
-      },
+      payload: payload,
     );
 
     notifyListeners();
   }
 
-  /// Xóa xe Pallet khỏi danh mục (xóa triệt để cả trong Database SQLite, File Backup và Cloud)
-  Future<void> deletePalletFromMaster(String palletCode) async {
+  /// Xóa xe Pallet khỏi danh mục (xóa triệt để đúng 1 Pallet chỉ định cả trong Database SQLite, File Backup và Cloud)
+  Future<void> deletePalletFromMaster(String palletCode, {String? palletId}) async {
     final clean = palletCode.trim().toUpperCase();
-    _pallets.removeWhere((p) =>
-        p.palletCode.toUpperCase() == clean ||
-        p.palletId.toUpperCase() == clean ||
-        p.palletId.toUpperCase() == 'PAL-$clean');
+    final cleanId = palletId?.trim().toUpperCase();
 
-    // 1. Xóa triệt để khỏi SQLite Database theo cả ID và Code
-    await _dbService.deletePallet(clean);
+    // 1. Xác định đúng duy nhất Pallet cần xóa, tránh xóa nhầm sang pallet khác
+    Pallet? targetPallet;
+    if (cleanId != null && cleanId.isNotEmpty) {
+      targetPallet = _pallets.where((p) => p.palletId.toUpperCase() == cleanId).firstOrNull;
+    }
+    targetPallet ??= _pallets.where((p) =>
+        (clean.isNotEmpty && p.palletCode.toUpperCase() == clean) ||
+        (clean.isNotEmpty && p.palletId.toUpperCase() == clean) ||
+        (clean.isNotEmpty && p.palletId.toUpperCase() == 'PAL-$clean')).firstOrNull;
 
-    // 2. Cập nhật lại file backup vĩnh viễn
-    await _dbService.savePalletsBackup(_pallets);
+    if (targetPallet != null) {
+      final actualId = targetPallet.palletId;
+      final actualCode = targetPallet.palletCode;
 
-    // 3. Đồng bộ lệnh xóa lên Supabase Cloud
-    await _syncDirectOrQueue(
-      tableName: 'pallets',
-      recordId: 'PAL-$clean',
-      action: 'DELETE',
-      payload: {'pallet_id': 'PAL-$clean', 'pallet_code': clean},
-    );
+      // Xóa chính xác 1 pallet này khỏi danh sách RAM
+      _pallets.remove(targetPallet);
 
+      // Xóa khỏi SQLite Database theo ID và Code
+      await _dbService.deletePallet(actualId);
+      if (actualCode.isNotEmpty && actualCode != actualId) {
+        await _dbService.deletePallet(actualCode);
+      }
+
+      // Cập nhật lại file backup vĩnh viễn
+      await _dbService.savePalletsBackup(_pallets);
+
+      // Đồng bộ lệnh xóa lên Supabase Cloud cho cả ID và Code
+      await _syncDirectOrQueue(
+        tableName: 'pallets',
+        recordId: actualId,
+        action: 'DELETE',
+        payload: {
+          'pallet_id': actualId,
+          'pallet_code': actualCode,
+          'alt_id': 'PAL-$actualCode',
+        },
+      );
+    } else {
+      // Fallback nếu không tìm thấy targetPallet
+      _pallets.removeWhere((p) =>
+          (cleanId != null && cleanId.isNotEmpty && p.palletId.toUpperCase() == cleanId) ||
+          (clean.isNotEmpty && p.palletCode.toUpperCase() == clean));
+      if (cleanId != null && cleanId.isNotEmpty) await _dbService.deletePallet(cleanId);
+      if (clean.isNotEmpty) await _dbService.deletePallet(clean);
+      await _dbService.savePalletsBackup(_pallets);
+      await _syncDirectOrQueue(
+        tableName: 'pallets',
+        recordId: cleanId ?? 'PAL-$clean',
+        action: 'DELETE',
+        payload: {'pallet_id': cleanId ?? 'PAL-$clean', 'pallet_code': clean},
+      );
+    }
+
+    _triggerBackgroundSync();
     notifyListeners();
   }
 
@@ -3911,15 +4152,35 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> deletePallet(String palletId) async {
     final cleanId = palletId.trim().toUpperCase();
-    _pallets.removeWhere((p) => p.palletId.toUpperCase() == cleanId || p.palletCode.toUpperCase() == cleanId);
-    await _dbService.deletePallet(cleanId);
-    await _dbService.savePalletsBackup(_pallets);
-    await _syncDirectOrQueue(
-      tableName: 'pallets',
-      recordId: cleanId,
-      action: 'DELETE',
-      payload: {'pallet_id': cleanId},
-    );
+    final target = _pallets.where((p) => p.palletId.toUpperCase() == cleanId || p.palletCode.toUpperCase() == cleanId).firstOrNull;
+    if (target != null) {
+      _pallets.remove(target);
+      await _dbService.deletePallet(target.palletId);
+      if (target.palletCode.isNotEmpty && target.palletCode != target.palletId) {
+        await _dbService.deletePallet(target.palletCode);
+      }
+      await _dbService.savePalletsBackup(_pallets);
+      await _syncDirectOrQueue(
+        tableName: 'pallets',
+        recordId: target.palletId,
+        action: 'DELETE',
+        payload: {
+          'pallet_id': target.palletId,
+          'pallet_code': target.palletCode,
+          'alt_id': 'PAL-${target.palletCode}',
+        },
+      );
+    } else {
+      _pallets.removeWhere((p) => p.palletId.toUpperCase() == cleanId || p.palletCode.toUpperCase() == cleanId);
+      await _dbService.deletePallet(cleanId);
+      await _dbService.savePalletsBackup(_pallets);
+      await _syncDirectOrQueue(
+        tableName: 'pallets',
+        recordId: cleanId,
+        action: 'DELETE',
+        payload: {'pallet_id': cleanId},
+      );
+    }
     _triggerBackgroundSync();
     notifyListeners();
   }

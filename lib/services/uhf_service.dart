@@ -181,13 +181,6 @@ class UhfService extends ChangeNotifier {
       final Map? args = call.arguments as Map?;
       final bool pressed = args?['pressed'] ?? false;
       _isTriggerPressed = pressed;
-      _isScanning = pressed;
-      if (pressed) {
-        _startRateTimer();
-      } else {
-        // Tắt ngay lập tức khi nhả cò súng
-        stopInventory();
-      }
       debugPrint('UhfService: Hardware Trigger ${pressed ? "Pressed" : "Released"}');
       _triggerStreamController.add(pressed);
       _notifyThrottleTimer?.cancel();
@@ -277,9 +270,7 @@ class UhfService extends ChangeNotifier {
           existing.count += (item['count'] as num?)?.toInt() ?? 1;
           existing.lastSeen = DateTime.now();
           _tagsCacheDirty = true;
-          if (!_filterDuplicates) {
-            _tagStreamController.add(_tagsMap[epc]!);
-          }
+          _tagStreamController.add(existing);
         } else {
           final newTag = TagInfo(
             epc: epc,
@@ -323,8 +314,8 @@ class UhfService extends ChangeNotifier {
         existing.count += (map['count'] as num?)?.toInt() ?? 1;
         existing.lastSeen = DateTime.now();
         _tagsCacheDirty = true;
-        if (_filterDuplicates) {
-          continue;
+        if (!_filterDuplicates) {
+          _tagStreamController.add(existing);
         }
       } else {
         final newTag = TagInfo(
@@ -341,9 +332,8 @@ class UhfService extends ChangeNotifier {
         );
         _tagsMap[epc] = newTag;
         _tagsCacheDirty = true;
+        _tagStreamController.add(newTag);
       }
-
-      _tagStreamController.add(_tagsMap[epc]!);
     }
     _throttledNotify();
   }
@@ -362,6 +352,7 @@ class UhfService extends ChangeNotifier {
     _recentReadCount = 0;
     _readRate = 0.0;
     _startRateTimer();
+    clearTags();
 
     if (!Platform.isAndroid) {
       _isScanning = true;

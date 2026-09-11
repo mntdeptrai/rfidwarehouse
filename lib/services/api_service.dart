@@ -318,11 +318,14 @@ class ApiService extends ChangeNotifier {
       return res.map((m) => Pallet(
             palletId: m['pallet_id']?.toString() ?? '',
             palletCode: m['pallet_code']?.toString() ?? '',
+            palletName: m['pallet_name']?.toString(),
+            rfidEpc: m['rfid_epc']?.toString(),
             locationId: m['location_id']?.toString(),
             inboundTime: m['inbound_time'] != null
                 ? DateTime.tryParse(m['inbound_time'].toString())
                 : null,
             isMultiSku: m['is_multi_sku'] == 1 || m['is_multi_sku'] == true,
+            placedBy: m['placed_by']?.toString(),
           )).toList();
     } catch (e) {
       debugPrint('ApiService fetchPallets error: $e');

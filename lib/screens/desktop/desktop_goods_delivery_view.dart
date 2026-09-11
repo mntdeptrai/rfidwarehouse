@@ -70,6 +70,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _desktopUhf.addListener(_onDesktopUhfUpdate);
 
     _initTagListeners();
+
+    if (_desktopUhf.config.autoConnectOnStartup && !_desktopUhf.isConnected) {
+      _desktopUhf.connectWithSavedConfig();
+    }
   }
 
   void _resetForm() {
@@ -182,7 +186,11 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _countdownTimer?.cancel();
 
     if (!_desktopUhf.isConnected) {
-      await _desktopUhf.connectSerial('COM3', 115200);
+      final ok = await _desktopUhf.connectWithSavedConfig();
+      if (!ok && !_desktopUhf.isConnected) {
+        debugPrint('⚠️ Chưa kết nối được đầu đọc RFID (${_desktopUhf.config.connectionSummary}).');
+        return;
+      }
     }
 
     _uhf.startInventory();
@@ -309,14 +317,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     setState(() {
       _selectedEpcs.addAll(toSelect);
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF10B981),
-        duration: const Duration(seconds: 3),
-        content: Text('⚡ Đã tự động gợi ý chọn ${toSelect.length} sản phẩm có ngày nhập xa hiện tại nhất (FIFO)!'),
-      ),
-    );
   }
 
 
@@ -1230,7 +1230,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  _desktopUhf.isConnected ? 'CỔNG SẴN SÀNG (COM3)' : 'CHƯA KẾT NỐI COM3',
+                                  _desktopUhf.isConnected
+                                      ? 'CỔNG SẴN SÀNG • ${_desktopUhf.config.connectionSummary}'
+                                      : 'CHƯA KẾT NỐI • ${_desktopUhf.config.connectionSummary}',
                                   style: TextStyle(
                                     color: _desktopUhf.isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                                     fontSize: 10.5,

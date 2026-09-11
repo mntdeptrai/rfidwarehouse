@@ -410,15 +410,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 onPressed: () async {
                   await _repo.refreshFromDatabase();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: c.successEmerald,
-                        content: const Text('Đã làm mới dữ liệu trạng thái kệ kho từ CSDL'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  }
+                  if (mounted) setState(() {});
                 },
               ),
               ElevatedButton.icon(
@@ -440,7 +432,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   color: c.bgCard,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   onSelected: (val) async {
-                    final messenger = ScaffoldMessenger.of(context);
                     if (val == 'clear_all') {
                       final confirm = await showDialog<bool>(
                         context: context,
@@ -464,9 +455,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       if (confirm == true) {
                         await _repo.deleteAllLocations();
                         if (mounted) setState(() {});
-                        messenger.showSnackBar(
-                          const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xóa sạch toàn bộ kệ trong kho!')),
-                        );
                       }
                     }
                   },
@@ -677,7 +665,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       Icon(Icons.palette_outlined, size: 14, color: c.textMuted),
                       const SizedBox(width: 6),
                       Text(
-                        isUltraNarrow ? 'TRẠNG THÁI:' : 'TRẠNG THÁI (PDA CẬP NHẬT):',
+                        'TRẠNG THÁI:',
                         style: TextStyle(
                           color: c.textPrimary,
                           fontSize: isUltraNarrow ? 10 : 11,
@@ -689,19 +677,19 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   ),
                   _buildLegendPill(
                     color: const Color(0xFFEF4444),
-                    label: isUltraNarrow ? 'Đỏ: Đầy' : 'Màu đỏ: Kệ đầy',
+                    label: 'Kệ đầy',
                     c: c,
                     isCompact: isUltraNarrow,
                   ),
                   _buildLegendPill(
                     color: const Color(0xFFF59E0B),
-                    label: isUltraNarrow ? 'Vàng: Sắp hết' : 'Màu vàng: Kệ sắp hết chỗ',
+                    label: 'Sắp hết chỗ',
                     c: c,
                     isCompact: isUltraNarrow,
                   ),
                   _buildLegendPill(
                     color: const Color(0xFF10B981),
-                    label: isUltraNarrow ? 'Xanh: Trống' : 'Màu xanh: Kệ còn trống nhiều',
+                    label: 'Còn chỗ',
                     c: c,
                     isCompact: isUltraNarrow,
                   ),
@@ -1415,7 +1403,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 icon: const Icon(Icons.delete_outline, size: 16),
                 label: const Text('XÓA KỆ', style: TextStyle(fontWeight: FontWeight.bold)),
                 onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
                   final confirm = await showDialog<bool>(
                     context: ctx,
                     builder: (confirmCtx) => AlertDialog(
@@ -1442,12 +1429,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     await _repo.deleteLocation(loc.locationId);
                     if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) setState(() {});
-                    messenger.showSnackBar(
-                      SnackBar(
-                        backgroundColor: const Color(0xFF10B981),
-                        content: Text('Đã xóa kệ ${loc.displayName} thành công!'),
-                      ),
-                    );
                   }
                 },
               ),
@@ -1480,7 +1461,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   // 5B. SỬA THÔNG TIN KỆ
   // ===========================================================================
   void _showEditShelfDialog(Location loc, EyeCareColors c) {
-    final messenger = ScaffoldMessenger.of(context);
     final codeCtrl = TextEditingController(text: loc.locationCode);
     final shelfCtrl = TextEditingController(text: loc.shelf);
     final zoneCtrl = TextEditingController(text: loc.zone);
@@ -1622,12 +1602,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (mounted) setState(() {});
-                messenger.showSnackBar(
-                  SnackBar(
-                    backgroundColor: const Color(0xFF10B981),
-                    content: Text('Đã cập nhật thông tin kệ $shelf thành công!'),
-                  ),
-                );
               },
               child: const Text('CẬP NHẬT', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
             ),
@@ -2776,12 +2750,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                         );
                         Navigator.pop(ctx);
                         setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: const Color(0xFF10B981),
-                            content: Text('Đã chuyển Pallet ${pallet.palletCode} sang ${targetLoc!.displayName}'),
-                          ),
-                        );
                       },
                 child: const Text('XÁC NHẬN CHUYỂN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
               ),
@@ -2874,12 +2842,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                         );
                         Navigator.pop(ctx);
                         setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: const Color(0xFF10B981),
-                            content: Text('Đã xếp Pallet ${selectedPallet!.palletCode} vào ${loc.displayName}'),
-                          ),
-                        );
                       },
                 child: const Text('XẾP VÀO KỆ NÀY', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
               ),
@@ -2894,7 +2856,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   // 6. THÊM KỆ MỚI
   // ===========================================================================
   void _showAddShelfDialog(EyeCareColors c) {
-    final messenger = ScaffoldMessenger.of(context);
     final codeCtrl = TextEditingController();
     final shelfCtrl = TextEditingController();
     final zoneCtrl = TextEditingController(text: 'Khu A');
@@ -2977,12 +2938,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
               await _repo.addLocation(newLoc);
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) setState(() {});
-              messenger.showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFF10B981),
-                  content: Text('Đã thêm kệ ${newLoc.displayName} thành công!'),
-                ),
-              );
             },
             child: const Text('LƯU KỆ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),
@@ -3071,11 +3026,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     ),
                     icon: const Icon(Icons.file_download, color: Color(0xFF2C251E), size: 18),
                     label: const Text('BÁO CÁO EXCEL', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xuất báo cáo kiểm kê ra file Excel')),
-                      );
-                    },
+                    onPressed: () {},
                   ),
                 ],
               ),
@@ -3203,11 +3154,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                 icon: const Icon(Icons.file_download, color: Color(0xFF2C251E), size: 18),
                 label: const Text('XUẤT EXCEL', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(backgroundColor: Color(0xFF10B981), content: Text('Đã xuất dữ liệu chi tiết kiểm kê ra Excel')),
-                  );
-                },
+                onPressed: () {},
               ),
             ],
           ),

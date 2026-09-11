@@ -10,7 +10,9 @@ import 'package:uhf/screens/desktop/desktop_main_layout.dart';
 import 'package:uhf/screens/storage_screen.dart';
 import 'package:uhf/screens/pda/pda_home_screen.dart';
 import 'package:uhf/screens/inbound_screen.dart';
+import 'package:uhf/screens/desktop/desktop_warehouse_management_view.dart';
 import 'package:uhf/screens/outbound_screen.dart';
+import 'package:uhf/screens/pda/pda_putaway_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -117,6 +119,22 @@ void main() {
     expect(find.byType(DesktopUhfStudioView), findsOneWidget);
   });
 
+  testWidgets('DesktopWarehouseManagementView renders without overflow in ultra-narrow window', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(200, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopWarehouseManagementView(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(DesktopWarehouseManagementView), findsOneWidget);
+  });
+
   testWidgets('DesktopMainLayout renders without overflow in ultra-narrow window', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(200, 600);
     tester.view.devicePixelRatio = 1.0;
@@ -172,6 +190,20 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(OutboundScreen), findsOneWidget);
+  });
+
+  testWidgets('PdaPutawayScreen renders without overflow in ultra-narrow window', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(200, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PdaPutawayScreen(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(PdaPutawayScreen), findsOneWidget);
   });
 }
 

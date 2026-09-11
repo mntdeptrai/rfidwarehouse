@@ -127,17 +127,6 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     setState(() {
       _currentScanMode = newMode;
     });
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: newMode == PdaScanMode.rfid ? const Color(0xFF00E5FF) : const Color(0xFF10B981),
-        duration: const Duration(milliseconds: 1500),
-        content: Text(
-          newMode == PdaScanMode.rfid ? 'Chế độ: Đọc chip RFID UHF' : 'Chế độ: Quét Laser Barcode',
-          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
   }
 
   @override
@@ -629,21 +618,9 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
         _lastTransferCount = count;
       });
 
-      final newLoc = _repo.locations
-          .where((l) => l.locationId == _selectedLocationId || l.locationCode == _selectedLocationId)
-          .firstOrNull;
-      final newLocName = newLoc?.displayName ?? (newLoc?.locationCode ?? _selectedLocationId);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            content: Text(
-                '✓ Chuyển thành công $count sản phẩm → $newLocName${_selectedTargetPalletId != null ? " (Pallet $_selectedTargetPalletId)" : ""}'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+
+
     } catch (e) {
       setState(() {
         _isProcessing = false;
@@ -907,8 +884,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
           _buildScanPrompt(
             c,
             _currentScanMode == PdaScanMode.barcode
-                ? 'Bóp cò súng PDA quét Barcode/QR Pallet hoặc nhập mã...'
-                : 'Bóp cò súng PDA quét thẻ RFID Pallet...',
+                ? 'Quét Barcode hoặc nhập mã Pallet'
+                : 'Quét thẻ RFID Pallet',
             _currentScanMode == PdaScanMode.barcode ? Icons.qr_code_scanner : Icons.nfc,
           ),
           const SizedBox(height: 10),
@@ -919,7 +896,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                   controller: _palletInputCtrl,
                   style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                   decoration: InputDecoration(
-                    hintText: 'Quét Barcode hoặc nhập mã Pallet...',
+                    hintText: 'Nhập mã Pallet...',
                     hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                     prefixIcon: Icon(
                       _currentScanMode == PdaScanMode.barcode ? Icons.qr_code_scanner : Icons.nfc,
@@ -1084,7 +1061,9 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       children: [
         _buildScanPrompt(
           c,
-          'Bóp cò quét chip RFID hoặc nhập mã EPC...',
+          _currentScanMode == PdaScanMode.rfid
+              ? 'Quét chip RFID hoặc nhập EPC'
+              : 'Quét Barcode hoặc nhập mã',
           _currentScanMode == PdaScanMode.rfid ? Icons.nfc : Icons.qr_code_scanner,
         ),
         const SizedBox(height: 8),
@@ -1095,7 +1074,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                 controller: _manualInputCtrl,
                 style: TextStyle(color: c.textPrimary, fontSize: 13, fontFamily: 'monospace'),
                 decoration: InputDecoration(
-                  hintText: 'Quét thẻ RFID hoặc nhập mã EPC...',
+                  hintText: 'Nhập mã...',
                   hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                   prefixIcon: Icon(Icons.nfc, color: c.rfidCyan, size: 18),
                   filled: true,

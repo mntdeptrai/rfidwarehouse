@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../models/wms_models.dart';
 import '../../models/tag_info.dart';
 import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
@@ -8,12 +9,16 @@ import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
 
+/// Màn hình Cất Hàng Lên Kệ (Putaway) trên tay cầm PDA
+/// Tối ưu: Ít chữ, không chú thích rườm rà, chọn vị trí -> quét mã Pallet -> hoàn tất.
 class PdaPutawayScreen extends StatefulWidget {
   final String? initialLocationId;
+  final String? initialCartonOrPalletBarcode;
 
   const PdaPutawayScreen({
     super.key,
     this.initialLocationId,
+    this.initialCartonOrPalletBarcode,
   });
 
   @override
@@ -25,29 +30,60 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   final UhfService _uhf = UhfService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
-  String? _selectedLocationId;
   StreamSubscription<String>? _barcodeSub;
-  StreamSubscription<TagInfo>? _rfidSub;
+  StreamSubscription<TagInfo>? _tagSub;
+  StreamSubscription<bool>? _triggerSub;
 
-  final TextEditingController _cartonInputController = TextEditingController();
-  final FocusNode _cartonFocusNode = FocusNode();
-
+  String? _activePalletGroup;
+  String? _lockedLocationId;
+  _PutawayResult? _lastResult;
+  bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedLocationId = widget.initialLocationId ?? (_repo.locations.isNotEmpty ? _repo.locations.first.locationId : null);
     _eyeCare.addListener(_onStateChange);
+    _repo.addListener(_onStateChange);
+
+    if (widget.initialLocationId != null && widget.initialLocationId!.trim().isNotEmpty) {
+      _lockedLocationId = widget.initialLocationId!.trim();
+    }
+
+    if (widget.initialCartonOrPalletBarcode != null &&
+        widget.initialCartonOrPalletBarcode!.trim().isNotEmpty) {
+      _activePalletGroup = widget.initialCartonOrPalletBarcode!.trim();
+    } else {
+      final pending = _pendingGroups();
+      if (pending.isNotEmpty) {
+        _activePalletGroup = pending.keys.first;
+      }
+    }
+
     _uhf.setScanMode(PdaScanMode.barcode);
 
-    // Lắng nghe sự kiện bóp cò quét Barcode phần cứng PDA
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
-      _handleIncomingBarcode(barcode);
+      if (!mounted) return;
+      _handleScannedCode(barcode);
     });
 
-    // Lắng nghe thẻ RFID nếu nhân viên quét chip trên thùng
-    _rfidSub = _uhf.onTagRead.listen((tag) {
-      _handleIncomingRfid(tag.epc);
+    _tagSub = _uhf.onTagRead.listen((tag) {
+      if (!mounted) return;
+      _handleScannedCode(tag.epc);
+    });
+
+    _triggerSub = _uhf.onTriggerStateChanged.listen((isPressed) {
+      if (!mounted) return;
+      if (isPressed) {
+        if (_uhf.scanMode == PdaScanMode.barcode) {
+          _uhf.triggerBarcodeScan();
+        } else {
+          _uhf.startInventory();
+        }
+      } else {
+        if (_uhf.scanMode == PdaScanMode.rfid) {
+          _uhf.stopInventory();
+        }
+      }
     });
   }
 
@@ -57,155 +93,167 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   @override
   void dispose() {
+    _barcodeSub?.cancel();
+    _tagSub?.cancel();
+    _triggerSub?.cancel();
     _uhf.setScanMode(PdaScanMode.rfid);
     _eyeCare.removeListener(_onStateChange);
-    _barcodeSub?.cancel();
-    _rfidSub?.cancel();
-    _cartonInputController.dispose();
-    _cartonFocusNode.dispose();
+    _repo.removeListener(_onStateChange);
     super.dispose();
   }
 
-  void _handleIncomingBarcode(String rawBarcode) {
-    final clean = rawBarcode.trim();
+  List<Item> _pendingItems() {
+    return _repo.items.where((i) =>
+      i.status == ItemStatus.waitingPutaway ||
+      (i.status == ItemStatus.inStock &&
+       (i.locationId == null || i.locationId!.trim().isEmpty || i.locationId == 'LOC-GATE-IN') &&
+       (i.palletId != null && i.palletId!.trim().isNotEmpty))
+    ).toList();
+  }
+
+  Map<String, List<Item>> _pendingGroups() {
+    final groups = <String, List<Item>>{};
+    for (var it in _pendingItems()) {
+      final key = (it.palletId != null && it.palletId!.trim().isNotEmpty)
+          ? it.palletId!.trim()
+          : (it.orderNo ?? 'CHƯA_RÕ');
+      groups.putIfAbsent(key, () => []).add(it);
+    }
+    return groups;
+  }
+
+  Future<void> _handleScannedCode(String raw) async {
+    final clean = raw.trim().toUpperCase();
     if (clean.isEmpty) return;
 
     const ignoredCommands = {
-      'ACTION_SCAN',
-      'ACTION_STOP_SCAN',
-      'SCANNER_START',
-      'SCANNER_STOP',
-      'START_SCAN',
-      'STOP_SCAN',
-      'SCAN',
-      'KEY_CONTROL',
-      'KEY_CONTROL_DISABLED',
-      'TRUE',
-      'FALSE',
+      'ACTION_SCAN', 'ACTION_STOP_SCAN', 'SCANNER_START', 'SCANNER_STOP',
+      'START_SCAN', 'STOP_SCAN', 'SCAN', 'KEY_CONTROL',
+      'KEY_CONTROL_DISABLED', 'TRUE', 'FALSE',
     };
-    if (ignoredCommands.contains(clean.toUpperCase())) return;
+    if (ignoredCommands.contains(clean)) return;
 
-    // 1. Kiểm tra nếu mã quét được là mã vị trí kệ (Bắt đầu bằng LOC- hoặc khớp trong bảng locations)
-    final isLocationCode = clean.toUpperCase().startsWith('LOC-') ||
-        _repo.locations.any((l) => l.locationCode.toUpperCase() == clean.toUpperCase());
+    // 1. Kiểm tra mã vị trí kệ
+    final loc = _repo.locations.where((l) =>
+      l.locationCode.toUpperCase() == clean ||
+      l.locationId.toUpperCase() == clean ||
+      clean.startsWith('LOC-')
+    ).firstOrNull;
 
-    if (isLocationCode) {
-      final loc = _repo.locations.where((l) =>
-          l.locationCode.toUpperCase() == clean.toUpperCase() ||
-          l.locationId.toUpperCase() == clean.toUpperCase()).firstOrNull;
+    if (loc != null) {
+      HapticFeedback.mediumImpact();
+      setState(() => _lockedLocationId = loc.locationId);
 
-      if (loc != null) {
-        setState(() {
-          _selectedLocationId = loc.locationId;
-        });
-        HapticFeedback.mediumImpact();
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF0284C7),
-            duration: const Duration(seconds: 2),
-            content: Text('📍 ĐÃ KHÓA VỊ TRÍ KỆ: ${loc.locationCode} - ${loc.zone} • ${loc.shelf}'),
-          ),
-        );
-        return;
+      if (_activePalletGroup != null && !_isProcessing) {
+        await _doPutaway(_activePalletGroup!, loc.locationId);
       }
-    }
-
-    // 2. Nếu không phải là vị trí kệ -> Đó là Mã Barcode Thùng Hàng / Đơn hàng -> Thực hiện xếp kho ngay!
-    _cartonInputController.text = clean;
-    _processPutawayCarton(clean);
-  }
-
-  void _handleIncomingRfid(String epc) {
-    final clean = epc.trim().toUpperCase();
-    final pallet = _repo.findPalletByRfid(clean);
-    if (pallet != null) {
-      _processPutawayCarton(pallet.palletCode);
       return;
     }
-    final item = _repo.items.where((i) => i.epc.toUpperCase() == clean).firstOrNull;
-    if (item != null && item.orderNo != null && item.orderNo!.isNotEmpty) {
-      _processPutawayCarton(item.orderNo!);
+
+    // 2. Kiểm tra mã Pallet
+    final groups = _pendingGroups();
+    String? matchedPalletKey;
+    if (groups.containsKey(clean)) {
+      matchedPalletKey = clean;
+    } else if (groups.containsKey('PAL-$clean')) {
+      matchedPalletKey = 'PAL-$clean';
+    } else if (clean.startsWith('PAL-') && groups.containsKey(clean.replaceFirst('PAL-', ''))) {
+      matchedPalletKey = clean.replaceFirst('PAL-', '');
+    } else {
+      final pal = _repo.pallets.where((p) =>
+        p.palletId.toUpperCase() == clean ||
+        p.palletCode.toUpperCase() == clean ||
+        p.palletId.toUpperCase() == 'PAL-$clean' ||
+        (p.rfidEpc != null && p.rfidEpc!.toUpperCase() == clean)
+      ).firstOrNull;
+
+      if (pal != null) {
+        matchedPalletKey = pal.palletId;
+      } else {
+        final matchedItem = _repo.items.where((i) =>
+          i.cartonCode?.toUpperCase() == clean ||
+          i.epc.toUpperCase() == clean ||
+          i.serialNumber.toUpperCase() == clean ||
+          i.sku.toUpperCase() == clean
+        ).firstOrNull;
+
+        matchedPalletKey = matchedItem?.palletId ?? clean;
+      }
+    }
+
+    HapticFeedback.selectionClick();
+    setState(() => _activePalletGroup = matchedPalletKey);
+
+    if (_lockedLocationId != null && !_isProcessing) {
+      await _doPutaway(matchedPalletKey, _lockedLocationId!);
     }
   }
 
-  Future<void> _processPutawayCarton(String cartonBarcode) async {
-    final clean = cartonBarcode.trim();
-    if (clean.isEmpty) return;
+  Future<void> _doPutaway(String palletOrCarton, String locationId) async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
 
-    // Tự động lấy vị trí kệ nếu chưa chọn
-    if (_selectedLocationId == null || _selectedLocationId!.isEmpty) {
-      if (_repo.locations.isNotEmpty) {
+    try {
+      final loc = _repo.locations.where((l) => l.locationId == locationId || l.locationCode == locationId).firstOrNull;
+      final targetLocId = loc?.locationId ?? locationId;
+
+      final savedCount = await _repo.confirmPdaPutawayByCarton(
+        cartonOrOrderBarcode: palletOrCarton,
+        locationId: targetLocId,
+        performedBy: _repo.resolveUserFullName(null, defaultRole: 'handheld'),
+      );
+
+      if (savedCount > 0) {
+        HapticFeedback.heavyImpact();
+        final result = _PutawayResult(
+          palletCode: palletOrCarton,
+          locationCode: loc?.locationCode ?? locationId,
+          itemCount: savedCount,
+          success: true,
+        );
+
         setState(() {
-          _selectedLocationId = _repo.locations.first.locationId;
+          _lastResult = result;
+          final remaining = _pendingGroups();
+          remaining.remove(palletOrCarton);
+          remaining.remove('PAL-$palletOrCarton');
+          remaining.remove(palletOrCarton.replaceAll(RegExp(r'^PAL-', caseSensitive: false), ''));
+          _activePalletGroup = remaining.isNotEmpty ? remaining.keys.first : null;
         });
       } else {
+        HapticFeedback.vibrate();
         setState(() {
-          _selectedLocationId = 'LOC-A01-01';
+          _lastResult = _PutawayResult(
+            palletCode: palletOrCarton,
+            locationCode: loc?.locationCode ?? locationId,
+            itemCount: 0,
+            success: false,
+          );
         });
       }
-    }
-
-    final savedCount = await _repo.confirmPdaPutawayByCarton(
-      cartonOrOrderBarcode: clean,
-      locationId: _selectedLocationId!,
-      performedBy: _repo.resolveUserFullName(null, defaultRole: 'handheld'),
-    );
-
-    if (savedCount > 0) {
-      final loc = _repo.locations.where((l) => l.locationId == _selectedLocationId).firstOrNull;
-      final locName = loc != null ? loc.locationCode : _selectedLocationId!;
-
-      setState(() {
-        _cartonInputController.clear();
-      });
-
-      HapticFeedback.heavyImpact();
-
+    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 3),
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Color(0xFF2C251E), size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '✅ ĐÃ LƯU VÀO VỊ TRÍ $locName ($savedCount SP)!',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text('Lỗi: $e'),
+        ));
       }
-    } else {
-      HapticFeedback.vibrate();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFF59E0B),
-            duration: const Duration(seconds: 3),
-            content: Text('⚠️ Không tìm thấy thùng/đơn hàng có mã "$clean" để xếp kho.'),
-          ),
-        );
-      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
+    final groups = _pendingGroups();
+    final selectedLoc = _repo.locations.where((l) => l.locationId == _lockedLocationId).firstOrNull;
+    final activeItems = _activePalletGroup != null ? (groups[_activePalletGroup] ?? _repo.items.where((i) => i.palletId == _activePalletGroup || i.palletId == 'PAL-$_activePalletGroup').toList()) : <Item>[];
+    final bool canComplete = _lockedLocationId != null && _activePalletGroup != null && !_isProcessing;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
-      appBar: const HardwareStatusAppBar(
-        title: 'CẤT HÀNG LÊN KỆ',
-      ),
+      appBar: const HardwareStatusAppBar(title: 'CẤT HÀNG LÊN KỆ'),
       body: RefreshIndicator(
         color: c.rfidCyan,
         onRefresh: () async {
@@ -215,16 +263,48 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // BƯỚC 1: CHỌN / QUÉT VỊ TRÍ KỆ
-              _buildStep1LocationCard(c),
-              const SizedBox(height: 14),
+              if (_lastResult != null) ...[
+                _buildResultBanner(c, _lastResult!),
+                const SizedBox(height: 10),
+              ],
 
-              // BƯỚC 2: QUÉT BARCODE TRÊN THÙNG HÀNG
-              _buildStep2CartonBarcodeCard(c),
+              if (groups.isEmpty && _lastResult != null && _lastResult!.success) ...[
+                _buildAllDoneView(c),
+              ] else ...[
+                _buildLocationCard(c, selectedLoc),
+                const SizedBox(height: 10),
+
+                _buildPalletCard(c, groups, activeItems),
+                const SizedBox(height: 12),
+
+                // Nút quét phụ (nếu không bấm cò vật lý)
+                SizedBox(
+                  width: double.infinity,
+                  height: 42,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.rfidCyan,
+                      side: BorderSide(color: c.rfidCyan.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      backgroundColor: c.bgCardElevated,
+                    ),
+                    icon: const Icon(Icons.qr_code_scanner, size: 18),
+                    label: const Text(
+                      'QUÉT MÃ',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    onPressed: () => _uhf.triggerBarcodeScan(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Nút hoàn tất
+                _buildCompleteActionButton(c, canComplete, activeItems.length),
+              ],
             ],
           ),
         ),
@@ -232,329 +312,300 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     );
   }
 
-  Widget _buildStep1LocationCard(EyeCareColors c) {
-    final locations = _repo.locations;
+  Widget _buildResultBanner(EyeCareColors c, _PutawayResult result) {
+    final color = result.success ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final icon = result.success ? Icons.check_circle : Icons.error_outline;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: c.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _selectedLocationId != null ? c.successEmerald : c.rfidCyan,
-          width: 1.5,
-        ),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color, width: 1.2),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: c.rfidCyan,
-                  shape: BoxShape.circle,
-                ),
-                child: const Text('1', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'BƯỚC 1: CHỌN VỊ TRÍ KỆ ĐÍCH',
-                  style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (_selectedLocationId != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: c.successEmerald.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'ĐÃ CHỌN',
-                    style: TextStyle(color: c.successEmerald, fontSize: 9.5, fontWeight: FontWeight.bold),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Dropdown lấy từ bảng locations trên Database
-          DropdownButtonFormField<String>(
-            key: ValueKey(_selectedLocationId),
-            isExpanded: true,
-            initialValue: (locations.any((l) => l.locationId == _selectedLocationId))
-                ? _selectedLocationId
-                : (locations.isNotEmpty ? locations.first.locationId : null),
-            dropdownColor: c.bgCardElevated,
-            icon: Icon(Icons.arrow_drop_down_circle, color: c.rfidCyan),
-            style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: c.bgCardElevated,
-              labelText: 'Vị trí kệ kho',
-              labelStyle: TextStyle(color: c.rfidCyan, fontSize: 11),
-              prefixIcon: Icon(Icons.shelves, color: c.rfidCyan, size: 20),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: c.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: c.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: c.rfidCyan, width: 1.5),
-              ),
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              result.success
+                  ? 'Đã cất ${result.palletCode} ➔ Kệ ${result.locationCode} (${result.itemCount} SP)'
+                  : 'Không tìm thấy "${result.palletCode}"',
+              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12.5),
             ),
-            items: locations.map((loc) {
-              return DropdownMenuItem<String>(
-                value: loc.locationId,
-                child: Text(
-                  '${loc.locationCode} - ${loc.zone} • ${loc.shelf} - ${loc.level}',
-                  style: TextStyle(color: c.textPrimary, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
-            onChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  _selectedLocationId = val;
-                });
-                HapticFeedback.selectionClick();
-              }
-            },
           ),
-
-          // Hiển thị trạng thái kệ & 3 nút cập nhật nhanh (Đầy / Sắp hết / Trống nhiều)
-          Builder(builder: (_) {
-            final selectedLoc = locations.where((l) => l.locationId == _selectedLocationId).firstOrNull;
-            if (selectedLoc == null) return const SizedBox.shrink();
-
-            Color statusColor = const Color(0xFF10B981);
-            String statusLabel = 'CÒN TRỐNG NHIỀU';
-            if (selectedLoc.status == 'FULL') {
-              statusColor = const Color(0xFFEF4444);
-              statusLabel = 'KỆ ĐẦY (FULL)';
-            } else if (selectedLoc.status == 'NEAR_FULL') {
-              statusColor = const Color(0xFFF59E0B);
-              statusLabel = 'SẮP HẾT CHỖ';
-            }
-
-            return Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Trạng thái kệ: ',
-                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: statusColor),
-                            ),
-                            child: Text(
-                              statusLabel,
-                              style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        'Chạm nút dưới để đổi',
-                        style: TextStyle(color: c.textMuted, fontSize: 10),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildQuickStatusButton(
-                          label: 'KỆ ĐẦY',
-                          color: const Color(0xFFEF4444),
-                          isSelected: selectedLoc.status == 'FULL',
-                          onTap: () async {
-                            HapticFeedback.heavyImpact();
-                            await _repo.updateLocationStatus(selectedLoc.locationId, 'FULL');
-                            setState(() => selectedLoc.status = 'FULL');
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: _buildQuickStatusButton(
-                          label: 'SẮP HẾT',
-                          color: const Color(0xFFF59E0B),
-                          isSelected: selectedLoc.status == 'NEAR_FULL',
-                          onTap: () async {
-                            HapticFeedback.mediumImpact();
-                            await _repo.updateLocationStatus(selectedLoc.locationId, 'NEAR_FULL');
-                            setState(() => selectedLoc.status = 'NEAR_FULL');
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: _buildQuickStatusButton(
-                          label: 'TRỐNG NHIỀU',
-                          color: const Color(0xFF10B981),
-                          isSelected: selectedLoc.status == 'AVAILABLE',
-                          onTap: () async {
-                            HapticFeedback.lightImpact();
-                            await _repo.updateLocationStatus(selectedLoc.locationId, 'AVAILABLE');
-                            setState(() => selectedLoc.status = 'AVAILABLE');
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }),
+          InkWell(
+            onTap: () => setState(() => _lastResult = null),
+            child: Icon(Icons.close, color: c.textSecondary, size: 16),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickStatusButton({
-    required String label,
-    required Color color,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: isSelected ? color : color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color, width: isSelected ? 1.8 : 1),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? const Color(0xFF2C251E) : color,
-                fontWeight: FontWeight.bold,
-                fontSize: 10.5,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildLocationCard(EyeCareColors c, Location? selectedLoc) {
+    final hasLoc = selectedLoc != null;
 
-  Widget _buildStep2CartonBarcodeCard(EyeCareColors c) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: c.bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: c.rfidCyan.withValues(alpha: 0.6), width: 1.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasLoc ? const Color(0xFF10B981) : c.rfidCyan,
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: c.successEmerald,
-                  shape: BoxShape.circle,
-                ),
-                child: const Text('2', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+              Icon(
+                hasLoc ? Icons.check_circle_rounded : Icons.shelves,
+                color: hasLoc ? const Color(0xFF10B981) : c.rfidCyan,
+                size: 18,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'BƯỚC 2: QUÉT MÃ THÙNG HÀNG',
-                  style: TextStyle(color: c.successEmerald, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.3),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  hasLoc ? 'KỆ: ${selectedLoc.locationCode}' : 'VỊ TRÍ KỆ',
+                  style: TextStyle(
+                    color: hasLoc ? const Color(0xFF10B981) : c.rfidCyan,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
+              if (hasLoc)
+                InkWell(
+                  onTap: () => setState(() => _lockedLocationId = null),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text('Đổi', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
             decoration: BoxDecoration(
               color: c.bgCardElevated,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: c.border),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: hasLoc ? const Color(0xFF10B981).withValues(alpha: 0.4) : c.border),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.qr_code_scanner, color: c.successEmerald, size: 28),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'SẴN SÀNG QUÉT (BARCODE / RFID)',
-                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: c.successEmerald,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: () => _uhf.triggerBarcodeScan(),
-                  child: const Text(
-                    'BẬT QUÉT',
-                    style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _cartonInputController,
-            focusNode: _cartonFocusNode,
-            style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              hintText: 'Quét hoặc nhập mã Barcode ngoài thùng...',
-              hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
-              filled: true,
-              fillColor: c.bgCardElevated,
-              prefixIcon: Icon(Icons.inventory_2, color: c.rfidCyan, size: 18),
-              suffixIcon: IconButton(
-                icon: Icon(Icons.send_rounded, color: c.successEmerald),
-                onPressed: () => _processPutawayCarton(_cartonInputController.text),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                dropdownColor: c.bgCardElevated,
+                value: _lockedLocationId,
+                icon: Icon(Icons.arrow_drop_down, color: hasLoc ? const Color(0xFF10B981) : c.rfidCyan),
+                hint: Text('Chọn vị trí kệ...', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                items: _repo.locations.map((loc) {
+                  return DropdownMenuItem(
+                    value: loc.locationId,
+                    child: Text(
+                      '${loc.locationCode} • ${loc.zone} - ${loc.shelf}',
+                      style: TextStyle(color: c.textPrimary, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _lockedLocationId = val);
+                    HapticFeedback.selectionClick();
+                  }
+                },
               ),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border)),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.rfidCyan, width: 1.5)),
             ),
-            onSubmitted: (val) => _processPutawayCarton(val),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildPalletCard(EyeCareColors c, Map<String, List<Item>> groups, List<Item> activeItems) {
+    final hasPallet = _activePalletGroup != null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: hasPallet ? const Color(0xFFF59E0B) : c.border,
+          width: hasPallet ? 1.2 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.inventory_2_outlined, color: Color(0xFFF59E0B), size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  hasPallet ? 'PALLET: $_activePalletGroup (${activeItems.length} SP)' : 'PALLET',
+                  style: const TextStyle(
+                    color: Color(0xFFF59E0B),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              if (hasPallet && groups.length > 1)
+                InkWell(
+                  onTap: () => setState(() => _activePalletGroup = null),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text('Đổi', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ],
+          ),
+          if (groups.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+              decoration: BoxDecoration(
+                color: c.bgCardElevated,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: hasPallet ? const Color(0xFFF59E0B).withValues(alpha: 0.4) : c.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  dropdownColor: c.bgCardElevated,
+                  value: groups.containsKey(_activePalletGroup) ? _activePalletGroup : null,
+                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFF59E0B)),
+                  hint: Text('Chọn Pallet (${groups.length})...', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                  style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                  items: groups.entries.map((entry) {
+                    return DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(
+                        '${entry.key} • ${entry.value.length} SP',
+                        style: TextStyle(color: c.textPrimary, fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _activePalletGroup = val);
+                      HapticFeedback.selectionClick();
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompleteActionButton(EyeCareColors c, bool canComplete, int itemCount) {
+    String label = 'HOÀN TẤT CẤT KỆ';
+    Color color = const Color(0xFF10B981);
+
+    if (_isProcessing) {
+      label = 'ĐANG LƯU...';
+      color = c.border;
+    } else if (_lockedLocationId == null) {
+      label = 'CHƯA CHỌN KỆ';
+      color = c.border;
+    } else if (_activePalletGroup == null) {
+      label = 'CHƯA CHỌN PALLET';
+      color = c.border;
+    } else {
+      label = 'HOÀN TẤT CẤT KỆ ($itemCount SP)';
+    }
+
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: c.border.withValues(alpha: 0.4),
+          disabledForegroundColor: c.textMuted,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          elevation: canComplete ? 2 : 0,
+        ),
+        onPressed: canComplete ? () => _doPutaway(_activePalletGroup!, _lockedLocationId!) : null,
+        child: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAllDoneView(EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF10B981), width: 1.2),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.done_all_rounded, color: Color(0xFF10B981), size: 40),
+          const SizedBox(height: 12),
+          const Text(
+            'HOÀN TẤT CẤT KỆ',
+            style: TextStyle(
+              color: Color(0xFF10B981),
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Đã xếp hết hàng vào kho.',
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.rfidCyan,
+                foregroundColor: const Color(0xFF2C251E),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('QUAY LẠI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PutawayResult {
+  final String palletCode;
+  final String locationCode;
+  final int itemCount;
+  final bool success;
+
+  _PutawayResult({
+    required this.palletCode,
+    required this.locationCode,
+    required this.itemCount,
+    required this.success,
+  });
 }

@@ -440,12 +440,32 @@ class SupabaseSyncService extends ChangeNotifier {
               'message': jsonEncode(payload),
             });
           } else {
-            await supa.from(targetTable).upsert(normalized);
+            try {
+              await supa.from(targetTable).upsert(normalized);
+            } on PostgrestException {
+              if (normalized.containsKey('pallet_name')) {
+                normalized.remove('pallet_name');
+                await supa.from(targetTable).upsert(normalized);
+              } else {
+                rethrow;
+              }
+            }
           }
         } else if (action == 'UPDATE') {
           final pkCol = _getPrimaryKeyColumn(targetTable);
           try {
             await supa.from(targetTable).update(normalized).eq(pkCol, recordId);
+          } on PostgrestException {
+            if (normalized.containsKey('pallet_name')) {
+              normalized.remove('pallet_name');
+              try {
+                await supa.from(targetTable).update(normalized).eq(pkCol, recordId);
+              } catch (_) {
+                await supa.from(targetTable).upsert(normalized);
+              }
+            } else {
+              await supa.from(targetTable).upsert(normalized);
+            }
           } catch (_) {
             await supa.from(targetTable).upsert(normalized);
           }
@@ -456,6 +476,19 @@ class SupabaseSyncService extends ChangeNotifier {
             await supa.from(targetTable).delete().or(
               '$pkCol.eq.$recordId,$pkCol.eq.$altId,location_code.eq.$recordId,location_code.eq.$altId',
             );
+          } else if (targetTable == 'pallets') {
+            final pCode = payload['pallet_code']?.toString().trim() ?? '';
+            final altId = recordId.startsWith('PAL-') ? recordId.substring(4) : 'PAL-$recordId';
+            final filterParts = <String>[
+              '$pkCol.eq.$recordId',
+              '$pkCol.eq.$altId',
+            ];
+            if (pCode.isNotEmpty) {
+              filterParts.add('pallet_code.eq.$pCode');
+              filterParts.add('$pkCol.eq.$pCode');
+              filterParts.add('$pkCol.eq.PAL-$pCode');
+            }
+            await supa.from(targetTable).delete().or(filterParts.join(','));
           } else {
             await supa.from(targetTable).delete().eq(pkCol, recordId);
           }
@@ -523,11 +556,44 @@ class SupabaseSyncService extends ChangeNotifier {
 
           try {
             if (action == 'INSERT' || action.contains('CONFIRM')) {
-              await supa.from(tableName).upsert(payload);
+              try {
+                await supa.from(tableName).upsert(payload);
+              } on PostgrestException {
+                if (payload.containsKey('pallet_name')) {
+                  payload.remove('pallet_name');
+                  await supa.from(tableName).upsert(payload);
+                } else {
+                  rethrow;
+                }
+              }
             } else if (action == 'UPDATE') {
-              await supa.from(tableName).update(payload).eq(pkCol, recordId);
+              try {
+                await supa.from(tableName).update(payload).eq(pkCol, recordId);
+              } on PostgrestException {
+                if (payload.containsKey('pallet_name')) {
+                  payload.remove('pallet_name');
+                  await supa.from(tableName).update(payload).eq(pkCol, recordId);
+                } else {
+                  rethrow;
+                }
+              }
             } else if (action == 'DELETE') {
-              await supa.from(tableName).delete().eq(pkCol, recordId);
+              if (tableName == 'pallets') {
+                final pCode = payload['pallet_code']?.toString().trim() ?? '';
+                final altId = recordId.startsWith('PAL-') ? recordId.substring(4) : 'PAL-$recordId';
+                final filterParts = <String>[
+                  '$pkCol.eq.$recordId',
+                  '$pkCol.eq.$altId',
+                ];
+                if (pCode.isNotEmpty) {
+                  filterParts.add('pallet_code.eq.$pCode');
+                  filterParts.add('$pkCol.eq.$pCode');
+                  filterParts.add('$pkCol.eq.PAL-$pCode');
+                }
+                await supa.from(tableName).delete().or(filterParts.join(','));
+              } else {
+                await supa.from(tableName).delete().eq(pkCol, recordId);
+              }
             }
             _offlineQueue.remove(item);
           } catch (e) {

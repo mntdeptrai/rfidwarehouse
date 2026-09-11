@@ -96,36 +96,7 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
 
     await _repo.updateLocationStatus(loc.locationId, newStatus);
 
-    if (!mounted) return;
-    String statusName = 'CÒN TRỐNG NHIỀU';
-    Color snackColor = const Color(0xFF10B981);
-    if (newStatus == 'FULL') {
-      statusName = 'KỆ ĐẦY (FULL)';
-      snackColor = const Color(0xFFEF4444);
-    } else if (newStatus == 'NEAR_FULL') {
-      statusName = 'SẮP HẾT CHỖ';
-      snackColor = const Color(0xFFF59E0B);
-    }
 
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: snackColor,
-        duration: const Duration(seconds: 2),
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_rounded, color: Color(0xFF2C251E), size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Đã cập nhật ${loc.displayName} -> $statusName',
-                style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -164,18 +135,9 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CẬP NHẬT TRẠNG THÁI KỆ',
-              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            Text(
-              'Quét mã Barcode kệ hoặc chọn bên dưới',
-              style: TextStyle(color: c.textMuted, fontSize: 11),
-            ),
-          ],
+        title: Text(
+          'TRẠNG THÁI KỆ',
+          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
       body: SafeArea(
@@ -199,8 +161,8 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Hãy quét mã vạch trên kệ bằng máy PDA hoặc chọn từ danh sách bên dưới.',
-                        style: TextStyle(color: c.textSecondary, fontSize: 12),
+                        'Chưa chọn kệ',
+                        style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -219,7 +181,7 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
                         controller: _searchCtrl,
                         style: TextStyle(color: c.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Tìm theo mã kệ, tầng, khu...',
+                          hintText: 'Tìm kiếm...',
                           hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
                           prefixIcon: Icon(Icons.search, size: 18, color: c.textMuted),
                           filled: true,
@@ -289,13 +251,13 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
 
   Widget _buildSelectedShelfPanel(Location loc, EyeCareColors c) {
     Color statusColor = const Color(0xFF10B981);
-    String statusLabel = 'CÒN TRỐNG NHIỀU';
+    String statusLabel = 'TRỐNG';
     if (loc.status == 'FULL') {
       statusColor = const Color(0xFFEF4444);
-      statusLabel = 'KỆ ĐẦY (FULL)';
+      statusLabel = 'ĐẦY';
     } else if (loc.status == 'NEAR_FULL') {
       statusColor = const Color(0xFFF59E0B);
-      statusLabel = 'SẮP HẾT CHỖ';
+      statusLabel = 'SẮP HẾT';
     }
 
     final itemCount = _repo.items.where((i) {
@@ -364,25 +326,19 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            itemCount > 0 ? '📦 Đang chứa $itemCount chip RFID' : '📦 Kệ hiện đang trống',
+            itemCount > 0 ? '$itemCount chip RFID' : 'Kệ trống',
             style: TextStyle(color: c.textMuted, fontSize: 11.5),
           ),
           const SizedBox(height: 12),
           const Divider(height: 1),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          Text(
-            'CHỌN TRẠNG THÁI MỚI CHO KỆ NÀY:',
-            style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-          ),
-          const SizedBox(height: 8),
-
-          // 3 Nút Bấm Lớn: ĐẦY / SẮP HẾT CHỖ / CÒN TRỐNG NHIỀU
+          // 3 Nút Bấm Lớn: ĐẦY / SẮP HẾT / CÒN CHỖ
           Row(
             children: [
               Expanded(
                 child: _buildStatusUpdateButton(
-                  label: 'KỆ ĐẦY',
+                  label: 'ĐẦY',
                   statusValue: 'FULL',
                   color: const Color(0xFFEF4444),
                   icon: Icons.error_outline_rounded,
@@ -404,7 +360,7 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: _buildStatusUpdateButton(
-                  label: 'TRỐNG NHIỀU',
+                  label: 'CÒN CHỖ',
                   statusValue: 'AVAILABLE',
                   color: const Color(0xFF10B981),
                   icon: Icons.check_circle_outline_rounded,

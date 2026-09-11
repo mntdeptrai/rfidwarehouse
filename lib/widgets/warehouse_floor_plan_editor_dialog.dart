@@ -67,18 +67,6 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
       await _repo.saveWarehouseLayoutConfig(updatedConfig);
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Color(0xFF10B981),
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('Đã lưu thành công sơ đồ mặt bằng kho của khách hàng!'),
-              ],
-            ),
-          ),
-        );
       }
     } catch (e) {
       if (mounted) {

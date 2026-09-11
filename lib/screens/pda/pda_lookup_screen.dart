@@ -89,21 +89,6 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
     HapticFeedback.mediumImpact();
     _serialController.text = clean;
     _performLookup(clean);
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF10B981),
-        duration: const Duration(seconds: 2),
-        content: Row(
-          children: [
-            Icon(source == 'RFID' ? Icons.nfc : Icons.qr_code_scanner, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text('Đã nhận mã [$source]: $clean')),
-          ],
-        ),
-      ),
-    );
   }
 
   void _startHardwareScan() {
@@ -129,16 +114,6 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
     setState(() {
       _currentScanMode = newMode;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: newMode == PdaScanMode.rfid ? const Color(0xFF00E5FF) : const Color(0xFF10B981),
-        duration: const Duration(milliseconds: 1500),
-        content: Text(
-          newMode == PdaScanMode.rfid ? 'Chế độ: Đọc chip RFID UHF' : 'Chế độ: Quét mã vạch Laser Barcode',
-          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
   }
 
   @override
@@ -406,7 +381,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
                                 _auth.currentUser?.username ??
                                 _repo.resolveUserFullName(null, defaultRole: 'handheld');
 
-                            final ok = await _repo.moveItemIndividual(
+                            await _repo.moveItemIndividual(
                               epc: item.epc,
                               newLocationId: selectedLocId,
                               newPalletId: selectedPalletId,
@@ -416,12 +391,6 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (!mounted) return;
                             _performLookup(_serialController.text);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: const Color(0xFF10B981),
-                                content: Text(ok ? '✓ Đã chuyển sản phẩm ${item.productName} thành công!' : 'Có lỗi khi chuyển sản phẩm'),
-                              ),
-                            );
                           },
                     child: isProcessing
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -534,18 +503,21 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.touch_app, size: 15, color: c.rfidCyan),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Bóp cò tay cầm để quét • Đang ở chế độ: ${_currentScanMode == PdaScanMode.rfid ? "RFID UHF" : "Laser Barcode"}',
-                      style: TextStyle(color: c.textSecondary, fontSize: 11),
-                    ),
+                  Icon(
+                    _currentScanMode == PdaScanMode.rfid ? Icons.nfc : Icons.qr_code_scanner,
+                    size: 16,
+                    color: c.rfidCyan,
                   ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _currentScanMode == PdaScanMode.rfid ? 'RFID UHF' : 'BARCODE',
+                    style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
                   InkWell(
                     onTap: _toggleScanMode,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: c.rfidCyan.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
@@ -581,14 +553,8 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
               Icon(Icons.radar_outlined, size: 56, color: c.textMuted.withValues(alpha: 0.4)),
               const SizedBox(height: 12),
               Text(
-                'Quét mã thẻ RFID / Barcode\nhoặc nhập từ khóa để tra cứu',
-                style: TextStyle(color: c.textMuted, fontSize: 13, height: 1.4),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Hỗ trợ tra cứu theo S/N, Product ID, SKU, Tên SP, Thùng hàng, Kệ kho, Pallet',
-                style: TextStyle(color: c.textSecondary, fontSize: 11),
+                'Quét mã hoặc nhập để tra cứu',
+                style: TextStyle(color: c.textMuted, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -613,14 +579,8 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
                 Icon(Icons.search_off, size: 44, color: c.errorCoral),
                 const SizedBox(height: 10),
                 Text(
-                  'Không tìm thấy kết quả cho "${_serialController.text}"',
+                  'Không tìm thấy "${_serialController.text}"',
                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Mã này chưa có trong CSDL hoặc chưa được nhập kho.',
-                  style: TextStyle(color: c.textMuted, fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -649,21 +609,9 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
         if (_matchedItems.isNotEmpty) ...[
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'KẾT QUẢ SẢN PHẨM KHỚP (${_matchedItems.length}):',
-                    style: TextStyle(color: c.rfidCyan, fontSize: 11.5, fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text(
-                  'Bấm vào để đổi kệ',
-                  style: TextStyle(color: c.textMuted, fontSize: 11),
-                ),
-              ],
+            child: Text(
+              'SẢN PHẨM KHỚP (${_matchedItems.length})',
+              style: TextStyle(color: c.rfidCyan, fontSize: 11.5, fontWeight: FontWeight.bold),
             ),
           ),
           ..._matchedItems.map((it) => _buildItemResultCard(it, c)),

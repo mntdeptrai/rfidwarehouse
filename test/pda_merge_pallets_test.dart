@@ -105,7 +105,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('GỘP 2 PALLET (PDA)'), findsOneWidget);
-      expect(find.textContaining('BƯỚC 1/2: Bóp cò súng PDA'), findsOneWidget);
+      expect(find.textContaining('Quét Pallet Nguồn'), findsOneWidget);
       expect(find.textContaining('1. PALLET NGUỒN (A)'), findsOneWidget);
       expect(find.textContaining('2. PALLET ĐÍCH (B)'), findsOneWidget);
       expect(find.text('TỰ ĐỘNG GỘP PALLET:'), findsOneWidget);
@@ -164,7 +164,7 @@ void main() {
       await tester.pump();
 
       // Kiểm tra pallet nguồn đã được chọn trên UI
-      expect(find.textContaining('BƯỚC 2/2'), findsOneWidget);
+      expect(find.textContaining('Quét Pallet Đích'), findsOneWidget);
 
       // 2. Quét Pallet Đích -> Tự động kích hoạt gộp ngay lập tức mà không cần thao tác bấm nút
       await tester.runAsync(() async {
@@ -230,14 +230,14 @@ void main() {
       await tester.pump();
 
       // Ban đầu mặc định slot nguồn được chọn
-      expect(find.text('CHỜ Ô 1 (NGUỒN)'), findsOneWidget);
+      expect(find.text('NGUỒN (A)'), findsOneWidget);
 
       // Chạm vào mục 2 (Pallet Đích) để chọn quét mục này
       await tester.tap(find.textContaining('2. PALLET ĐÍCH (B)'));
       await tester.pump();
 
       // Lúc này slot đích được chọn
-      expect(find.text('CHỜ Ô 2 (ĐÍCH)'), findsOneWidget);
+      expect(find.text('ĐÍCH (B)'), findsOneWidget);
 
       final state = tester.state<PdaMergePalletsScreenState>(find.byType(PdaMergePalletsScreen));
 
@@ -248,7 +248,7 @@ void main() {
       await tester.pump();
 
       // Đã tự động điền vào ô Đích và chuyển sang chờ ô Nguồn
-      expect(find.text('CHỜ Ô 1 (NGUỒN)'), findsOneWidget);
+      expect(find.text('NGUỒN (A)'), findsOneWidget);
 
       // Quét pallet nguồn -> tự động gộp ngay lập tức
       await tester.runAsync(() async {

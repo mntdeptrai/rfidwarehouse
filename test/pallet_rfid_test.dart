@@ -237,6 +237,58 @@ void main() {
       await repo.deleteLocation('C-05-01');
       expect(repo.locations.where((l) => l.locationCode == 'C-05-01').isEmpty, isTrue);
     });
+
+    test('Pallet edit with custom palletName persists and updates displayName correctly', () async {
+      await repo.registerOrUpdatePallet(
+        palletCode: '945321582',
+        palletName: '945321582',
+        rfidEpc: 'E28000000000000000000001',
+      );
+
+      final pBefore = repo.pallets.firstWhere((p) => p.palletCode == '945321582');
+      expect(pBefore.displayName, equals('945321582'));
+
+      // User edits the pallet: sets custom name 'Xe Pallet So 1'
+      await repo.registerOrUpdatePallet(
+        palletCode: '945321582',
+        palletName: 'Xe Pallet So 1',
+        rfidEpc: 'E28000000000000000000001',
+        oldPalletCode: '945321582',
+        oldPalletId: pBefore.palletId,
+      );
+
+      final pAfter = repo.pallets.firstWhere((p) => p.palletCode == '945321582');
+      expect(pAfter.palletName, equals('Xe Pallet So 1'));
+      expect(pAfter.displayName, equals('Xe Pallet So 1'));
+
+      // Simulate reload
+      await repo.reloadFromSqlite();
+      final pReloaded = repo.pallets.firstWhere((p) => p.palletCode == '945321582');
+      expect(pReloaded.palletName, equals('Xe Pallet So 1'));
+      expect(pReloaded.displayName, equals('Xe Pallet So 1'));
+    });
+
+    test('deletePalletFromMaster with multiple pallets deletes exactly 1 pallet, not 2', () async {
+      // Setup 3 pallets
+      await repo.registerOrUpdatePallet(palletCode: '945321582', palletName: 'Pallet 1', rfidEpc: 'E28000000000000000000001');
+      await repo.registerOrUpdatePallet(palletCode: '945321579', palletName: 'Pallet 2', rfidEpc: 'E28000000000000000000002');
+      await repo.registerOrUpdatePallet(palletCode: '945321988', palletName: 'Pallet 3', rfidEpc: 'E28000000000000000000003');
+
+      expect(repo.pallets.any((p) => p.palletCode == '945321582'), isTrue);
+      expect(repo.pallets.any((p) => p.palletCode == '945321579'), isTrue);
+      expect(repo.pallets.any((p) => p.palletCode == '945321988'), isTrue);
+      final countBefore = repo.pallets.length;
+
+      // Delete only pallet 945321579
+      final pToDelete = repo.pallets.firstWhere((p) => p.palletCode == '945321579');
+      await repo.deletePalletFromMaster(pToDelete.palletCode, palletId: pToDelete.palletId);
+
+      // Only 1 should be removed, exactly 2 remain
+      expect(repo.pallets.length, equals(countBefore - 1));
+      expect(repo.pallets.any((p) => p.palletCode == '945321579'), isFalse);
+      expect(repo.pallets.any((p) => p.palletCode == '945321582'), isTrue);
+      expect(repo.pallets.any((p) => p.palletCode == '945321988'), isTrue);
+    });
   });
 }
 

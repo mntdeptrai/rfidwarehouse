@@ -113,13 +113,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                       'Chưa có phiếu kiểm kê nào',
                       style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
                     ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Bấm nút bên dưới để bắt đầu phiên kiểm kê kho mới bằng đầu đọc RFID cầm tay.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12.5),
-                    ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       height: 48,
@@ -130,7 +124,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                         ),
                         icon: const Icon(Icons.add, color: Colors.white),
                         label: const Text(
-                          'TẠO PHIẾU KIỂM KÊ MỚI',
+                          'TẠO PHIẾU KIỂM KÊ',
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         onPressed: _showCreateInventoryWorkflowDialog,
@@ -303,7 +297,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   ),
                   icon: const Icon(Icons.add, color: Colors.white, size: 20),
                   label: const Text(
-                    '+ TẠO PHIẾU KIỂM KÊ MỚI',
+                    'TẠO PHIẾU KIỂM KÊ',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   onPressed: _showCreateInventoryWorkflowDialog,
@@ -340,7 +334,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
-                    'Chọn Hình Thức Kiểm Kê',
+                    'Hình Thức Kiểm Kê',
                     style: TextStyle(
                       color: Color(0xFF2C251E),
                       fontWeight: FontWeight.bold,
@@ -356,24 +350,24 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _buildInventoryTypeCard(
-                    title: '1. Theo từng Vị trí / Kệ kho (Sơ đồ kho)',
-                    subtitle: 'Đối soát chi tiết hàng tồn trên CSDL tại kệ cụ thể vs thực tế quét',
+                    title: 'Theo Vị Trí / Kệ Kho',
+                    subtitle: 'Kiểm kê từng vị trí kệ cụ thể',
                     icon: Icons.grid_view_rounded,
                     isSelected: selectedType == 'by_location',
                     onTap: () => setDialogState(() => selectedType = 'by_location'),
                   ),
                   const SizedBox(height: 10),
                   _buildInventoryTypeCard(
-                    title: '2. Theo Phân Khu / Khu vực (Zone)',
-                    subtitle: 'Kiểm kê toàn bộ các kệ thuộc 1 phân khu (Khu A, Khu B...)',
+                    title: 'Theo Phân Khu (Zone)',
+                    subtitle: 'Kiểm kê các kệ trong phân khu',
                     icon: Icons.warehouse_rounded,
                     isSelected: selectedType == 'by_zone',
                     onTap: () => setDialogState(() => selectedType = 'by_zone'),
                   ),
                   const SizedBox(height: 10),
                   _buildInventoryTypeCard(
-                    title: '3. Kiểm kê toàn bộ kho hàng',
-                    subtitle: 'Quét đối soát toàn bộ hàng hóa và mọi vị trí trong kho',
+                    title: 'Toàn Bộ Kho Hàng',
+                    subtitle: 'Kiểm kê toàn bộ hàng hóa trong kho',
                     icon: Icons.storefront_outlined,
                     isSelected: selectedType == 'all',
                     onTap: () => setDialogState(() => selectedType = 'all'),

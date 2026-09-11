@@ -95,6 +95,27 @@ class _OutboundScreenState extends State<OutboundScreen> {
     }
   }
 
+  DateTime? _lastTriggerPressTime;
+
+  bool _handleHardwareKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      final key = event.logicalKey;
+      final isScanKey = key == LogicalKeyboardKey.f1 ||
+          key == LogicalKeyboardKey.f2 ||
+          key == LogicalKeyboardKey.f3 ||
+          key == LogicalKeyboardKey.f4 ||
+          key == LogicalKeyboardKey.f5 ||
+          key == LogicalKeyboardKey.f6 ||
+          key == LogicalKeyboardKey.audioVolumeUp ||
+          key == LogicalKeyboardKey.audioVolumeDown;
+      if (isScanKey && _wizardStep == 2) {
+        _toggleScan();
+        return true;
+      }
+    }
+    return false;
+  }
+
   void _initHardwareListeners() {
     _tagSubscription = _uhf.onTagRead.listen((tag) {
       if (!mounted) return;
@@ -103,12 +124,24 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
     _triggerSubscription = _uhf.onTriggerStateChanged.listen((isPressed) {
       if (!mounted) return;
-      if (isPressed && !_isScanning) {
-        _startScan();
-      } else if (!isPressed && _isScanning) {
-        _stopScan();
+      if (isPressed) {
+        _lastTriggerPressTime = DateTime.now();
+        if (_isScanning) {
+          _stopScan();
+        } else {
+          _startScan();
+        }
+      } else {
+        final pressDurationMs = _lastTriggerPressTime != null
+            ? DateTime.now().difference(_lastTriggerPressTime!).inMilliseconds
+            : 0;
+        if (pressDurationMs >= 600 && _isScanning) {
+          _stopScan();
+        }
       }
     });
+
+    HardwareKeyboard.instance.addHandler(_handleHardwareKeyEvent);
   }
 
   void _scheduleUiRefresh() {
@@ -143,6 +176,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
     _uiRefreshTimer?.cancel();
     _tagSubscription?.cancel();
     _triggerSubscription?.cancel();
@@ -427,14 +461,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
         fileName: file.name,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            content: Text('Đã nạp file và gợi ý ${_suggestedFifoItems.length} sản phẩm theo FIFO (Nhập trước - Xuất trước)!'),
-          ),
-        );
-      }
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -460,9 +487,6 @@ class _OutboundScreenState extends State<OutboundScreen> {
     if (_isImporting) return;
     setState(() => _isImporting = true);
     try {
-      final messenger = ScaffoldMessenger.of(context);
-      final hadLoadedData = _suggestedFifoItems.isNotEmpty || _selectedEpcs.isNotEmpty;
-
       _uhf.stopInventory();
       _isScanning = false;
 
@@ -475,24 +499,12 @@ class _OutboundScreenState extends State<OutboundScreen> {
       _loadedFileName = null;
       _wizardStep = 1;
 
-      // Đồng bộ lại CSDL
-      await _supabaseSync.syncNow();
-      await _repo.reloadFromSqlite();
-
       if (mounted) {
         setState(() {});
-        messenger.showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 2),
-            content: Text(
-              hadLoadedData
-                  ? 'Đã xóa dữ liệu file đã nạp. Bạn có thể chọn nạp file mới!'
-                  : 'Đã làm mới và đồng bộ dữ liệu kho thành công!',
-            ),
-          ),
-        );
       }
+
+      // Đồng bộ ngầm không chặn UI
+      _supabaseSync.syncNow();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

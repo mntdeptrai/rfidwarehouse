@@ -434,18 +434,6 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                 if (success) {
                   if (context.mounted) {
                     Navigator.pop(dialogCtx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: c.successEmerald,
-                        content: Row(
-                          children: [
-                            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
-                            const SizedBox(width: 8),
-                            Text('Cấp tài khoản "$username" thành công!'),
-                          ],
-                        ),
-                      ),
-                    );
                   }
                 } else {
                   setDialogState(() => localError = _auth.authError ?? 'Không thể tạo tài khoản.');
@@ -523,12 +511,6 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                 final success = await _auth.adminResetPassword(user.userId, newPass);
                 if (success && context.mounted) {
                   Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: c.successEmerald,
-                      content: Text('Đã cập nhật mật khẩu mới cho tài khoản @${user.username}!'),
-                    ),
-                  );
                 } else {
                   setDialogState(() => localError = _auth.authError ?? 'Lỗi đặt lại mật khẩu.');
                 }
@@ -661,9 +643,6 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                 await _auth.adminUpdateUser(updated);
                 if (context.mounted) {
                   Navigator.pop(dialogCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(backgroundColor: c.successEmerald, content: Text('Đã cập nhật thông tin tài khoản @${user.username}!')),
-                  );
                 }
               },
               child: const Text('LƯU THAY ĐỔI', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -712,9 +691,7 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
       final success = await _auth.adminDeleteUser(user.userId);
       if (context.mounted) {
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: c.successEmerald, content: Text('Đã xóa tài khoản @${user.username}!')),
-          );
+          // Success
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(backgroundColor: c.errorCoral, content: Text(_auth.authError ?? 'Lỗi khi xóa tài khoản!')),
@@ -813,21 +790,7 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                   label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   onPressed: () async {
                     await _repo.reloadFromSqlite();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: const Color(0xFF10B981),
-                          content: const Row(
-                            children: [
-                              Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                              SizedBox(width: 8),
-                              Text('Đã làm mới dữ liệu thực tế từ CSDL SQLite.'),
-                            ],
-                          ),
-                          duration: const Duration(seconds: 1),
-                        ),
-                      );
-                    }
+                    if (context.mounted) setState(() {});
                   },
                 ),
                 const SizedBox(width: 10),

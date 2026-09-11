@@ -148,6 +148,7 @@ class Item {
 class Pallet {
   final String palletId;
   String palletCode;
+  String? palletName;
   String? rfidEpc;
   String? locationId;
   DateTime? inboundTime;
@@ -158,6 +159,7 @@ class Pallet {
   Pallet({
     required this.palletId,
     required this.palletCode,
+    this.palletName,
     this.rfidEpc,
     this.locationId,
     this.inboundTime,
@@ -165,6 +167,9 @@ class Pallet {
     List<String>? itemIds,
     this.placedBy,
   }) : itemIds = itemIds ?? [];
+
+  /// Tên hiển thị ưu tiên tên pallet, nếu chưa đặt tên thì dùng mã barcode palletCode
+  String get displayName => (palletName != null && palletName!.trim().isNotEmpty) ? palletName!.trim() : palletCode;
 }
 
 /// Dòng gợi ý lấy hàng theo FIFO

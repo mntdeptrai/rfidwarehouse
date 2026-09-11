@@ -5,6 +5,8 @@ import 'desktop_inventory_view.dart';
 import 'desktop_lookup_view.dart';
 import 'desktop_uhf_studio_view.dart';
 import 'desktop_user_management_view.dart';
+import 'desktop_warehouse_management_view.dart';
+import 'desktop_connection_config_view.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
 import '../../services/auth_service.dart';
@@ -23,12 +25,14 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   final AuthService _auth = AuthService();
 
   List<Widget> _buildViews() => [
-    DesktopGoodsReceiveView(isActive: _selectedMenuIndex == 0), // 0: Goods Receive
-    DesktopGoodsDeliveryView(isActive: _selectedMenuIndex == 1), // 1: Goods Delivery
-    const DesktopInventoryView(), // 2: Inventory
-    const DesktopLookupView(), // 3: Lookup
-    const DesktopUhfStudioView(), // 4: UHF Reader Studio (Hopeland SDK & Fixed Reader)
-    const DesktopUserManagementView(), // 5: User Management (Admin Account Provisioning)
+    DesktopGoodsReceiveView(key: const ValueKey('desktop_goods_receive'), isActive: _selectedMenuIndex == 0), // 0: Goods Receive
+    DesktopGoodsDeliveryView(key: const ValueKey('desktop_goods_delivery'), isActive: _selectedMenuIndex == 1), // 1: Goods Delivery
+    const DesktopWarehouseManagementView(key: ValueKey('desktop_warehouse_management')), // 2: Warehouse Management (Pallet, In/Out History & Audit Log)
+    const DesktopInventoryView(key: ValueKey('desktop_inventory')), // 3: Inventory
+    const DesktopLookupView(key: ValueKey('desktop_lookup')), // 4: Lookup
+    const DesktopUhfStudioView(key: ValueKey('desktop_uhf_studio')), // 5: UHF Reader Studio (Hopeland SDK & Fixed Reader)
+    const DesktopUserManagementView(key: ValueKey('desktop_user_management')), // 6: User Management (Admin Account Provisioning)
+    const DesktopConnectionConfigView(key: ValueKey('desktop_connection_config')), // 7: Hardware Connection Configuration
   ];
 
   @override
@@ -88,9 +92,10 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     // Tự động chuyển sang màn hình được phép nếu màn hình hiện tại bị ẩn
     int effectiveIndex = _selectedMenuIndex;
     if (effectiveIndex == 0 && !canIn) effectiveIndex = 1;
-    if (effectiveIndex == 2 && !canAud) effectiveIndex = 1;
-    if (effectiveIndex == 4 && !isTech) effectiveIndex = canManageUsers ? 5 : 1;
-    if (effectiveIndex == 5 && !canManageUsers) effectiveIndex = isTech ? 4 : 1;
+    if (effectiveIndex == 3 && !canAud) effectiveIndex = 1;
+    if (effectiveIndex == 5 && !isTech) effectiveIndex = canManageUsers ? 6 : 1;
+    if (effectiveIndex == 6 && !canManageUsers) effectiveIndex = isTech ? 5 : 1;
+    if (effectiveIndex == 7 && !isTech) effectiveIndex = canManageUsers ? 6 : 1;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
@@ -217,16 +222,24 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     isCompact: isCompact,
                   ),
                 _buildMenuItem(1, Icons.output, 'Xuất Kho', 'Xuất hàng xuất bán', c, isCompact: isCompact),
+                _buildMenuItem(
+                  2,
+                  Icons.warehouse_rounded,
+                  'Quản Lý Kho',
+                  'Pallet & lịch sử nhập xuất',
+                  c,
+                  isCompact: isCompact,
+                ),
                 if (canAud)
                   _buildMenuItem(
-                    2,
+                    3,
                     Icons.inventory_2,
                     'Kiểm Kê Kho',
                     'Kiểm đếm & quét RFID',
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(3, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
+                _buildMenuItem(4, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
                 if (isTech) ...[
                   const SizedBox(height: 8),
                   if (!isCompact)
@@ -238,12 +251,21 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       ),
                     ),
                   _buildMenuItem(
-                    4,
+                    5,
                     Icons.radar,
                     'Đầu Đọc UHF (Studio)',
                     'Hopeland SDK 4.42 & Chỉnh thông số máy',
                     c,
                     badge: 'KỸ THUẬT',
+                    isCompact: isCompact,
+                  ),
+                  _buildMenuItem(
+                    7,
+                    Icons.settings_input_antenna_rounded,
+                    'Cấu Hình Kết Nối',
+                    'IP LAN, COM & tự kết nối',
+                    c,
+                    badge: 'KẾT NỐI',
                     isCompact: isCompact,
                   ),
                 ],
@@ -258,7 +280,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       ),
                     ),
                   _buildMenuItem(
-                    5,
+                    6,
                     Icons.manage_accounts_rounded,
                     'Cấp & Quản Lý Tài Khoản',
                     'Cấp phát, phân quyền nhân viên',

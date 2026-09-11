@@ -566,16 +566,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const Text(
-                        'Đã qua cổng RFID • Cần xếp vào pallet trước khi cất kệ ➜',
-                        style: TextStyle(
-                          color: Color(0xFFD97706),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                     ],
                   ),
                 ),
@@ -649,7 +639,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
-                          'ĐÃ ĐỌC XONG - CẦN CẤT VÀO KỆ',
+                          'CẦN CẤT KỆ',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 9.5,
@@ -665,16 +655,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           color: c.textPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const Text(
-                        'Máy tính đã đọc đủ • Bấm để cất vào kệ ➜',
-                        style: TextStyle(
-                          color: Color(0xFF059669),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

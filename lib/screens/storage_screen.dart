@@ -366,12 +366,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 );
 
                 Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: const Color(0xFF10B981),
-                    content: Text('✓ Đã tạo Pallet $code thành công!'),
-                  ),
-                );
               },
               child: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
             ),
@@ -445,12 +439,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       performedBy: 'Thủ kho',
                     );
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: const Color(0xFF10B981),
-                        content: Text('✓ Đã chuyển Pallet ${pallet.palletCode} đến vị trí $selectedLocId thành công!'),
-                      ),
-                    );
                   },
                   child: const Text('XÁC NHẬN DI CHUYỂN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
                 ),
@@ -725,7 +713,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                     : () async {
                         setModalState(() => isProcessing = true);
                         try {
-                          final ok = await _repo.moveItemIndividual(
+                          await _repo.moveItemIndividual(
                             epc: selectedItem!.epc,
                             newLocationId: selectedLocId,
                             newPalletId: selectedPalletId,
@@ -733,18 +721,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                           );
 
                           if (dialogCtx.mounted) Navigator.pop(dialogCtx);
-                          if (mounted) {
-                            final destLoc = _repo.locations.where((l) => l.locationId == selectedLocId).firstOrNull;
-                            final destLocName = destLoc?.displayName ?? selectedLocId;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: const Color(0xFF10B981),
-                                content: Text(ok
-                                    ? '✓ Đã cập nhật lại vị trí sản phẩm "${selectedItem!.productName}" sang $destLocName${selectedPalletId != null ? " (Pallet $selectedPalletId)" : ""}!'
-                                    : 'Có lỗi xảy ra khi di chuyển sản phẩm.'),
-                              ),
-                            );
-                          }
                         } catch (e) {
                           setModalState(() => isProcessing = false);
                           if (mounted) {
@@ -1078,14 +1054,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                           );
 
                           if (ctx.mounted) Navigator.pop(ctx);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                backgroundColor: const Color(0xFF10B981),
-                                content: Text('✓ Đã nhập gộp thành công ${sourceItems.length} sản phẩm từ ${sourcePal.palletCode} vào ${targetPal.palletCode}!'),
-                              ),
-                            );
-                          }
                         } catch (e) {
                           setModalState(() => isProcessing = false);
                           if (mounted) {
@@ -1228,11 +1196,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
             onPressed: () async {
               await _repo.deletePallet(pallet.palletId);
               if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(backgroundColor: c.successEmerald, content: Text('✓ Đã xóa Pallet ${pallet.palletCode}!')),
-                );
-              }
             },
             child: const Text('XÓA PALLET', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -1266,11 +1229,6 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
             onPressed: () async {
               await _repo.clearAllData();
               if (ctx.mounted) Navigator.pop(ctx);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
-                );
-              }
             },
             child: const Text('XÓA SẠCH DỮ LIỆU', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
           ),

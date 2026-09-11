@@ -254,7 +254,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
   }
 
   void _showFeedbackSnackBar(String msg, {bool isError = false, bool isSuccess = false}) {
-    if (!mounted) return;
+    if (!mounted || !isError) return;
     final c = _eyeCare.colors;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -568,25 +568,23 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
     Color stepColor;
 
     if (_isProcessing) {
-      stepText = 'Đang tự động gộp và chuyển toàn bộ dữ liệu hàng hóa...';
+      stepText = 'Đang gộp pallet...';
       stepIcon = Icons.sync_rounded;
       stepColor = c.rfidCyan;
     } else if (_sourcePallet != null && _targetPallet != null) {
-      stepText = 'Đã hoàn tất gộp! Sẵn sàng quét mã Barcode cặp Pallet tiếp theo...';
+      stepText = 'Đã gộp thành công';
       stepIcon = Icons.check_circle_rounded;
       stepColor = c.successEmerald;
     } else if (_selectedSlot == MergeScanSlot.source) {
       stepText = _sourcePallet == null
-          ? 'BƯỚC 1/2: Bóp cò súng PDA quét mã Barcode Pallet NGUỒN (có hàng).'
-          : 'ĐANG CHỌN QUÉT Ô NGUỒN (A) ➔ Bóp cò PDA để đổi Pallet, hoặc chạm ô Đích.';
+          ? 'Quét Pallet Nguồn (A)'
+          : 'Đã chọn Pallet Nguồn (A)';
       stepIcon = Icons.qr_code_scanner_rounded;
       stepColor = const Color(0xFFF59E0B);
     } else {
       stepText = _targetPallet == null
-          ? (_sourcePallet != null
-              ? 'BƯỚC 2/2: Quét mã Barcode Pallet ĐÍCH ➔ Hệ thống sẽ TỰ ĐỘNG GỘP NGAY LẬP TỨC!'
-              : 'ĐANG CHỌN QUÉT Ô ĐÍCH (B) ➔ Bóp cò súng PDA quét mã Barcode Pallet Đích.')
-          : 'ĐANG CHỌN QUÉT Ô ĐÍCH (B) ➔ Bóp cò PDA để đổi Pallet, hoặc chạm ô Nguồn.';
+          ? 'Quét Pallet Đích (B)'
+          : 'Đã chọn Pallet Đích (B)';
       stepIcon = Icons.bolt_rounded;
       stepColor = c.successEmerald;
     }
@@ -1118,7 +1116,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        isSourceSlot ? 'CHỜ Ô 1 (NGUỒN)' : 'CHỜ Ô 2 (ĐÍCH)',
+                        isSourceSlot ? 'NGUỒN (A)' : 'ĐÍCH (B)',
                         style: TextStyle(
                           color: isSourceSlot ? const Color(0xFFF59E0B) : c.successEmerald,
                           fontSize: 9.5,
@@ -1131,13 +1129,11 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                 const SizedBox(height: 2),
                 Text(
                   _isProcessing
-                      ? 'Đang tiến hành gộp dữ liệu hàng hóa...'
-                      : (isSourceSlot
-                          ? 'Bóp cò súng PDA quét mã Barcode Pallet Nguồn (hoặc chạm ô Đích)'
-                          : 'Bóp cò súng PDA quét mã Barcode Pallet Đích (${_sourcePallet != null ? "Sẽ Gộp Ngay ⚡" : "hoặc chạm ô Nguồn"})'),
+                      ? 'Đang gộp pallet...'
+                      : (isSourceSlot ? 'Quét mã Pallet Nguồn' : 'Quét mã Pallet Đích'),
                   style: TextStyle(
                     color: c.textPrimary,
-                    fontSize: 11.5,
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
                   overflow: TextOverflow.ellipsis,

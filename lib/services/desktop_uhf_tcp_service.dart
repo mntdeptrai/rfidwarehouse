@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import '../models/tag_info.dart';
+import '../models/uhf_connection_config.dart';
 import 'auth_service.dart';
 
 class DiscoveredLanReader {
@@ -31,11 +34,22 @@ class DesktopUhfTcpService extends ChangeNotifier {
   factory DesktopUhfTcpService() => _instance;
   DesktopUhfTcpService._internal() {
     _initBridge();
+    loadConfig().then((_) {
+      if (!Platform.environment.containsKey('FLUTTER_TEST') && _config.autoConnectOnStartup) {
+        Timer(const Duration(milliseconds: 1500), () {
+          if (!_isConnected && !_isConnecting) {
+            connectWithSavedConfig();
+          }
+        });
+      }
+    });
   }
 
   Socket? _bridgeSocket;
   Process? _bridgeProcess;
   Timer? _rateTimer;
+  Timer? _reconnectTimer;
+  Completer<bool>? _connectCompleter;
   bool _isBridgeConnected = false;
   bool _isConnected = false;
   bool _isConnecting = false;
@@ -44,6 +58,9 @@ class DesktopUhfTcpService extends ChangeNotifier {
   String _currentConnId = '';
   double _readerTemp = 38.5;
   Timer? _connectTimeoutTimer;
+
+  UhfConnectionConfig _config = const UhfConnectionConfig();
+  UhfConnectionConfig get config => _config;
 
   bool get isBridgeConnected => _isBridgeConnected;
   bool get isConnected => _isConnected;
@@ -262,6 +279,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _isScanning = false;
         _isConnecting = false;
         _connectTimeoutTimer?.cancel();
+        _scheduleReconnect();
         notifyListeners();
       },
       onDone: () {
@@ -271,6 +289,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _isScanning = false;
         _isConnecting = false;
         _connectTimeoutTimer?.cancel();
+        _scheduleReconnect();
         notifyListeners();
       },
     );
@@ -317,6 +336,9 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _isConnected = msg['connected'] == true;
         _isScanning = msg['scanning'] == true;
         _currentConnId = msg['connId']?.toString() ?? '';
+        if (!_isConnected) {
+          _scheduleReconnect();
+        }
         notifyListeners();
         break;
 
@@ -327,13 +349,25 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _currentConnId = msg['connId']?.toString() ?? '';
         if (_isConnected) {
           _log('Đã kết nối đầu đọc: $_currentConnId');
-          // Tắt toàn bộ đèn GPO về trạng thái chờ, chỉ bật khi có sự kiện
           setGpo(1, false);
           setGpo(2, false);
           setGpo(3, false);
           setGpo(4, false);
+          if (_config.activeAntennas.isNotEmpty) {
+            _activeAntennas.clear();
+            _activeAntennas.addAll(_config.activeAntennas);
+          }
+          setAntennaPower({1: _config.rfPower, 2: _config.rfPower, 3: _config.rfPower, 4: _config.rfPower});
+          _reconnectTimer?.cancel();
+          if (_connectCompleter != null && !_connectCompleter!.isCompleted) {
+            _connectCompleter!.complete(true);
+          }
         } else {
           _log('Không thể kết nối tới đầu đọc ($_currentConnId). Vui lòng kiểm tra cáp hoặc cổng COM.');
+          if (_connectCompleter != null && !_connectCompleter!.isCompleted) {
+            _connectCompleter!.complete(false);
+          }
+          _scheduleReconnect();
         }
         notifyListeners();
         break;
@@ -512,7 +546,10 @@ class DesktopUhfTcpService extends ChangeNotifier {
   }
 
   /// Disconnect current session
-  Future<void> disconnect() async {
+  Future<void> disconnect({bool isManual = true}) async {
+    if (isManual) {
+      _reconnectTimer?.cancel();
+    }
     _connectTimeoutTimer?.cancel();
     _isConnecting = false;
     if (_isBridgeConnected) {
@@ -524,6 +561,180 @@ class DesktopUhfTcpService extends ChangeNotifier {
     _rateTimer?.cancel();
     _rateTimer = null;
     _log('Đã ngắt kết nối đầu đọc.');
+    notifyListeners();
+  }
+
+  // ==================== CONFIGURATION PERSISTENCE & AUTO-CONNECT ====================
+
+  Future<File?> _getConfigFile() async {
+    try {
+      if (kIsWeb || Platform.environment.containsKey('FLUTTER_TEST')) return null;
+      final dir = await getApplicationSupportDirectory();
+      final target = File(p.join(dir.path, 'uhf_hardware_config.json'));
+      if (!target.parent.existsSync()) {
+        target.parent.createSync(recursive: true);
+      }
+      return target;
+    } catch (_) {
+      try {
+        final appData = Platform.environment['APPDATA'] ?? '.';
+        final dir = Directory(p.join(appData, 'RFIDWarehouse'));
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        return File(p.join(dir.path, 'uhf_hardware_config.json'));
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  Future<void> loadConfig() async {
+    try {
+      final file = await _getConfigFile();
+      if (file != null && await file.exists()) {
+        final content = await file.readAsString();
+        _config = UhfConnectionConfig.deserialize(content);
+        if (_config.activeAntennas.isNotEmpty) {
+          _activeAntennas.clear();
+          _activeAntennas.addAll(_config.activeAntennas);
+        }
+        for (int i = 1; i <= 4; i++) {
+          _antennaPower[i] = _config.rfPower;
+        }
+        _log('Đã nạp cấu hình kết nối: ${_config.connectionSummary}');
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading uhf_hardware_config: $e');
+    }
+  }
+
+  Future<bool> saveConfig(UhfConnectionConfig newConfig) async {
+    _config = newConfig;
+    if (_config.activeAntennas.isNotEmpty) {
+      _activeAntennas.clear();
+      _activeAntennas.addAll(_config.activeAntennas);
+    }
+    for (int i = 1; i <= 4; i++) {
+      _antennaPower[i] = _config.rfPower;
+    }
+    notifyListeners();
+
+    try {
+      final file = await _getConfigFile();
+      if (file != null) {
+        await file.writeAsString(newConfig.serialize());
+        _log('Đã lưu cấu hình kết nối: ${newConfig.connectionSummary}');
+      }
+      if (_isConnected) {
+        setAntennaPower({1: _config.rfPower, 2: _config.rfPower, 3: _config.rfPower, 4: _config.rfPower});
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Error saving uhf_hardware_config: $e');
+      return false;
+    }
+  }
+
+  Future<bool> connectWithSavedConfig({Duration timeout = const Duration(seconds: 5)}) async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return false;
+    if (_isConnected) return true;
+    _isConnecting = true;
+    notifyListeners();
+    _log('Đang tự động kết nối theo cấu hình: ${_config.connectionSummary}...');
+
+    try {
+      final bridgeReady = await ensureBridgeConnected();
+      if (!bridgeReady || !_isBridgeConnected) {
+        _isConnecting = false;
+        notifyListeners();
+        _log('❌ Không thể kết nối tới C# Hardware Bridge.');
+        return false;
+      }
+
+      if (_connectCompleter != null && !_connectCompleter!.isCompleted) {
+        _connectCompleter!.complete(false);
+      }
+      _connectCompleter = Completer<bool>();
+      _startConnectTimeout();
+
+      switch (_config.connectionType) {
+        case 'TCP Client':
+          _sendBridgeCommand({
+            'cmd': 'connect',
+            'type': 'TCP Client',
+            'ip': _config.tcpIp,
+            'port': _config.tcpPort,
+          });
+          break;
+        case 'RS232':
+          _sendBridgeCommand({
+            'cmd': 'connect',
+            'type': 'RS232',
+            'port': _config.comPort,
+            'baud': _config.baudRate,
+          });
+          break;
+        case 'RS485':
+          _sendBridgeCommand({
+            'cmd': 'connect',
+            'type': 'RS485',
+            'addr': _config.rs485Address,
+            'port': _config.comPort,
+            'baud': _config.baudRate,
+          });
+          break;
+        case 'USB':
+          _sendBridgeCommand({
+            'cmd': 'connect',
+            'type': 'USB',
+          });
+          break;
+        case 'TCP Server':
+          await startTcpServer('0.0.0.0', _config.tcpPort);
+          _isConnecting = false;
+          notifyListeners();
+          return true;
+        default:
+          _sendBridgeCommand({
+            'cmd': 'connect',
+            'type': 'RS232',
+            'port': _config.comPort,
+            'baud': _config.baudRate,
+          });
+          break;
+      }
+
+      final success = await _connectCompleter!.future.timeout(timeout, onTimeout: () {
+        _isConnecting = false;
+        _connectTimeoutTimer?.cancel();
+        return _isConnected;
+      });
+
+      return success || _isConnected;
+    } catch (e) {
+      _log('Lỗi khi kết nối theo cấu hình: $e');
+      _isConnecting = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void _scheduleReconnect() {
+    if (!_config.autoReconnect || _isConnected || _isConnecting || !Platform.isWindows) return;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 5), () async {
+      if (!_isConnected && !_isConnecting && _config.autoReconnect) {
+        _log('Tự động thử kết nối lại đầu đọc (${_config.connectionSummary})...');
+        await connectWithSavedConfig();
+      }
+    });
+  }
+
+  Future<void> searchLanDevices() async {
+    await ensureBridgeConnected();
+    _discoveredReaders.clear();
+    _log('Đang phát lệnh dò tìm đầu đọc UHF trong mạng LAN...');
+    _sendBridgeCommand({'cmd': 'search_lan'});
     notifyListeners();
   }
 

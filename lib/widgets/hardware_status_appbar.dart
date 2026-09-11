@@ -6,11 +6,13 @@ import '../theme/eye_care_theme.dart';
 class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final List<Widget>? actions;
+  final Widget? leading;
 
   const HardwareStatusAppBar({
     super.key,
     required this.title,
     this.actions,
+    this.leading,
   });
 
   @override
@@ -55,6 +57,7 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
         return AppBar(
           backgroundColor: c.bgDeep,
           elevation: 0,
+          leading: leading,
           title: Text(
             title,
             maxLines: 1,

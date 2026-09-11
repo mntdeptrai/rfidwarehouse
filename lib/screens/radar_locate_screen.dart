@@ -196,11 +196,6 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Quét chip RFID -> Hệ thống sẽ hiển thị vị trí lưu kho & Pallet ngay lập tức.',
-                          style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
-                        ),
                       ],
                     ),
                   ),

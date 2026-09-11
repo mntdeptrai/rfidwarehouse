@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS public.pallets (
 );
 ALTER TABLE public.pallets ADD COLUMN IF NOT EXISTS rfid_epc TEXT;
 ALTER TABLE public.pallets ADD COLUMN IF NOT EXISTS placed_by TEXT;
+ALTER TABLE public.pallets ADD COLUMN IF NOT EXISTS pallet_name TEXT;
 
 -- 4. Bảng Mặt hàng cụ thể gắn thẻ RFID Chip (items)
 -- FK: product_id -> products(product_id)

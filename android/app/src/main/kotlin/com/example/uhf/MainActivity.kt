@@ -98,13 +98,34 @@ class MainActivity : FlutterActivity() {
         for (item in tags) {
             if (item == null) continue
             try {
-                val epcStr = callMethod(item, "getId") as? String ?: continue
+                var epcStr = callMethod(item, "getId") as? String
+                if (epcStr.isNullOrEmpty()) {
+                    epcStr = callMethod(item, "getEpc") as? String
+                }
+                if (epcStr.isNullOrEmpty()) {
+                    try {
+                        val f = item.javaClass.getField("epc")
+                        epcStr = f.get(item) as? String
+                    } catch (_: Throwable) {}
+                }
+                if (epcStr.isNullOrEmpty()) {
+                    try {
+                        val f = item.javaClass.getField("id")
+                        epcStr = f.get(item) as? String
+                    } catch (_: Throwable) {}
+                }
+                if (epcStr.isNullOrEmpty()) continue
+
                 val subEpcs = epcStr.split(Regex("[\\r\\n;,]+"))
                     .map { it.trim().replace(" ", "").uppercase() }
                     .filter { it.isNotBlank() && it.length >= 4 }
 
-                val rssi = try { item.javaClass.getField("rssi").getInt(item) } catch (_: Throwable) { -50 }
-                val count = try { item.javaClass.getField("count").getInt(item) } catch (_: Throwable) { 1 }
+                val rssi = try { item.javaClass.getField("rssi").getInt(item) } catch (_: Throwable) {
+                    try { (callMethod(item, "getRssi") as? Number)?.toInt() ?: -50 } catch (_: Throwable) { -50 }
+                }
+                val count = try { item.javaClass.getField("count").getInt(item) } catch (_: Throwable) {
+                    try { (callMethod(item, "getCount") as? Number)?.toInt() ?: 1 } catch (_: Throwable) { 1 }
+                }
 
                 for (epc in subEpcs) {
                     if (filterDuplicates && scannedEpcs.contains(epc)) continue
@@ -186,18 +207,34 @@ class MainActivity : FlutterActivity() {
             bgHandler.post {
                 when (action) {
                     "com.rscja.android.KEY_DOWN", "android.rfid.FUN_KEY", "com.rscja.action.KEY_DOWN",
-                    "com.seuic.android.action.KEY_DOWN", "com.rfid.KEY_DOWN" -> {
+                    "com.seuic.android.action.KEY_DOWN", "com.rfid.KEY_DOWN",
+                    "android.intent.action.SCANNER_BUTTON_DOWN", "com.android.server.scannerservice.onkeydown",
+                    "com.ubx.action.KEY_DOWN", "urovo.action.SCAN_KEY" -> {
                         val keyCode = intent.getIntExtra("KEY_CODE", intent.getIntExtra("keyCode", 293))
                         Log.d(TAG, "Hardware Trigger Broadcast DOWN: keyCode=$keyCode")
                         mainHandler.post { sendTriggerEvent(true, keyCode) }
                     }
                     "com.rscja.android.KEY_UP", "com.rscja.action.KEY_UP",
-                    "com.seuic.android.action.KEY_UP", "com.rfid.KEY_UP" -> {
+                    "com.seuic.android.action.KEY_UP", "com.rfid.KEY_UP",
+                    "android.intent.action.SCANNER_BUTTON_UP", "com.android.server.scannerservice.onkeyup",
+                    "com.ubx.action.KEY_UP" -> {
                         val keyCode = intent.getIntExtra("KEY_CODE", intent.getIntExtra("keyCode", 293))
                         Log.d(TAG, "Hardware Trigger Broadcast UP: keyCode=$keyCode")
                         mainHandler.post { sendTriggerEvent(false, keyCode) }
                     }
-                    "com.android.server.scannerservice.broadcast",
+                    "com.android.server.scannerservice.broadcast" -> {
+                        val subAction = intent.getStringExtra("action") ?: ""
+                        if (subAction.equals("ACTION_KEY_DOWN", ignoreCase = true) ||
+                            subAction.equals("SCAN_TRIGGER", ignoreCase = true) ||
+                            subAction.equals("START_SCAN", ignoreCase = true)) {
+                            mainHandler.post { sendTriggerEvent(true, 293) }
+                        } else if (subAction.equals("ACTION_KEY_UP", ignoreCase = true) ||
+                                   subAction.equals("STOP_SCAN", ignoreCase = true)) {
+                            mainHandler.post { sendTriggerEvent(false, 293) }
+                        } else {
+                            handleBarcodeBroadcastData(intent)
+                        }
+                    }
                     "android.intent.action.SCANNER_BARCODE_DATA",
                     "android.intent.ACTION_DECODE_DATA",
                     "com.seuic.scanner.action.RESULT_DATA",
@@ -333,7 +370,13 @@ class MainActivity : FlutterActivity() {
                 addAction("com.honeywell.decode.intent.action.SCAN_RESULT")
                 addAction("nlscan.action.SCANNER_RESULT")
                 addAction("urovo.rcv.message")
-                addAction("com.ubx.datawedge.RECORD_DATA")
+                addAction("android.intent.action.SCANNER_BUTTON_DOWN")
+                addAction("android.intent.action.SCANNER_BUTTON_UP")
+                addAction("com.android.server.scannerservice.onkeydown")
+                addAction("com.android.server.scannerservice.onkeyup")
+                addAction("com.ubx.action.KEY_DOWN")
+                addAction("com.ubx.action.KEY_UP")
+                addAction("urovo.action.SCAN_KEY")
                 addAction("com.seuic.uhf.action.TAG_READ")
                 addAction("com.seuic.uhf.action.INVENTORY_TAG")
                 addAction("com.seuic.uhf.action.ACTION_TAG")
@@ -574,13 +617,32 @@ class MainActivity : FlutterActivity() {
                 Log.d(TAG, "UHFService Method: ${m.name}($params): ${m.returnType.simpleName}")
             }
 
-            // Set Max Output Power (Try 33 dBm first, fallback to 30 dBm)
+            // Set Max Output Power (ensure max transmission sensitivity)
             try {
-                val ok33 = callMethod(service, "setPower", arrayOf(Int::class.javaPrimitiveType!!), arrayOf(33)) as? Boolean ?: false
-                if (!ok33) {
-                    callMethod(service, "setPower", arrayOf(Int::class.javaPrimitiveType!!), arrayOf(30))
+                var powerConfigured = false
+                for (targetPower in listOf(33, 30, 28, 26)) {
+                    for (m in clazz.methods.filter { it.name == "setPower" }) {
+                        try {
+                            if (m.parameterTypes.size == 1 && (m.parameterTypes[0] == Int::class.javaPrimitiveType || m.parameterTypes[0] == Integer::class.java)) {
+                                val res = m.invoke(service, targetPower)
+                                if (res == true || res == 0 || (res as? Boolean) == true) {
+                                    powerConfigured = true
+                                    Log.d(TAG, "SEUIC setPower($targetPower) succeeded via 1-param method")
+                                    break
+                                }
+                            } else if (m.parameterTypes.size == 2 && m.parameterTypes[0] == Int::class.javaPrimitiveType && m.parameterTypes[1] == Int::class.javaPrimitiveType) {
+                                val res = m.invoke(service, targetPower, targetPower)
+                                if (res == true || res == 0 || (res as? Boolean) == true) {
+                                    powerConfigured = true
+                                    Log.d(TAG, "SEUIC setPower($targetPower, $targetPower) succeeded via 2-param method")
+                                    break
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                    }
+                    if (powerConfigured) break
                 }
-                Log.d(TAG, "SEUIC RF Power set (33 attempt: $ok33, current=${callMethod(service, "getPower")})")
+                Log.d(TAG, "SEUIC current power: ${callMethod(service, "getPower")}")
             } catch (_: Throwable) {}
 
             // Try setting high-speed inventory parameters if supported by SEUIC
@@ -648,15 +710,45 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun triggerUhfBroadcastStart() {
+        try {
+            sendBroadcast(Intent("com.seuic.uhf.action.START_SCAN"))
+            sendBroadcast(Intent("com.seuic.uhf.action.INVENTORY_START"))
+            sendBroadcast(Intent("com.rscja.android.START_SCAN"))
+            sendBroadcast(Intent("com.rfid.START_SCAN"))
+            sendBroadcast(Intent("urovo.action.START_SCAN"))
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "ACTION_SCAN")
+            })
+        } catch (_: Throwable) {}
+    }
+
+    private fun triggerUhfBroadcastStop() {
+        try {
+            sendBroadcast(Intent("com.seuic.uhf.action.STOP_SCAN"))
+            sendBroadcast(Intent("com.seuic.uhf.action.INVENTORY_STOP"))
+            sendBroadcast(Intent("com.rscja.android.STOP_SCAN"))
+            sendBroadcast(Intent("com.rfid.STOP_SCAN"))
+            sendBroadcast(Intent("urovo.action.STOP_SCAN"))
+            sendBroadcast(Intent("com.android.server.scannerservice.broadcast").apply {
+                putExtra("action", "ACTION_STOP_SCAN")
+            })
+        } catch (_: Throwable) {}
+    }
+
     private fun startInventory(): Boolean {
+        scannedEpcs.clear()
         if (isScanning.get()) return true
+
+        triggerUhfBroadcastStart()
 
         if (mUhfService == null || !isUhfOpen()) {
             try { initUHF() } catch (_: Throwable) {}
         }
         if (mUhfService == null || !isUhfOpen()) {
-            Log.w(TAG, "UHF not available")
-            return false
+            Log.w(TAG, "UHF not available via SDK reflection, broadcast sent")
+            isScanning.set(true)
+            return true
         }
 
         return try {
@@ -673,6 +765,7 @@ class MainActivity : FlutterActivity() {
     private fun stopInventory(): Boolean {
         Log.d(TAG, "stopInventory called")
         isScanning.set(false)
+        triggerUhfBroadcastStop()
         return try {
             callMethod(mUhfService, "inventoryStop") as? Boolean ?: true
         } catch (_: Throwable) { true }
@@ -754,11 +847,23 @@ class MainActivity : FlutterActivity() {
                keyCode == 139 || keyCode == 140 || keyCode == 141 ||
                keyCode == KeyEvent.KEYCODE_F4 || keyCode == KeyEvent.KEYCODE_F1 ||
                keyCode == KeyEvent.KEYCODE_F2 || keyCode == KeyEvent.KEYCODE_F3 ||
-               keyCode == KeyEvent.KEYCODE_F5 ||
+               keyCode == KeyEvent.KEYCODE_F5 || keyCode == KeyEvent.KEYCODE_F6 ||
+               keyCode == KeyEvent.KEYCODE_F7 || keyCode == KeyEvent.KEYCODE_F8 ||
+               keyCode == KeyEvent.KEYCODE_F9 || keyCode == KeyEvent.KEYCODE_F10 ||
+               keyCode == KeyEvent.KEYCODE_F11 || keyCode == KeyEvent.KEYCODE_F12 ||
+               keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
                keyCode == KeyEvent.KEYCODE_BUTTON_L1 || keyCode == KeyEvent.KEYCODE_BUTTON_R1 ||
+               keyCode == KeyEvent.KEYCODE_BUTTON_L2 || keyCode == KeyEvent.KEYCODE_BUTTON_R2 ||
+               keyCode == KeyEvent.KEYCODE_BUTTON_A || keyCode == KeyEvent.KEYCODE_BUTTON_B ||
+               keyCode == KeyEvent.KEYCODE_BUTTON_X || keyCode == KeyEvent.KEYCODE_BUTTON_Y ||
+               keyCode == 188 || keyCode == 189 || keyCode == 190 || keyCode == 191 ||
+               keyCode == 261 || keyCode == 262 ||
+               keyCode == 300 || keyCode == 301 || keyCode == 302 ||
+               keyCode == 520 || keyCode == 521 || keyCode == 522 || keyCode == 523 || keyCode == 524 ||
                keyCode == KeyEvent.KEYCODE_PROG_RED || keyCode == KeyEvent.KEYCODE_PROG_GREEN ||
                keyCode == KeyEvent.KEYCODE_STEM_1 || keyCode == KeyEvent.KEYCODE_STEM_2 ||
-               keyCode == KeyEvent.KEYCODE_STEM_3
+               keyCode == KeyEvent.KEYCODE_STEM_3 ||
+               keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_FOCUS
     }
 
     private fun initBarcodeScannerCache() {
@@ -942,10 +1047,14 @@ class MainActivity : FlutterActivity() {
                 triggerBarcodeBroadcast()
             } else if (mode == "hybrid") {
                 triggerBarcodeBroadcast()
-                bgHandler.post { startInventory() }
+                if (!isScanning.get()) {
+                    bgHandler.post { startInventory() }
+                }
             } else {
                 // Chế độ RFID (mặc định) & Auto: Quét chip RFID UHF
-                bgHandler.post { startInventory() }
+                if (!isScanning.get()) {
+                    bgHandler.post { startInventory() }
+                }
             }
 
             notifyFlutterTrigger(true, keyCode, mode)
@@ -954,13 +1063,6 @@ class MainActivity : FlutterActivity() {
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 stopBarcodeBroadcast()
-            } else if (mode == "hybrid") {
-                stopBarcodeBroadcast()
-                stopInventory()
-                bgHandler.post { stopInventory() }
-            } else {
-                stopInventory()
-                bgHandler.post { stopInventory() }
             }
             notifyFlutterTrigger(false, keyCode, mode)
         }
