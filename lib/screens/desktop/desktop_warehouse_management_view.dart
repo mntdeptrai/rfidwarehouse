@@ -6,6 +6,8 @@ import '../../services/warehouse_repository.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
 import '../../theme/eye_care_theme.dart';
+import 'desktop_location_management_view.dart';
+import 'desktop_lookup_view.dart';
 
 class DesktopWarehouseManagementView extends StatefulWidget {
   const DesktopWarehouseManagementView({super.key});
@@ -21,6 +23,9 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
   final DesktopUhfTcpService _desktopUhf = DesktopUhfTcpService();
   final UhfService _uhf = UhfService();
+
+  // Sub-tab state for History tab (0: Orders, 1: DB Audit Trail)
+  int _historySubTabIndex = 0;
 
   // Pallet tab state
   final TextEditingController _palletSearchCtrl = TextEditingController();
@@ -44,7 +49,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _eyeCare.addListener(_onStateUpdate);
     _repo.addListener(_onStateUpdate);
   }
@@ -107,8 +112,9 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
               controller: _tabController,
               children: [
                 _buildPalletManagementTab(c),
+                const DesktopLocationManagementView(),
                 _buildHistoryManagementTab(c),
-                _buildAuditLogTab(c),
+                const DesktopLookupView(),
               ],
             ),
           ),
@@ -160,9 +166,11 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                 children: [
                   _buildTabButton(0, Icons.layers_outlined, 'Quản Lý Pallet', c),
                   const SizedBox(width: 4),
-                  _buildTabButton(1, Icons.history_rounded, 'Lịch Sử Nhập Xuất', c),
+                  _buildTabButton(1, Icons.grid_view_rounded, 'Quản Lý Vị Trí Kho', c),
                   const SizedBox(width: 4),
-                  _buildTabButton(2, Icons.receipt_long_rounded, 'Nhật Ký Biến Động', c),
+                  _buildTabButton(2, Icons.history_rounded, 'Quản Lý Lịch Sử', c),
+                  const SizedBox(width: 4),
+                  _buildTabButton(3, Icons.inventory_2_outlined, 'Thông Tin Sản Phẩm', c),
                 ],
               ),
             ),
@@ -647,10 +655,73 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
     );
   }
 
+  Widget _buildSubTabButton(int index, IconData icon, String title, EyeCareColors c) {
+    final isSelected = _historySubTabIndex == index;
+    return InkWell(
+      onTap: () => setState(() => _historySubTabIndex = index),
+      borderRadius: BorderRadius.circular(6),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? c.rfidCyan : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? c.rfidCyan : c.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: isSelected ? const Color(0xFF2C251E) : c.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ==========================================
-  // TAB 2: LỊCH SỬ NHẬP XUẤT HÀNG HÓA
+  // TAB 3: QUẢN LÝ LỊCH SỬ KHO (HỢP NHẤT)
   // ==========================================
   Widget _buildHistoryManagementTab(EyeCareColors c) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            color: c.bgCard,
+            border: Border(bottom: BorderSide(color: c.border, width: 1)),
+          ),
+          child: Row(
+            children: [
+              Text(
+                'DANH MỤC LỊCH SỬ:',
+                style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              ),
+              const SizedBox(width: 12),
+              _buildSubTabButton(0, Icons.receipt_long_rounded, 'Lịch Sử Giao Dịch Nhập Xuất', c),
+              const SizedBox(width: 8),
+              _buildSubTabButton(1, Icons.history_edu_rounded, 'Nhật Ký Biến Động CSDL', c),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _historySubTabIndex == 0
+              ? _buildOrderHistoryContent(c)
+              : _buildAuditLogContent(c),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrderHistoryContent(EyeCareColors c) {
     final allInboundOrders = _repo.inboundOrders;
     final allOutboundOrders = _repo.outboundOrders;
     final allItems = _repo.items;
@@ -1077,9 +1148,9 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
   }
 
   // ==========================================
-  // TAB 3: NHẬT KÝ BIẾN ĐỘNG KHO (AUDIT LOG)
+  // NHẬT KÝ BIẾN ĐỘNG KHO (AUDIT LOG CONTENT)
   // ==========================================
-  Widget _buildAuditLogTab(EyeCareColors c) {
+  Widget _buildAuditLogContent(EyeCareColors c) {
     final transactions = _repo.transactions;
 
     // Filter
