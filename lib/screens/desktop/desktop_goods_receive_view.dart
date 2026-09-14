@@ -8,6 +8,7 @@ import '../../services/uhf_service.dart';
 import '../../services/tower_light_service.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../services/excel_import_service.dart';
+import '../../services/auth_service.dart';
 import '../../theme/eye_care_theme.dart';
 
 /// Mô hình lưu tạm đơn hàng chờ qua cổng RFID (chưa quét sẽ KHÔNG lưu vào CSDL)
@@ -46,6 +47,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   final TowerLightService _towerLight = TowerLightService();
   final SupabaseSyncService _supabaseSync = SupabaseSyncService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
+  final AuthService _auth = AuthService();
 
   // ---------- TRẠNG THÁI CỔNG NHẬP KHO QUÉT LIÊN TỤC ĐA ĐƠN HÀNG ----------
   bool _isImporting = false;
@@ -431,9 +433,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final cleanEpc = tag.epc.trim().toUpperCase();
     if (cleanEpc.isEmpty) return;
 
-    // Nếu chưa nạp file và không có đơn hàng nào đang chờ qua cổng, không xử lý thẻ
+    // Nếu chưa nạp file và không có đơn hàng hoặc pallet nào đang chờ qua cổng, không xử lý thẻ
     final hasPendingOrders = _pendingGateOrders.isNotEmpty ||
-        _repo.items.any((i) => i.status == ItemStatus.pendingInbound);
+        _repo.items.any((i) => i.status == ItemStatus.pendingInbound) ||
+        _repo.inboundOrders.any((o) => o.status == InboundOrderStatus.newOrder) ||
+        _repo.pallets.any((p) => (p.rfidEpc ?? '').trim().toUpperCase() == cleanEpc || p.palletCode.toUpperCase() == cleanEpc);
     if (!hasPendingOrders) {
       return;
     }
@@ -587,7 +591,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           if (expectedSerials.isNotEmpty && _wizardScannedTags.length >= expectedSerials.length && _getFilteredUnexpectedTags().isEmpty) {
             _tagBatchUiTimer?.cancel();
             _tagBatchUiTimer = null;
-            final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? 'Xe Pallet';
+            final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? 'Pallet';
             _towerLight.triggerPass(reason: 'Pallet $pCode: Đã quét đủ ${expectedSerials.length} sản phẩm. Tự động chuyển sang PDA!');
             if (mounted) setState(() {});
           } else {
@@ -624,7 +628,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         if (expectedSerials.isNotEmpty && _wizardScannedTags.length >= expectedSerials.length && _getFilteredUnexpectedTags().isEmpty) {
           _tagBatchUiTimer?.cancel();
           _tagBatchUiTimer = null;
-          final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? 'Xe Pallet';
+          final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? 'Pallet';
           _towerLight.triggerPass(reason: 'Pallet $pCode: Đã quét đủ ${expectedSerials.length} sản phẩm. Tự động chuyển sang PDA!');
           if (mounted) setState(() {});
         } else {
@@ -740,12 +744,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
     final palletEpc = (p?.rfidEpc ?? _wizardDetectedPalletTag ?? _activePalletTag)?.trim().toUpperCase();
     if (palletEpc != null && palletEpc.isNotEmpty && !_wizardScannedTags.containsKey(palletEpc)) {
-      final palletCode = p?.palletCode ?? 'Xe Pallet';
+      final palletCode = p?.palletCode ?? 'Pallet';
       missing.insert(0, Item(
         itemId: 'PALLET-$palletCode',
         productId: palletCode,
         sku: palletCode,
-        productName: '🏷️ Thẻ RFID Xe Pallet ($palletCode)',
+        productName: '🏷️ Thẻ RFID Pallet ($palletCode)',
         serialNumber: palletEpc,
         epc: palletEpc,
         status: ItemStatus.pendingInbound,
@@ -818,7 +822,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('XÁC NHẬN NHẬP THIẾU', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('NHẬP THIẾU', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -846,7 +850,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       orderNo: orderNo,
       scannedEpcs: itemEpcs,
       palletCode: palletCode,
-      performedBy: 'Cổng RFID Gate (Nhập thiếu)',
+      performedBy: _auth.currentUser?.fullName ?? _repo.resolveUserFullName(null, defaultRole: 'thukho'),
     );
 
     final hasPallet = palletCode != null || _activeExpectedItems.any((i) => i.palletId != null && i.palletId!.isNotEmpty);
@@ -880,7 +884,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFF59E0B),
-          content: Text('⚠️ Đã xác nhận nhập thiếu đơn $orderNo ($count sản phẩm). Cổng sẵn sàng đón xe tiếp theo!'),
+          content: Text('⚠️ Đã xác nhận nhập thiếu đơn $orderNo ($count sản phẩm). Cổng sẵn sàng đón pallet tiếp theo!'),
         ),
       );
     }
@@ -984,7 +988,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               orderNo: ordNo,
               scannedEpcs: scannedEpcs,
               palletCode: pCode,
-              performedBy: 'Cổng RFID Gate',
+              performedBy: _auth.currentUser?.fullName ?? _repo.resolveUserFullName(null, defaultRole: 'thukho'),
             );
             _recentCompletedPasses.insert(0, {
               'orderNo': ordNo,
@@ -995,7 +999,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               'status': 'CHỜ XẾP KỆ',
               'isSuccess': true,
             });
-            _towerLight.triggerPass(reason: 'Đã hoàn tất nhập kho và chuyển sang PDA cho đơn $ordNo!');
+            _towerLight.triggerPass(reason: 'Qua cổng thành công!');
             if (mounted) {
               setState(() {
                 _lastSuccessOrderNo = ordNo;
@@ -1013,9 +1017,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 _desktopUhf.clearTags();
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFF10B981),
-                  content: Text('✓ Đã tự động hoàn tất đơn $ordNo và đẩy sang PDA!'),
+                const SnackBar(
+                  backgroundColor: Color(0xFF10B981),
+                  content: Text('✓ Qua cổng thành công!'),
+                  duration: Duration(seconds: 2),
                 ),
               );
             }
@@ -1053,7 +1058,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             orderNo: ordNo,
             scannedEpcs: scannedEpcs,
             palletCode: pCode,
-            performedBy: 'Cổng RFID Gate',
+            performedBy: _auth.currentUser?.fullName ?? _repo.resolveUserFullName(null, defaultRole: 'thukho'),
           );
 
           _recentCompletedPasses.insert(0, {
@@ -1076,7 +1081,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
 
       final totalSaved = completedOrders.fold<int>(0, (sum, p) => sum + p.items.length);
-      _towerLight.triggerPass(reason: 'Đã hoàn tất nhập kho và chuyển sang PDA cho ${completedOrders.length} xe Pallet ($totalSaved chip)!');
+      _towerLight.triggerPass(reason: 'Qua cổng thành công!');
 
       if (mounted) {
         setState(() {
@@ -1095,14 +1100,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             _stopWizardScan();
             _desktopUhf.clearTags();
           } else {
-            // Tự động chuyển sang xe Pallet tiếp theo trong hàng đợi
+            // Tự động chuyển sang pallet tiếp theo trong hàng đợi
             _selectActivePendingOrder(_pendingGateOrders.first.order.orderNo);
           }
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            content: Text('✓ Đã tự động hoàn tất ${completedOrders.length} xe Pallet ($totalSaved chip) và đẩy sang PDA!'),
+          const SnackBar(
+            backgroundColor: Color(0xFF10B981),
+            content: Text('✓ Qua cổng thành công!'),
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -1336,7 +1342,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
-              inboundBy: 'Cổng RFID Gate',
+              inboundBy: _auth.currentUser?.fullName ?? _repo.resolveUserFullName(null, defaultRole: 'thukho'),
             ));
             itemSeq++;
           }
@@ -1364,7 +1370,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
               inboundTime: now,
-              inboundBy: 'Cổng RFID Gate',
+              inboundBy: _auth.currentUser?.fullName ?? _repo.resolveUserFullName(null, defaultRole: 'thukho'),
             ));
             itemSeq++;
           }
@@ -1573,7 +1579,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               cartonCode: poNo,
               supplier: poSupplier,
               inboundTime: now,
-              inboundBy: 'Cổng RFID Gate',
+              inboundBy: _auth.currentUser?.fullName ?? _repo.resolveUserFullName(null, defaultRole: 'thukho'),
             ));
             itemSeq++;
 
@@ -1977,13 +1983,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final hasPendingInbound = _pendingGateOrders.isNotEmpty || _repo.items.any((i) => i.status == ItemStatus.pendingInbound);
     final isVehicleActive = hasPendingInbound;
 
-    final waitingPutawayItems = _repo.items.where((i) =>
-      i.status == ItemStatus.waitingPutaway ||
-      (i.status == ItemStatus.inStock &&
-       (i.locationId == null || i.locationId!.trim().isEmpty) &&
-       (i.palletId != null && i.palletId!.trim().isNotEmpty))
-    ).toList();
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
@@ -1998,12 +1997,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           // 2. BANNER THÔNG CỔNG THÀNH CÔNG (TỰ ĐỘNG RESET SAU 3S)
           if (_lastSuccessOrderNo != null && !_hasDiscrepancyError) ...[
             _buildPassSuccessBanner(c),
-            const SizedBox(height: 12),
-          ],
-
-          // 2.1 BANNER THÔNG BÁO HÀNG ĐÃ QUA CỔNG - CHƯA CẤT LÊN KỆ (CHỜ TAY CẦM PDA)
-          if (waitingPutawayItems.isNotEmpty && !_hasDiscrepancyError) ...[
-            _buildWaitingPutawayNoticeBanner(c, waitingPutawayItems),
             const SizedBox(height: 12),
           ],
 
@@ -2072,7 +2065,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Xe Pallet: ${_discrepancyPalletCode ?? "Chưa gán pallet"} • Thiếu ${_discrepancyMissingItems.length} chip sản phẩm • Có ${_discrepancyUnexpectedTags.length} chip lạ ngoài đơn',
+                      'Pallet: ${_discrepancyPalletCode ?? "Chưa gán"} • Thiếu ${_discrepancyMissingItems.length} chip sản phẩm • Có ${_discrepancyUnexpectedTags.length} chip lạ ngoài đơn',
                       style: TextStyle(color: c.textSecondary, fontSize: 12),
                     ),
                   ],
@@ -2087,7 +2080,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: const Icon(Icons.replay, size: 16),
-                label: const Text('QUÉT LẠI XE NÀY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                label: const Text('QUÉT LẠI PALLET NÀY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                 onPressed: _retryCurrentVehicle,
               ),
               const SizedBox(width: 8),
@@ -2146,103 +2139,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+        color: const Color(0xFF10B981).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFF10B981), width: 1.5),
       ),
-      child: Row(
+      child: const Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '✓ ĐƠN HÀNG $_lastSuccessOrderNo ĐÃ QUA CỔNG THÀNH CÔNG!',
-                  style: const TextStyle(
-                    color: Color(0xFF10B981),
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Xe Pallet: ${_lastSuccessPalletCode ?? "--"} • Đã ghi nhận $_lastSuccessCount/$_lastSuccessCount chip (Trạng thái: Chờ Xếp Kệ) • Đang sẵn sàng đón xe tiếp theo...',
-                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.autorenew, size: 14, color: Color(0xFF10B981)),
-                SizedBox(width: 4),
-                Text('TỰ ĐỘNG CHUYỂN TIẾP', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- 2.1 BANNER THÔNG BÁO HÀNG ĐÃ QUA CỔNG CHỜ TAY CẦM CẤT KỆ ----------
-  Widget _buildWaitingPutawayNoticeBanner(EyeCareColors c, List<Item> waitingItems) {
-    final palletSet = <String>{};
-    for (final it in waitingItems) {
-      if (it.palletId != null && it.palletId!.trim().isNotEmpty) {
-        palletSet.add(it.palletId!.replaceAll('PAL-', '').trim());
-      }
-    }
-    final palletText = palletSet.isEmpty ? 'Xe Pallet' : palletSet.join(', ');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.shelves, color: Color(0xFFF59E0B), size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '📦 HÀNG ĐÃ NHẬP QUA CỔNG - CHƯA CẤT LÊN KỆ (Chờ tay cầm PDA xếp vào vị trí kệ)',
-                  style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 13.5),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Xe: $palletText • ${waitingItems.length} sản phẩm đang ở khu vực đệm chờ cất vào kệ. Khi tay cầm PDA hoàn tất xếp kệ, thông báo này sẽ tự động biến mất.',
-                  style: TextStyle(color: c.textPrimary, fontSize: 12),
-                ),
-              ],
+          Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 22),
+          SizedBox(width: 10),
+          Text(
+            '✓ QUA CỔNG THÀNH CÔNG',
+            style: TextStyle(
+              color: Color(0xFF10B981),
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -2275,7 +2186,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       final isComplete = expectedCount > 0 && scannedCount >= expectedCount;
       final progress = expectedCount > 0 ? (scannedCount / expectedCount).clamp(0.0, 1.0) : 0.0;
       final activeItems = _getStep2FlatInspectionItems();
-      final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? 'Xe Pallet';
+      final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? '--';
       final pRfid = _activePalletTag ?? _wizardDetectedPalletTag ?? _activePallet?.rfidEpc ?? '--';
 
       return _buildSingleVehicleLayout(
@@ -2403,7 +2314,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text(
-                          'Xe Pallet: $palletCode',
+                          (palletCode.isNotEmpty && palletCode != '--' && palletCode != 'Xe Pallet') ? 'Pallet: $palletCode' : 'Pallet: Chưa xác định',
                           style: TextStyle(color: c.textPrimary, fontSize: 15.5, fontWeight: FontWeight.bold),
                         ),
                         Container(
@@ -2418,7 +2329,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             ),
                           ),
                           child: Text(
-                            isComplete ? '✓ ĐỦ TOÀN BỘ' : '⚡ ĐANG ĐỐI SOÁT TRỰC TIẾP',
+                            isComplete ? '✓ HOÀN TẤT' : '⚡ ĐANG QUÉT',
                             style: TextStyle(
                               color: isComplete ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                               fontSize: 10.5,
@@ -2430,7 +2341,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Mã Đơn: $orderNo • RFID Pallet: $palletCode ($palletRfid) • Cần nhận diện: $expectedCount chip hàng',
+                      'Mã Đơn: $orderNo • Pallet: ${(palletCode.isNotEmpty && palletCode != '--' && palletCode != 'Xe Pallet') ? palletCode : "Chưa gán"}${palletRfid != '--' && palletRfid.isNotEmpty ? " ($palletRfid)" : ""} • Cần nhận diện: $expectedCount chip hàng',
                       style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                     ),
                   ],
@@ -2574,11 +2485,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   child: Row(
                     children: [
                       SizedBox(width: 45, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 120, child: Text('THÙNG HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 110, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 3, child: Text('TÊN SẢN PHẨM / QUY CÁCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 140, child: Text('TRẠNG THÁI CỔNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                      SizedBox(width: 120, child: Text('THÙNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                      SizedBox(width: 110, child: Text('SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                      Expanded(flex: 3, child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                      Expanded(flex: 3, child: Text('EPC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                      SizedBox(width: 140, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     ],
                   ),
                 ),
@@ -2653,7 +2564,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                       ),
                                     ),
                                     child: Text(
-                                      isScanned ? '✓ ĐÃ ĐỐI SOÁT' : '⏳ CHỜ QUA CỔNG',
+                                      isScanned ? '✓ ĐẠT' : '⏳ CHỜ',
                                       style: TextStyle(
                                         color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                                         fontSize: 10.5,
@@ -2679,7 +2590,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               const Expanded(
                                 flex: 3,
                                 child: Text(
-                                  'Chip không thuộc đơn hàng đang qua cổng!',
+                                  'Ngoài đơn',
                                   style: TextStyle(color: Color(0xFFEF4444), fontSize: 12),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -2710,7 +2621,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                       border: Border.all(color: const Color(0xFFEF4444)),
                                     ),
                                     child: const Text(
-                                      '❌ CHIP LẠ',
+                                      '❌ LẠ',
                                       style: TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold),
                                     ),
                                   ),
@@ -2790,7 +2701,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            'Xe Pallet: $pCode',
+                            (pCode.isNotEmpty && pCode != '--' && pCode != 'Xe Pallet') ? 'Pallet: $pCode' : 'Pallet: Chưa xác định',
                             style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                           ),
                           Container(
@@ -2805,7 +2716,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               ),
                             ),
                             child: Text(
-                              isComplete ? '✓ ĐỦ TOÀN BỘ' : '⚡ ĐANG ĐỐI SOÁT TRỰC TIẾP',
+                              isComplete ? '✓ HOÀN TẤT' : '⚡ ĐANG QUÉT',
                               style: TextStyle(
                                 color: isComplete ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                                 fontSize: 10.5,
@@ -2817,7 +2728,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Mã Đơn: $ordNo • RFID Pallet: $pCode ($pRfid) • Cần nhận diện: $expectedCount chip hàng',
+                        'Đơn: $ordNo • Pallet: ${(pCode.isNotEmpty && pCode != '--' && pCode != 'Xe Pallet') ? pCode : "Chưa gán"}${pRfid != '--' && pRfid.isNotEmpty ? " ($pRfid)" : ""} • Mục tiêu: $expectedCount',
                         style: TextStyle(color: c.textSecondary, fontSize: 11),
                       ),
                     ],
@@ -2831,7 +2742,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     border: Border.all(color: isComplete ? const Color(0xFF10B981) : c.border),
                   ),
                   child: Text(
-                    '$scannedCount / $expectedCount chip',
+                    '$scannedCount / $expectedCount',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -2863,11 +2774,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             child: Row(
               children: [
                 SizedBox(width: 45, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                SizedBox(width: 120, child: Text('THÙNG HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                SizedBox(width: 110, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 3, child: Text('TÊN SẢN PHẨM / QUY CÁCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                SizedBox(width: 140, child: Text('TRẠNG THÁI CỔNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                SizedBox(width: 120, child: Text('THÙNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                SizedBox(width: 110, child: Text('SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 3, child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                Expanded(flex: 3, child: Text('EPC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                SizedBox(width: 140, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
               ],
             ),
           ),
@@ -2939,7 +2850,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             ),
                           ),
                           child: Text(
-                            isScanned ? '✓ ĐÃ ĐỐI SOÁT' : '⏳ CHỜ QUA CỔNG',
+                            isScanned ? '✓ ĐẠT' : '⏳ CHỜ',
                             style: TextStyle(
                               color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                               fontSize: 10.5,
@@ -2980,7 +2891,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 const Icon(Icons.warning, size: 16, color: Color(0xFFEF4444)),
                 const SizedBox(width: 8),
                 Text(
-                  'CÓ ${unexpList.length} CHIP LẠ NGOÀI ĐƠN HÀNG!',
+                  '${unexpList.length} THẺ LẠ NGOÀI ĐƠN',
                   style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ],
@@ -2997,7 +2908,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
                   const Expanded(
                     flex: 3,
-                    child: Text('Chip không thuộc đơn hàng đang qua cổng!', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12)),
+                    child: Text('Ngoài đơn', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12)),
                   ),
                   Expanded(
                     flex: 3,
@@ -3009,7 +2920,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   const SizedBox(
                     width: 140,
                     child: Center(
-                      child: Text('❌ CHIP LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11)),
+                      child: Text('❌ LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11)),
                     ),
                   ),
                 ],
@@ -3044,14 +2955,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             ),
             const SizedBox(height: 16),
             Text(
-              'CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG',
+              'CỔNG RFID SẴN SÀNG',
               style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Vui lòng bấm nút [NHẬP HÀNG] ở góc trên để tải file Excel/PO vào hệ thống.\nSau khi nạp file, hệ thống sẽ tự động quét và đối soát mã chip RFID khi xe qua cổng.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5, height: 1.5),
             ),
           ],
         ),
@@ -3090,7 +2995,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               icon: Icon(Icons.refresh, size: 15, color: c.textSecondary),
-              label: Text('Làm Mới Quét', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+              label: Text('Làm mới', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
               onPressed: _resetWizard,
             ),
             const SizedBox(width: 10),
@@ -3126,8 +3031,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               icon: Icon(_wizardIsScanning ? Icons.stop : Icons.sensors, size: 16),
               label: Text(
                 _wizardIsScanning
-                    ? (_wizardScanDuration == 0 ? 'DỪNG QUÉT LIÊN TỤC' : 'DỪNG QUÉT ($_wizardScanCountdown s)')
-                    : 'BẮT ĐẦU QUÉT (${_wizardScanDuration == 0 ? "LIÊN TỤC" : "${_wizardScanDuration}s"})',
+                    ? (_wizardScanDuration == 0 ? 'DỪNG QUÉT' : 'DỪNG QUÉT ($_wizardScanCountdown s)')
+                    : 'QUÉT (${_wizardScanDuration == 0 ? "LIÊN TỤC" : "${_wizardScanDuration}s"})',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               ),
               onPressed: _toggleWizardScan,
@@ -3144,7 +3049,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.report_problem, size: 15, color: Color(0xFFEF4444)),
-                  label: const Text('BÁO LỖI SAI SÓT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  label: const Text('BÁO SAI SÓT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                   onPressed: _reportDiscrepancyError,
                 ),
               const SizedBox(width: 8),
@@ -3163,8 +3068,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 icon: Icon(isComplete ? Icons.check_circle : Icons.hourglass_top_rounded, size: 16),
                 label: Text(
                   isComplete
-                      ? 'ĐÃ ĐỌC ĐỦ $scannedCount/$expectedCount (TỰ ĐỘNG ĐẨY SANG PDA)'
-                      : (scannedCount > 0 ? 'CHƯA ĐỌC ĐỦ ($scannedCount/$expectedCount CHIP)' : 'CHƯA ĐỌC ĐỦ'),
+                      ? '✓ ĐÃ ĐỦ $scannedCount/$expectedCount • TỰ ĐỘNG ĐẨY PDA'
+                      : (scannedCount > 0 ? 'CHƯA ĐỦ ($scannedCount/$expectedCount)' : 'CHƯA ĐỌC ĐỦ'),
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isComplete ? Colors.white : c.textMuted),
                 ),
                 onPressed: (isComplete && !hasUnexpectedTags) ? _completeGoodsReceiveAtGate : null,

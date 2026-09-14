@@ -1392,7 +1392,7 @@ class _InboundScreenState extends State<InboundScreen> {
       }
     }
     final palletText = palletSet.isEmpty
-        ? (waitingOrders.isNotEmpty ? waitingOrders.first.orderNo : 'Xe Pallet')
+        ? (waitingOrders.isNotEmpty ? waitingOrders.first.orderNo : 'Chưa gán pallet')
         : palletSet.join(', ');
 
     final totalCount = waitingPutawayItems.length;
@@ -2466,8 +2466,8 @@ class _InboundScreenState extends State<InboundScreen> {
                   const SizedBox(width: 6),
                   Text(
                     _detectedPallet != null
-                        ? 'Xe Pallet: ${_detectedPallet!.palletCode}'
-                        : 'Xe: ${_palletController.text.trim().toUpperCase()}',
+                        ? 'Pallet: ${_detectedPallet!.palletCode}'
+                        : 'Pallet: ${_palletController.text.trim().toUpperCase()}',
                     style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ],

@@ -399,18 +399,7 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
                 const Icon(Icons.door_sliding_outlined, color: Color(0xFF10B981), size: 22),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Thiết Kế Cổng Ra Vào', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text(
-                        _config.isSingleGate
-                            ? 'Dùng chung 1 Cổng Chính vừa làm Cổng Nhập vừa làm Cổng Xuất'
-                            : 'Có 2 Cổng riêng biệt: Cổng Nhập xe tải ở đầu vào và Cổng Xuất xe ở đầu ra',
-                        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                      ),
-                    ],
-                  ),
+                  child: Text('Thiết Kế Cổng Ra Vào', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 Switch(
                   value: !_config.isSingleGate,

@@ -740,43 +740,9 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                 ),
                 const SizedBox(width: 14),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'QUẢN LÝ & CẤP TÀI KHOẢN NHÂN VIÊN',
-                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 17, letterSpacing: 0.4),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: c.rfidCyan.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: c.rfidCyan, width: 0.8),
-                            ),
-                            child: Text('ADMIN ONLY', style: TextStyle(color: c.rfidCyan, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: const Color(0xFF10B981), width: 0.8),
-                            ),
-                            child: const Text('CSDL THỰC TẾ (NO MOCK)', style: TextStyle(color: Color(0xFF10B981), fontSize: 9.5, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Quản trị viên toàn quyền cấp mới tài khoản, phân quyền vai trò (Kỹ thuật, Thủ kho, PDA, Seller), đặt lại mật khẩu và khóa tài khoản.',
-                        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                      ),
-                    ],
+                  child: Text(
+                    'QUẢN LÝ & CẤP TÀI KHOẢN NHÂN VIÊN',
+                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 17, letterSpacing: 0.4),
                   ),
                 ),
                 OutlinedButton.icon(

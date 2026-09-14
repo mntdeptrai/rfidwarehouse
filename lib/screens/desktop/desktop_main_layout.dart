@@ -132,6 +132,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
       width: isCompact ? 68 : 250,
       decoration: BoxDecoration(
         color: c.bgCard,
@@ -150,15 +151,16 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: c.rfidCyan.withValues(alpha: 0.2),
+                  color: c.rfidCyan.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
                 ),
-                child: Icon(Icons.warehouse, color: c.rfidCyan, size: 24),
+                child: Icon(Icons.warehouse_rounded, color: c.rfidCyan, size: 22),
               ),
             )
           else
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: c.border, width: 1)),
               ),
@@ -167,29 +169,49 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: c.rfidCyan.withValues(alpha: 0.2),
+                      color: c.rfidCyan.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
                     ),
-                    child: Icon(Icons.warehouse, color: c.rfidCyan, size: 26),
+                    child: Icon(Icons.warehouse_rounded, color: c.rfidCyan, size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'RFIDwarehouse',
-                          style: TextStyle(
-                            color: c.rfidCyan,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            letterSpacing: 1.1,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Text(
+                              'RFIDwarehouse',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                                letterSpacing: 0.5,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF10B981),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'Hệ Thống Quản Lý Kho WMS',
-                          style: TextStyle(color: c.textSecondary, fontSize: 11),
+                          'UHF WMS Intelligent Suite',
+                          style: TextStyle(
+                            color: c.textMuted,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -202,59 +224,65 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
           // Menu Items
           Expanded(
             child: ListView(
-              padding: EdgeInsets.symmetric(vertical: 12, horizontal: isCompact ? 6 : 12),
+              padding: EdgeInsets.symmetric(vertical: 10, horizontal: isCompact ? 6 : 10),
               children: [
                 if (!isCompact)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.only(left: 10, right: 10, top: 8, bottom: 6),
                     child: Text(
-                      'QUẢN LÝ KHO HÀNG',
-                      style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      'QUẢN LÝ KHO',
+                      style: TextStyle(
+                        color: c.textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
                     ),
                   ),
                 if (canIn)
                   _buildMenuItem(
                     0,
-                    Icons.input,
+                    Icons.input_rounded,
                     'Nhập Kho',
-                    'Nhập hàng vào kho',
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(1, Icons.output, 'Xuất Kho', 'Xuất hàng xuất bán', c, isCompact: isCompact),
+                _buildMenuItem(1, Icons.output_rounded, 'Xuất Kho', c, isCompact: isCompact),
                 _buildMenuItem(
                   2,
                   Icons.warehouse_rounded,
                   'Quản Lý Kho',
-                  'Pallet & lịch sử nhập xuất',
                   c,
                   isCompact: isCompact,
                 ),
                 if (canAud)
                   _buildMenuItem(
                     3,
-                    Icons.inventory_2,
+                    Icons.inventory_2_outlined,
                     'Kiểm Kê Kho',
-                    'Kiểm đếm & quét RFID',
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(4, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
+                _buildMenuItem(4, Icons.search_rounded, 'Tra Cứu', c, isCompact: isCompact),
                 if (isTech) ...[
                   const SizedBox(height: 8),
                   if (!isCompact)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.only(left: 10, right: 10, top: 8, bottom: 6),
                       child: Text(
                         'HỆ THỐNG & ĐẦU ĐỌC',
-                        style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        style: TextStyle(
+                          color: c.textMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
                       ),
                     ),
                   _buildMenuItem(
                     5,
-                    Icons.radar,
+                    Icons.radar_rounded,
                     'Đầu Đọc UHF (Studio)',
-                    'Hopeland SDK 4.42 & Chỉnh thông số máy',
                     c,
                     badge: 'KỸ THUẬT',
                     isCompact: isCompact,
@@ -263,7 +291,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     7,
                     Icons.settings_input_antenna_rounded,
                     'Cấu Hình Kết Nối',
-                    'IP LAN, COM & tự kết nối',
                     c,
                     badge: 'KẾT NỐI',
                     isCompact: isCompact,
@@ -273,17 +300,21 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                   const SizedBox(height: 8),
                   if (!isCompact)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.only(left: 10, right: 10, top: 8, bottom: 6),
                       child: Text(
                         'QUẢN TRỊ HỆ THỐNG',
-                        style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        style: TextStyle(
+                          color: c.textMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
                       ),
                     ),
                   _buildMenuItem(
                     6,
                     Icons.manage_accounts_rounded,
                     'Cấp & Quản Lý Tài Khoản',
-                    'Cấp phát, phân quyền nhân viên',
                     c,
                     badge: 'ADMIN',
                     isCompact: isCompact,
@@ -293,7 +324,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
             ),
           ),
 
-          // User Profile Footer (Tự động thích ứng compact)
+          // User Profile Footer
           Builder(
             builder: (context) {
               final user = _auth.currentUser;
@@ -316,20 +347,39 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
               }
 
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                margin: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: c.bgCardElevated,
-                  border: Border(top: BorderSide(color: c.border, width: 1)),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.border.withValues(alpha: 0.7)),
                 ),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: c.rfidCyan.withValues(alpha: 0.2),
-                      radius: 17,
-                      child: Text(
-                        user?.fullName.isNotEmpty == true ? user!.fullName.substring(0, 1).toUpperCase() : 'U',
-                        style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
+                    Stack(
+                      children: [
+                        CircleAvatar(
+                          backgroundColor: c.rfidCyan.withValues(alpha: 0.18),
+                          radius: 16,
+                          child: Text(
+                            user?.fullName.isNotEmpty == true ? user!.fullName.substring(0, 1).toUpperCase() : 'U',
+                            style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: c.bgCardElevated, width: 1.2),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -338,12 +388,12 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                         children: [
                           Text(
                             user?.fullName ?? 'Người Dùng WMS',
-                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5),
+                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            '@${user?.username ?? "user"} • $roleLabel',
-                            style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.w600),
+                            roleLabel,
+                            style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w500),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -370,7 +420,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     int index,
     IconData icon,
     String title,
-    String subTitle,
     EyeCareColors c, {
     bool isLocked = false,
     bool isCompact = false,
@@ -379,45 +428,106 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   }) {
     final isSelected = _selectedMenuIndex == index;
 
-    if (isCompact) {
+    return _SidebarItem(
+      index: index,
+      icon: icon,
+      title: title,
+      c: c,
+      isSelected: isSelected,
+      isLocked: isLocked,
+      isCompact: isCompact,
+      badge: badge,
+      onTap: () {
+        if (isLocked) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFEF4444),
+              content: Text(lockMessage ?? 'Tài khoản của bạn không có quyền truy cập chức năng này.'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+        if (_selectedMenuIndex != index) {
+          DesktopUhfTcpService().stopInventory();
+          UhfService().stopInventory();
+          setState(() => _selectedMenuIndex = index);
+        }
+      },
+    );
+  }
+}
+
+class _SidebarItem extends StatefulWidget {
+  final int index;
+  final IconData icon;
+  final String title;
+  final EyeCareColors c;
+  final bool isSelected;
+  final bool isLocked;
+  final bool isCompact;
+  final String? badge;
+  final VoidCallback onTap;
+
+  const _SidebarItem({
+    required this.index,
+    required this.icon,
+    required this.title,
+    required this.c,
+    required this.isSelected,
+    this.isLocked = false,
+    this.isCompact = false,
+    this.badge,
+    required this.onTap,
+  });
+
+  @override
+  State<_SidebarItem> createState() => _SidebarItemState();
+}
+
+class _SidebarItemState extends State<_SidebarItem> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final isSelected = widget.isSelected;
+    final isLocked = widget.isLocked;
+
+    if (widget.isCompact) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Tooltip(
-          message: title,
-          waitDuration: const Duration(milliseconds: 300),
-          child: Material(
-            color: isSelected ? c.rfidCyan.withValues(alpha: 0.2) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
+          message: widget.title,
+          waitDuration: const Duration(milliseconds: 250),
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
             child: InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () {
-                if (isLocked) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: const Color(0xFFEF4444),
-                      content: Text(lockMessage ?? 'Tài khoản của bạn không có quyền truy cập chức năng này.'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                  return;
-                }
-                if (_selectedMenuIndex != index) {
-                  DesktopUhfTcpService().stopInventory();
-                  UhfService().stopInventory();
-                  setState(() => _selectedMenuIndex = index);
-                }
-              },
-              child: Container(
+              borderRadius: BorderRadius.circular(8),
+              onTap: widget.onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  border: isSelected ? Border.all(color: c.rfidCyan, width: 1.5) : null,
+                  color: isSelected
+                      ? c.rfidCyan.withValues(alpha: 0.18)
+                      : (_isHovered ? c.bgCardElevated : Colors.transparent),
+                  borderRadius: BorderRadius.circular(8),
+                  border: isSelected
+                      ? Border.all(color: c.rfidCyan.withValues(alpha: 0.8), width: 1.2)
+                      : (_isHovered
+                          ? Border.all(color: c.border.withValues(alpha: 0.6), width: 1)
+                          : Border.all(color: Colors.transparent)),
                 ),
                 child: Icon(
-                  icon,
-                  color: isSelected ? c.rfidCyan : (isLocked ? c.textMuted : c.textSecondary),
-                  size: 22,
+                  widget.icon,
+                  color: isSelected
+                      ? c.rfidCyan
+                      : (isLocked ? c.textMuted : (_isHovered ? c.textPrimary : c.textSecondary)),
+                  size: 20,
                 ),
               ),
             ),
@@ -428,76 +538,84 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Material(
-        color: isSelected ? c.rfidCyan.withValues(alpha: 0.15) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: () {
-            if (isLocked) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFFEF4444),
-                  content: Text(lockMessage ?? 'Tài khoản của bạn không có quyền truy cập chức năng này.'),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-              return;
-            }
-            if (_selectedMenuIndex != index) {
-              DesktopUhfTcpService().stopInventory();
-              UhfService().stopInventory();
-              setState(() => _selectedMenuIndex = index);
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
             decoration: BoxDecoration(
+              color: isSelected
+                  ? c.rfidCyan.withValues(alpha: 0.14)
+                  : (_isHovered ? c.bgCardElevated.withValues(alpha: 0.7) : Colors.transparent),
               borderRadius: BorderRadius.circular(8),
-              border: isSelected ? Border.all(color: c.rfidCyan.withValues(alpha: 0.5)) : null,
+              border: Border.all(
+                color: isSelected
+                    ? c.rfidCyan.withValues(alpha: 0.45)
+                    : (_isHovered ? c.border.withValues(alpha: 0.5) : Colors.transparent),
+                width: 1,
+              ),
             ),
             child: Row(
               children: [
-                Icon(
-                  isLocked ? Icons.lock_rounded : icon,
-                  color: isSelected ? c.rfidCyan : (isLocked ? c.textMuted : c.textMuted),
-                  size: 20,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 3,
+                  height: isSelected ? 18 : 0,
+                  decoration: BoxDecoration(
+                    color: c.rfidCyan,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: isSelected ? 8 : 4),
+                Icon(
+                  isLocked ? Icons.lock_outline_rounded : widget.icon,
+                  color: isSelected
+                      ? c.rfidCyan
+                      : (isLocked ? c.textMuted : (_isHovered ? c.textPrimary : c.textSecondary)),
+                  size: 19,
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    title,
+                    widget.title,
                     style: TextStyle(
                       color: isSelected
                           ? c.rfidCyan
-                          : (isLocked ? c.textMuted : c.textSecondary),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          : (isLocked ? c.textMuted : (_isHovered ? c.textPrimary : c.textSecondary)),
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                       fontSize: 13,
+                      letterSpacing: 0.2,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (badge != null)
+                if (widget.badge != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: isLocked
-                          ? const Color(0xFFEF4444).withValues(alpha: 0.15)
-                          : c.rfidCyan.withValues(alpha: 0.15),
+                          ? const Color(0xFFEF4444).withValues(alpha: 0.12)
+                          : c.rfidCyan.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
                         color: isLocked
-                            ? const Color(0xFFEF4444).withValues(alpha: 0.4)
-                            : c.rfidCyan.withValues(alpha: 0.4),
-                        width: 0.7,
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.3)
+                            : c.rfidCyan.withValues(alpha: 0.3),
+                        width: 0.8,
                       ),
                     ),
                     child: Text(
-                      badge,
+                      widget.badge!,
                       style: TextStyle(
                         color: isLocked ? const Color(0xFFEF4444) : c.rfidCyan,
                         fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
                       ),
                     ),
                   ),

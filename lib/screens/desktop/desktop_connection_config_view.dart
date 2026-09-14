@@ -346,53 +346,33 @@ class _DesktopConnectionConfigViewState extends State<DesktopConnectionConfigVie
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Text(
-                      'CẤU HÌNH KẾT NỐI ĐẦU ĐỌC RFID',
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: c.rfidCyan.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: c.rfidCyan, width: 0.8),
-                      ),
-                      child: Text('QUẢN TRỊ HỆ THỐNG', style: TextStyle(color: c.rfidCyan, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isConnected ? const Color(0xFF10B981).withValues(alpha: 0.15) : const Color(0xFFEF4444).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444), width: 0.8),
-                      ),
-                      child: Text(
-                        isConnected ? 'ONLINE • ĐÃ KẾT NỐI' : 'OFFLINE • CHƯA KẾT NỐI',
-                        style: TextStyle(
-                          color: isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
                 Text(
-                  'Thiết lập thông số kết nối TCP/IP LAN, Cổng COM RS232/485 và tự động kết nối khi khởi động phần mềm.',
-                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                  'CẤU HÌNH KẾT NỐI ĐẦU ĐỌC RFID',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isConnected ? const Color(0xFF10B981).withValues(alpha: 0.15) : const Color(0xFFEF4444).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444), width: 0.8),
+                  ),
+                  child: Text(
+                    isConnected ? 'ONLINE • ĐÃ KẾT NỐI' : 'OFFLINE • CHƯA KẾT NỐI',
+                    style: TextStyle(
+                      color: isConnected ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),

@@ -787,15 +787,15 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           const Tab(icon: Icon(Icons.radar, size: 15), text: 'Quét Thẻ (Live Inventory)'),
           Tab(
             icon: Icon(canConfigure ? Icons.edit_note : Icons.lock_outline, size: 15),
-            text: canConfigure ? 'Đọc & Ghi Thẻ (Memory R/W)' : 'Đọc Thẻ 🔒 [Ghi bị khóa]',
+            text: 'Đọc & Ghi Thẻ (Memory R/W)',
           ),
           Tab(
             icon: Icon(Icons.lock_outline, size: 15),
-            text: canConfigure ? 'Bảo Mật Thẻ (Lock & Kill)' : 'Bảo Mật Thẻ 🔒 [Chỉ xem]',
+            text: 'Bảo Mật Thẻ (Lock & Kill)',
           ),
           Tab(
             icon: Icon(Icons.lan_outlined, size: 15),
-            text: canConfigure ? 'Tìm Thiết Bị LAN & Cấu Hình' : 'Tìm Thiết Bị LAN 🔒 [Chỉ xem]',
+            text: 'Tìm Thiết Bị LAN & Cấu Hình',
           ),
         ],
       ),

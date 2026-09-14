@@ -284,42 +284,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     return items;
   }
 
-  void _suggestFifoOutbound(List<Item> currentItems) {
-    if (currentItems.isEmpty) return;
-    final Map<String, List<Item>> skuMap = {};
-    for (var it in currentItems) {
-      skuMap.putIfAbsent(it.sku.trim().toLowerCase(), () => []).add(it);
-    }
-
-    final Set<String> toSelect = {};
-    for (var list in skuMap.values) {
-      list.sort((a, b) {
-        final tA = a.inboundTime;
-        final tB = b.inboundTime;
-        if (tA == null && tB == null) return 0;
-        if (tA == null) return 1;
-        if (tB == null) return -1;
-        return tA.compareTo(tB);
-      });
-      if (list.isNotEmpty) {
-        final oldestTime = list.first.inboundTime;
-        if (oldestTime != null) {
-          final oldestBatch = list.where((i) => i.inboundTime == oldestTime);
-          for (var it in oldestBatch) {
-            toSelect.add(it.epc.toUpperCase());
-          }
-        } else {
-          toSelect.add(list.first.epc.toUpperCase());
-        }
-      }
-    }
-
-    setState(() {
-      _selectedEpcs.addAll(toSelect);
-    });
-  }
-
-
   // ---------- HOÀN TẤT XUẤT KHO QUA CỔNG RFID (STEP 2) ----------
   Future<void> _completeGateOutbound() async {
     final scannedEpcs = _gateScannedTags.keys.toList();
@@ -555,18 +519,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 child: const Icon(Icons.outbox_rounded, color: Color(0xFF10B981), size: 22),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'QUẢN LÝ XUẤT KHO RFID',
-                    style: TextStyle(color: c.textPrimary, fontSize: isNarrow ? 15 : 18, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Sơ đồ 10 vị trí • Kiểm đếm hàng hóa • Cổng quét RFID đối soát xuất xe',
-                    style: TextStyle(color: c.textSecondary, fontSize: 11),
-                  ),
-                ],
+              Text(
+                'QUẢN LÝ XUẤT KHO RFID',
+                style: TextStyle(color: c.textPrimary, fontSize: isNarrow ? 15 : 18, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -582,8 +537,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 ),
                 child: Row(
                   children: [
-                    _buildTopTabItem(0, 'XUẤT KHO THEO SƠ ĐỒ', Icons.map_outlined, c),
-                    _buildTopTabItem(1, 'LỊCH SỬ XUẤT KHO', Icons.receipt_long_outlined, c),
+                    _buildTopTabItem(0, 'XUẤT KHO', Icons.map_outlined, c),
+                    _buildTopTabItem(1, 'LỊCH SỬ', Icons.receipt_long_outlined, c),
                   ],
                 ),
               ),
@@ -733,24 +688,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-
-              // Nút gợi ý xuất FIFO (Ưu tiên lô xa nhất)
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.flash_on, size: 15),
-                label: const Text(
-                  'GỢI Ý FIFO (LÔ XA NHẤT)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
-                ),
-                onPressed: () => _suggestFifoOutbound(items),
-              ),
               const SizedBox(width: 14),
 
               // Ô tìm kiếm
@@ -761,7 +698,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     controller: _searchController,
                     style: TextStyle(color: c.textPrimary, fontSize: 12),
                     decoration: InputDecoration(
-                      hintText: 'Tìm kiếm theo mã SKU, tên sản phẩm, mã RFID EPC, mã thùng...',
+                      hintText: 'Tìm SKU, tên, EPC, thùng...',
                       hintStyle: TextStyle(color: c.textMuted, fontSize: 11.5),
                       prefixIcon: Icon(Icons.search, size: 16, color: c.textMuted),
                       filled: true,
@@ -814,17 +751,17 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                     const SizedBox(width: 8),
                     SizedBox(width: 45, child: Text('STT', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 110, child: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 110, child: Text('VỊ TRÍ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 130, child: Text('MÃ THÙNG / PALLET', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 130, child: Text('THÙNG / PALLET', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 140, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 140, child: Text('SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    Expanded(flex: 3, child: Text('TÊN SẢN PHẨM / QUY CÁCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    Expanded(flex: 3, child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                    Expanded(flex: 3, child: Text('EPC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
-                    SizedBox(width: 170, child: Text('NGÀY NHẬP KHO (FIFO)', style: TextStyle(color: const Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold))),
+                    SizedBox(width: 170, child: Text('NGÀY NHẬP (FIFO)', style: TextStyle(color: const Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold))),
                     const SizedBox(width: 8),
                     SizedBox(width: 110, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                   ],
@@ -845,12 +782,12 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                               Text(
                                 _selectedLocationId != null
                                     ? 'Không có sản phẩm nào đang lưu tại vị trí này'
-                                    : 'Không có sản phẩm nào khớp với tìm kiếm',
+                                    : 'Không có sản phẩm',
                                 style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Vui lòng chọn vị trí khác hoặc xóa bộ lọc tìm kiếm.',
+                                'Chọn vị trí khác hoặc xóa bộ lọc.',
                                 style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                               ),
                             ],
@@ -1085,7 +1022,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   const Icon(Icons.check_circle_outline, size: 20, color: Color(0xFF10B981)),
                   const SizedBox(width: 8),
                   Text(
-                    'ĐÃ CHỌN: ${_selectedEpcs.length} / ${items.length} SẢN PHẨM ĐỂ XUẤT KHO',
+                    'ĐÃ CHỌN: ${_selectedEpcs.length}/${items.length} SP',
                     style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ],
@@ -1102,7 +1039,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 ),
                 icon: const Icon(Icons.arrow_forward, size: 17),
                 label: const Text(
-                  'TIẾP TỤC: QUA CỔNG RFID XUẤT KHO ➜',
+                  'QUA CỔNG XUẤT ➜',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
                 ),
                 onPressed: () {
@@ -1219,7 +1156,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                           Row(
                             children: [
                               Text(
-                                'CỔNG QUÉT XUẤT KHO RFID',
+                                'CỔNG XUẤT RFID',
                                 style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(width: 10),
@@ -1245,10 +1182,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                           const SizedBox(height: 4),
                           Text(
                             hasUnexpected
-                                ? '⛔ PHÁT HIỆN ${unexpected.length} CHIP LẠ NGOÀI ĐƠN! VUI LÒNG DỪNG XE KIỂM TRA'
+                                ? '⛔ ${unexpected.length} THẺ LẠ NGOÀI ĐƠN! CẦN KIỂM TRA'
                                 : (isComplete
-                                    ? '✅ ĐÃ ĐỐI SOÁT ĐỦ $scannedCount/$expectedCount SẢN PHẨM • SẴN SÀNG XÁC NHẬN XUẤT KHO'
-                                    : (scannedCount > 0 ? '⚡ Đang quét hàng qua cổng... Còn thiếu ${expectedCount - scannedCount} sản phẩm' : 'Đưa pallet/kiện hàng đã chọn đi qua cổng RFID để đối soát')),
+                                    ? '✅ ĐỦ $scannedCount/$expectedCount SP • SẴN SÀNG XUẤT'
+                                    : (scannedCount > 0 ? '⚡ Đang quét... Còn thiếu ${expectedCount - scannedCount} SP' : 'Đưa hàng qua cổng RFID để đối soát')),
                             style: TextStyle(
                               color: hasUnexpected
                                   ? const Color(0xFFEF4444)
@@ -1373,7 +1310,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                         ),
                         icon: const Icon(Icons.check_circle, size: 18),
                         label: Text(
-                          _isSaving ? 'ĐANG LƯU...' : 'XÁC NHẬN HOÀN TẤT XUẤT KHO ($scannedCount SP)',
+                          _isSaving ? 'ĐANG LƯU...' : 'HOÀN TẤT XUẤT ($scannedCount SP)',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
                         ),
                         onPressed: (_isSaving || scannedCount == 0 || hasUnexpected) ? null : _completeGateOutbound,
@@ -1407,15 +1344,15 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       children: [
                         SizedBox(width: 45, child: Text('STT', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
-                        Expanded(flex: 3, child: Text('MÃ RFID EPC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 3, child: Text('EPC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
-                        SizedBox(width: 150, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        SizedBox(width: 150, child: Text('SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
                         Expanded(flex: 3, child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
-                        SizedBox(width: 120, child: Text('VỊ TRÍ KỆ GỐC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        SizedBox(width: 120, child: Text('VỊ TRÍ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         const SizedBox(width: 8),
-                        SizedBox(width: 150, child: Text('KẾT QUẢ CỔNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        SizedBox(width: 150, child: Text('KẾT QUẢ', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                       ],
                     ),
                   ),
@@ -1470,7 +1407,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                         border: Border.all(color: isPassed ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
                                       ),
                                       child: Text(
-                                        isPassed ? '✅ ĐÃ QUA CỔNG' : '⏳ CHỜ QUA CỔNG',
+                                        isPassed ? '✓ ĐẠT' : '⏳ CHỜ',
                                         style: TextStyle(
                                           color: isPassed ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                                           fontSize: 10,
@@ -1509,7 +1446,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                 const SizedBox(width: 8),
                                 SizedBox(width: 150, child: Text(item?.sku ?? 'CHIP LẠ', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11.5, fontWeight: FontWeight.bold))),
                                 const SizedBox(width: 8),
-                                Expanded(flex: 3, child: Text(item?.productName ?? 'Không nằm trong danh sách xuất', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
+                                Expanded(flex: 3, child: Text(item?.productName ?? 'Ngoài danh sách', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
                                 const SizedBox(width: 8),
                                 SizedBox(width: 120, child: Text(item?.locationId ?? '--', style: TextStyle(color: c.textMuted, fontSize: 11))),
                                 const SizedBox(width: 8),
@@ -1524,7 +1461,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                         border: Border.all(color: const Color(0xFFEF4444)),
                                       ),
                                       child: const Text(
-                                        '⛔ CHIP LẠ NGOÀI ĐƠN',
+                                        '⛔ LẠ',
                                         style: TextStyle(color: Color(0xFFEF4444), fontSize: 10, fontWeight: FontWeight.bold),
                                       ),
                                     ),
@@ -1557,7 +1494,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'LỊCH SỬ GIAO DỊCH XUẤT KHO (${transactions.length} giao dịch)',
+            'LỊCH SỬ XUẤT KHO (${transactions.length})',
             style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),

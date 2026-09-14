@@ -17,3 +17,24 @@
 ## 3. Surgical Changes
 - Chỉ chạm vào đúng những dòng code cần sửa. Không sửa lung tung các thành phần đang hoạt động ổn định.
 - Khi loại bỏ logic cũ, dọn sạch triệt để các biến/hàm mồ côi liên quan trực tiếp đến thay đổi đó.
+
+---
+
+## 4. Duy Trì & Cập Nhật CODE_GRAPH.md
+- [CODE_GRAPH.md](CODE_GRAPH.md) là bản đồ tổng thể kiến trúc, phân tầng và luồng dữ liệu của dự án.
+- Khi thay đổi kiến trúc, thêm màn hình, sửa luồng nghiệp vụ hoặc refactor dịch vụ, Agent **bắt buộc** phải cập nhật lại `CODE_GRAPH.md`.
+
+---
+
+## 5. Đội Ngũ AI Chuyên Môn Hóa (Antigravity AI Team Squad)
+Hệ thống được vận hành bởi một đội ngũ Agent chuyên biệt nằm trong `.agents/skills/`:
+
+| Vai trò Agent | Skill Tương Ứng | Trách Nhiệm Chính |
+| :--- | :--- | :--- |
+| **Orchestrator / Team Lead** | `AGENTS.md` | Tiếp nhận yêu cầu, phân tích bài toán, phân rã công việc cho các specialist, kiểm duyệt chất lượng |
+| **RFID Hardware Engineer** | `.agents/skills/rfid-hardware-engineer` | Hopeland CL7206C2 (TCP), SEUIC UTouch 2 (AAR / Kotlin reflection), Tower Light Modbus, RSSI |
+| **Supabase DB Architect** | `.agents/skills/supabase-db-architect` | PostgreSQL 17, `supabase_schema.sql`, `create_foreign_keys.sql`, SQLite cache, No Mock Data |
+| **Flutter UI/UX Specialist** | `.agents/skills/flutter-ui-taste` | Flutter Desktop & PDA, Agency-grade UI, Animation 160ms, Sơ đồ kho 2D Canvas, AAA contrast |
+| **QA Test Engineer** | `.agents/skills/qa-test-engineer` | Chạy `flutter test`, kiểm tra hồi quy, duy trì 100% test pass (125/125) trước khi hoàn tất task |
+
+

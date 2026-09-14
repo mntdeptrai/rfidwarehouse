@@ -889,5 +889,41 @@ void main() {
       await repo.addItem(customItem);
       expect(repo.getItemPutawayBy(customItem), 'Nguyễn Vịt Quay');
     });
+
+    test('getItemInboundBy resolves user name who operated gate receive', () async {
+      final repo = WarehouseRepository();
+      await repo.reloadFromSqlite();
+
+      final activeStaff = WmsUser(
+        userId: 'USER-STAFF-INBOUND-01',
+        username: 'nhanvien1',
+        fullName: 'Trần Văn Nhập Kho',
+        role: 'thukho',
+        isActive: true,
+      );
+      await repo.addUser(activeStaff);
+
+      final item = Item(
+        itemId: 'ITEM-TEST-GATE-INB-01',
+        productId: 'PROD-001',
+        sku: 'SKU-001',
+        productName: 'Hàng Gate Test',
+        serialNumber: 'SN-GATE-01',
+        epc: 'EPC-GATE-01',
+        status: ItemStatus.pendingInbound,
+        orderNo: 'ORD-GATE-01',
+      );
+      await repo.addItem(item);
+
+      await repo.confirmGateReceiveToWaitingPutaway(
+        orderNo: 'ORD-GATE-01',
+        scannedEpcs: ['EPC-GATE-01'],
+        palletCode: 'PL-GATE-01',
+        performedBy: 'Trần Văn Nhập Kho',
+      );
+
+      final updated = repo.items.firstWhere((i) => i.epc == 'EPC-GATE-01');
+      expect(repo.getItemInboundBy(updated), 'Trần Văn Nhập Kho');
+    });
   });
 }

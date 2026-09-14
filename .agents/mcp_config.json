@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "git": {
+      "command": "cmd.exe",
+      "args": ["/c", "git", "status"],
+      "env": {}
+    }
+  }
+}
