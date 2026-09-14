@@ -110,8 +110,9 @@ graph TD
 | ├── [`gate_pass_fail_banner.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/gate_pass_fail_banner.dart) | Banner thông báo kết quả qua cổng (Đạt / Báo động sai sót). |
 | ├── [`sonar_radar_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/sonar_radar_widget.dart) | Radar mô phỏng mức sóng RSSI để định vị thẻ RFID bị thất lạc. |
 | **`database/`** | **Cơ Sở Dữ Liệu & Ràng Buộc Toàn Vẹn (PostgreSQL 17 / Supabase)** |
-| ├── [`supabase_schema.sql`](file:///c:/Users/MNT/Documents/uhf/supabase_schema.sql) | Toàn bộ schema khởi tạo 16 bảng, RLS, Realtime và tự động đồng bộ đầy đủ PK, UK, FK an toàn. |
-| ├── [`create_foreign_keys.sql`](file:///c:/Users/MNT/Documents/uhf/create_foreign_keys.sql) | Script độc lập thiết lập toàn diện 16 Khóa chính (PK), 10 Ràng buộc duy nhất (UK), dọn dẹp orphan data, 14 Khóa ngoại (FK) và 14 B-Tree Indexes cho Supabase. |
+| ├── [`supabase_schema.sql`](file:///c:/Users/MNT/Documents/uhf/supabase_schema.sql) | Toàn bộ schema khởi tạo 17 bảng (bao gồm `inventory_transactions`), RLS, Realtime và tự động đồng bộ đầy đủ PK, UK, FK an toàn. |
+| ├── [`create_foreign_keys.sql`](file:///c:/Users/MNT/Documents/uhf/create_foreign_keys.sql) | Script độc lập thiết lập toàn diện 17 Khóa chính (PK), 10 Ràng buộc duy nhất (UK), dọn dẹp orphan data, 14 Khóa ngoại (FK) và B-Tree Indexes cho Supabase. |
+
 
 ---
 
@@ -241,7 +242,23 @@ erDiagram
         string epc
         string resultType
     }
+
+    InventoryTransaction {
+        string transactionId PK
+        string transactionType
+        string documentNo
+        string sku
+        string productName
+        int quantity
+        string fromLocation
+        string toLocation
+        string palletCode
+        string performedBy
+        timestamptz timestamp
+        string notes
+    }
 ```
+
 
 ---
 

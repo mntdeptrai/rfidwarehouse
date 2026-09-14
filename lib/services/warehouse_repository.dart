@@ -165,6 +165,7 @@ class WarehouseRepository extends ChangeNotifier {
         supa.from('outbound_order_details').select(),
         supa.from('users').select(),
         supa.from('customers').select(),
+        supa.from('inventory_transactions').select().order('timestamp', ascending: false).limit(200).catchError((_) => []),
       ]);
 
       final locRows = results[0] as List<dynamic>;
@@ -177,6 +178,8 @@ class WarehouseRepository extends ChangeNotifier {
       final outDetailRows = results[7] as List<dynamic>;
       final userRows = results[8] as List<dynamic>;
       final custRows = results[9] as List<dynamic>;
+      final txRows = results[10] as List<dynamic>;
+
 
       // 1. Locations
       final loadedLocs = locRows.map((m) => Location(
@@ -372,6 +375,29 @@ class WarehouseRepository extends ChangeNotifier {
         createdAt: DateTime.tryParse((c['created_at'] ?? '').toString()) ?? DateTime.now(),
       )).toList();
 
+      // 9. Inventory Transactions
+      final List<InventoryTransaction> loadedTransactions = txRows.map((t) {
+        final typeStr = (t['transaction_type'] ?? 'INBOUND').toString().toLowerCase();
+        final type = TransactionType.values.firstWhere(
+          (e) => e.name.toLowerCase() == typeStr,
+          orElse: () => TransactionType.inbound,
+        );
+        return InventoryTransaction(
+          transactionId: (t['transaction_id'] ?? '').toString(),
+          type: type,
+          documentNo: (t['document_no'] ?? '').toString(),
+          sku: (t['sku'] ?? '').toString(),
+          productName: (t['product_name'] ?? '').toString(),
+          quantity: (t['quantity'] as num?)?.toInt() ?? 1,
+          fromLocation: t['from_location'] as String?,
+          toLocation: t['to_location'] as String?,
+          palletCode: t['pallet_code'] as String?,
+          performedBy: (t['performed_by'] ?? 'Hệ thống').toString(),
+          timestamp: DateTime.tryParse((t['timestamp'] ?? '').toString()) ?? DateTime.now(),
+          notes: t['notes'] as String?,
+        );
+      }).toList();
+
       // Link pallet items:
       for (final p in loadedPallets) {
         p.itemIds.clear();
@@ -407,7 +433,11 @@ class WarehouseRepository extends ChangeNotifier {
       _customers.clear();
       _customers.addAll(loadedCusts);
 
-      debugPrint('Directly synced from Supabase Cloud: ${_locations.length} locs, ${_pallets.length} pallets, ${_items.length} items, ${_products.length} prods');
+      _transactions.clear();
+      _transactions.addAll(loadedTransactions);
+
+      debugPrint('Directly synced from Supabase Cloud: ${_locations.length} locs, ${_pallets.length} pallets, ${_items.length} items, ${_products.length} prods, ${_transactions.length} txs');
+
       return true;
     } catch (e) {
       debugPrint('Supabase direct load error: $e');
@@ -1532,7 +1562,34 @@ class WarehouseRepository extends ChangeNotifier {
     }
   }
 
+  Future<void> _syncInventoryTransaction(InventoryTransaction tx) async {
+    final effectiveRecordId = (tx.documentNo.isNotEmpty && !tx.documentNo.startsWith('PDA-DIRECT'))
+        ? tx.documentNo
+        : tx.transactionId;
+    await _syncDirectOrQueue(
+      tableName: 'inventory_transactions',
+      recordId: effectiveRecordId,
+      action: 'INSERT',
+      payload: {
+        'transaction_id': tx.transactionId,
+        'transaction_type': tx.type.name.toUpperCase(),
+        'document_no': tx.documentNo,
+        'sku': tx.sku,
+        'product_name': tx.productName,
+        'quantity': tx.quantity,
+        'from_location': tx.fromLocation,
+        'to_location': tx.toLocation,
+        'pallet_code': tx.palletCode,
+        'performed_by': tx.performedBy,
+        'timestamp': tx.timestamp.toIso8601String(),
+        'notes': tx.notes,
+      },
+    );
+  }
+
+
   void triggerBackgroundSync() => _triggerBackgroundSync();
+
 
   void _triggerBackgroundSync() {
     if (Platform.environment.containsKey('FLUTTER_TEST')) return;
@@ -2568,43 +2625,29 @@ class WarehouseRepository extends ChangeNotifier {
     if (location != null) location.currentPallets++;
 
     for (var d in order.details) {
-      _transactions.insert(
-        0,
-        InventoryTransaction(
-          transactionId: 'TX-${DateTime.now().millisecondsSinceEpoch}-${d.sku}',
-          type: TransactionType.inbound,
-          documentNo: orderNo,
-          sku: d.sku,
-          productName: d.productName,
-          quantity: d.requiredQty,
-          toLocation: location?.locationCode ?? locationId,
-          palletCode: palletCode,
-          performedBy: performedBy,
-          timestamp: DateTime.now(),
-          notes: 'Nhập kho thành công, Gate INBOUND PASS',
-        ),
+      final tx = InventoryTransaction(
+        transactionId: 'TX-${DateTime.now().millisecondsSinceEpoch}-${d.sku}',
+        type: TransactionType.inbound,
+        documentNo: orderNo,
+        sku: d.sku,
+        productName: d.productName,
+        quantity: d.requiredQty,
+        toLocation: location?.locationCode ?? locationId,
+        palletCode: palletCode,
+        performedBy: performedBy,
+        timestamp: DateTime.now(),
+        notes: 'Nhập kho thành công, Gate INBOUND PASS',
       );
+      _transactions.insert(0, tx);
+      _syncInventoryTransaction(tx);
     }
 
     ErpBravoService().pushInboundCompleted(orderNo, pallet.itemIds.length);
-
-    _syncDirectOrQueue(
-      tableName: 'inbound_transactions',
-      recordId: orderNo,
-      action: 'INBOUND_GATE_CONFIRM',
-      payload: {
-        'orderNo': orderNo,
-        'palletCode': palletCode,
-        'locationId': locationId,
-        'performedBy': performedBy,
-        'itemCount': pallet.itemIds.length,
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-    );
     _triggerBackgroundSync();
 
     notifyListeners();
     return true;
+
   }
 
   Future<int> confirmGateReceiveToWaitingPutaway({
@@ -2772,25 +2815,26 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    await _syncDirectOrQueue(
-      tableName: 'inbound_transactions',
-      recordId: cleanOrderNo,
-      action: hasPallet ? 'GATE_RECEIVE_WAITING_PUTAWAY' : 'GATE_RECEIVE_WAITING_PALLETIZE',
-      payload: {
-        'orderNo': cleanOrderNo,
-        'palletCode': cleanPallet,
-        'cartonCode': effectiveCartonCode,
-        'status': targetStatus.code,
-        'itemCount': matchedItems.length,
-        'performedBy': effectivePerformer,
-        'timestamp': now.toIso8601String(),
-      },
+    final summaryTx = InventoryTransaction(
+      transactionId: 'TX-INB-GATE-${now.millisecondsSinceEpoch}-$cleanOrderNo',
+      type: TransactionType.inbound,
+      documentNo: cleanOrderNo,
+      sku: matchedItems.firstOrNull?.sku ?? 'MULTI-SKU',
+      productName: matchedItems.firstOrNull?.productName ?? 'Nhập kho qua cổng',
+      quantity: matchedItems.length,
+      toLocation: hasPallet ? 'CHỜ XẾP KỆ' : 'XẾP VÀO PALLET',
+      palletCode: cleanPallet,
+      performedBy: effectivePerformer,
+      timestamp: now,
+      notes: hasPallet ? 'Đã gán Pallet $cleanPallet - Chờ cất kệ' : 'Chờ đóng pallet sau khi qua cổng',
     );
+    await _syncInventoryTransaction(summaryTx);
 
     _triggerBackgroundSync();
     notifyListeners();
     return matchedItems.length;
   }
+
 
   Future<int> confirmPdaPutawayByCarton({
     required String cartonOrOrderBarcode,
@@ -3049,25 +3093,28 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    await _syncDirectOrQueue(
-      tableName: 'inbound_transactions',
-      recordId: cleanBarcode,
-      action: 'PDA_PUTAWAY_CONFIRM',
-      payload: {
-        'cartonBarcode': cleanBarcode,
-        'orderNo': directOrder?.orderNo ?? (affectedOrderNos.isNotEmpty ? affectedOrderNos.first : cleanBarcode),
-        'locationId': loc.locationId,
-        'locationCode': loc.locationCode,
-        'itemCount': matchedItems.length,
-        'performedBy': performedBy,
-        'timestamp': now.toIso8601String(),
-      },
+    final putawayTx = InventoryTransaction(
+      transactionId: 'TX-PUTAWAY-${now.millisecondsSinceEpoch}-$cleanBarcode',
+      type: TransactionType.movement,
+      documentNo: directOrder?.orderNo ?? (affectedOrderNos.isNotEmpty ? affectedOrderNos.first : cleanBarcode),
+      sku: matchedItems.firstOrNull?.sku ?? 'PALLET-PUTAWAY',
+      productName: matchedItems.firstOrNull?.productName ?? 'Cất kệ hàng hóa',
+      quantity: matchedItems.length,
+      fromLocation: 'Khu vực chờ cất kệ',
+      toLocation: loc.locationCode,
+      palletCode: cleanBarcode.startsWith('PAL') ? cleanBarcode : (matchedItems.firstOrNull?.palletId ?? cleanBarcode),
+      performedBy: performedBy,
+      timestamp: now,
+      notes: 'Cất kệ thành công qua PDA - Vị trí: ${loc.locationCode}',
     );
+    await _syncInventoryTransaction(putawayTx);
+
 
     _triggerBackgroundSync();
     notifyListeners();
     return matchedItems.length;
   }
+
 
   Future<int> confirmHandheldInbound({
     String? orderNo,
@@ -3177,45 +3224,29 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     final destinationName = locationId != null ? (_locations.where((l) => l.locationId == locationId).firstOrNull?.locationCode ?? locationId) : 'Chờ xếp kệ';
-    _transactions.insert(
-      0,
-      InventoryTransaction(
-        transactionId: 'TX-${DateTime.now().millisecondsSinceEpoch}',
-        type: TransactionType.inbound,
-        documentNo: orderNo ?? 'PDA-DIRECT-IN',
-        sku: defaultSku ?? 'MULTI-SKU',
-        productName: defaultProductName ?? 'Nhập kho quét RFID',
-        quantity: uniqueEpcs.length,
-        toLocation: destinationName,
-        palletCode: palletCode,
-        performedBy: actualPerformer,
-        timestamp: now,
-        notes: 'Nhập $count thẻ RFID qua PDA vào Pallet $palletCode - Trạng thái: $destinationName',
-      ),
+    final tx = InventoryTransaction(
+      transactionId: 'TX-INB-PDA-${now.millisecondsSinceEpoch}',
+      type: TransactionType.inbound,
+      documentNo: orderNo ?? 'PDA-DIRECT-IN',
+      sku: defaultSku ?? 'MULTI-SKU',
+      productName: defaultProductName ?? 'Nhập kho quét RFID',
+      quantity: uniqueEpcs.length,
+      toLocation: destinationName,
+      palletCode: palletCode,
+      performedBy: actualPerformer,
+      timestamp: now,
+      notes: 'Nhập $count thẻ RFID qua PDA vào Pallet $palletCode - Trạng thái: $destinationName',
     );
+    _transactions.insert(0, tx);
 
     ErpBravoService().pushInboundCompleted(orderNo ?? 'PDA-DIRECT-IN', uniqueEpcs.length);
 
-    await _syncDirectOrQueue(
-      tableName: 'sync_logs',
-      recordId: orderNo ?? 'PDA-DIRECT-${now.millisecondsSinceEpoch}',
-      action: 'INBOUND_PDA_CONFIRM',
-      payload: {
-        'order_no': orderNo,
-        'pallet_code': palletCode,
-        'location_id': locationId,
-        'epcs': uniqueEpcs,
-        'sku': defaultSku,
-        'product_name': defaultProductName,
-        'performed_by': performedBy,
-        'item_count': uniqueEpcs.length,
-        'timestamp': now.toIso8601String(),
-      },
-    );
+    await _syncInventoryTransaction(tx);
 
     _triggerBackgroundSync();
     notifyListeners();
     return uniqueEpcs.length;
+
   }
 
   PickingPlan generateFifoPickingPlan(String outboundOrderId) {
@@ -3559,41 +3590,29 @@ class WarehouseRepository extends ChangeNotifier {
     await _dbService.updateOutboundOrderStatus(order.outboundOrderId, OutboundOrderStatus.shipped);
 
     for (var d in order.details) {
-      _transactions.insert(
-        0,
-        InventoryTransaction(
-          transactionId: 'TX-${now.millisecondsSinceEpoch}-${d.sku}',
-          type: TransactionType.outbound,
-          documentNo: poNo,
-          sku: d.sku,
-          productName: d.productName,
-          quantity: d.requiredQty,
-          fromLocation: 'KHO_TONG',
-          toLocation: 'KHACH_HANG: ${order.customer}',
-          performedBy: performedBy,
-          timestamp: now,
-          notes: 'Xuất kho thành công, Gate OUTBOUND PASS',
-        ),
+      final tx = InventoryTransaction(
+        transactionId: 'TX-OUT-GATE-${now.millisecondsSinceEpoch}-${d.sku}',
+        type: TransactionType.outbound,
+        documentNo: poNo,
+        sku: d.sku,
+        productName: d.productName,
+        quantity: d.requiredQty,
+        fromLocation: 'KHO_TONG',
+        toLocation: 'KHACH_HANG: ${order.customer}',
+        performedBy: performedBy,
+        timestamp: now,
+        notes: 'Xuất kho thành công, Gate OUTBOUND PASS',
       );
+      _transactions.insert(0, tx);
+      await _syncInventoryTransaction(tx);
     }
 
     ErpBravoService().pushOutboundCompleted(poNo, shippedEpcs.length);
-
-    await _syncDirectOrQueue(
-      tableName: 'outbound_transactions',
-      recordId: poNo,
-      action: 'OUTBOUND_CONFIRM',
-      payload: {
-        'poNo': poNo,
-        'shippedEpcs': shippedEpcs,
-        'performedBy': performedBy,
-        'timestamp': now.toIso8601String(),
-      },
-    );
     _triggerBackgroundSync();
 
     notifyListeners();
     return true;
+
   }
 
   Future<int> confirmDirectOutbound({
@@ -3674,39 +3693,28 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    _transactions.insert(
-      0,
-      InventoryTransaction(
-        transactionId: 'TX-${now.millisecondsSinceEpoch}',
-        type: TransactionType.outbound,
-        documentNo: poNo ?? 'DIRECT-OUT',
-        sku: 'MULTI-SKU',
-        productName: 'Xuất kho RFID',
-        quantity: uniqueEpcs.length,
-        fromLocation: 'KHO_TONG',
-        toLocation: 'XUẤT_GIAO',
-        performedBy: performedBy,
-        timestamp: now,
-        notes: 'Xuất trực tiếp ${uniqueEpcs.length} chip RFID qua trạm Desktop',
-      ),
+    final tx = InventoryTransaction(
+      transactionId: 'TX-OUT-DIRECT-${now.millisecondsSinceEpoch}',
+      type: TransactionType.outbound,
+      documentNo: poNo ?? 'DIRECT-OUT',
+      sku: 'MULTI-SKU',
+      productName: 'Xuất kho RFID',
+      quantity: uniqueEpcs.length,
+      fromLocation: 'KHO_TONG',
+      toLocation: 'XUẤT_GIAO',
+      performedBy: performedBy,
+      timestamp: now,
+      notes: 'Xuất trực tiếp ${uniqueEpcs.length} chip RFID qua trạm Desktop',
     );
+    _transactions.insert(0, tx);
 
-    await _syncDirectOrQueue(
-      tableName: 'outbound_transactions',
-      recordId: poNo ?? 'DIRECT-OUT-${now.millisecondsSinceEpoch}',
-      action: 'OUTBOUND_CONFIRM',
-      payload: {
-        'poNo': poNo ?? 'DIRECT-OUT',
-        'epcs': uniqueEpcs,
-        'performedBy': performedBy,
-        'timestamp': now.toIso8601String(),
-      },
-    );
+    await _syncInventoryTransaction(tx);
     _triggerBackgroundSync();
 
     notifyListeners();
     return uniqueEpcs.length;
   }
+
 
   /// Đối soát danh sách hàng cần xuất kho với tồn kho thực tế và vị trí kệ FIFO:
   /// - Kiểm tra số lượng tồn kho theo từng SKU (`status == ItemStatus.inStock`).
@@ -4033,39 +4041,28 @@ class WarehouseRepository extends ChangeNotifier {
       await _dbService.insertOutboundOrder(newOrder);
     }
 
-    _transactions.insert(
-      0,
-      InventoryTransaction(
-        transactionId: 'TX-${now.millisecondsSinceEpoch}',
-        type: TransactionType.outbound,
-        documentNo: poNo,
-        sku: 'MULTI-SKU',
-        productName: 'Xuất kho qua cổng RFID',
-        quantity: uniqueEpcs.length,
-        fromLocation: 'KHO_TONG',
-        toLocation: customer,
-        performedBy: performedBy,
-        timestamp: now,
-        notes: 'Xuất thành công ${uniqueEpcs.length} chip qua cổng RFID',
-      ),
+    final tx = InventoryTransaction(
+      transactionId: 'TX-OUT-GATE-${now.millisecondsSinceEpoch}-$poNo',
+      type: TransactionType.outbound,
+      documentNo: poNo,
+      sku: 'MULTI-SKU',
+      productName: 'Xuất kho qua cổng RFID',
+      quantity: uniqueEpcs.length,
+      fromLocation: 'KHO_TONG',
+      toLocation: customer,
+      performedBy: performedBy,
+      timestamp: now,
+      notes: 'Xuất thành công ${uniqueEpcs.length} chip qua cổng RFID',
     );
+    _transactions.insert(0, tx);
 
-    await _syncDirectOrQueue(
-      tableName: 'outbound_transactions',
-      recordId: poNo,
-      action: 'OUTBOUND_CONFIRM',
-      payload: {
-        'poNo': poNo,
-        'epcs': uniqueEpcs,
-        'performedBy': performedBy,
-        'timestamp': now.toIso8601String(),
-      },
-    );
+    await _syncInventoryTransaction(tx);
     _triggerBackgroundSync();
 
     notifyListeners();
     return updatedCount > 0 ? updatedCount : uniqueEpcs.length;
   }
+
 
   /// Tra cứu vị trí kệ kho thực tế của sản phẩm (hỗ trợ cả hàng lẻ và hàng trên Pallet)
   Location? resolveItemLocation(Item it) {

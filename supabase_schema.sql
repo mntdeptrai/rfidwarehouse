@@ -254,6 +254,28 @@ CREATE TABLE IF NOT EXISTS public.system_config (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 17. Bảng Lịch sử Biến động Kho Nghiệp vụ (inventory_transactions)
+CREATE TABLE IF NOT EXISTS public.inventory_transactions (
+    transaction_id TEXT NOT NULL PRIMARY KEY,
+    transaction_type TEXT NOT NULL,
+    document_no TEXT,
+    sku TEXT,
+    product_name TEXT,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    from_location TEXT,
+    to_location TEXT,
+    pallet_code TEXT,
+    performed_by TEXT,
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_type ON public.inventory_transactions (transaction_type);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_doc ON public.inventory_transactions (document_no);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_pallet ON public.inventory_transactions (pallet_code);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_timestamp ON public.inventory_transactions (timestamp DESC);
+
+
 -- ==========================================================
 -- BỔ SUNG & ĐỒNG BỘ TOÀN BỘ KHÓA CHÍNH (PK) & KHÓA NGOẠI (FK)
 -- ==========================================================
@@ -678,6 +700,8 @@ ALTER TABLE public.inventory_session_details DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sync_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_config DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory_transactions DISABLE ROW LEVEL SECURITY;
+
 
 DO $$
 DECLARE

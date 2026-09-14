@@ -397,6 +397,8 @@ class SupabaseSyncService extends ChangeNotifier {
         return 'customer_id';
       case 'system_config':
         return 'config_key';
+      case 'inventory_transactions':
+        return 'transaction_id';
       default:
         return 'id';
     }
@@ -411,7 +413,7 @@ class SupabaseSyncService extends ChangeNotifier {
   }) async {
     String targetTable = tableName;
     if (tableName == 'inbound_transactions' || tableName == 'outbound_transactions') {
-      targetTable = 'sync_logs';
+      targetTable = 'inventory_transactions';
     }
 
     final normalized = _normalizePayloadForSupabase(targetTable, payload);
@@ -434,12 +436,13 @@ class SupabaseSyncService extends ChangeNotifier {
             await supa.from(targetTable).insert({
               'log_id': recordId,
               'action': action,
-              'table_name': tableName,
-              'record_count': payload['itemCount'] ?? payload['item_count'] ?? 1,
-              'is_success': true,
-              'message': jsonEncode(payload),
+              'table_name': payload['table_name'] ?? tableName,
+              'record_count': payload['itemCount'] ?? payload['item_count'] ?? payload['quantity'] ?? 1,
+              'is_success': payload['is_success'] ?? true,
+              'message': payload['message'] ?? jsonEncode(payload),
             });
           } else {
+
             try {
               await supa.from(targetTable).upsert(normalized);
             } on PostgrestException {
@@ -649,7 +652,9 @@ class SupabaseSyncService extends ChangeNotifier {
       await supa.from('products').delete().neq('product_id', '');
       await supa.from('customers').delete().neq('customer_id', '');
       await supa.from('users').delete().neq('user_id', '');
+      await supa.from('inventory_transactions').delete().neq('transaction_id', '');
       await supa.from('sync_logs').delete().neq('id', 0);
+
 
       _addLog(
         action: 'DELETE',

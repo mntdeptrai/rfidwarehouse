@@ -421,13 +421,15 @@ void main() {
     ));
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: const Scaffold(
           body: DesktopGoodsReceiveView(isActive: true),
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 500));
+
 
     // Ban đầu: 0 / 2 chip
     expect(find.textContaining('TIẾN ĐỘ ĐỐI SOÁT QUA CỔNG: (0 / 2 chip)'), findsOneWidget);
@@ -459,13 +461,15 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: const Scaffold(
           body: DesktopGoodsDeliveryView(isActive: true),
         ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 500));
+
 
     // Nút XUẤT HÀNG dạng dropdown màu cyan trên header
     expect(find.text('XUẤT HÀNG'), findsOneWidget);

@@ -110,7 +110,34 @@ BEGIN
         ALTER TABLE public.system_config ALTER COLUMN config_key SET NOT NULL;
         ALTER TABLE public.system_config ADD CONSTRAINT pk_system_config PRIMARY KEY (config_key);
     END IF;
+
+    -- 1.17. Bảng inventory_transactions (transaction_id)
+    CREATE TABLE IF NOT EXISTS public.inventory_transactions (
+        transaction_id TEXT NOT NULL PRIMARY KEY,
+        transaction_type TEXT NOT NULL,
+        document_no TEXT,
+        sku TEXT,
+        product_name TEXT,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        from_location TEXT,
+        to_location TEXT,
+        pallet_code TEXT,
+        performed_by TEXT,
+        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_inventory_transactions_type ON public.inventory_transactions (transaction_type);
+    CREATE INDEX IF NOT EXISTS idx_inventory_transactions_doc ON public.inventory_transactions (document_no);
+    CREATE INDEX IF NOT EXISTS idx_inventory_transactions_pallet ON public.inventory_transactions (pallet_code);
+    CREATE INDEX IF NOT EXISTS idx_inventory_transactions_timestamp ON public.inventory_transactions (timestamp DESC);
+    ALTER TABLE public.inventory_transactions DISABLE ROW LEVEL SECURITY;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.inventory_transactions'::regclass AND contype = 'p') THEN
+        ALTER TABLE public.inventory_transactions ALTER COLUMN transaction_id SET NOT NULL;
+        ALTER TABLE public.inventory_transactions ADD CONSTRAINT pk_inventory_transactions PRIMARY KEY (transaction_id);
+    END IF;
 END $$;
+
 
 -- ====================================================================
 -- BƯỚC 2: THIẾT LẬP RÀNG BUỘC DUY NHẤT (UNIQUE CONSTRAINTS - UK)
