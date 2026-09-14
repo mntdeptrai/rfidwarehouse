@@ -66,6 +66,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       }
     }
 
+    _uhf.stopInventory();
     _uhf.setScanMode(PdaScanMode.barcode);
 
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
@@ -115,6 +116,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   @override
   void dispose() {
+    _uhf.stopInventory();
     _barcodeSub?.cancel();
     _tagSub?.cancel();
     _triggerSub?.cancel();

@@ -75,6 +75,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
 
   @override
   void dispose() {
+    _uhf.stopInventory();
     _tagSub?.cancel();
     _barcodeSub?.cancel();
     _triggerSub?.cancel();

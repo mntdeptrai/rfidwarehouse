@@ -118,6 +118,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
 
   @override
   void dispose() {
+    _uhf.stopInventory();
     _tagSub?.cancel();
     _barcodeSub?.cancel();
     _triggerSub?.cancel();

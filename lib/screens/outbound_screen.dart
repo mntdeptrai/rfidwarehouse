@@ -210,6 +210,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   @override
   void dispose() {
+    _uhf.stopInventory();
     HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
     _tagSubscription?.cancel();
     _triggerSubscription?.cancel();

@@ -547,6 +547,7 @@ class _InboundScreenState extends State<InboundScreen> {
 
   @override
   void dispose() {
+    _uhf.stopInventory();
     _saveSessionToCache();
     HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
     _uiRefreshTimer?.cancel();

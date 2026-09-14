@@ -55,6 +55,10 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   @override
   void initState() {
     super.initState();
+    // Dập tắt ngay lập tức mọi phiên phát sóng RFID ngầm tồn dư từ các màn hình trước
+    _uhf.stopInventory();
+    _isScanning = false;
+
     _selectedLocationId =
         _repo.locations.isNotEmpty ? _repo.locations.first.locationId : null;
     // Mặc định ở chế độ chuyển Pallet, dùng mắt đọc Barcode để quét tem pallet nhanh và chuẩn xác
@@ -81,6 +85,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   void _subscribeHardwareScanner() {
     _rfidSub = _uhf.onTagRead.listen((tag) {
       if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+      // Chỉ nhận diện chip khi người dùng đang chủ động kích hoạt quét (bóp cò hoặc bấm nút quét)
+      if (!_isScanning) return;
       if (tag.epc.isNotEmpty) {
         _handleScan(tag.epc, source: 'RFID');
       }
@@ -122,6 +128,9 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   }
 
   void _toggleScanMode() {
+    if (_isScanning) {
+      _stopHardwareScan();
+    }
     final newMode = _currentScanMode == PdaScanMode.rfid ? PdaScanMode.barcode : PdaScanMode.rfid;
     _uhf.setScanMode(newMode);
     setState(() {
@@ -131,6 +140,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
 
   @override
   void dispose() {
+    _stopHardwareScan();
+    _uhf.stopInventory();
     _manualInputCtrl.dispose();
     _palletInputCtrl.dispose();
     _rfidSub?.cancel();
@@ -1317,21 +1328,49 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   }
 
   Widget _buildScanPrompt(EyeCareColors c, String text, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-      decoration: BoxDecoration(
-        color: c.bgDeep,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: _isScanning ? const Color(0xFF10B981) : c.textMuted, size: 26),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text,
-              style: TextStyle(color: c.textMuted, fontSize: 13, fontStyle: FontStyle.italic))),
-        ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () {
+        if (_isScanning) {
+          _stopHardwareScan();
+        } else {
+          _startHardwareScan();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: _isScanning ? const Color(0xFF10B981).withValues(alpha: 0.1) : c.bgDeep,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _isScanning ? const Color(0xFF10B981) : c.border.withValues(alpha: 0.5),
+            width: _isScanning ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _isScanning ? Icons.sensors : icon,
+              color: _isScanning ? const Color(0xFF10B981) : c.textMuted,
+              size: 26,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _isScanning
+                    ? 'Đang phát sóng quét... (Bóp cò hoặc chạm để dừng)'
+                    : '$text (Bóp cò hoặc chạm để quét)',
+                style: TextStyle(
+                  color: _isScanning ? const Color(0xFF10B981) : c.textMuted,
+                  fontSize: 13,
+                  fontWeight: _isScanning ? FontWeight.bold : FontWeight.normal,
+                  fontStyle: _isScanning ? FontStyle.normal : FontStyle.italic,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
