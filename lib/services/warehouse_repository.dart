@@ -6,6 +6,7 @@ import '../models/wms_models.dart';
 import 'erp_bravo_service.dart';
 import 'database_service.dart';
 import 'supabase_sync_service.dart';
+import 'auth_service.dart';
 
 class WarehouseRepository extends ChangeNotifier {
   static final WarehouseRepository _instance = WarehouseRepository._internal();
@@ -1948,7 +1949,7 @@ class WarehouseRepository extends ChangeNotifier {
 
   /// Lấy người nhập kho của Item
   String getItemInboundBy(Item item) {
-    if (item.inboundBy != null && item.inboundBy!.trim().isNotEmpty) {
+    if (item.inboundBy != null && item.inboundBy!.trim().isNotEmpty && item.inboundBy != 'Cổng RFID Gate') {
       return resolveUserFullName(item.inboundBy, defaultRole: 'thukho');
     }
     if (item.orderNo != null && item.orderNo!.trim().isNotEmpty) {
@@ -1956,11 +1957,16 @@ class WarehouseRepository extends ChangeNotifier {
         t.documentNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase() &&
         (t.type == TransactionType.inbound || t.transactionId.contains('INBOUND') || t.transactionId.contains('GATE'))
       ).firstOrNull;
-      if (tx != null && tx.performedBy.trim().isNotEmpty) {
+      if (tx != null && tx.performedBy.trim().isNotEmpty && tx.performedBy != 'Cổng RFID Gate') {
         return resolveUserFullName(tx.performedBy, defaultRole: 'thukho');
       }
     }
-    return 'Cổng RFID Gate';
+    // Ưu tiên hiển thị tên người dùng / thủ kho đang đăng nhập trong phiên hiện tại
+    final activeUser = AuthService().currentUser?.fullName;
+    if (activeUser != null && activeUser.trim().isNotEmpty) {
+      return activeUser.trim();
+    }
+    return resolveUserFullName(null, defaultRole: 'thukho');
   }
 
   /// Tra cứu chính xác họ và tên người dùng từ CSDL (bảng users) thay vì hiển thị role/mã kỹ thuật
@@ -2606,13 +2612,16 @@ class WarehouseRepository extends ChangeNotifier {
     required List<String> scannedEpcs,
     String? palletCode,
     String? cartonCode,
-    String performedBy = 'Cổng RFID Gate',
+    String? performedBy,
   }) async {
     final cleanOrderNo = orderNo.trim().toUpperCase();
     final uniqueEpcs = scannedEpcs.toSet().toList();
     final now = DateTime.now();
     final cleanPallet = (palletCode != null && palletCode.trim().isNotEmpty) ? palletCode.trim().toUpperCase() : null;
     final cleanCarton = (cartonCode != null && cartonCode.trim().isNotEmpty) ? cartonCode.trim().toUpperCase() : null;
+    final effectivePerformer = (performedBy != null && performedBy.trim().isNotEmpty && performedBy != 'Thủ kho' && performedBy != 'Cổng RFID Gate')
+        ? performedBy.trim()
+        : (AuthService().currentUser?.fullName ?? resolveUserFullName(null, defaultRole: 'thukho'));
 
     final order = _inboundOrders.where((o) =>
       o.orderNo.trim().toUpperCase() == cleanOrderNo ||
@@ -2668,7 +2677,7 @@ class WarehouseRepository extends ChangeNotifier {
       if (it.cartonCode == null || it.cartonCode!.trim().isEmpty) {
         it.cartonCode = effectiveCartonCode;
       }
-      it.inboundBy = performedBy;
+      it.inboundBy = effectivePerformer;
       if (order != null && (it.supplier == null || it.supplier!.isEmpty)) {
         it.supplier = order.sourceSupplier;
       }
@@ -2720,8 +2729,28 @@ class WarehouseRepository extends ChangeNotifier {
           'pallet_id': it.palletId,
           'order_no': it.orderNo,
           'inbound_time': now.toIso8601String(),
+          'inbound_by': it.inboundBy,
           'updated_at': now.toIso8601String(),
         },
+      );
+    }
+
+    for (var it in matchedItems) {
+      _transactions.insert(
+        0,
+        InventoryTransaction(
+          transactionId: 'TX-${now.millisecondsSinceEpoch}-${it.sku}',
+          type: TransactionType.inbound,
+          documentNo: cleanOrderNo,
+          sku: it.sku,
+          productName: it.productName,
+          quantity: 1,
+          toLocation: hasPallet ? 'CHỜ XẾP KỆ' : 'XẾP VÀO PALLET',
+          palletCode: cleanPallet,
+          performedBy: effectivePerformer,
+          timestamp: now,
+          notes: 'Nhập qua Cổng RFID Gate bởi $effectivePerformer',
+        ),
       );
     }
 
@@ -2753,7 +2782,7 @@ class WarehouseRepository extends ChangeNotifier {
         'cartonCode': effectiveCartonCode,
         'status': targetStatus.code,
         'itemCount': matchedItems.length,
-        'performedBy': performedBy,
+        'performedBy': effectivePerformer,
         'timestamp': now.toIso8601String(),
       },
     );

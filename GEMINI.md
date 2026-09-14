@@ -17,3 +17,10 @@
 ## 3. Surgical Changes
 - Chỉ chạm vào đúng những dòng code cần sửa. Không sửa lung tung các thành phần đang hoạt động ổn định.
 - Khi loại bỏ logic cũ, dọn sạch triệt để các biến/hàm mồ côi liên quan trực tiếp đến thay đổi đó.
+
+---
+
+## 4. Duy Trì & Cập Nhật CODE_GRAPH.md
+- [CODE_GRAPH.md](CODE_GRAPH.md) là bản đồ tổng thể kiến trúc, phân tầng và luồng dữ liệu của dự án.
+- Khi thay đổi kiến trúc, thêm màn hình, sửa luồng nghiệp vụ hoặc refactor dịch vụ, Agent **bắt buộc** phải cập nhật lại `CODE_GRAPH.md`.
+

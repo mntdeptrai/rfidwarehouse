@@ -141,20 +141,9 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
               child: Icon(Icons.warehouse_rounded, color: c.rfidCyan, size: 24),
             ),
             const SizedBox(width: 14),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'QUẢN LÝ KHO & LỊCH SỬ GIAO DỊCH',
-                  style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Quản lý Pallet gắn chip RFID, theo dõi lịch sử luân chuyển nhập/xuất và nhật ký biến động kho',
-                  style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                ),
-              ],
+            Text(
+              'QUẢN LÝ KHO & LỊCH SỬ GIAO DỊCH',
+              style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
             ),
             const SizedBox(width: 24),
 
@@ -203,12 +192,12 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: isSelected ? const Color(0xFF2C251E) : c.textSecondary),
+            Icon(icon, size: 16, color: isSelected ? Colors.white : c.textSecondary),
             const SizedBox(width: 8),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+                color: isSelected ? Colors.white : c.textSecondary,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
@@ -420,7 +409,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                       children: [
                         SizedBox(width: 45, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         Expanded(flex: 2, child: Text('MÃ PALLET (BARCODE)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                        Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                        Expanded(flex: 3, child: Text('EPC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         Expanded(flex: 2, child: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         Expanded(flex: 2, child: Text('SỐ LƯỢNG HÀNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                         SizedBox(width: 120, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
@@ -1446,7 +1435,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Nhập mã barcode định danh Pallet và mã chip RFID cố định trên xe. Có thể quét chip trực tiếp từ đầu đọc.',
+                      'Nhập mã barcode định danh Pallet và mã chip RFID cố định trên Pallet. Có thể quét chip trực tiếp từ đầu đọc.',
                       style: TextStyle(color: c.textSecondary, fontSize: 12),
                     ),
                     const SizedBox(height: 16),
@@ -1472,7 +1461,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                       style: TextStyle(color: c.textPrimary, fontSize: 13),
                       decoration: InputDecoration(
                         labelText: 'Tên / Ghi chú Pallet (Tùy chọn)',
-                        hintText: 'VD: Xe Pallet Kho A, Pallet Nhựa...',
+                        hintText: 'VD: Pallet Kho A, Pallet Nhựa...',
                         filled: true,
                         fillColor: c.bgDeep,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
@@ -1486,7 +1475,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                       controller: rfidCtrl,
                       style: TextStyle(color: c.rfidCyan, fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 12.5),
                       decoration: InputDecoration(
-                        labelText: 'Mã Chip RFID (EPC) - Quét hoặc nhập',
+                        labelText: 'Mã EPC',
                         hintText: 'Quét thẻ qua đầu đọc để tự điền...',
                         prefixIcon: Icon(Icons.sensors, size: 18, color: c.rfidCyan),
                         suffixIcon: rfidCtrl.text.isNotEmpty
@@ -1903,7 +1892,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                                   child: Row(
                                     children: [
                                       SizedBox(width: 40, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                                      Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                                      Expanded(flex: 3, child: Text('EPC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                       Expanded(flex: 2, child: Text('SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                       SizedBox(width: 110, child: Text('PALLET', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                       SizedBox(width: 110, child: Text('TRẠNG THÁI', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),

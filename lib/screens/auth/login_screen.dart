@@ -250,32 +250,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2, color: c.bgDeep),
                                 )
                               : const Text(
-                                  'ĐĂNG NHẬP HỆ THỐNG',
+                                   'ĐĂNG NHẬP HỆ THỐNG',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, letterSpacing: 0.4),
                                 ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-
-                      // Thông báo tài khoản nội bộ do Quản trị viên cấp phát (Bỏ đăng ký)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: c.bgCardElevated,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: c.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.shield_outlined, color: c.rfidCyan, size: 20),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Hệ thống quản lý kho WMS nội bộ. Tài khoản do Quản Trị Viên (Admin) cấp phát và phân quyền.',
-                                style: TextStyle(color: c.textMuted, fontSize: 11.5, height: 1.3),
-                              ),
-                            ),
-                          ],
                         ),
                       ),
                     ],

@@ -111,7 +111,7 @@ class Item {
   }
 
   /// Người nhập kho hiển thị
-  String get inboundByDisplay => (inboundBy != null && inboundBy!.trim().isNotEmpty) ? inboundBy!.trim() : 'Cổng RFID Gate';
+  String get inboundByDisplay => (inboundBy != null && inboundBy!.trim().isNotEmpty && inboundBy != 'Cổng RFID Gate') ? inboundBy!.trim() : 'Thủ kho';
 
   /// Người cất kệ hiển thị
   String get putawayByDisplay {
