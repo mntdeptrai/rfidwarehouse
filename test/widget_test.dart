@@ -16,6 +16,7 @@ import 'package:uhf/screens/pda/pda_putaway_screen.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/models/tag_info.dart';
 import 'package:uhf/services/warehouse_repository.dart';
+import 'package:uhf/services/uhf_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -309,8 +310,10 @@ void main() {
     // Tiến độ đối soát qua cổng hiển thị định dạng (scanned / expected chip) giống xuất kho
     expect(find.textContaining('TIẾN ĐỘ ĐỐI SOÁT QUA CỔNG: (0 / 1 chip)'), findsOneWidget);
 
-    // Các nút quét được dạt sang phải, nút CHƯA ĐỌC ĐỦ bị loại bỏ
+    // Các nút quét được dạt sang phải, nút CHƯA ĐỌC ĐỦ và ô ĐÃ LỌC/bật lọc bị loại bỏ hoàn toàn
     expect(find.textContaining('CHƯA ĐỌC ĐỦ'), findsNothing);
+    expect(find.text('ĐÃ LỌC'), findsNothing);
+    expect(find.textContaining('Lọc chip đã qua'), findsNothing);
     expect(find.textContaining('Làm Mới Quét'), findsOneWidget);
     expect(find.textContaining('BẮT ĐẦU QUÉT'), findsOneWidget);
   });
@@ -365,6 +368,74 @@ void main() {
     expect(find.text('12'), findsWidgets); // THIẾU 12
     expect(find.text('PAL-945321545'), findsWidgets);
     expect(find.text('PAL-945321988'), findsWidgets);
+  });
+
+  testWidgets('DesktopGoodsReceiveView preserves full list when gate is complete and locks scan', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final oldPending = repo.items.where((it) => it.status == ItemStatus.pendingInbound).map((it) => it.epc).toList();
+    await repo.deleteItemsByEpcs(oldPending);
+
+    // Thêm 2 sản phẩm chờ nhập
+    final epc1 = 'E280119100000000AUTO001';
+    final epc2 = 'E280119100000000AUTO002';
+    await repo.addItem(Item(
+      itemId: 'ITEM-TEST-AUTO-1',
+      productId: 'SKU-A1',
+      sku: 'SKU-A1',
+      productName: 'Sản phẩm Test 1',
+      serialNumber: 'SN-A1',
+      epc: epc1,
+      status: ItemStatus.pendingInbound,
+      orderNo: 'INBOUND-AUTO-01',
+      palletId: 'PAL-999',
+    ));
+    await repo.addItem(Item(
+      itemId: 'ITEM-TEST-AUTO-2',
+      productId: 'SKU-A2',
+      sku: 'SKU-A2',
+      productName: 'Sản phẩm Test 2',
+      serialNumber: 'SN-A2',
+      epc: epc2,
+      status: ItemStatus.pendingInbound,
+      orderNo: 'INBOUND-AUTO-01',
+      palletId: 'PAL-999',
+    ));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopGoodsReceiveView(isActive: true),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Ban đầu: 0 / 2 chip
+    expect(find.textContaining('TIẾN ĐỘ ĐỐI SOÁT QUA CỔNG: (0 / 2 chip)'), findsOneWidget);
+    expect(find.text('SKU-A1'), findsOneWidget);
+    expect(find.text('SKU-A2'), findsOneWidget);
+
+    // Bấm bắt đầu quét
+    await tester.tap(find.textContaining('BẮT ĐẦU QUÉT'));
+    await tester.pump();
+
+    // Mô phỏng nhận 2 chip từ đầu đọc
+    UhfService().simulateTag(epc1);
+    UhfService().simulateTag(epc2);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Sau khi quét đủ: danh sách VẪN HIỂN THỊ ĐẦY ĐỦ, không bị biến mất!
+    expect(find.text('SKU-A1'), findsOneWidget);
+    expect(find.text('SKU-A2'), findsOneWidget);
+    expect(find.textContaining('ĐÃ ĐỐI SOÁT ĐỦ (KHOÁ QUÉT)'), findsOneWidget);
+
+    // Xả hết timer của đèn tháp (4s) để tránh lỗi pending timer
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('DesktopGoodsDeliveryView matches Inbound style: cyan dropdown XUẤT HÀNG, idle gate monitor, and history toggle', (WidgetTester tester) async {

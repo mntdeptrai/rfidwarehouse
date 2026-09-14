@@ -420,7 +420,18 @@ class ExcelImportService {
         if (nameToBarcodeMap.containsKey(effectiveName)) {
           rowBarcode = nameToBarcodeMap[effectiveName]!;
         } else {
-          rowBarcode = WarehouseRepository().generateHexBarcode128();
+          // Tra cứu xem trong kho đã có sản phẩm này chưa (theo EPC hoặc theo tên) để tái sử dụng SKU
+          final repoItems = WarehouseRepository().items;
+          final existingItem = repoItems.where((it) =>
+              (serial.isNotEmpty && it.epc.toUpperCase() == serial.toUpperCase()) ||
+              (it.productName.trim().isNotEmpty && it.productName.trim().toLowerCase() == effectiveName.trim().toLowerCase())
+          ).firstOrNull;
+
+          if (existingItem != null && existingItem.sku.isNotEmpty && existingItem.sku != '--') {
+            rowBarcode = existingItem.sku;
+          } else {
+            rowBarcode = WarehouseRepository().generateHexBarcode128();
+          }
           nameToBarcodeMap[effectiveName] = rowBarcode;
         }
       } else if (!RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(rowBarcode)) {

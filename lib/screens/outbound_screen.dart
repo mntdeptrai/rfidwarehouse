@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../models/tag_info.dart';
 import '../models/wms_models.dart';
 import '../services/auth_service.dart';
@@ -1414,7 +1415,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                             const SizedBox(width: 6),
                             SizedBox(width: 95, child: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
-                            SizedBox(width: 90, child: Text('ƯU TIÊN FIFO', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            SizedBox(width: 95, child: Text('NGÀY NHẬP', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
                             SizedBox(width: 110, child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
@@ -1506,27 +1507,29 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    // ƯU TIÊN FIFO
+                                    // NGÀY NHẬP (FIFO)
                                     SizedBox(
-                                      width: 90,
+                                      width: 95,
                                       child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: item.isInStock
-                                              ? (item.fifoPriority == 1 ? const Color(0xFF10B981).withValues(alpha: 0.15) : const Color(0xFF6366F1).withValues(alpha: 0.12))
+                                              ? const Color(0xFF10B981).withValues(alpha: 0.12)
                                               : const Color(0xFFEF4444).withValues(alpha: 0.15),
                                           borderRadius: BorderRadius.circular(5),
                                           border: Border.all(
                                             color: item.isInStock
-                                                ? (item.fifoPriority == 1 ? const Color(0xFF10B981) : const Color(0xFF6366F1).withValues(alpha: 0.5))
+                                                ? const Color(0xFF10B981).withValues(alpha: 0.4)
                                                 : const Color(0xFFEF4444),
                                           ),
                                         ),
                                         child: Text(
-                                          item.isInStock ? 'FIFO #${item.fifoPriority}' : 'HẾT TỒN',
+                                          item.isInStock
+                                              ? (item.inboundTime != null ? DateFormat('dd/MM/yyyy').format(item.inboundTime!) : '--')
+                                              : 'HẾT TỒN',
                                           style: TextStyle(
                                             color: item.isInStock
-                                                ? (item.fifoPriority == 1 ? const Color(0xFF10B981) : const Color(0xFF6366F1))
+                                                ? const Color(0xFF10B981)
                                                 : const Color(0xFFEF4444),
                                             fontSize: 10.5,
                                             fontWeight: FontWeight.bold,

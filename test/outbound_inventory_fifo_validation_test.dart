@@ -248,5 +248,144 @@ void main() {
       expect(result.items.first.fifoWarning, isNotNull,
           reason: 'Phải có cảnh báo FIFO khi xuất chip mới mà kho còn chip cũ hơn');
     });
+
+    test('Exact EPC match succeeds with zero shortage even when requested SKU is different or auto-generated', () async {
+      final loc = repo.locations.first;
+
+      // Giả lập hàng đã nhập vào kho với SKU A
+      await repo.addItem(
+        Item(
+          itemId: 'ITEM-DIFF-01',
+          productId: 'PROD-DIFF-01',
+          sku: 'SKU-ORIGINAL-HEX123',
+          productName: 'Nước ngọt Pepsi 330ml',
+          serialNumber: 'SN-PEPSI-01',
+          epc: 'EPC-PEPSI-EXACT-01',
+          status: ItemStatus.inStock,
+          locationId: loc.locationId,
+          inboundTime: DateTime(2026, 1, 10),
+        ),
+      );
+
+      // Yêu cầu xuất bằng file Excel sinh ra SKU tạm khác (SKU-AUTO-HEX999) nhưng đúng EPC
+      final result = repo.validateOutboundInventoryAndFifo(
+        requestedItems: [
+          {
+            'sku': 'SKU-AUTO-HEX999',
+            'productName': 'Nước ngọt Pepsi 330ml',
+            'epc': 'EPC-PEPSI-EXACT-01',
+          },
+        ],
+      );
+
+      expect(result.isStockSufficient, isTrue,
+          reason: 'Khớp chính xác EPC thì không được báo thiếu dù SKU file nạp tạm thời bị lệch');
+      expect(result.shortageCount, equals(0));
+      expect(result.items.first.isInStock, isTrue);
+      expect(result.items.first.sku, equals('SKU-ORIGINAL-HEX123'),
+          reason: 'SKU phải được cập nhật chuẩn theo SKU thực tế trong kho');
+      expect(result.items.first.locationCode, equals(loc.locationCode));
+    });
+
+    test('Include waitingPutaway status as available warehouse stock during outbound validation', () async {
+      final loc = repo.locations.first;
+
+      // Hàng vừa qua cổng nhập có trạng thái waitingPutaway
+      await repo.addItem(
+        Item(
+          itemId: 'ITEM-WAIT-01',
+          productId: 'PROD-WAIT-01',
+          sku: 'TEST-SKU-WAIT',
+          productName: 'Hàng Chờ Xếp Kệ',
+          serialNumber: 'SN-WAIT-01',
+          epc: 'EPC-WAITING-PUTAWAY-01',
+          status: ItemStatus.waitingPutaway,
+          locationId: loc.locationId,
+          inboundTime: DateTime(2026, 2, 20),
+        ),
+      );
+
+      final result = repo.validateOutboundInventoryAndFifo(
+        requestedItems: [
+          {
+            'sku': 'TEST-SKU-WAIT',
+            'epc': 'EPC-WAITING-PUTAWAY-01',
+          },
+        ],
+      );
+
+      expect(result.isStockSufficient, isTrue,
+          reason: 'Hàng waitingPutaway đã ở trong kho nên được công nhận là tồn kho khả dụng');
+      expect(result.shortageCount, equals(0));
+      expect(result.items.first.isInStock, isTrue);
+    });
+
+    test('Items are sorted with oldest date (furthest date in past) first', () async {
+      final loc = repo.locations.first;
+
+      final dateFarPast = DateTime(2025, 12, 1);
+      final dateMidPast = DateTime(2026, 1, 15);
+      final dateRecent = DateTime(2026, 3, 1);
+
+      await repo.addItem(
+        Item(
+          itemId: 'ITEM-DATE-NEW',
+          productId: 'P-DATE',
+          sku: 'TEST-SKU-DATE',
+          productName: 'Hàng Mới',
+          serialNumber: 'SN-D3',
+          epc: 'EPC-D3',
+          status: ItemStatus.inStock,
+          locationId: loc.locationId,
+          inboundTime: dateRecent,
+        ),
+      );
+      await repo.addItem(
+        Item(
+          itemId: 'ITEM-DATE-MID',
+          productId: 'P-DATE',
+          sku: 'TEST-SKU-DATE',
+          productName: 'Hàng Vừa',
+          serialNumber: 'SN-D2',
+          epc: 'EPC-D2',
+          status: ItemStatus.inStock,
+          locationId: loc.locationId,
+          inboundTime: dateMidPast,
+        ),
+      );
+      await repo.addItem(
+        Item(
+          itemId: 'ITEM-DATE-FAR',
+          productId: 'P-DATE',
+          sku: 'TEST-SKU-DATE',
+          productName: 'Hàng Cũ Xa Nhất',
+          serialNumber: 'SN-D1',
+          epc: 'EPC-D1',
+          status: ItemStatus.inStock,
+          locationId: loc.locationId,
+          inboundTime: dateFarPast,
+        ),
+      );
+
+      // Nạp danh sách theo thứ tự lộn xộn
+      final result = repo.validateOutboundInventoryAndFifo(
+        requestedItems: [
+          {'sku': 'TEST-SKU-DATE', 'epc': 'EPC-D3'},
+          {'sku': 'TEST-SKU-DATE', 'epc': 'EPC-D1'},
+          {'sku': 'TEST-SKU-DATE', 'epc': 'EPC-D2'},
+        ],
+      );
+
+      expect(result.isStockSufficient, isTrue);
+      // Kiểm tra sắp xếp theo date xa nhất lên đầu (2025-12-01 trước 2026-01-15 trước 2026-03-01)
+      expect(result.items[0].epc, equals('EPC-D1'));
+      expect(result.items[0].inboundTime, equals(dateFarPast));
+
+      expect(result.items[1].epc, equals('EPC-D2'));
+      expect(result.items[1].inboundTime, equals(dateMidPast));
+
+      expect(result.items[2].epc, equals('EPC-D3'));
+      expect(result.items[2].inboundTime, equals(dateRecent));
+    });
   });
 }

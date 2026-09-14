@@ -3637,9 +3637,13 @@ class WarehouseRepository extends ChangeNotifier {
   /// Đối soát danh sách hàng cần xuất kho với tồn kho thực tế và vị trí kệ FIFO:
   /// - Kiểm tra số lượng tồn kho theo từng SKU (`status == ItemStatus.inStock`).
   /// - Nếu hàng có sẵn trong kho: sắp xếp theo FIFO (`inboundTime` tăng dần - hàng nhập trước ưu tiên xuất trước).
+  /// Đối soát hàng tồn kho xuất kho và vị trí kệ FIFO:
+  /// - Kiểm tra số lượng tồn kho khả dụng (`status == inStock || waitingPutaway || allocated`).
+  /// - Ưu tiên đối soát theo thẻ chip EPC trực tiếp nếu file yêu cầu có EPC.
+  /// - Nếu không có EPC, đối soát phân bổ theo SKU hoặc Tên sản phẩm theo chuẩn FIFO (`inboundTime` tăng dần).
   /// - Phân giải vị trí kệ (`locationCode`) thực tế từ `locationId` của sản phẩm hoặc pallet chứa sản phẩm.
-  /// - Gán thứ tự ưu tiên FIFO (1, 2, ...) cho từng sản phẩm.
-  /// - Cảnh báo nếu số lượng tồn kho không đủ để xuất, hoặc sản phẩm yêu cầu đã hết tồn.
+  /// - Sắp xếp danh sách hàng xuất theo chuẩn FIFO: Hàng có sẵn xếp theo ngày nhập xa nhất/cũ nhất lên đầu.
+  /// - Xác định chính xác số lượng thiếu hụt `shortageCount` để cảnh báo nếu không đủ tồn kho.
   OutboundInventoryValidationResult validateOutboundInventoryAndFifo({
     required List<Map<String, dynamic>> requestedItems,
   }) {
@@ -3654,8 +3658,12 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
-    // 1. Tập hợp các sản phẩm đang có trong kho (inStock)
-    final inStockItems = _items.where((it) => it.status == ItemStatus.inStock).toList();
+    // 1. Tập hợp các sản phẩm khả dụng trong kho (đã cất kệ, chờ cất kệ hoặc đã phân bổ)
+    final availableStockItems = _items.where((it) =>
+      it.status == ItemStatus.inStock ||
+      it.status == ItemStatus.waitingPutaway ||
+      it.status == ItemStatus.allocated
+    ).toList();
 
     // Map vị trí kệ: locationId -> locationCode
     final locationCodeMap = <String, String>{};
@@ -3673,51 +3681,84 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // Nhóm các sản phẩm tồn kho theo SKU và sắp xếp theo FIFO (inboundTime tăng dần)
+    // Nhóm các sản phẩm tồn kho theo SKU và Tên sản phẩm, sắp xếp theo FIFO (inboundTime tăng dần)
     final Map<String, List<Item>> inStockBySku = {};
-    for (var it in inStockItems) {
+    final Map<String, List<Item>> inStockByName = {};
+    for (var it in availableStockItems) {
       final skuKey = it.sku.trim().toUpperCase();
-      inStockBySku.putIfAbsent(skuKey, () => []).add(it);
+      if (skuKey.isNotEmpty && skuKey != '--') {
+        inStockBySku.putIfAbsent(skuKey, () => []).add(it);
+      }
+      final nameKey = it.productName.trim().toUpperCase();
+      if (nameKey.isNotEmpty && nameKey != '--') {
+        inStockByName.putIfAbsent(nameKey, () => []).add(it);
+      }
     }
 
-    // Sắp xếp từng SKU theo FIFO (cũ nhất đứng đầu)
+    // Sắp xếp từng nhóm theo FIFO (cũ nhất / ngày nhập xa nhất đứng đầu)
     for (var list in inStockBySku.values) {
       list.sort((a, b) {
-        final timeA = a.inboundTime ?? a.allocatedTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final timeB = b.inboundTime ?? b.allocatedTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeA = getItemInboundTime(a);
+        final timeB = getItemInboundTime(b);
+        return timeA.compareTo(timeB);
+      });
+    }
+    for (var list in inStockByName.values) {
+      list.sort((a, b) {
+        final timeA = getItemInboundTime(a);
+        final timeB = getItemInboundTime(b);
         return timeA.compareTo(timeB);
       });
     }
 
-    // 2. Phân tích danh sách yêu cầu xuất
-    final Map<String, int> requestedCountBySku = {};
-    for (var req in requestedItems) {
-      final sku = (req['sku'] ?? '').toString().trim().toUpperCase();
-      if (sku.isNotEmpty && sku != '--') {
-        requestedCountBySku[sku] = (requestedCountBySku[sku] ?? 0) + 1;
-      }
-    }
-
-    // Tính lượng thiếu hụt theo SKU
-    final Map<String, int> shortageBySku = {};
-    int totalShortage = 0;
-    for (var entry in requestedCountBySku.entries) {
-      final sku = entry.key;
-      final reqQty = entry.value;
-      final availableQty = inStockBySku[sku]?.length ?? 0;
-      if (availableQty < reqQty) {
-        final shortage = reqQty - availableQty;
-        shortageBySku[sku] = shortage;
-        totalShortage += shortage;
-      }
-    }
-
-    // 3. Đối soát chi tiết từng món yêu cầu:
-    // Theo dõi các Item tồn kho đã được phân bổ cho đơn xuất hiện tại
+    // 2. Cơ chế đối soát 2 pha (2-Phase Matching):
     final Set<String> allocatedItemIds = {};
+    final Map<int, Item> matchedByIndex = {};
+
+    // Pha 1: Đối soát ưu tiên tuyệt đối theo mã chip EPC cụ thể nếu file có truyền EPC
+    for (int i = 0; i < requestedItems.length; i++) {
+      final req = requestedItems[i];
+      final reqEpc = (req['epc'] ?? '').toString().trim().toUpperCase();
+      if (reqEpc.isNotEmpty && reqEpc != '--') {
+        final matched = availableStockItems.where((it) =>
+            it.epc.toUpperCase() == reqEpc && !allocatedItemIds.contains(it.itemId)
+        ).firstOrNull;
+        if (matched != null) {
+          matchedByIndex[i] = matched;
+          allocatedItemIds.add(matched.itemId);
+        }
+      }
+    }
+
+    // Pha 2: Với các dòng chưa khớp EPC (xuất theo số lượng hoặc không có mã chip EPC cụ thể),
+    // tìm sản phẩm trong kho theo SKU hoặc theo Tên sản phẩm theo thứ tự FIFO
+    for (int i = 0; i < requestedItems.length; i++) {
+      if (matchedByIndex.containsKey(i)) continue;
+      final req = requestedItems[i];
+      final skuKey = (req['sku'] ?? '').toString().trim().toUpperCase();
+      final nameKey = (req['productName'] ?? req['name'] ?? '').toString().trim().toUpperCase();
+
+      Item? matched;
+      if (skuKey.isNotEmpty && skuKey != '--') {
+        final candidates = inStockBySku[skuKey] ?? [];
+        matched = candidates.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
+      }
+      if (matched == null && nameKey.isNotEmpty && nameKey != '--') {
+        final candidates = inStockByName[nameKey] ?? [];
+        matched = candidates.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
+      }
+
+      if (matched != null) {
+        matchedByIndex[i] = matched;
+        allocatedItemIds.add(matched.itemId);
+      }
+    }
+
+    // 3. Xây dựng danh sách OutboundValidatedItem chi tiết:
     final List<OutboundValidatedItem> validatedList = [];
 
-    for (var req in requestedItems) {
+    for (int i = 0; i < requestedItems.length; i++) {
+      final req = requestedItems[i];
       final sku = (req['sku'] ?? '').toString().trim();
       final skuKey = sku.toUpperCase();
       final reqEpc = (req['epc'] ?? '').toString().trim().toUpperCase();
@@ -3728,24 +3769,9 @@ class WarehouseRepository extends ChangeNotifier {
       final supplier = (req['supplier'] ?? '--').toString().trim();
       final customer = (req['customer'] ?? '--').toString().trim();
 
-      // Kiểm tra xem có khớp chính xác EPC này trong kho hay không
-      Item? matchedItem;
-      if (reqEpc.isNotEmpty && reqEpc != '--') {
-        matchedItem = inStockItems.where((it) =>
-            it.epc.toUpperCase() == reqEpc && !allocatedItemIds.contains(it.itemId)
-        ).firstOrNull;
-      }
-
-      // Nếu không tìm thấy theo EPC chính xác (hoặc EPC không có trong kho),
-      // thì phân bổ theo thứ tự FIFO của SKU đó
-      if (matchedItem == null) {
-        final candidateItems = inStockBySku[skuKey] ?? [];
-        matchedItem = candidateItems.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
-      }
+      final matchedItem = matchedByIndex[i];
 
       if (matchedItem != null) {
-        allocatedItemIds.add(matchedItem.itemId);
-
         // Tìm vị trí kệ
         String locCode = '--';
         if (matchedItem.locationId != null && locationCodeMap.containsKey(matchedItem.locationId)) {
@@ -3755,8 +3781,9 @@ class WarehouseRepository extends ChangeNotifier {
         }
 
         // Tính thứ tự ưu tiên FIFO trong các món của cùng SKU này trong kho
-        final allSkuStock = inStockBySku[skuKey] ?? [];
-        final fifoIndex = allSkuStock.indexWhere((it) => it.itemId == matchedItem!.itemId);
+        final effectiveSkuKey = matchedItem.sku.trim().toUpperCase();
+        final allSkuStock = inStockBySku[effectiveSkuKey] ?? inStockBySku[skuKey] ?? [];
+        final fifoIndex = allSkuStock.indexWhere((it) => it.itemId == matchedItem.itemId);
         final fifoPriority = fifoIndex >= 0 ? (fifoIndex + 1) : 1;
 
         String? fifoWarning;
@@ -3764,18 +3791,24 @@ class WarehouseRepository extends ChangeNotifier {
           fifoWarning = 'Không phải lô nhập cũ nhất (còn $fifoIndex sản phẩm cũ hơn trong kho)';
         }
 
+        final itemInboundTime = getItemInboundTime(matchedItem);
+
         validatedList.add(OutboundValidatedItem(
           sku: matchedItem.sku.isNotEmpty ? matchedItem.sku : sku,
           productName: matchedItem.productName.isNotEmpty ? matchedItem.productName : productName,
-          cartonCode: matchedItem.cartonCode ?? cartonCode,
-          palletCode: matchedItem.palletId ?? palletCode,
-          supplier: supplier,
+          cartonCode: (matchedItem.cartonCode != null && matchedItem.cartonCode!.isNotEmpty && matchedItem.cartonCode != '--')
+              ? matchedItem.cartonCode!
+              : cartonCode,
+          palletCode: (matchedItem.palletId != null && matchedItem.palletId!.isNotEmpty && matchedItem.palletId != '--')
+              ? matchedItem.palletId!
+              : palletCode,
+          supplier: supplier.isNotEmpty && supplier != '--' ? supplier : (matchedItem.supplier ?? '--'),
           customer: customer,
           palletEpc: palletEpc,
           epc: reqEpc.isNotEmpty && reqEpc != '--' ? reqEpc : matchedItem.epc.toUpperCase(),
           isInStock: true,
           locationCode: locCode,
-          inboundTime: matchedItem.inboundTime ?? matchedItem.allocatedTime,
+          inboundTime: itemInboundTime,
           fifoPriority: fifoPriority,
           fifoWarning: fifoWarning,
           matchedItemId: matchedItem.itemId,
@@ -3801,13 +3834,35 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    final isSufficient = totalShortage == 0 && validatedList.every((v) => v.isInStock);
+    // 4. Sắp xếp danh sách theo ngày nhập xa nhất / cũ nhất trước (chuẩn FIFO)
+    validatedList.sort((a, b) {
+      if (a.isInStock && !b.isInStock) return -1;
+      if (!a.isInStock && b.isInStock) return 1;
+      if (a.isInStock && b.isInStock) {
+        final timeA = a.inboundTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = b.inboundTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final cmp = timeA.compareTo(timeB);
+        if (cmp != 0) return cmp;
+      }
+      return 0;
+    });
+
+    // 5. Tính toán lượng thiếu hụt thực tế
+    final missingItems = validatedList.where((v) => !v.isInStock).toList();
+    final int shortageCount = missingItems.length;
+    final Map<String, int> shortageBySku = {};
+    for (var m in missingItems) {
+      final key = m.sku.isNotEmpty && m.sku != '--' ? m.sku : m.productName;
+      shortageBySku[key] = (shortageBySku[key] ?? 0) + 1;
+    }
+
+    final bool isStockSufficient = (shortageCount == 0);
 
     return OutboundInventoryValidationResult(
-      isStockSufficient: isSufficient,
+      isStockSufficient: isStockSufficient,
       totalRequested: requestedItems.length,
-      totalInStock: inStockItems.length,
-      shortageCount: totalShortage > 0 ? totalShortage : validatedList.where((v) => !v.isInStock).length,
+      totalInStock: availableStockItems.length,
+      shortageCount: shortageCount,
       shortageBySku: shortageBySku,
       items: validatedList,
     );

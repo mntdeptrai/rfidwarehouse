@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../models/tag_info.dart';
 import '../../models/wms_models.dart';
 import '../../services/auth_service.dart';
@@ -1222,7 +1223,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                 const SizedBox(width: 8),
                                 SizedBox(width: 110, child: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                 const SizedBox(width: 8),
-                                SizedBox(width: 115, child: Text('ƯU TIÊN FIFO', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                                SizedBox(width: 120, child: Text('NGÀY NHẬP', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                 const SizedBox(width: 8),
                                 SizedBox(width: 130, child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                 const SizedBox(width: 8),
@@ -1334,36 +1335,36 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        // ƯU TIÊN FIFO
+                                        // NGÀY NHẬP
                                         SizedBox(
-                                          width: 115,
+                                          width: 120,
                                           child: Align(
                                             alignment: Alignment.centerLeft,
                                             child: item.isInStock
                                                 ? Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                                     decoration: BoxDecoration(
-                                                      color: item.fifoPriority == 1
-                                                          ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                                          : const Color(0xFF6366F1).withValues(alpha: 0.12),
+                                                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
                                                       borderRadius: BorderRadius.circular(6),
                                                       border: Border.all(
-                                                        color: item.fifoPriority == 1 ? const Color(0xFF10B981) : const Color(0xFF6366F1).withValues(alpha: 0.5),
+                                                        color: const Color(0xFF10B981).withValues(alpha: 0.4),
                                                       ),
                                                     ),
                                                     child: Row(
                                                       mainAxisSize: MainAxisSize.min,
                                                       children: [
-                                                        Icon(
-                                                          item.fifoPriority == 1 ? Icons.star_rounded : Icons.low_priority,
-                                                          size: 13,
-                                                          color: item.fifoPriority == 1 ? const Color(0xFF10B981) : const Color(0xFF6366F1),
+                                                        const Icon(
+                                                          Icons.calendar_today_outlined,
+                                                          size: 12,
+                                                          color: Color(0xFF10B981),
                                                         ),
-                                                        const SizedBox(width: 4),
+                                                        const SizedBox(width: 5),
                                                         Text(
-                                                          'FIFO #${item.fifoPriority}',
-                                                          style: TextStyle(
-                                                            color: item.fifoPriority == 1 ? const Color(0xFF10B981) : const Color(0xFF6366F1),
+                                                          item.inboundTime != null
+                                                              ? DateFormat('dd/MM/yyyy').format(item.inboundTime!)
+                                                              : '--',
+                                                          style: const TextStyle(
+                                                            color: Color(0xFF10B981),
                                                             fontSize: 11,
                                                             fontWeight: FontWeight.bold,
                                                           ),
