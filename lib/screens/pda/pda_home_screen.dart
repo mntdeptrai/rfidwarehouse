@@ -10,8 +10,7 @@ import 'pda_inventory_screen.dart';
 import '../inbound_screen.dart';
 import 'pda_transfer_screen.dart';
 import 'pda_putaway_screen.dart';
-import 'pda_shelf_status_screen.dart';
-import 'pda_lookup_screen.dart';
+import 'pda_warehouse_management_screen.dart';
 
 class PdaHomeScreen extends StatefulWidget {
   const PdaHomeScreen({super.key});
@@ -268,29 +267,15 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           ),
                         _buildPdaActionTile(
                           context,
-                          title: 'Trạng thái kệ',
-                          icon: Icons.tune_rounded,
-                          accentColor: const Color(0xFFF59E0B),
-                          badgeColor: const Color(0xFFEF4444),
-                          colors: c,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const PdaShelfStatusScreen()),
-                            );
-                          },
-                        ),
-                        _buildPdaActionTile(
-                          context,
-                          title: 'Tra cứu mã',
-                          icon: Icons.search_rounded,
+                          title: 'Quản lý kho',
+                          icon: Icons.warehouse_rounded,
                           accentColor: c.rfidCyan,
-                          badgeColor: c.rfidCyan,
+                          badgeColor: const Color(0xFF8B5CF6),
                           colors: c,
                           onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const PdaLookupScreen()),
+                              MaterialPageRoute(builder: (_) => const PdaWarehouseManagementScreen()),
                             );
                           },
                         ),

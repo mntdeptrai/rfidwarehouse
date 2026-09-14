@@ -93,6 +93,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     final locId = loc.locationId.trim().toUpperCase();
 
     return _repo.items.where((i) {
+      if (i.status != ItemStatus.inStock) return false;
       final itemLoc = i.locationId?.trim().toUpperCase();
       if (itemLoc == null || itemLoc.isEmpty) return false;
       return itemLoc == locCode || itemLoc == locId;
@@ -830,6 +831,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     final locCode = loc.locationCode.trim().toUpperCase();
     final locId = loc.locationId.trim().toUpperCase();
     final itemsOnShelf = _repo.items.where((i) {
+      if (i.status != ItemStatus.inStock) return false;
       final itemLoc = i.locationId?.trim().toUpperCase();
       if (itemLoc == null || itemLoc.isEmpty) return false;
       return itemLoc == locCode || itemLoc == locId;
@@ -1057,6 +1059,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
           final locCode = loc.locationCode.trim().toUpperCase();
           final locId = loc.locationId.trim().toUpperCase();
           final liveItems = _repo.items.where((i) {
+            if (i.status != ItemStatus.inStock) return false;
             final itemLoc = i.locationId?.trim().toUpperCase();
             if (itemLoc == null || itemLoc.isEmpty) return false;
             return itemLoc == locCode || itemLoc == locId;
@@ -1554,6 +1557,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
 
     // Lấy toàn bộ Hàng hóa / Chip RFID trên kệ
     final itemsOnShelf = _repo.items.where((i) {
+      if (i.status != ItemStatus.inStock) return false;
       final itemLoc = i.locationId?.trim().toUpperCase();
       if (itemLoc == null || itemLoc.isEmpty) return false;
       return itemLoc == locCode || itemLoc == locId;
@@ -1998,9 +2002,10 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     final placedBy = _repo.getPalletPlacedBy(p);
     final placedTime = _repo.getPalletPlacedTime(p);
     final pItems = _repo.items.where((i) =>
-      p.itemIds.contains(i.itemId) ||
+      i.status == ItemStatus.inStock &&
+      (p.itemIds.contains(i.itemId) ||
       i.palletId == p.palletId ||
-      i.palletId == p.palletCode
+      i.palletId == p.palletCode)
     ).toList();
     final isExpanded = _expandedPalletIds.contains(p.palletId);
 
@@ -2685,7 +2690,10 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                           hint: Text('Chọn Pallet cần xếp vào kệ...', style: TextStyle(color: c.textMuted, fontSize: 13)),
                           dropdownColor: c.bgCard,
                           items: availablePallets.map((p) {
-                            final pItems = _repo.items.where((i) => p.itemIds.contains(i.itemId) || i.palletId == p.palletId).length;
+                            final pItems = _repo.items.where((i) =>
+                              i.status == ItemStatus.inStock &&
+                              (p.itemIds.contains(i.itemId) || i.palletId == p.palletId)
+                            ).length;
                             final currentLoc = p.locationId != null ? ' (Đang ở: ${p.locationId})' : ' (Chưa có vị trí)';
                             return DropdownMenuItem<Pallet>(
                               value: p,

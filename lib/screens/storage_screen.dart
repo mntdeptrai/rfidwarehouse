@@ -121,7 +121,9 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       final loc = it.locationId != null
                           ? _repo.locations.where((l) => l.locationId == it.locationId || l.locationCode == it.locationId).firstOrNull
                           : (pallet != null ? _repo.locations.where((l) => l.locationId == pallet.locationId || l.locationCode == pallet.locationId).firstOrNull : null);
-                      final locDisplay = loc?.displayName ?? (loc?.locationCode ?? (it.locationId ?? 'Chưa có vị trí'));
+                      final locDisplay = it.status == ItemStatus.out
+                          ? 'ĐÃ XUẤT KHO'
+                          : (loc?.displayName ?? (loc?.locationCode ?? (it.locationId ?? 'Chưa có vị trí')));
 
                       return DataRow(
                         cells: [

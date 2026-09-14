@@ -3505,16 +3505,54 @@ class WarehouseRepository extends ChangeNotifier {
     final now = DateTime.now();
 
     for (var epc in shippedEpcs) {
-      final item = _items.firstWhere((it) => it.epc == epc);
-      item.status = ItemStatus.out;
-      item.locationId = null;
-      if (item.palletId != null) {
-        final pal = _pallets.where((p) => p.palletId == item.palletId).firstOrNull;
-        pal?.itemIds.remove(item.itemId);
+      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+      if (item != null) {
+        item.status = ItemStatus.out;
+        item.locationId = null;
+        final oldPalletId = item.palletId;
+        item.palletId = null;
+        if (oldPalletId != null && oldPalletId.trim().isNotEmpty) {
+          final cleanPal = oldPalletId.trim().toUpperCase();
+          final pal = _pallets.where((p) => p.palletId.trim().toUpperCase() == cleanPal || p.palletCode.trim().toUpperCase() == cleanPal).firstOrNull;
+          if (pal != null) {
+            pal.itemIds.remove(item.itemId);
+            final remainingInStock = _items.where((it) =>
+              it.palletId?.trim().toUpperCase() == cleanPal &&
+              it.status == ItemStatus.inStock &&
+              it.itemId != item.itemId
+            ).length;
+            if (remainingInStock == 0 && pal.itemIds.isEmpty) {
+              pal.locationId = null;
+              await _dbService.insertPallet(pal);
+              await _syncDirectOrQueue(
+                tableName: 'pallets',
+                recordId: pal.palletId,
+                action: 'UPDATE',
+                payload: {
+                  'pallet_id': pal.palletId,
+                  'location_id': null,
+                  'updated_at': now.toIso8601String(),
+                },
+              );
+            }
+          }
+        }
+        await _dbService.updateItemStatus(item.epc, ItemStatus.out);
+        await _dbService.updateItemLocationAndPallet(item.epc, null, null, status: ItemStatus.out.code);
+        await _dbService.insertItem(item);
+        await _syncDirectOrQueue(
+          tableName: 'items',
+          recordId: item.itemId,
+          action: 'UPDATE',
+          payload: {
+            'item_id': item.itemId,
+            'status': ItemStatus.out.code,
+            'location_id': null,
+            'pallet_id': null,
+            'updated_at': now.toIso8601String(),
+          },
+        );
       }
-      await _dbService.updateItemStatus(epc, ItemStatus.out);
-      await _dbService.updateItemLocationAndPallet(epc, null, item.palletId);
-      await _dbService.insertItem(item);
     }
 
     order.status = OutboundOrderStatus.shipped;
@@ -3578,17 +3616,53 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     for (var epc in uniqueEpcs) {
-      final item = _items.where((it) => it.epc == epc).firstOrNull;
+      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
       if (item != null) {
         item.status = ItemStatus.out;
         item.locationId = null;
-        if (item.palletId != null) {
-          final pal = _pallets.where((p) => p.palletId == item.palletId).firstOrNull;
-          pal?.itemIds.remove(item.itemId);
+        final oldPalletId = item.palletId;
+        item.palletId = null;
+        if (oldPalletId != null && oldPalletId.trim().isNotEmpty) {
+          final cleanPal = oldPalletId.trim().toUpperCase();
+          final pal = _pallets.where((p) => p.palletId.trim().toUpperCase() == cleanPal || p.palletCode.trim().toUpperCase() == cleanPal).firstOrNull;
+          if (pal != null) {
+            pal.itemIds.remove(item.itemId);
+            final remainingInStock = _items.where((it) =>
+              it.palletId?.trim().toUpperCase() == cleanPal &&
+              it.status == ItemStatus.inStock &&
+              it.itemId != item.itemId
+            ).length;
+            if (remainingInStock == 0 && pal.itemIds.isEmpty) {
+              pal.locationId = null;
+              await _dbService.insertPallet(pal);
+              await _syncDirectOrQueue(
+                tableName: 'pallets',
+                recordId: pal.palletId,
+                action: 'UPDATE',
+                payload: {
+                  'pallet_id': pal.palletId,
+                  'location_id': null,
+                  'updated_at': now.toIso8601String(),
+                },
+              );
+            }
+          }
         }
-        await _dbService.updateItemStatus(epc, ItemStatus.out);
-        await _dbService.updateItemLocationAndPallet(epc, null, item.palletId);
+        await _dbService.updateItemStatus(item.epc, ItemStatus.out);
+        await _dbService.updateItemLocationAndPallet(item.epc, null, null, status: ItemStatus.out.code);
         await _dbService.insertItem(item);
+        await _syncDirectOrQueue(
+          tableName: 'items',
+          recordId: item.itemId,
+          action: 'UPDATE',
+          payload: {
+            'item_id': item.itemId,
+            'status': ItemStatus.out.code,
+            'location_id': null,
+            'pallet_id': null,
+            'updated_at': now.toIso8601String(),
+          },
+        );
       }
     }
 
@@ -3885,13 +3959,49 @@ class WarehouseRepository extends ChangeNotifier {
       if (item != null) {
         item.status = ItemStatus.out;
         item.locationId = null;
-        if (item.palletId != null) {
-          final pal = _pallets.where((p) => p.palletId == item.palletId || p.palletCode == item.palletId).firstOrNull;
-          pal?.itemIds.remove(item.itemId);
+        final oldPalletId = item.palletId;
+        item.palletId = null;
+        if (oldPalletId != null && oldPalletId.trim().isNotEmpty) {
+          final cleanPal = oldPalletId.trim().toUpperCase();
+          final pal = _pallets.where((p) => p.palletId.trim().toUpperCase() == cleanPal || p.palletCode.trim().toUpperCase() == cleanPal).firstOrNull;
+          if (pal != null) {
+            pal.itemIds.remove(item.itemId);
+            final remainingInStock = _items.where((it) =>
+              it.palletId?.trim().toUpperCase() == cleanPal &&
+              it.status == ItemStatus.inStock &&
+              it.itemId != item.itemId
+            ).length;
+            if (remainingInStock == 0 && pal.itemIds.isEmpty) {
+              pal.locationId = null;
+              await _dbService.insertPallet(pal);
+              await _syncDirectOrQueue(
+                tableName: 'pallets',
+                recordId: pal.palletId,
+                action: 'UPDATE',
+                payload: {
+                  'pallet_id': pal.palletId,
+                  'location_id': null,
+                  'updated_at': now.toIso8601String(),
+                },
+              );
+            }
+          }
         }
         await _dbService.updateItemStatus(item.epc, ItemStatus.out);
-        await _dbService.updateItemLocationAndPallet(item.epc, null, item.palletId);
+        await _dbService.updateItemLocationAndPallet(item.epc, null, null, status: ItemStatus.out.code);
         await _dbService.insertItem(item);
+        await _syncDirectOrQueue(
+          tableName: 'items',
+          recordId: item.itemId,
+          action: 'UPDATE',
+          payload: {
+            'item_id': item.itemId,
+            'status': ItemStatus.out.code,
+            'location_id': null,
+            'pallet_id': null,
+            'updated_at': now.toIso8601String(),
+          },
+        );
         updatedCount++;
       }
     }
@@ -3959,6 +4069,7 @@ class WarehouseRepository extends ChangeNotifier {
 
   /// Tra cứu vị trí kệ kho thực tế của sản phẩm (hỗ trợ cả hàng lẻ và hàng trên Pallet)
   Location? resolveItemLocation(Item it) {
+    if (it.status == ItemStatus.out) return null;
     String? rawLocId = it.locationId;
     if ((rawLocId == null || rawLocId.trim().isEmpty) && it.palletId != null && it.palletId!.trim().isNotEmpty) {
       final pClean = it.palletId!.trim().toUpperCase();

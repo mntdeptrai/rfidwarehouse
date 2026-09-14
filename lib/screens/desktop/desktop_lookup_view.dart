@@ -86,6 +86,9 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
   }
 
   String _getLocationDisplay(Item item) {
+    if (item.status == ItemStatus.out) {
+      return 'ĐÃ XUẤT KHO';
+    }
     final pallet = _repo.pallets.where((p) => p.palletId == item.palletId || p.palletCode == item.palletId).firstOrNull;
     final loc = item.locationId != null
         ? _repo.locations.where((l) => l.locationId == item.locationId || l.locationCode == item.locationId).firstOrNull

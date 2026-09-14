@@ -925,5 +925,60 @@ void main() {
       final updated = repo.items.firstWhere((i) => i.epc == 'EPC-GATE-01');
       expect(repo.getItemInboundBy(updated), 'Trần Văn Nhập Kho');
     });
+
+    test('Outbound clearing: Xuất kho thành công gỡ bỏ triệt để vị trí kệ, pallet và resolveItemLocation trả về null', () async {
+      final repo = WarehouseRepository();
+      const locId = 'LOC-TEST-OUT-01';
+      const palletCode = 'PALLET-OUT-TEST-01';
+      const epc = 'E28011910000000000OUT001';
+
+      final loc = Location(
+        locationId: locId,
+        locationCode: 'A-99-01',
+        zone: 'A',
+        shelf: '99',
+        level: '01',
+      );
+      await repo.addLocation(loc);
+
+      final item = Item(
+        itemId: 'ITEM-TEST-OUT-CLEAR-01',
+        productId: 'PROD-OUT-01',
+        sku: 'SKU-OUT-01',
+        productName: 'Hàng Test Xuất Kho',
+        serialNumber: 'SN-OUT-01',
+        epc: epc,
+        status: ItemStatus.inStock,
+        locationId: locId,
+        palletId: palletCode,
+      );
+      await repo.addItem(item);
+
+      final pallet = repo.createOrAssignPallet(
+        palletCode: palletCode,
+        locationId: locId,
+        newItems: [item],
+        placedBy: 'Tester',
+      );
+      pallet.itemIds.add(item.itemId);
+
+      // Trước khi xuất kho: item ở trên kệ A-99-01
+      expect(repo.resolveItemLocation(item)?.locationCode, 'A-99-01');
+
+      // Thực hiện xuất kho qua cổng RFID Gate
+      final shippedCount = await repo.confirmGateOutbound(
+        poNo: 'PO-OUT-TEST-CLEAR',
+        customer: 'Khách Hàng Test',
+        scannedEpcs: [epc],
+        performedBy: 'Thủ Kho Gate',
+      );
+
+      expect(shippedCount, 1);
+      final shippedItem = repo.items.firstWhere((i) => i.epc == epc);
+      expect(shippedItem.status, ItemStatus.out);
+      expect(shippedItem.locationId, isNull);
+      expect(shippedItem.palletId, isNull);
+      expect(repo.resolveItemLocation(shippedItem), isNull);
+    });
   });
 }

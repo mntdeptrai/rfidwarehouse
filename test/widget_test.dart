@@ -13,6 +13,7 @@ import 'package:uhf/screens/inbound_screen.dart';
 import 'package:uhf/screens/desktop/desktop_warehouse_management_view.dart';
 import 'package:uhf/screens/outbound_screen.dart';
 import 'package:uhf/screens/pda/pda_putaway_screen.dart';
+import 'package:uhf/screens/pda/pda_warehouse_management_screen.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/models/tag_info.dart';
 import 'package:uhf/services/warehouse_repository.dart';
@@ -166,6 +167,20 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(PdaHomeScreen), findsOneWidget);
+  });
+
+  testWidgets('PdaWarehouseManagementScreen renders without overflow in ultra-narrow window', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(200, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PdaWarehouseManagementScreen(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(PdaWarehouseManagementScreen), findsOneWidget);
   });
 
   testWidgets('InboundScreen renders without overflow in ultra-narrow window', (WidgetTester tester) async {

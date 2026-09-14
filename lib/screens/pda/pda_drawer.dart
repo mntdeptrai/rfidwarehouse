@@ -7,7 +7,7 @@ import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
 import 'pda_merge_pallets_screen.dart';
 import 'pda_putaway_screen.dart';
-import 'pda_shelf_status_screen.dart';
+import 'pda_warehouse_management_screen.dart';
 import '../radar_locate_screen.dart';
 import '../desktop/desktop_user_management_view.dart';
 
@@ -118,17 +118,17 @@ class PdaDrawer extends StatelessWidget {
                   },
                 ),
               ListTile(
-                leading: Icon(Icons.tune_rounded, color: c.warningAmber),
+                leading: Icon(Icons.warehouse_rounded, color: c.rfidCyan),
                 title: Text(
-                  'Cập Nhật Trạng Thái Kệ',
+                  'Quản Lý Kho (PDA)',
                   style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
                 ),
-                subtitle: Text('Đầy • Sắp hết • Còn trống', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                subtitle: Text('Pallet • Kệ • Lịch sử • Sản phẩm', style: TextStyle(color: c.textMuted, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const PdaShelfStatusScreen()),
+                    MaterialPageRoute(builder: (_) => const PdaWarehouseManagementScreen()),
                   );
                 },
               ),
