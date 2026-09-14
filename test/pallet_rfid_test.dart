@@ -289,6 +289,50 @@ void main() {
       expect(repo.pallets.any((p) => p.palletCode == '945321582'), isTrue);
       expect(repo.pallets.any((p) => p.palletCode == '945321988'), isTrue);
     });
+
+    test('Inbound 10 products + 2 pallets yields 12 total expected chips', () {
+      final items = List.generate(10, (idx) => Item(
+        itemId: 'ITEM-$idx',
+        productId: 'SKU-$idx',
+        sku: 'SKU-$idx',
+        productName: 'SP $idx',
+        serialNumber: 'EPC-$idx',
+        epc: 'EPC-$idx',
+        status: ItemStatus.pendingInbound,
+        palletId: idx < 5 ? 'PAL-945321545' : 'PAL-945321988',
+      ));
+      final pallets = <String, String?>{
+        '945321545': 'AB2600100000000000000200',
+        '945321988': 'E2806A960000502C4760454E',
+      };
+
+      final expectedProductEpcs = items.map((i) => i.epc.trim().toUpperCase()).toSet();
+      final validPalletEpcs = pallets.values
+          .where((e) => e != null && e.trim().isNotEmpty && e != '--')
+          .map((e) => e!.trim().toUpperCase())
+          .toSet();
+      final allExpectedEpcs = {...expectedProductEpcs, ...validPalletEpcs};
+
+      expect(expectedProductEpcs.length, equals(10));
+      expect(validPalletEpcs.length, equals(2));
+      expect(allExpectedEpcs.length, equals(12));
+
+      // Simulate scanned tags: 10 products + 2 pallets
+      final scannedMap = <String, TagInfo>{};
+      for (final epc in expectedProductEpcs) {
+        scannedMap[epc] = TagInfo(epc: epc, ant: '1', rssi: '-50');
+      }
+      expect(allExpectedEpcs.where((e) => scannedMap.containsKey(e)).length, equals(10));
+
+      // Scan pallet 1
+      scannedMap['AB2600100000000000000200'] = TagInfo(epc: 'AB2600100000000000000200', ant: '1', rssi: '-45');
+      expect(allExpectedEpcs.where((e) => scannedMap.containsKey(e)).length, equals(11));
+
+      // Scan pallet 2
+      scannedMap['E2806A960000502C4760454E'] = TagInfo(epc: 'E2806A960000502C4760454E', ant: '1', rssi: '-48');
+      expect(allExpectedEpcs.where((e) => scannedMap.containsKey(e)).length, equals(12));
+    });
   });
 }
+
 

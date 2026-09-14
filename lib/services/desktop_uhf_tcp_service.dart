@@ -103,8 +103,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
   double _readRate = 0.0;
   double get readRate => _readRate;
 
-  // Active Antennas (Mặc định bật đồng thời ANT 1 & ANT 2 cho trạm/cổng)
-  final Set<int> _activeAntennas = {1, 2};
+  // Active Antennas (Mặc định mở ANT 1 cho đầu đọc)
+  final Set<int> _activeAntennas = {1};
   Set<int> get activeAntennas => Set.unmodifiable(_activeAntennas);
 
   void setAntenna(int ant, bool enable) {
@@ -598,9 +598,9 @@ class DesktopUhfTcpService extends ChangeNotifier {
           _activeAntennas.addAll(_config.activeAntennas);
         }
         for (int i = 1; i <= 4; i++) {
-          _antennaPower[i] = _config.rfPower;
+          _antennaPower[i] = _config.antennaPowers[i] ?? _config.rfPower;
         }
-        _log('Đã nạp cấu hình kết nối: ${_config.connectionSummary}');
+        _log('Đã nạp cấu hình kết nối: ${_config.connectionSummary} • Công suất: $_antennaPower dBm');
         notifyListeners();
       }
     } catch (e) {
@@ -615,7 +615,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
       _activeAntennas.addAll(_config.activeAntennas);
     }
     for (int i = 1; i <= 4; i++) {
-      _antennaPower[i] = _config.rfPower;
+      _antennaPower[i] = _config.antennaPowers[i] ?? _config.rfPower;
     }
     notifyListeners();
 
@@ -626,7 +626,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _log('Đã lưu cấu hình kết nối: ${newConfig.connectionSummary}');
       }
       if (_isConnected) {
-        setAntennaPower({1: _config.rfPower, 2: _config.rfPower, 3: _config.rfPower, 4: _config.rfPower});
+        setAntennaPower(_antennaPower);
       }
       return true;
     } catch (e) {
@@ -850,6 +850,10 @@ class DesktopUhfTcpService extends ChangeNotifier {
       return;
     }
     powers.forEach((k, v) => _antennaPower[k] = v);
+    _config = _config.copyWith(
+      antennaPowers: Map.from(_antennaPower),
+      rfPower: _antennaPower.values.isNotEmpty ? _antennaPower.values.first : _config.rfPower,
+    );
     _log('Đã cấu hình công suất phát Anten: $powers dBm');
 
     if (_isBridgeConnected) {
@@ -858,7 +862,30 @@ class DesktopUhfTcpService extends ChangeNotifier {
         'powers': powers.map((k, v) => MapEntry(k.toString(), v)),
       });
     }
+
+    try {
+      final file = await _getConfigFile();
+      if (file != null) {
+        await file.writeAsString(_config.serialize());
+      }
+    } catch (_) {}
+
     notifyListeners();
+  }
+
+  /// Cấu hình công suất cho 1 ăng-ten cụ thể (1..4, từ 0 đến 33 dBm)
+  Future<void> setSingleAntennaPower(int antenna, int power) async {
+    await setAntennaPower({antenna: power});
+  }
+
+  /// Cấu hình công suất đồng loạt cho tất cả ăng-ten (0 đến 33 dBm)
+  Future<void> setAllAntennasPower(int power) async {
+    await setAntennaPower({1: power, 2: power, 3: power, 4: power});
+  }
+
+  /// Lấy mức công suất hiện tại của 1 ăng-ten (1..4)
+  int getAntennaPower(int antenna) {
+    return _config.antennaPowers[antenna] ?? _antennaPower[antenna] ?? _config.rfPower;
   }
 
   // ==================== MEMORY R/W ====================

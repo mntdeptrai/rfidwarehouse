@@ -28,8 +28,11 @@ class UhfConnectionConfig {
   /// Danh sách Anten hoạt động (1..4)
   final List<int> activeAntennas;
 
-  /// Công suất phát sóng RF (dBm, từ 10 đến 33 dBm)
+  /// Công suất phát sóng RF mặc định / tổng quát (dBm, từ 0 đến 33 dBm)
   final int rfPower;
+
+  /// Công suất phát sóng cho từng ăng-ten (1..4 -> dBm)
+  final Map<int, int> antennaPowers;
 
   const UhfConnectionConfig({
     this.connectionType = 'TCP Client',
@@ -41,8 +44,9 @@ class UhfConnectionConfig {
     this.autoConnectOnStartup = true,
     this.autoReconnect = true,
     this.autoConnectOnScan = true,
-    this.activeAntennas = const [1, 2],
+    this.activeAntennas = const [1],
     this.rfPower = 30,
+    this.antennaPowers = const {1: 30, 2: 30, 3: 30, 4: 30},
   });
 
   /// Mô tả ngắn gọn cổng đang cấu hình
@@ -75,6 +79,7 @@ class UhfConnectionConfig {
     bool? autoConnectOnScan,
     List<int>? activeAntennas,
     int? rfPower,
+    Map<int, int>? antennaPowers,
   }) {
     return UhfConnectionConfig(
       connectionType: connectionType ?? this.connectionType,
@@ -88,6 +93,7 @@ class UhfConnectionConfig {
       autoConnectOnScan: autoConnectOnScan ?? this.autoConnectOnScan,
       activeAntennas: activeAntennas ?? List<int>.from(this.activeAntennas),
       rfPower: rfPower ?? this.rfPower,
+      antennaPowers: antennaPowers != null ? Map<int, int>.from(antennaPowers) : Map<int, int>.from(this.antennaPowers),
     );
   }
 
@@ -103,15 +109,27 @@ class UhfConnectionConfig {
     'autoConnectOnScan': autoConnectOnScan,
     'activeAntennas': activeAntennas,
     'rfPower': rfPower,
+    'antennaPowers': antennaPowers.map((k, v) => MapEntry(k.toString(), v)),
   };
 
   factory UhfConnectionConfig.fromJson(Map<String, dynamic> json) {
-    List<int> ants = [1, 2];
+    List<int> ants = [1];
     if (json['activeAntennas'] is List) {
       ants = (json['activeAntennas'] as List)
           .map((e) => int.tryParse(e.toString()) ?? 1)
           .toList();
-      if (ants.isEmpty) ants = [1, 2];
+      if (ants.isEmpty) ants = [1];
+    }
+
+    final pwr = int.tryParse(json['rfPower']?.toString() ?? '') ?? 30;
+    Map<int, int> powers = {1: pwr, 2: pwr, 3: pwr, 4: pwr};
+    if (json['antennaPowers'] is Map) {
+      final rawMap = json['antennaPowers'] as Map;
+      for (final e in rawMap.entries) {
+        final k = int.tryParse(e.key.toString());
+        final v = int.tryParse(e.value.toString());
+        if (k != null && v != null) powers[k] = v;
+      }
     }
 
     return UhfConnectionConfig(
@@ -125,7 +143,8 @@ class UhfConnectionConfig {
       autoReconnect: json['autoReconnect'] != false,
       autoConnectOnScan: json['autoConnectOnScan'] != false,
       activeAntennas: ants,
-      rfPower: int.tryParse(json['rfPower']?.toString() ?? '') ?? 30,
+      rfPower: pwr,
+      antennaPowers: powers,
     );
   }
 

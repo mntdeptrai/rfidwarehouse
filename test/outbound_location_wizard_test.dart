@@ -99,7 +99,7 @@ void main() {
       expect(testItem.locationId, isNull);
     });
 
-    testWidgets('DesktopGoodsDeliveryView displays 10 locations and table', (WidgetTester tester) async {
+    testWidgets('DesktopGoodsDeliveryView displays header with XUẤT HÀNG button and idle gate monitor', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -113,14 +113,13 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 500));
 
-      // Sơ đồ vị trí hiển thị
-      expect(find.textContaining('SƠ ĐỒ 10 VỊ TRÍ'), findsOneWidget);
-      // Nút gợi ý xuất FIFO ưu tiên lô xa nhất
-      expect(find.textContaining('GỢI Ý FIFO (LÔ XA NHẤT)'), findsOneWidget);
-      // Cột ngày nhập kho FIFO hiển thị trên bảng
-      expect(find.textContaining('NGÀY NHẬP KHO (FIFO)'), findsOneWidget);
-      // Nút tiếp tục qua cổng RFID xuất kho ở góc phải
-      expect(find.textContaining('TIẾP TỤC: QUA CỔNG RFID XUẤT KHO'), findsOneWidget);
+      // Nút XUẤT HÀNG dropdown màu cyan trên thanh tiêu đề
+      expect(find.text('XUẤT HÀNG'), findsOneWidget);
+      // Nút Lịch sử xuất kho và Làm mới
+      expect(find.text('LỊCH SỬ XUẤT KHO'), findsOneWidget);
+      expect(find.text('LÀM MỚI'), findsOneWidget);
+      // Màn hình chờ tiếp nhận hàng xuất khi chưa nạp file
+      expect(find.textContaining('CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT'), findsOneWidget);
     });
 
     testWidgets('WarehouseLocationGridWidget uses GridView, scrolls smoothly and supports collapse/expand', (WidgetTester tester) async {

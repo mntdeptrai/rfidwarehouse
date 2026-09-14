@@ -12,6 +12,7 @@ class ExcelImportResult {
   final int totalCartons;
   final int totalSerials;
   final List<Map<String, dynamic>> cartons;
+  final String? customerName;
 
   ExcelImportResult({
     required this.fileName,
@@ -19,6 +20,7 @@ class ExcelImportResult {
     required this.totalCartons,
     required this.totalSerials,
     required this.cartons,
+    this.customerName,
   });
 }
 
@@ -94,9 +96,16 @@ class ExcelImportService {
       }
 
       int totalSerials = 0;
+      String? topCustomer;
       for (final c in cartons) {
         final list = (c['serials'] as List<dynamic>?) ?? [];
         totalSerials += list.length;
+        if (topCustomer == null || topCustomer.isEmpty) {
+          final cust = c['customer']?.toString().trim();
+          if (cust != null && cust.isNotEmpty) {
+            topCustomer = cust;
+          }
+        }
       }
 
       return ExcelImportResult(
@@ -105,6 +114,7 @@ class ExcelImportService {
         totalCartons: cartons.length,
         totalSerials: totalSerials,
         cartons: cartons,
+        customerName: topCustomer,
       );
     } catch (e) {
       debugPrint('ExcelImportService error: $e');
@@ -196,7 +206,42 @@ class ExcelImportService {
     int? barcodeCol;
     int? nameCol;
     int? supplierCol;
+    int? customerCol;
     int startRow = 0;
+
+    String fileCustomer = '';
+    for (int r = 0; r < rawGrid.length && r < 10; r++) {
+      for (int c = 0; c < rawGrid[r].length; c++) {
+        final cell = rawGrid[r][c];
+        final lower = _normalizeHeader(cell);
+        // TH1: Nhãn và tên khách hàng nằm chung 1 ô (vd: "Khách hàng: Công ty ABC")
+        if (lower.startsWith('khach hang:') ||
+            lower.startsWith('khach hang :') ||
+            lower.startsWith('customer:') ||
+            lower.startsWith('don vi nhan:') ||
+            lower.startsWith('nguoi nhan:') ||
+            lower.startsWith('khach mua:')) {
+          final parts = cell.split(RegExp(r'[:：]'));
+          if (parts.length > 1 && parts.sublist(1).join(':').trim().isNotEmpty) {
+            fileCustomer = parts.sublist(1).join(':').trim();
+            break;
+          }
+        }
+        // TH2: Nhãn ở ô này, tên khách hàng ở ô kế bên (vd: ô A1 là "Khách hàng", ô B1 là "Công ty ABC")
+        if (lower == 'khach hang' ||
+            lower == 'khách hàng' ||
+            lower == 'customer' ||
+            lower == 'don vi nhan' ||
+            lower == 'nguoi nhan' ||
+            lower == 'khach mua') {
+          if (c + 1 < rawGrid[r].length && rawGrid[r][c + 1].trim().isNotEmpty) {
+            fileCustomer = rawGrid[r][c + 1].trim();
+            break;
+          }
+        }
+      }
+      if (fileCustomer.isNotEmpty) break;
+    }
 
     final firstRow = rawGrid.first;
     final headers = firstRow.map((c) => _normalizeHeader(c)).toList();
@@ -273,12 +318,30 @@ class ExcelImportService {
         supplierCol = i;
         hasHeader = true;
       }
+      // 8. Cột Khách hàng / Customer / Đơn vị nhận / Người nhận
+      else if (h.contains('khach hang') ||
+          h.contains('khách hàng') ||
+          h.contains('customer') ||
+          h.contains('don vi nhan') ||
+          h.contains('nguoi nhan') ||
+          h.contains('khach mua') ||
+          h.contains('client')) {
+        customerCol = i;
+        hasHeader = true;
+      }
     }
 
     // Nếu file có cột Pallet và cột RFID/EPC nhưng cột RFID chưa có chữ 'pallet' (Ví dụ: cột 1 là "Pallet", cột 2 là "RFID")
     if (palletCol != null && palletEpcCol == null && serialCol != null) {
       palletEpcCol = serialCol;
       serialCol = null;
+    }
+
+    // Nếu bảng dữ liệu có cột "KHÁCH HÀNG" nhưng không có cột Nhà Cung Cấp riêng,
+    // dữ liệu thực tế tại kho lưu trong cột đó là Nhà Cung Cấp (như PEPSICO).
+    if (supplierCol == null && customerCol != null) {
+      supplierCol = customerCol;
+      customerCol = null;
     }
 
     if (hasHeader) {
@@ -335,6 +398,8 @@ class ExcelImportService {
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
       final name = (nameCol < row.length) ? row[nameCol].trim() : '';
       final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
+      final customer = (customerCol != null && customerCol < row.length) ? row[customerCol].trim() : '';
+      final effectiveCustomer = customer.isNotEmpty ? customer : (fileCustomer.isNotEmpty ? fileCustomer : '');
 
       if (carton.isEmpty && pallet.isEmpty && palletEpc.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
         continue;
@@ -377,6 +442,7 @@ class ExcelImportService {
           'productCode': rowBarcode,
           'productName': effectiveName,
           'supplier': supplier.isNotEmpty ? supplier : 'Nhà cung cấp tổng hợp',
+          'customer': effectiveCustomer,
           'quantity': 0,
           'serials': <String>[],
           'serialItems': <Map<String, dynamic>>[],
@@ -384,6 +450,9 @@ class ExcelImportService {
       } else {
         if (supplier.isNotEmpty && cartonMap[groupKey]!['supplier'] == 'Nhà cung cấp tổng hợp') {
           cartonMap[groupKey]!['supplier'] = supplier;
+        }
+        if (effectiveCustomer.isNotEmpty && (cartonMap[groupKey]!['customer'] == null || (cartonMap[groupKey]!['customer'] as String).isEmpty)) {
+          cartonMap[groupKey]!['customer'] = effectiveCustomer;
         }
         if (cartonMap[groupKey]!['palletCode'] == null && effectivePallet != null) {
           cartonMap[groupKey]!['palletCode'] = effectivePallet;
@@ -412,6 +481,7 @@ class ExcelImportService {
             'palletEpc': effectivePalletEpc,
             'palletRfid': effectivePalletEpc,
             'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
+            'customer': effectiveCustomer.isNotEmpty ? effectiveCustomer : entry['customer'],
           });
         }
       } else {
@@ -431,6 +501,7 @@ class ExcelImportService {
             'palletEpc': effectivePalletEpc,
             'palletRfid': effectivePalletEpc,
             'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
+            'customer': effectiveCustomer.isNotEmpty ? effectiveCustomer : entry['customer'],
           });
           final serialsList = entry['serials'] as List<String>;
           if (!serialsList.contains(effectiveItemSerial)) {

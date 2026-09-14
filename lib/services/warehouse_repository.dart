@@ -3605,6 +3605,274 @@ class WarehouseRepository extends ChangeNotifier {
     return uniqueEpcs.length;
   }
 
+  /// Đối soát danh sách hàng cần xuất kho với tồn kho thực tế và vị trí kệ FIFO:
+  /// - Kiểm tra số lượng tồn kho theo từng SKU (`status == ItemStatus.inStock`).
+  /// - Nếu hàng có sẵn trong kho: sắp xếp theo FIFO (`inboundTime` tăng dần - hàng nhập trước ưu tiên xuất trước).
+  /// - Phân giải vị trí kệ (`locationCode`) thực tế từ `locationId` của sản phẩm hoặc pallet chứa sản phẩm.
+  /// - Gán thứ tự ưu tiên FIFO (1, 2, ...) cho từng sản phẩm.
+  /// - Cảnh báo nếu số lượng tồn kho không đủ để xuất, hoặc sản phẩm yêu cầu đã hết tồn.
+  OutboundInventoryValidationResult validateOutboundInventoryAndFifo({
+    required List<Map<String, dynamic>> requestedItems,
+  }) {
+    if (requestedItems.isEmpty) {
+      return OutboundInventoryValidationResult(
+        isStockSufficient: true,
+        totalRequested: 0,
+        totalInStock: 0,
+        shortageCount: 0,
+        shortageBySku: {},
+        items: [],
+      );
+    }
+
+    // 1. Tập hợp các sản phẩm đang có trong kho (inStock)
+    final inStockItems = _items.where((it) => it.status == ItemStatus.inStock).toList();
+
+    // Map vị trí kệ: locationId -> locationCode
+    final locationCodeMap = <String, String>{};
+    for (var loc in _locations) {
+      locationCodeMap[loc.locationId] = loc.locationCode;
+    }
+
+    // Map vị trí của pallet: palletId / palletCode -> locationCode
+    final palletLocationMap = <String, String>{};
+    for (var pal in _pallets) {
+      if (pal.locationId != null && locationCodeMap.containsKey(pal.locationId)) {
+        final locCode = locationCodeMap[pal.locationId]!;
+        palletLocationMap[pal.palletId] = locCode;
+        palletLocationMap[pal.palletCode] = locCode;
+      }
+    }
+
+    // Nhóm các sản phẩm tồn kho theo SKU và sắp xếp theo FIFO (inboundTime tăng dần)
+    final Map<String, List<Item>> inStockBySku = {};
+    for (var it in inStockItems) {
+      final skuKey = it.sku.trim().toUpperCase();
+      inStockBySku.putIfAbsent(skuKey, () => []).add(it);
+    }
+
+    // Sắp xếp từng SKU theo FIFO (cũ nhất đứng đầu)
+    for (var list in inStockBySku.values) {
+      list.sort((a, b) {
+        final timeA = a.inboundTime ?? a.allocatedTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = b.inboundTime ?? b.allocatedTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return timeA.compareTo(timeB);
+      });
+    }
+
+    // 2. Phân tích danh sách yêu cầu xuất
+    final Map<String, int> requestedCountBySku = {};
+    for (var req in requestedItems) {
+      final sku = (req['sku'] ?? '').toString().trim().toUpperCase();
+      if (sku.isNotEmpty && sku != '--') {
+        requestedCountBySku[sku] = (requestedCountBySku[sku] ?? 0) + 1;
+      }
+    }
+
+    // Tính lượng thiếu hụt theo SKU
+    final Map<String, int> shortageBySku = {};
+    int totalShortage = 0;
+    for (var entry in requestedCountBySku.entries) {
+      final sku = entry.key;
+      final reqQty = entry.value;
+      final availableQty = inStockBySku[sku]?.length ?? 0;
+      if (availableQty < reqQty) {
+        final shortage = reqQty - availableQty;
+        shortageBySku[sku] = shortage;
+        totalShortage += shortage;
+      }
+    }
+
+    // 3. Đối soát chi tiết từng món yêu cầu:
+    // Theo dõi các Item tồn kho đã được phân bổ cho đơn xuất hiện tại
+    final Set<String> allocatedItemIds = {};
+    final List<OutboundValidatedItem> validatedList = [];
+
+    for (var req in requestedItems) {
+      final sku = (req['sku'] ?? '').toString().trim();
+      final skuKey = sku.toUpperCase();
+      final reqEpc = (req['epc'] ?? '').toString().trim().toUpperCase();
+      final productName = (req['productName'] ?? req['name'] ?? 'Sản phẩm').toString().trim();
+      final cartonCode = (req['cartonCode'] ?? '--').toString().trim();
+      final palletCode = (req['palletCode'] ?? '--').toString().trim();
+      final palletEpc = (req['palletEpc'] ?? '--').toString().trim();
+      final supplier = (req['supplier'] ?? '--').toString().trim();
+      final customer = (req['customer'] ?? '--').toString().trim();
+
+      // Kiểm tra xem có khớp chính xác EPC này trong kho hay không
+      Item? matchedItem;
+      if (reqEpc.isNotEmpty && reqEpc != '--') {
+        matchedItem = inStockItems.where((it) =>
+            it.epc.toUpperCase() == reqEpc && !allocatedItemIds.contains(it.itemId)
+        ).firstOrNull;
+      }
+
+      // Nếu không tìm thấy theo EPC chính xác (hoặc EPC không có trong kho),
+      // thì phân bổ theo thứ tự FIFO của SKU đó
+      if (matchedItem == null) {
+        final candidateItems = inStockBySku[skuKey] ?? [];
+        matchedItem = candidateItems.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
+      }
+
+      if (matchedItem != null) {
+        allocatedItemIds.add(matchedItem.itemId);
+
+        // Tìm vị trí kệ
+        String locCode = '--';
+        if (matchedItem.locationId != null && locationCodeMap.containsKey(matchedItem.locationId)) {
+          locCode = locationCodeMap[matchedItem.locationId]!;
+        } else if (matchedItem.palletId != null && palletLocationMap.containsKey(matchedItem.palletId)) {
+          locCode = palletLocationMap[matchedItem.palletId]!;
+        }
+
+        // Tính thứ tự ưu tiên FIFO trong các món của cùng SKU này trong kho
+        final allSkuStock = inStockBySku[skuKey] ?? [];
+        final fifoIndex = allSkuStock.indexWhere((it) => it.itemId == matchedItem!.itemId);
+        final fifoPriority = fifoIndex >= 0 ? (fifoIndex + 1) : 1;
+
+        String? fifoWarning;
+        if (fifoIndex > 0) {
+          fifoWarning = 'Không phải lô nhập cũ nhất (còn $fifoIndex sản phẩm cũ hơn trong kho)';
+        }
+
+        validatedList.add(OutboundValidatedItem(
+          sku: matchedItem.sku.isNotEmpty ? matchedItem.sku : sku,
+          productName: matchedItem.productName.isNotEmpty ? matchedItem.productName : productName,
+          cartonCode: matchedItem.cartonCode ?? cartonCode,
+          palletCode: matchedItem.palletId ?? palletCode,
+          supplier: supplier,
+          customer: customer,
+          palletEpc: palletEpc,
+          epc: reqEpc.isNotEmpty && reqEpc != '--' ? reqEpc : matchedItem.epc.toUpperCase(),
+          isInStock: true,
+          locationCode: locCode,
+          inboundTime: matchedItem.inboundTime ?? matchedItem.allocatedTime,
+          fifoPriority: fifoPriority,
+          fifoWarning: fifoWarning,
+          matchedItemId: matchedItem.itemId,
+        ));
+      } else {
+        // Hết hàng tồn kho cho món này
+        validatedList.add(OutboundValidatedItem(
+          sku: sku,
+          productName: productName,
+          cartonCode: cartonCode,
+          palletCode: palletCode,
+          supplier: supplier,
+          customer: customer,
+          palletEpc: palletEpc,
+          epc: reqEpc.isNotEmpty ? reqEpc : '--',
+          isInStock: false,
+          locationCode: '--',
+          inboundTime: null,
+          fifoPriority: 999,
+          fifoWarning: 'Không đủ hàng tồn trong kho để xuất!',
+          matchedItemId: null,
+        ));
+      }
+    }
+
+    final isSufficient = totalShortage == 0 && validatedList.every((v) => v.isInStock);
+
+    return OutboundInventoryValidationResult(
+      isStockSufficient: isSufficient,
+      totalRequested: requestedItems.length,
+      totalInStock: inStockItems.length,
+      shortageCount: totalShortage > 0 ? totalShortage : validatedList.where((v) => !v.isInStock).length,
+      shortageBySku: shortageBySku,
+      items: validatedList,
+    );
+  }
+
+  /// Xác nhận xuất kho đối soát qua cổng RFID Gate (Hàng + Pallet)
+  Future<int> confirmGateOutbound({
+    required String poNo,
+    required String customer,
+    required List<String> scannedEpcs,
+    String performedBy = 'Cổng RFID Gate Outbound',
+  }) async {
+    final uniqueEpcs = scannedEpcs.toSet().toList();
+    if (uniqueEpcs.isEmpty) return 0;
+    final now = DateTime.now();
+
+    int updatedCount = 0;
+    for (var epc in uniqueEpcs) {
+      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+      if (item != null) {
+        item.status = ItemStatus.out;
+        item.locationId = null;
+        if (item.palletId != null) {
+          final pal = _pallets.where((p) => p.palletId == item.palletId || p.palletCode == item.palletId).firstOrNull;
+          pal?.itemIds.remove(item.itemId);
+        }
+        await _dbService.updateItemStatus(item.epc, ItemStatus.out);
+        await _dbService.updateItemLocationAndPallet(item.epc, null, item.palletId);
+        await _dbService.insertItem(item);
+        updatedCount++;
+      }
+    }
+
+    final outboundId = 'OUT-${now.millisecondsSinceEpoch}';
+    final existingOrder = _outboundOrders.where((o) => o.poNo == poNo).firstOrNull;
+    if (existingOrder != null) {
+      existingOrder.status = OutboundOrderStatus.shipped;
+      await _dbService.updateOutboundOrderStatus(existingOrder.outboundOrderId, OutboundOrderStatus.shipped);
+    } else {
+      final newOrder = OutboundOrder(
+        outboundOrderId: outboundId,
+        poNo: poNo,
+        customer: customer,
+        status: OutboundOrderStatus.shipped,
+        createdAt: now,
+        details: [
+          OutboundOrderDetail(
+            productId: 'MULTI',
+            sku: 'MULTI',
+            productName: 'Xuất kho cổng RFID',
+            requiredQty: uniqueEpcs.length,
+            pickedQty: uniqueEpcs.length,
+            epcList: uniqueEpcs,
+          ),
+        ],
+      );
+      _outboundOrders.insert(0, newOrder);
+      await _dbService.insertOutboundOrder(newOrder);
+    }
+
+    _transactions.insert(
+      0,
+      InventoryTransaction(
+        transactionId: 'TX-${now.millisecondsSinceEpoch}',
+        type: TransactionType.outbound,
+        documentNo: poNo,
+        sku: 'MULTI-SKU',
+        productName: 'Xuất kho qua cổng RFID',
+        quantity: uniqueEpcs.length,
+        fromLocation: 'KHO_TONG',
+        toLocation: customer,
+        performedBy: performedBy,
+        timestamp: now,
+        notes: 'Xuất thành công ${uniqueEpcs.length} chip qua cổng RFID',
+      ),
+    );
+
+    await _syncDirectOrQueue(
+      tableName: 'outbound_transactions',
+      recordId: poNo,
+      action: 'OUTBOUND_CONFIRM',
+      payload: {
+        'poNo': poNo,
+        'epcs': uniqueEpcs,
+        'performedBy': performedBy,
+        'timestamp': now.toIso8601String(),
+      },
+    );
+    _triggerBackgroundSync();
+
+    notifyListeners();
+    return updatedCount > 0 ? updatedCount : uniqueEpcs.length;
+  }
+
   /// Tra cứu vị trí kệ kho thực tế của sản phẩm (hỗ trợ cả hàng lẻ và hàng trên Pallet)
   Location? resolveItemLocation(Item it) {
     String? rawLocId = it.locationId;

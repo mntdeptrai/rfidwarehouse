@@ -57,7 +57,7 @@ class MainActivity : FlutterActivity() {
     private var currentScanMode = "rfid"
 
     private var lastTriggerDown = 0L
-    private val TRIGGER_DEBOUNCE_MS = 50L
+    private val TRIGGER_DEBOUNCE_MS = 150L
 
     // Cached SEUIC Scanner reflection for 0ms instantaneous laser response
     private var mBarcodeScanner: Any? = null
@@ -210,17 +210,21 @@ class MainActivity : FlutterActivity() {
                     "com.seuic.android.action.KEY_DOWN", "com.rfid.KEY_DOWN",
                     "android.intent.action.SCANNER_BUTTON_DOWN", "com.android.server.scannerservice.onkeydown",
                     "com.ubx.action.KEY_DOWN", "urovo.action.SCAN_KEY" -> {
-                        val keyCode = intent.getIntExtra("KEY_CODE", intent.getIntExtra("keyCode", 293))
-                        Log.d(TAG, "Hardware Trigger Broadcast DOWN: keyCode=$keyCode")
-                        mainHandler.post { sendTriggerEvent(true, keyCode) }
+                        val keyCode = intent.getIntExtra("KEY_CODE", intent.getIntExtra("keyCode", -1))
+                        if (keyCode != -1 && isTriggerKey(keyCode)) {
+                            Log.d(TAG, "Hardware Trigger Broadcast DOWN: keyCode=$keyCode")
+                            mainHandler.post { sendTriggerEvent(true, keyCode) }
+                        }
                     }
                     "com.rscja.android.KEY_UP", "com.rscja.action.KEY_UP",
                     "com.seuic.android.action.KEY_UP", "com.rfid.KEY_UP",
                     "android.intent.action.SCANNER_BUTTON_UP", "com.android.server.scannerservice.onkeyup",
                     "com.ubx.action.KEY_UP" -> {
-                        val keyCode = intent.getIntExtra("KEY_CODE", intent.getIntExtra("keyCode", 293))
-                        Log.d(TAG, "Hardware Trigger Broadcast UP: keyCode=$keyCode")
-                        mainHandler.post { sendTriggerEvent(false, keyCode) }
+                        val keyCode = intent.getIntExtra("KEY_CODE", intent.getIntExtra("keyCode", -1))
+                        if (keyCode != -1 && isTriggerKey(keyCode)) {
+                            Log.d(TAG, "Hardware Trigger Broadcast UP: keyCode=$keyCode")
+                            mainHandler.post { sendTriggerEvent(false, keyCode) }
+                        }
                     }
                     "com.android.server.scannerservice.broadcast" -> {
                         val subAction = intent.getStringExtra("action") ?: ""
@@ -840,30 +844,13 @@ class MainActivity : FlutterActivity() {
     // ──── Trigger Handling ────
 
     private fun isTriggerKey(keyCode: Int): Boolean {
+        // Chỉ chấp nhận các phím bóp cò / nút quét vật lý thực tế của PDA công nghiệp
         return keyCode == 142 || keyCode == 293 || keyCode == 294 || keyCode == 280 || keyCode == 281 ||
-               keyCode == 248 || keyCode == 249 || keyCode == 250 || keyCode == 251 || keyCode == 252 ||
-               keyCode == 131 || keyCode == 132 || keyCode == 133 || keyCode == 134 ||
-               keyCode == 135 || keyCode == 136 || keyCode == 137 || keyCode == 138 ||
-               keyCode == 139 || keyCode == 140 || keyCode == 141 ||
-               keyCode == KeyEvent.KEYCODE_F4 || keyCode == KeyEvent.KEYCODE_F1 ||
-               keyCode == KeyEvent.KEYCODE_F2 || keyCode == KeyEvent.KEYCODE_F3 ||
-               keyCode == KeyEvent.KEYCODE_F5 || keyCode == KeyEvent.KEYCODE_F6 ||
-               keyCode == KeyEvent.KEYCODE_F7 || keyCode == KeyEvent.KEYCODE_F8 ||
-               keyCode == KeyEvent.KEYCODE_F9 || keyCode == KeyEvent.KEYCODE_F10 ||
-               keyCode == KeyEvent.KEYCODE_F11 || keyCode == KeyEvent.KEYCODE_F12 ||
-               keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
-               keyCode == KeyEvent.KEYCODE_BUTTON_L1 || keyCode == KeyEvent.KEYCODE_BUTTON_R1 ||
-               keyCode == KeyEvent.KEYCODE_BUTTON_L2 || keyCode == KeyEvent.KEYCODE_BUTTON_R2 ||
-               keyCode == KeyEvent.KEYCODE_BUTTON_A || keyCode == KeyEvent.KEYCODE_BUTTON_B ||
-               keyCode == KeyEvent.KEYCODE_BUTTON_X || keyCode == KeyEvent.KEYCODE_BUTTON_Y ||
-               keyCode == 188 || keyCode == 189 || keyCode == 190 || keyCode == 191 ||
-               keyCode == 261 || keyCode == 262 ||
-               keyCode == 300 || keyCode == 301 || keyCode == 302 ||
-               keyCode == 520 || keyCode == 521 || keyCode == 522 || keyCode == 523 || keyCode == 524 ||
-               keyCode == KeyEvent.KEYCODE_PROG_RED || keyCode == KeyEvent.KEYCODE_PROG_GREEN ||
-               keyCode == KeyEvent.KEYCODE_STEM_1 || keyCode == KeyEvent.KEYCODE_STEM_2 ||
-               keyCode == KeyEvent.KEYCODE_STEM_3 ||
-               keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_FOCUS
+               keyCode == 248 || keyCode == 249 ||
+               keyCode == 139 ||
+               keyCode == KeyEvent.KEYCODE_F4 ||
+               keyCode == 261 ||
+               keyCode == 300 || keyCode == 301 || keyCode == 302
     }
 
     private fun initBarcodeScannerCache() {

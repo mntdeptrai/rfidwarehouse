@@ -71,25 +71,47 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   // Lưu vết chip RFID đã quét tách biệt theo từng đơn hàng / xe Pallet (ngăn ngừa lẫn lộn giữa các xe)
   final Map<String, Map<String, TagInfo>> _scannedTagsByOrderNo = {};
   final Map<String, String> _scannedPalletTagsByOrderNo = {};
+
+  // Cơ chế lọc chip đã quét qua cổng (tránh báo chip lạ khi xe pallet còn trong vùng phủ sóng)
+  final Set<String> _passedGateEpcs = {};
+  bool _filterAlreadyPassedChips = true;
+  final Map<String, TagInfo> _filteredPassedTags = {};
+
   bool _wizardIsScanning = false;
   int _wizardScanDuration = 0; // 0 = liên tục (mặc định cho cổng quét), 5s, 10s
   int _wizardScanCountdown = 0;
   Timer? _wizardCountdownTimer;
 
-  int get _totalFileExpected => _pendingGateOrders.fold<int>(0, (sum, p) => sum + p.items.length);
-  int get _totalFileScanned {
-    int count = 0;
+  int get _totalFileExpected {
+    final expectedEpcs = <String>{};
     for (final p in _pendingGateOrders) {
-      final scannedMap = _scannedTagsByOrderNo[p.order.orderNo];
-      if (scannedMap != null) {
-        for (final it in p.items) {
-          if (scannedMap.containsKey(it.epc.trim().toUpperCase())) {
-            count++;
-          }
+      for (final it in p.items) {
+        expectedEpcs.add(it.epc.trim().toUpperCase());
+      }
+      for (final palletEpc in p.pallets.values) {
+        if (palletEpc != null && palletEpc.isNotEmpty && palletEpc != '--') {
+          expectedEpcs.add(palletEpc.trim().toUpperCase());
         }
       }
     }
-    return count;
+    return expectedEpcs.length;
+  }
+  int get _totalFileScanned {
+    final expectedEpcs = <String>{};
+    for (final p in _pendingGateOrders) {
+      for (final it in p.items) {
+        expectedEpcs.add(it.epc.trim().toUpperCase());
+      }
+      for (final palletEpc in p.pallets.values) {
+        if (palletEpc != null && palletEpc.isNotEmpty && palletEpc != '--') {
+          expectedEpcs.add(palletEpc.trim().toUpperCase());
+        }
+      }
+    }
+    return expectedEpcs.where((epc) {
+      return _wizardScannedTags.containsKey(epc) ||
+          _scannedTagsByOrderNo.values.any((m) => m.containsKey(epc));
+    }).length;
   }
 
   void _syncWizardScannedTagsForActiveOrder() {
@@ -100,12 +122,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
   }
 
-  // Trạng thái báo lỗi sai sót theo đơn hàng khi qua cổng
-  bool _hasDiscrepancyError = false;
-  String? _discrepancyOrderNo;
-  String? _discrepancyPalletCode;
-  List<Item> _discrepancyMissingItems = [];
-  List<TagInfo> _discrepancyUnexpectedTags = [];
 
   // Thông báo đối soát thành công (tự động giải phóng sau 3s)
   String? _lastSuccessOrderNo;
@@ -256,13 +272,18 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     if (_cachedStep1DetailedItems != null) return _cachedStep1DetailedItems!;
     final List<Map<String, dynamic>> list = [];
     if (_activeExpectedItems.isNotEmpty) {
-      list.addAll(_activeExpectedItems.map((i) => {
-        'boxCode': i.cartonCode ?? '--',
-        'sku': i.sku,
-        'productName': i.productName,
-        'serial': i.epc,
-        'supplier': i.supplier ?? '--',
-        'orderNo': i.orderNo ?? '--',
+      list.addAll(_activeExpectedItems.map((i) {
+        final pal = _repo.pallets.where((p) => p.palletId == i.palletId || p.palletCode == i.palletId).firstOrNull;
+        return {
+          'boxCode': i.cartonCode ?? '--',
+          'palletCode': i.palletId ?? '--',
+          'palletEpc': pal?.rfidEpc ?? '--',
+          'sku': i.sku,
+          'productName': i.productName,
+          'serial': i.epc,
+          'supplier': i.supplier ?? _repo.inboundOrders.where((o) => o.orderNo == i.orderNo).firstOrNull?.sourceSupplier ?? '--',
+          'orderNo': i.orderNo ?? '--',
+        };
       }));
     } else {
       final cartons = _getAvailableCartons();
@@ -282,6 +303,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           final sSupplier = (i < sItems.length ? sItems[i]['supplier'] : null) ?? cBox['supplier'] ?? 'Nhà cung cấp tổng hợp';
           list.add({
             'boxCode': boxCode,
+            'palletCode': (cBox['palletCode'] ?? cBox['palletId'] ?? '--').toString(),
+            'palletEpc': (cBox['palletEpc'] ?? '--').toString(),
             'sku': sku,
             'productName': prodName,
             'serial': serial,
@@ -294,6 +317,51 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     _cachedStep1DetailedItems = list;
     return list;
+  }
+
+  Widget _buildMetricBadge({
+    required String label,
+    required int count,
+    required Color color,
+    required EyeCareColors c,
+    double width = 80,
+  }) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.6), width: 1.2),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: color,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            '$count',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   List<Map<String, dynamic>> _getStep2FlatInspectionItems() {
@@ -314,7 +382,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   Future<void> _startWizardScan({int? durationSeconds}) async {
     final duration = durationSeconds ?? _wizardScanDuration;
     _wizardCountdownTimer?.cancel();
-    _desktopUhf.clearTags();
     if (!_desktopUhf.isConnected) {
       final success = await _desktopUhf.connectWithSavedConfig();
       if (!success && !_desktopUhf.isConnected) {
@@ -422,6 +489,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     return _wizardUnexpectedTags.values.where((t) {
       final epc = t.epc.trim().toUpperCase();
       if (knownEpcs.contains(epc)) return false;
+      if (_filterAlreadyPassedChips && (_passedGateEpcs.contains(epc) || _repo.items.any((i) => i.epc.trim().toUpperCase() == epc))) {
+        return false;
+      }
       if (_repo.findPalletByRfid(epc) != null) return false;
       return true;
     }).toList();
@@ -444,11 +514,37 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _successBannerTimer?.cancel();
     }
 
+    // 0. CƠ CHẾ LỌC CÁC CHIP ĐÃ QUÉT TRƯỚC ĐÓ ĐÃ QUA CỔNG
+    if (_filterAlreadyPassedChips) {
+      final isPassedGate = _passedGateEpcs.contains(cleanEpc);
+      final isExistingItemInWarehouse = _repo.items.any((i) =>
+        i.epc.trim().toUpperCase() == cleanEpc && i.status != ItemStatus.pendingInbound
+      );
+
+      // Kiểm tra xem chip này có thuộc đơn hàng ĐANG CHỜ qua cổng hay không
+      final isInPendingOrder = _pendingGateOrders.any((p) =>
+        p.items.any((i) => i.epc.trim().toUpperCase() == cleanEpc) ||
+        p.pallets.values.any((v) => (v ?? '').trim().toUpperCase() == cleanEpc)
+      ) || _activeExpectedItems.any((i) => i.epc.trim().toUpperCase() == cleanEpc);
+
+      if ((isPassedGate || isExistingItemInWarehouse) && !isInPendingOrder) {
+        // Chip đã qua cổng thành công trước đó hoặc đã lưu kho -> lọc bỏ, không coi là chip lạ
+        _filteredPassedTags[cleanEpc] = tag;
+        _wizardUnexpectedTags.remove(cleanEpc);
+        return;
+      }
+    }
+
     // 1. TỰ ĐỘNG NHẬN DIỆN XE PALLET
     // 1.1 Kiểm tra nếu đây là chip của xe Pallet đang active
     final curPalletEpc = (_activePallet?.rfidEpc ?? _wizardDetectedPalletTag ?? _wizardDetectedPallet?.rfidEpc)?.trim().toUpperCase();
     if (curPalletEpc != null && curPalletEpc.isNotEmpty && (curPalletEpc == cleanEpc || _wizardDetectedPalletTag == cleanEpc || _activePalletTag == cleanEpc)) {
       _wizardUnexpectedTags.remove(cleanEpc);
+      _wizardScannedTags[cleanEpc] = tag;
+      if (_activeOrderNo != null) {
+        _scannedTagsByOrderNo.putIfAbsent(_activeOrderNo!, () => {})[cleanEpc] = tag;
+      }
+      if (mounted) setState(() {});
       return;
     }
 
@@ -495,8 +591,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
       targetOrderNo ??= _activeOrderNo;
 
+      _wizardScannedTags[cleanEpc] = tag;
       if (targetOrderNo != null) {
         _scannedPalletTagsByOrderNo[targetOrderNo] = cleanEpc;
+        _scannedTagsByOrderNo.putIfAbsent(targetOrderNo, () => {})[cleanEpc] = tag;
       }
 
       // Chỉ kích hoạt xe Pallet nếu xác định được đơn hàng chờ tương ứng (tránh tạo xe ma 0/0 chip)
@@ -532,9 +630,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
           // Đồng bộ lại chỉ các chip đã quét thuộc xe Pallet này
           _syncWizardScannedTagsForActiveOrder();
-          _hasDiscrepancyError = false;
-          _discrepancyMissingItems.clear();
-          _discrepancyUnexpectedTags.clear();
           _invalidateCartonCaches();
         });
         _towerLight.triggerPass(reason: 'Đã nhận diện xe Pallet ${mPallet.palletCode}!');
@@ -570,6 +665,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     if (itemPendingOrder != null && matchedItem != null) {
       final ordNo = itemPendingOrder.order.orderNo;
       _scannedTagsByOrderNo.putIfAbsent(ordNo, () => {})[cleanEpc] = tag;
+      _wizardScannedTags[cleanEpc] = tag;
       _wizardUnexpectedTags.remove(cleanEpc);
 
       // Nếu chưa có xe nào active -> tự động active xe này
@@ -650,8 +746,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }
 
     final isAnyKnownDbItem = _repo.items.any((i) =>
-      i.epc.trim().toUpperCase() == cleanEpc && i.status == ItemStatus.pendingInbound);
+      i.epc.trim().toUpperCase() == cleanEpc);
     if (isAnyKnownDbItem) {
+      if (_filterAlreadyPassedChips) {
+        _filteredPassedTags[cleanEpc] = tag;
+      }
       return;
     }
 
@@ -721,170 +820,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
 
 
-  /// Báo lỗi sai sót đích danh đơn hàng qua cổng (thiếu sản phẩm hoặc có chip lạ)
-  void _reportDiscrepancyError() {
-    final missing = _activeExpectedItems.where((i) => !_wizardScannedTags.containsKey(i.epc.trim().toUpperCase())).toList();
-    final unexp = _getFilteredUnexpectedTags();
-
-    var p = _activePallet ?? _wizardDetectedPallet;
-    if (p == null && _activeExpectedItems.isNotEmpty) {
-      final pId = _activeExpectedItems.first.palletId;
-      if (pId != null && pId.isNotEmpty) {
-        p = _repo.pallets.where((item) =>
-          item.palletId.toUpperCase() == pId.toUpperCase() ||
-          item.palletCode.toUpperCase() == pId.toUpperCase() ||
-          item.palletId.toUpperCase() == 'PAL-${pId.toUpperCase()}' ||
-          'PAL-${item.palletCode.toUpperCase()}' == pId.toUpperCase()
-        ).firstOrNull;
-      }
-    }
-    final palletEpc = (p?.rfidEpc ?? _wizardDetectedPalletTag ?? _activePalletTag)?.trim().toUpperCase();
-    if (palletEpc != null && palletEpc.isNotEmpty && !_wizardScannedTags.containsKey(palletEpc)) {
-      final palletCode = p?.palletCode ?? 'Xe Pallet';
-      missing.insert(0, Item(
-        itemId: 'PALLET-$palletCode',
-        productId: palletCode,
-        sku: palletCode,
-        productName: '🏷️ Thẻ RFID Xe Pallet ($palletCode)',
-        serialNumber: palletEpc,
-        epc: palletEpc,
-        status: ItemStatus.pendingInbound,
-        orderNo: _activeOrderNo,
-        cartonCode: 'PALLET: $palletCode',
-      ));
-    }
-
-    _towerLight.triggerWarningRed(withBuzzer: true, reason: 'Sai sót tại đơn ${_activeOrderNo ?? "--"}: Thiếu ${missing.length} chip, có ${unexp.length} chip lạ!');
-    _autoCompleteTimer?.cancel();
-    _autoCompleteTimer = null;
-
-    setState(() {
-      _hasDiscrepancyError = true;
-      _discrepancyOrderNo = _activeOrderNo ?? (_wizardSelectedCartons.isNotEmpty ? _wizardSelectedCartons.first : 'Chưa rõ mã đơn');
-      _discrepancyPalletCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode;
-      _discrepancyMissingItems = missing;
-      _discrepancyUnexpectedTags = unexp;
-    });
-  }
-
-  void _retryCurrentVehicle() {
-    _autoCompleteTimer?.cancel();
-    _autoCompleteTimer = null;
-    setState(() {
-      if (_activeOrderNo != null) {
-        _scannedTagsByOrderNo.remove(_activeOrderNo);
-      }
-      _wizardScannedTags.clear();
-      _wizardUnexpectedTags.clear();
-      _hasDiscrepancyError = false;
-      _discrepancyMissingItems.clear();
-      _discrepancyUnexpectedTags.clear();
-    });
-    _desktopUhf.clearTags();
-    _startWizardScan();
-  }
-
-  Future<void> _confirmPartialInbound() async {
-    if (_wizardScannedTags.isEmpty) return;
-    final orderNo = _activeOrderNo ?? (_wizardSelectedCartons.isNotEmpty ? _wizardSelectedCartons.first : 'NK-${DateTime.now().millisecondsSinceEpoch}');
-    final String? palletCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode;
-    final itemEpcs = _wizardScannedTags.keys.toList();
-    final count = itemEpcs.length;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _eyeCare.colors.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _eyeCare.colors.border)),
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 22),
-            const SizedBox(width: 8),
-            Text('Xác nhận nhập thiếu?', style: TextStyle(color: _eyeCare.colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
-          ],
-        ),
-        content: Text(
-          'Đơn hàng "$orderNo" (Pallet: ${palletCode ?? "--"}) chỉ mới đọc được $count chip (thiếu ${_discrepancyMissingItems.length} chip).\n\nBạn có chắc chắn muốn lưu thông tin nhập thiếu này vào CSDL?',
-          style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 12.5, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('HỦY', style: TextStyle(color: _eyeCare.colors.textMuted)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF59E0B),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('XÁC NHẬN NHẬP THIẾU', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    // Khi xác nhận nhập thiếu, lưu dữ liệu đơn hàng chờ vào CSDL trước khi xác nhận lưu kho
-    final pendingIdx = _pendingGateOrders.indexWhere((p) => p.order.orderNo == orderNo || p.order.inboundOrderId == orderNo);
-    if (pendingIdx != -1) {
-      final pending = _pendingGateOrders[pendingIdx];
-      if (pending.products.isNotEmpty) {
-        await _repo.addProductsBatch(pending.products);
-      }
-      for (final entry in pending.pallets.entries) {
-        await _repo.registerOrUpdatePallet(palletCode: entry.key, rfidEpc: entry.value ?? '');
-      }
-      await _repo.addInboundOrder(pending.order, autoGenerateEpcs: false);
-      await _repo.insertDirectItems(pending.items);
-      _pendingGateOrders.removeAt(pendingIdx);
-      _scannedTagsByOrderNo.remove(orderNo);
-    }
-
-    await _repo.confirmGateReceiveToWaitingPutaway(
-      orderNo: orderNo,
-      scannedEpcs: itemEpcs,
-      palletCode: palletCode,
-      performedBy: 'Cổng RFID Gate (Nhập thiếu)',
-    );
-
-    final hasPallet = palletCode != null || _activeExpectedItems.any((i) => i.palletId != null && i.palletId!.isNotEmpty);
-
-    _recentCompletedPasses.insert(0, {
-      'orderNo': orderNo,
-      'palletCode': palletCode ?? '--',
-      'count': count,
-      'total': _activeExpectedItems.isNotEmpty ? _activeExpectedItems.length : count,
-      'time': DateTime.now(),
-      'status': '${hasPallet ? "CHỜ XẾP KỆ" : "XẾP VÀO PALLET"} (Thiếu ${_discrepancyMissingItems.length})',
-      'isSuccess': false,
-    });
-
-    setState(() {
-      _hasDiscrepancyError = false;
-      _activeOrderNo = null;
-      _activePallet = null;
-      _activePalletTag = null;
-      _activeExpectedItems.clear();
-      _wizardScannedTags.clear();
-      _wizardUnexpectedTags.clear();
-      _wizardDetectedPallet = null;
-      _wizardDetectedPalletTag = null;
-      _discrepancyMissingItems.clear();
-      _discrepancyUnexpectedTags.clear();
-      _invalidateCartonCaches();
-    });
-    _desktopUhf.clearTags();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFFF59E0B),
-          content: Text('⚠️ Đã xác nhận nhập thiếu đơn $orderNo ($count sản phẩm). Cổng sẵn sàng đón xe tiếp theo!'),
-        ),
-      );
-    }
-  }
 
   /// Kích hoạt chọn xe Pallet / đơn hàng đang chờ để kiểm tra hoặc xác nhận
   void _selectActivePendingOrder(String orderNo) {
@@ -902,9 +837,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           _wizardDetectedPalletTag = _activePallet?.rfidEpc;
           _activePalletTag = _activePallet?.rfidEpc;
         }
-        _hasDiscrepancyError = false;
-        _discrepancyMissingItems.clear();
-        _discrepancyUnexpectedTags.clear();
         _syncWizardScannedTagsForActiveOrder();
         _invalidateCartonCaches();
       });
@@ -944,9 +876,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _activePalletTag = palTag;
       _wizardDetectedPallet = pal;
       _wizardDetectedPalletTag = palTag;
-      _hasDiscrepancyError = false;
-      _discrepancyMissingItems.clear();
-      _discrepancyUnexpectedTags.clear();
 
       _syncWizardScannedTagsForActiveOrder();
       _invalidateCartonCaches();
@@ -962,16 +891,29 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     try {
       final unexpList = _getFilteredUnexpectedTags();
       if (unexpList.isNotEmpty) {
-        _reportDiscrepancyError();
         return;
       }
 
-      // Kiểm tra danh sách các xe pallet đã quét đủ số lượng
+      // Kiểm tra danh sách các xe pallet đã quét đủ số lượng (bao gồm cả chip sản phẩm và chip pallet)
       final completedOrders = _pendingGateOrders.where((p) {
         final ordNo = p.order.orderNo;
         final scannedMap = _scannedTagsByOrderNo[ordNo] ?? {};
-        final scannedItemCount = p.items.where((i) => scannedMap.containsKey(i.epc.trim().toUpperCase())).length;
-        return p.items.isNotEmpty && scannedItemCount >= p.items.length;
+        final scannedItemCount = p.items.where((i) {
+          final epc = i.epc.trim().toUpperCase();
+          return scannedMap.containsKey(epc) || _wizardScannedTags.containsKey(epc);
+        }).length;
+
+        final expectedPalletEpcs = p.pallets.values
+            .where((e) => e != null && e.isNotEmpty && e != '--')
+            .map((e) => e!.trim().toUpperCase())
+            .toSet();
+        final scannedPalletCount = expectedPalletEpcs.where((e) =>
+            scannedMap.containsKey(e) ||
+            _wizardScannedTags.containsKey(e) ||
+            _scannedPalletTagsByOrderNo[ordNo] == e).length;
+        final hasAllPallets = expectedPalletEpcs.isEmpty || scannedPalletCount >= expectedPalletEpcs.length;
+
+        return p.items.isNotEmpty && scannedItemCount >= p.items.length && hasAllPallets;
       }).toList();
 
       if (completedOrders.isEmpty) {
@@ -986,6 +928,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               palletCode: pCode,
               performedBy: 'Cổng RFID Gate',
             );
+            _passedGateEpcs.addAll(scannedEpcs);
+            if (_activePalletTag != null && _activePalletTag!.isNotEmpty) {
+              _passedGateEpcs.add(_activePalletTag!.trim().toUpperCase());
+            }
             _recentCompletedPasses.insert(0, {
               'orderNo': ordNo,
               'palletCode': pCode ?? '--',
@@ -1000,9 +946,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               setState(() {
                 _lastSuccessOrderNo = ordNo;
                 _lastSuccessCount = scannedEpcs.length;
-                _hasDiscrepancyError = false;
-                _discrepancyMissingItems.clear();
-                _discrepancyUnexpectedTags.clear();
                 _invalidateCartonCaches();
                 _activeOrderNo = null;
                 _activePallet = null;
@@ -1022,14 +965,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             return;
           }
         }
-        _reportDiscrepancyError();
         return;
       }
 
       for (final pending in List<_PendingGateOrder>.from(completedOrders)) {
         final ordNo = pending.order.orderNo;
         final scannedMap = _scannedTagsByOrderNo[ordNo] ?? {};
-        final scannedEpcs = pending.items.where((i) => scannedMap.containsKey(i.epc.trim().toUpperCase())).map((i) => i.epc.trim().toUpperCase()).toList();
+        final scannedEpcs = pending.items.where((i) {
+          final clean = i.epc.trim().toUpperCase();
+          return scannedMap.containsKey(clean) || _wizardScannedTags.containsKey(clean);
+        }).map((i) => i.epc.trim().toUpperCase()).toList();
         final pCode = pending.pallets.keys.firstOrNull ?? (pending.items.isNotEmpty ? pending.items.first.palletId?.replaceAll('PAL-', '') : null) ?? ordNo;
         final rfidEpc = _scannedPalletTagsByOrderNo[ordNo] ?? pending.pallets[pCode];
 
@@ -1043,11 +988,31 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           await _repo.addInboundOrder(pending.order, autoGenerateEpcs: false);
           await _repo.insertDirectItems(pending.items);
 
-          await _repo.assignItemsToPallet(
-            palletCode: pCode,
-            rfidEpc: rfidEpc,
-            itemEpcs: scannedEpcs,
-          );
+          if (pending.pallets.length > 1) {
+            final Map<String, List<String>> epcsByPallet = {};
+            for (final it in pending.items) {
+              final itEpc = it.epc.trim().toUpperCase();
+              if (scannedEpcs.contains(itEpc)) {
+                final p = it.palletId?.replaceAll('PAL-', '') ?? pending.pallets.keys.first;
+                epcsByPallet.putIfAbsent(p, () => []).add(itEpc);
+              }
+            }
+            for (final entry in epcsByPallet.entries) {
+              final palKey = entry.key;
+              final pTag = pending.pallets[palKey] ?? pending.pallets['PAL-$palKey'];
+              await _repo.assignItemsToPallet(
+                palletCode: palKey,
+                rfidEpc: pTag,
+                itemEpcs: entry.value,
+              );
+            }
+          } else {
+            await _repo.assignItemsToPallet(
+              palletCode: pCode,
+              rfidEpc: rfidEpc,
+              itemEpcs: scannedEpcs,
+            );
+          }
 
           await _repo.confirmGateReceiveToWaitingPutaway(
             orderNo: ordNo,
@@ -1055,6 +1020,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             palletCode: pCode,
             performedBy: 'Cổng RFID Gate',
           );
+          _passedGateEpcs.addAll(scannedEpcs);
+          if (rfidEpc != null && rfidEpc.isNotEmpty) {
+            _passedGateEpcs.add(rfidEpc.trim().toUpperCase());
+          }
 
           _recentCompletedPasses.insert(0, {
             'orderNo': ordNo,
@@ -1082,9 +1051,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         setState(() {
           _lastSuccessOrderNo = completedOrders.map((p) => p.order.orderNo).join(', ');
           _lastSuccessCount = totalSaved;
-          _hasDiscrepancyError = false;
-          _discrepancyMissingItems.clear();
-          _discrepancyUnexpectedTags.clear();
           _invalidateCartonCaches();
           if (_pendingGateOrders.isEmpty) {
             _activeOrderNo = null;
@@ -1127,9 +1093,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _scannedPalletTagsByOrderNo.clear();
       _wizardScannedTags.clear();
       _wizardUnexpectedTags.clear();
-      _hasDiscrepancyError = false;
-      _discrepancyMissingItems.clear();
-      _discrepancyUnexpectedTags.clear();
+      _filteredPassedTags.clear();
       _lastSuccessOrderNo = null;
       _lastSuccessPalletCode = null;
       _lastSuccessCount = 0;
@@ -1320,9 +1284,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             final assignedPalletId = effectivePallet != null
                 ? (_repo.pallets.where((p) => p.palletCode.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == 'PAL-${effectivePallet.toUpperCase()}').firstOrNull?.palletId ?? (effectivePallet.toUpperCase().startsWith('PAL-') ? effectivePallet : 'PAL-$effectivePallet'))
                 : null;
-            final assignedOrderNo = (effectivePallet != null && palletsToRegister.length > 1)
-                ? '$inboundOrderNo-$effectivePallet'
-                : inboundOrderNo;
+            final assignedOrderNo = inboundOrderNo;
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
@@ -1347,9 +1309,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           final assignedPalletId = effectivePallet != null
               ? (_repo.pallets.where((p) => p.palletCode.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == 'PAL-${effectivePallet.toUpperCase()}').firstOrNull?.palletId ?? (effectivePallet.toUpperCase().startsWith('PAL-') ? effectivePallet : 'PAL-$effectivePallet'))
               : null;
-          final assignedOrderNo = (effectivePallet != null && palletsToRegister.length > 1)
-              ? '$inboundOrderNo-$effectivePallet'
-              : inboundOrderNo;
+          final assignedOrderNo = inboundOrderNo;
           for (var serial in serials) {
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
@@ -1464,22 +1424,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           details: currentDetailMap.values.toList(),
         );
 
-        final thisOrderPallets = <String, String?>{};
-        for (final item in orderItems) {
-          final rawCode = item.palletId?.replaceAll('PAL-', '');
-          if (rawCode != null) {
-            // Tìm resolved name theo rawCode hoặc trực tiếp trong resolvedPalletsToRegister
-            final displayCode = resolvedPalletName[rawCode] ?? rawCode;
-            if (resolvedPalletsToRegister.containsKey(displayCode)) {
-              thisOrderPallets[displayCode] = resolvedPalletsToRegister[displayCode];
-            } else if (palletsToRegister.containsKey(rawCode)) {
-              thisOrderPallets[displayCode] = palletsToRegister[rawCode];
-            }
-          }
-        }
-        if (thisOrderPallets.isEmpty && resolvedPalletsToRegister.length == 1) {
-          thisOrderPallets.addAll(resolvedPalletsToRegister);
-        }
+        final thisOrderPallets = <String, String?>{...resolvedPalletsToRegister};
 
         _pendingGateOrders.add(_PendingGateOrder(
           order: order,
@@ -1989,20 +1934,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. BANNER BÁO LỖI SAI SÓT ĐÍCH DANH ĐƠN HÀNG KHI QUA CỔNG
-          if (_hasDiscrepancyError) ...[
-            _buildDiscrepancyErrorCard(c),
-            const SizedBox(height: 12),
-          ],
-
-          // 2. BANNER THÔNG CỔNG THÀNH CÔNG (TỰ ĐỘNG RESET SAU 3S)
-          if (_lastSuccessOrderNo != null && !_hasDiscrepancyError) ...[
+          // 1. BANNER THÔNG CỔNG THÀNH CÔNG (TỰ ĐỘNG RESET SAU 3S)
+          if (_lastSuccessOrderNo != null) ...[
             _buildPassSuccessBanner(c),
             const SizedBox(height: 12),
           ],
 
-          // 2.1 BANNER THÔNG BÁO HÀNG ĐÃ QUA CỔNG - CHƯA CẤT LÊN KỆ (CHỜ TAY CẦM PDA)
-          if (waitingPutawayItems.isNotEmpty && !_hasDiscrepancyError) ...[
+          // 2. BANNER THÔNG BÁO HÀNG ĐÃ QUA CỔNG - CHƯA CẤT LÊN KỆ (CHỜ TAY CẦM PDA)
+          if (waitingPutawayItems.isNotEmpty) ...[
             _buildWaitingPutawayNoticeBanner(c, waitingPutawayItems),
             const SizedBox(height: 12),
           ],
@@ -2030,112 +1969,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             hasUnexpectedTags: hasUnexpectedTags,
             unexpList: unexpList,
           ),
-        ],
-      ),
-    );
-  }
-
-  // ---------- 1. BANNER BÁO LỖI SAI SÓT THEO ĐƠN HÀNG ----------
-  Widget _buildDiscrepancyErrorCard(EyeCareColors c) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEF4444).withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444).withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '⛔ PHÁT HIỆN SAI SÓT ĐỐI SOÁT - ĐƠN HÀNG: ${_discrepancyOrderNo ?? "CHƯA XÁC ĐỊNH"}',
-                      style: const TextStyle(
-                        color: Color(0xFFEF4444),
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Xe Pallet: ${_discrepancyPalletCode ?? "Chưa gán pallet"} • Thiếu ${_discrepancyMissingItems.length} chip sản phẩm • Có ${_discrepancyUnexpectedTags.length} chip lạ ngoài đơn',
-                      style: TextStyle(color: c.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFEF4444),
-                  side: const BorderSide(color: Color(0xFFEF4444)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.replay, size: 16),
-                label: const Text('QUÉT LẠI XE NÀY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
-                onPressed: _retryCurrentVehicle,
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF59E0B),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.check, size: 16),
-                label: const Text('XÁC NHẬN NHẬP THIẾU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
-                onPressed: _wizardScannedTags.isNotEmpty ? _confirmPartialInbound : null,
-              ),
-            ],
-          ),
-          if (_discrepancyMissingItems.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.bgCard,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: c.border),
-              ),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  const Text('Danh sách chip thiếu:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFEF4444))),
-                  ..._discrepancyMissingItems.take(5).map((m) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      '${m.sku} (${m.epc})',
-                      style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace', color: Color(0xFFEF4444)),
-                    ),
-                  )),
-                  if (_discrepancyMissingItems.length > 5)
-                    Text('+${_discrepancyMissingItems.length - 5} chip nữa...', style: TextStyle(fontSize: 11, color: c.textSecondary)),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -2256,68 +2089,51 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     required List<TagInfo> unexpList,
     required bool hasUnexpectedTags,
   }) {
-    // 1. Lấy danh sách các xe pallet đã qua cổng (hoặc xe đầu tiên trong file nếu chưa qua)
-    final passedOrders = _pendingGateOrders.where((p) =>
-      (_scannedTagsByOrderNo[p.order.orderNo]?.isNotEmpty == true) ||
-      _scannedPalletTagsByOrderNo.containsKey(p.order.orderNo) ||
-      p.order.orderNo == _activeOrderNo
-    ).toList();
+    // 1. Nếu có đơn hàng nạp từ file trong _pendingGateOrders -> hiển thị đầy đủ toàn bộ sản phẩm như Xuất Kho
+    if (_pendingGateOrders.isNotEmpty) {
+      final allItems = _pendingGateOrders.expand((p) => p.items).toList();
+      final allPallets = <String, String?>{};
+      for (final p in _pendingGateOrders) {
+        allPallets.addAll(p.pallets);
+      }
 
-    if (passedOrders.isEmpty && _pendingGateOrders.isNotEmpty) {
-      passedOrders.add(_pendingGateOrders.first);
-    }
+      final expectedProductEpcs = allItems.map((i) => i.epc.trim().toUpperCase()).toSet();
+      final validPalletEpcs = allPallets.values
+          .where((e) => e != null && e.trim().isNotEmpty && e != '--')
+          .map((e) => e!.trim().toUpperCase())
+          .toSet();
+      final allExpectedEpcs = {...expectedProductEpcs, ...validPalletEpcs};
+      final expectedCount = allExpectedEpcs.length;
 
-    // Nếu không có trong _pendingGateOrders (ví dụ: quét trực tiếp từ CSDL)
-    if (passedOrders.isEmpty) {
-      final expectedSerials = _getWizardExpectedSerials();
-      final expectedCount = expectedSerials.length;
-      final scannedCount = expectedCount > 0 ? expectedSerials.where((s) => _wizardScannedTags.containsKey(s)).length : _wizardScannedTags.length;
-      final isComplete = expectedCount > 0 && scannedCount >= expectedCount;
-      final progress = expectedCount > 0 ? (scannedCount / expectedCount).clamp(0.0, 1.0) : 0.0;
-      final activeItems = _getStep2FlatInspectionItems();
-      final pCode = _activePallet?.palletCode ?? _wizardDetectedPallet?.palletCode ?? 'Xe Pallet';
-      final pRfid = _activePalletTag ?? _wizardDetectedPalletTag ?? _activePallet?.rfidEpc ?? '--';
-
-      return _buildSingleVehicleLayout(
-        c,
-        palletCode: pCode,
-        palletRfid: pRfid,
-        orderNo: _activeOrderNo ?? '--',
-        items: activeItems,
-        expectedCount: expectedCount,
-        scannedCount: scannedCount,
-        isComplete: isComplete,
-        progress: progress,
-        unexpList: unexpList,
-        hasUnexpectedTags: hasUnexpectedTags,
-        isScannedCallback: (epc) => _wizardScannedTags.containsKey(epc),
-      );
-    }
-
-    // Nếu chỉ có 1 xe đi qua (hiển thị trọn vẹn không cuộn ngoài)
-    if (passedOrders.length == 1) {
-      final pOrder = passedOrders.first;
-      final ordNo = pOrder.order.orderNo;
-      final pCode = pOrder.pallets.keys.firstOrNull ?? (pOrder.items.isNotEmpty ? pOrder.items.first.palletId?.replaceAll('PAL-', '') : null) ?? ordNo;
-      final pRfid = _scannedPalletTagsByOrderNo[ordNo] ?? pOrder.pallets[pCode] ?? '--';
-      final scannedMap = _scannedTagsByOrderNo[ordNo] ?? {};
-      final scannedCount = pOrder.items.where((i) => scannedMap.containsKey(i.epc.trim().toUpperCase())).length;
-      final expectedCount = pOrder.items.length;
+      final scannedCount = allExpectedEpcs.where((epc) {
+        return _wizardScannedTags.containsKey(epc) ||
+            _scannedTagsByOrderNo.values.any((m) => m.containsKey(epc));
+      }).length;
       final isComplete = expectedCount > 0 && scannedCount >= expectedCount;
       final progress = expectedCount > 0 ? (scannedCount / expectedCount).clamp(0.0, 1.0) : 0.0;
 
-      final items = pOrder.items.map((i) => {
-        'boxCode': i.cartonCode ?? '--',
-        'sku': i.sku,
-        'productName': i.productName,
-        'serial': i.epc,
+      final items = allItems.map((i) {
+        final itemPalletCode = (i.palletId != null && i.palletId!.isNotEmpty)
+            ? i.palletId!
+            : (allPallets.keys.firstOrNull ?? '--');
+        final cleanPallet = itemPalletCode.replaceAll('PAL-', '');
+        final itemPalletEpc = allPallets[itemPalletCode] ?? allPallets[cleanPallet] ?? (allPallets.values.firstOrNull ?? '--');
+        final supp = (i.supplier != null && i.supplier!.isNotEmpty && i.supplier != 'Nhà cung cấp tổng hợp')
+            ? i.supplier!
+            : (_pendingGateOrders.first.supplier.isNotEmpty ? _pendingGateOrders.first.supplier : '--');
+        return {
+          'boxCode': i.cartonCode ?? '--',
+          'palletCode': itemPalletCode,
+          'supplier': supp,
+          'sku': i.sku,
+          'productName': i.productName,
+          'palletEpc': itemPalletEpc,
+          'serial': i.epc,
+        };
       }).toList();
 
       return _buildSingleVehicleLayout(
         c,
-        palletCode: pCode,
-        palletRfid: pRfid,
-        orderNo: ordNo,
         items: items,
         expectedCount: expectedCount,
         scannedCount: scannedCount,
@@ -2325,31 +2141,61 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         progress: progress,
         unexpList: unexpList,
         hasUnexpectedTags: hasUnexpectedTags,
-        isScannedCallback: (epc) => scannedMap.containsKey(epc) || _wizardScannedTags.containsKey(epc),
+        isScannedCallback: (epc) {
+          final clean = epc.trim().toUpperCase();
+          return _wizardScannedTags.containsKey(clean) ||
+              _scannedTagsByOrderNo.values.any((m) => m.containsKey(clean));
+        },
+        getTagCallback: (epc) {
+          final clean = epc.trim().toUpperCase();
+          return _wizardScannedTags[clean] ??
+              _scannedTagsByOrderNo.values.where((m) => m.containsKey(clean)).firstOrNull?[clean];
+        },
       );
     }
 
-    // Nếu có NHIỀU XE pallet đi qua liên tục (cuộn mượt mà từng xe)
-    return ListView.separated(
-      padding: EdgeInsets.zero,
-      itemCount: passedOrders.length + (hasUnexpectedTags ? 1 : 0),
-      separatorBuilder: (_, _) => const SizedBox(height: 16),
-      itemBuilder: (ctx, idx) {
-        if (idx < passedOrders.length) {
-          final pOrder = passedOrders[idx];
-          return _buildMultiVehicleCard(c, pOrder);
-        } else {
-          return _buildUnexpectedCard(c, unexpList);
-        }
-      },
+    // 2. Nếu không có trong _pendingGateOrders (ví dụ: quét trực tiếp từ CSDL)
+    final dbPendingItems = _repo.items.where((i) => i.status == ItemStatus.pendingInbound).toList();
+    final effectiveItems = _activeExpectedItems.isNotEmpty ? _activeExpectedItems : dbPendingItems;
+    final expectedSerials = effectiveItems.isNotEmpty
+        ? effectiveItems.map((i) => i.epc.trim().toUpperCase()).toSet()
+        : _getWizardExpectedSerials();
+    final expectedCount = expectedSerials.length;
+    final scannedCount = expectedCount > 0 ? expectedSerials.where((s) => _wizardScannedTags.containsKey(s)).length : _wizardScannedTags.length;
+    final isComplete = expectedCount > 0 && scannedCount >= expectedCount;
+    final progress = expectedCount > 0 ? (scannedCount / expectedCount).clamp(0.0, 1.0) : 0.0;
+    final activeItems = effectiveItems.isNotEmpty
+        ? effectiveItems.map((i) {
+            final pal = _repo.pallets.where((p) => p.palletId == i.palletId || p.palletCode == i.palletId).firstOrNull;
+            return {
+              'boxCode': i.cartonCode ?? '--',
+              'palletCode': i.palletId ?? '--',
+              'palletEpc': pal?.rfidEpc ?? '--',
+              'sku': i.sku,
+              'productName': i.productName,
+              'serial': i.epc,
+              'supplier': i.supplier ?? _repo.inboundOrders.where((o) => o.orderNo == i.orderNo).firstOrNull?.sourceSupplier ?? '--',
+              'orderNo': i.orderNo ?? '--',
+            };
+          }).toList()
+        : _getStep2FlatInspectionItems();
+
+    return _buildSingleVehicleLayout(
+      c,
+      items: activeItems,
+      expectedCount: expectedCount,
+      scannedCount: scannedCount,
+      isComplete: isComplete,
+      progress: progress,
+      unexpList: unexpList,
+      hasUnexpectedTags: hasUnexpectedTags,
+      isScannedCallback: (epc) => _wizardScannedTags.containsKey(epc),
+      getTagCallback: (epc) => _wizardScannedTags[epc],
     );
   }
 
   Widget _buildSingleVehicleLayout(
     EyeCareColors c, {
-    required String palletCode,
-    required String palletRfid,
-    required String orderNo,
     required List<Map<String, dynamic>> items,
     required int expectedCount,
     required int scannedCount,
@@ -2358,91 +2204,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     required List<TagInfo> unexpList,
     required bool hasUnexpectedTags,
     required bool Function(String epc) isScannedCallback,
+    TagInfo? Function(String epc)? getTagCallback,
   }) {
+    final missingCount = (expectedCount - scannedCount).clamp(0, expectedCount);
+    final unexpCount = unexpList.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 1. Dòng xe Pallet
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: c.bgCardElevated,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isComplete ? const Color(0xFF10B981) : (scannedCount > 0 ? c.rfidCyan : c.border),
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isComplete
-                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                      : (scannedCount > 0 ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : c.rfidCyan.withValues(alpha: 0.15)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  isComplete ? Icons.check_circle : Icons.sensors,
-                  color: isComplete
-                      ? const Color(0xFF10B981)
-                      : (scannedCount > 0 ? const Color(0xFFF59E0B) : c.rfidCyan),
-                  size: 26,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text(
-                          'Xe Pallet: $palletCode',
-                          style: TextStyle(color: c.textPrimary, fontSize: 15.5, fontWeight: FontWeight.bold),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isComplete
-                                ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                : const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: isComplete ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                            ),
-                          ),
-                          child: Text(
-                            isComplete ? '✓ ĐỦ TOÀN BỘ' : '⚡ ĐANG ĐỐI SOÁT TRỰC TIẾP',
-                            style: TextStyle(
-                              color: isComplete ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Mã Đơn: $orderNo • RFID Pallet: $palletCode ($palletRfid) • Cần nhận diện: $expectedCount chip hàng',
-                      style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // 2. Thanh tiến độ đọc & Hero Counter
+        // 1. Thanh tiến độ đọc & 3 Ô CHỈ SỐ: ĐÃ QUÉT - THIẾU - LẠ
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -2463,7 +2233,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'TIẾN ĐỘ ĐỐI SOÁT QUA CỔNG:',
+                      'TIẾN ĐỘ ĐỐI SOÁT QUA CỔNG: ($scannedCount / $expectedCount chip)',
                       style: TextStyle(
                         color: hasUnexpectedTags ? const Color(0xFFEF4444) : c.textSecondary,
                         fontSize: 11,
@@ -2487,74 +2257,45 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                   ],
                 ),
               ),
-              const SizedBox(width: 20),
-              if (hasUnexpectedTags)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFEF4444)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.warning, size: 14, color: Color(0xFFEF4444)),
-                      const SizedBox(width: 4),
-                      Text(
-                        'CÓ ${unexpList.length} CHIP LẠ!',
-                        style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isComplete
-                      ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                      : (scannedCount > 0 ? const Color(0xFFF59E0B).withValues(alpha: 0.12) : c.bgCard),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isComplete
-                        ? const Color(0xFF10B981)
-                        : (scannedCount > 0 ? const Color(0xFFF59E0B) : c.border),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      '$scannedCount',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: isComplete
-                            ? const Color(0xFF10B981)
-                            : (scannedCount > 0 ? const Color(0xFFF59E0B) : c.textPrimary),
-                      ),
-                    ),
-                    Text(
-                      ' / $expectedCount',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: c.textSecondary),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'chip',
-                      style: TextStyle(fontSize: 11, color: c.textSecondary),
-                    ),
-                  ],
-                ),
+              const SizedBox(width: 16),
+
+              // CÁC Ô CHỈ SỐ: ĐÃ QUÉT - THIẾU - LẠ - ĐÃ LỌC
+              _buildMetricBadge(
+                label: 'ĐÃ QUÉT',
+                count: scannedCount,
+                color: const Color(0xFF10B981),
+                c: c,
               ),
+              const SizedBox(width: 8),
+              _buildMetricBadge(
+                label: 'THIẾU',
+                count: missingCount,
+                color: const Color(0xFFF59E0B),
+                c: c,
+              ),
+              const SizedBox(width: 8),
+              _buildMetricBadge(
+                label: 'LẠ',
+                count: unexpCount,
+                color: const Color(0xFFEF4444),
+                c: c,
+              ),
+              if (_filterAlreadyPassedChips) ...[
+                const SizedBox(width: 8),
+                _buildMetricBadge(
+                  label: 'ĐÃ LỌC',
+                  count: _filteredPassedTags.length,
+                  color: const Color(0xFF06B6D4),
+                  c: c,
+                ),
+              ],
             ],
           ),
         ),
 
         const SizedBox(height: 10),
 
-        // 3. Bảng danh mục sản phẩm đối soát thời gian thực
+        // 2. BẢNG THÔNG TIN SẢN PHẨM ĐỐI SOÁT THỜI GIAN THỰC (9 CỘT THEO YÊU CẦU)
         Expanded(
           child: Container(
             decoration: BoxDecoration(
@@ -2562,462 +2303,267 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: c.border),
             ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: c.bgDeep,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                    border: Border(bottom: BorderSide(color: c.border)),
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(width: 45, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 120, child: Text('THÙNG HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 110, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 3, child: Text('TÊN SẢN PHẨM / QUY CÁCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 140, child: Text('TRẠNG THÁI CỔNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: items.length + unexpList.length,
-                    separatorBuilder: (_, _) => Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
-                    itemBuilder: (ctx, idx) {
-                      if (idx < items.length) {
-                        final item = items[idx];
-                        final epc = (item['serial'] ?? '').toString().trim().toUpperCase();
-                        final isScanned = isScannedCallback(epc);
-                        return Container(
-                          color: isScanned ? const Color(0xFF10B981).withValues(alpha: 0.05) : Colors.transparent,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                final tableWidth = constraints.maxWidth > 1100 ? constraints.maxWidth : 1100.0;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Column(
+                      children: [
+                        // Header bảng
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: c.bgDeep,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                            border: Border(bottom: BorderSide(color: c.border)),
+                          ),
                           child: Row(
                             children: [
-                              SizedBox(width: 45, child: Text('${idx + 1}', style: TextStyle(color: c.textSecondary, fontSize: 12))),
-                              SizedBox(
-                                width: 120,
-                                child: Text(
-                                  item['boxCode'] ?? '--',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              SizedBox(
-                                width: 110,
-                                child: Text(
-                                  item['sku'] ?? '--',
-                                  style: TextStyle(color: c.textSecondary, fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  item['productName'] ?? '--',
-                                  style: TextStyle(color: c.textPrimary, fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  epc,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 11.5,
-                                    fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
-                                    color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 140,
-                                child: Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: isScanned
-                                          ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                          : const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      isScanned ? '✓ ĐÃ ĐỐI SOÁT' : '⏳ CHỜ QUA CỔNG',
-                                      style: TextStyle(
-                                        color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                              SizedBox(width: 45, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              SizedBox(width: 110, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              SizedBox(width: 110, child: Text('MÃ THÙNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              SizedBox(width: 110, child: Text('MÃ PALLET', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              SizedBox(width: 140, child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              Expanded(flex: 3, child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              SizedBox(width: 160, child: Text('EPC PALLET', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              SizedBox(width: 160, child: Text('EPC HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                              const SizedBox(width: 8),
+                              SizedBox(width: 110, child: Text('ATEN ĐÃ QUÉT', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                             ],
                           ),
-                        );
-                      } else {
-                        final unexp = unexpList[idx - items.length];
-                        return Container(
-                          color: const Color(0xFFEF4444).withValues(alpha: 0.08),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Row(
-                            children: [
-                              SizedBox(width: 45, child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12))),
-                              const SizedBox(width: 120, child: Text('CHIP LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12))),
-                              const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
-                              const Expanded(
-                                flex: 3,
-                                child: Text(
-                                  'Chip không thuộc đơn hàng đang qua cổng!',
-                                  style: TextStyle(color: Color(0xFFEF4444), fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  unexp.epc,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFFEF4444),
-                                    fontSize: 11.5,
+                        ),
+                        // Danh sách rows
+                        Expanded(
+                          child: ListView.separated(
+                            itemCount: items.length + unexpList.length,
+                            separatorBuilder: (_, _) => Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
+                            itemBuilder: (ctx, idx) {
+                              if (idx < items.length) {
+                                final item = items[idx];
+                                final epc = (item['serial'] ?? '').toString().trim().toUpperCase();
+                                final isScanned = isScannedCallback(epc);
+                                final palletEpc = (item['palletEpc'] ?? '').toString().trim().toUpperCase();
+                                final isPalletScanned = palletEpc != '--' && palletEpc.isNotEmpty && isScannedCallback(palletEpc);
+                                final isRowHighlighted = isScanned || isPalletScanned;
+                                final tag = getTagCallback?.call(epc) ?? (isPalletScanned ? getTagCallback?.call(palletEpc) : null);
+                                final antenStr = isRowHighlighted
+                                    ? (tag != null && tag.ant.isNotEmpty ? 'Anten ${tag.ant}' : 'Anten 1')
+                                    : '--';
+
+                                return Container(
+                                  color: isRowHighlighted ? const Color(0xFF10B981).withValues(alpha: 0.05) : Colors.transparent,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(width: 45, child: Text('${idx + 1}', style: TextStyle(color: c.textSecondary, fontSize: 12))),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 110,
+                                        child: Text(
+                                          item['sku'] ?? '--',
+                                          style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 110,
+                                        child: Text(
+                                          item['boxCode'] ?? '--',
+                                          style: TextStyle(color: c.textSecondary, fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 110,
+                                        child: Text(
+                                          item['palletCode'] ?? '--',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 140,
+                                        child: Text(
+                                          item['supplier'] ?? '--',
+                                          style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          item['productName'] ?? '--',
+                                          style: TextStyle(color: c.textPrimary, fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 160,
+                                        child: Text(
+                                          item['palletEpc'] ?? '--',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 11,
+                                            fontWeight: isPalletScanned ? FontWeight.bold : FontWeight.normal,
+                                            color: (palletEpc == '--' || palletEpc.isEmpty)
+                                                ? c.textSecondary
+                                                : (isPalletScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 160,
+                                        child: Text(
+                                          epc,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 11.5,
+                                            fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
+                                            color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 110,
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: isRowHighlighted
+                                                  ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                                  : c.bgDeep,
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(
+                                                color: isRowHighlighted ? const Color(0xFF10B981) : c.border,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (isRowHighlighted) ...[
+                                                  const Icon(Icons.check_circle, size: 12, color: Color(0xFF10B981)),
+                                                  const SizedBox(width: 4),
+                                                ],
+                                                Text(
+                                                  antenStr,
+                                                  style: TextStyle(
+                                                    color: isRowHighlighted ? const Color(0xFF10B981) : c.textMuted,
+                                                    fontSize: 11,
+                                                    fontWeight: isRowHighlighted ? FontWeight.bold : FontWeight.normal,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 140,
-                                child: Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: const Color(0xFFEF4444)),
-                                    ),
-                                    child: const Text(
-                                      '❌ CHIP LẠ',
-                                      style: TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold),
-                                    ),
+                                );
+                              } else {
+                                final unexp = unexpList[idx - items.length];
+                                final antenStr = unexp.ant.isNotEmpty ? 'Anten ${unexp.ant}' : 'Anten 1';
+                                return Container(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(width: 45, child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12))),
+                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 140, child: Text('CHIP LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11.5))),
+                                      const SizedBox(width: 8),
+                                      const Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          'Chip không thuộc đơn hàng đang qua cổng!',
+                                          style: TextStyle(color: Color(0xFFEF4444), fontSize: 12),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 160, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 160,
+                                        child: Text(
+                                          unexp.epc,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFFEF4444),
+                                            fontSize: 11.5,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SizedBox(
+                                        width: 110,
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(color: const Color(0xFFEF4444)),
+                                            ),
+                                            child: Text(
+                                              antenStr,
+                                              style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ),
-                            ],
+                                );
+                              }
+                            },
                           ),
-                        );
-                      }
-                    },
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildMultiVehicleCard(EyeCareColors c, _PendingGateOrder pOrder) {
-    final ordNo = pOrder.order.orderNo;
-    final pCode = pOrder.pallets.keys.firstOrNull ?? (pOrder.items.isNotEmpty ? pOrder.items.first.palletId?.replaceAll('PAL-', '') : null) ?? ordNo;
-    final pRfid = _scannedPalletTagsByOrderNo[ordNo] ?? pOrder.pallets[pCode] ?? '--';
-    final scannedMap = _scannedTagsByOrderNo[ordNo] ?? {};
-    final scannedCount = pOrder.items.where((i) => scannedMap.containsKey(i.epc.trim().toUpperCase())).length;
-    final expectedCount = pOrder.items.length;
-    final isComplete = expectedCount > 0 && scannedCount >= expectedCount;
-    final progress = expectedCount > 0 ? (scannedCount / expectedCount).clamp(0.0, 1.0) : 0.0;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: c.bgCard,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isComplete ? const Color(0xFF10B981) : (scannedCount > 0 ? c.rfidCyan : c.border),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Pallet Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: c.bgCardElevated,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
-              border: Border(bottom: BorderSide(color: c.border)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isComplete
-                        ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                        : (scannedCount > 0 ? const Color(0xFFF59E0B).withValues(alpha: 0.15) : c.rfidCyan.withValues(alpha: 0.15)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    isComplete ? Icons.check_circle : Icons.sensors,
-                    color: isComplete
-                        ? const Color(0xFF10B981)
-                        : (scannedCount > 0 ? const Color(0xFFF59E0B) : c.rfidCyan),
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            'Xe Pallet: $pCode',
-                            style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isComplete
-                                  ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                  : const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(
-                                color: isComplete ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                              ),
-                            ),
-                            child: Text(
-                              isComplete ? '✓ ĐỦ TOÀN BỘ' : '⚡ ĐANG ĐỐI SOÁT TRỰC TIẾP',
-                              style: TextStyle(
-                                color: isComplete ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Mã Đơn: $ordNo • RFID Pallet: $pCode ($pRfid) • Cần nhận diện: $expectedCount chip hàng',
-                        style: TextStyle(color: c.textSecondary, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isComplete ? const Color(0xFF10B981).withValues(alpha: 0.15) : c.bgDeep,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: isComplete ? const Color(0xFF10B981) : c.border),
-                  ),
-                  child: Text(
-                    '$scannedCount / $expectedCount chip',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: isComplete ? const Color(0xFF10B981) : c.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Progress bar
-          LinearProgressIndicator(
-            value: progress,
-            minHeight: 4,
-            backgroundColor: c.border.withValues(alpha: 0.3),
-            valueColor: AlwaysStoppedAnimation<Color>(
-              isComplete ? const Color(0xFF10B981) : c.rfidCyan,
-            ),
-          ),
-
-          // Table of carton chips below pallet line
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: c.bgDeep,
-              border: Border(bottom: BorderSide(color: c.border)),
-            ),
-            child: Row(
-              children: [
-                SizedBox(width: 45, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                SizedBox(width: 120, child: Text('THÙNG HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                SizedBox(width: 110, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 3, child: Text('TÊN SẢN PHẨM / QUY CÁCH', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                Expanded(flex: 3, child: Text('MÃ CHIP RFID (EPC)', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                SizedBox(width: 140, child: Text('TRẠNG THÁI CỔNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-              ],
-            ),
-          ),
-          for (int idx = 0; idx < pOrder.items.length; idx++) ...[
-            if (idx > 0) Divider(height: 1, color: c.border.withValues(alpha: 0.4)),
-            Builder(builder: (ctx) {
-              final item = pOrder.items[idx];
-              final epc = item.epc.trim().toUpperCase();
-              final isScanned = scannedMap.containsKey(epc);
-              return Container(
-                color: isScanned ? const Color(0xFF10B981).withValues(alpha: 0.05) : Colors.transparent,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    SizedBox(width: 45, child: Text('${idx + 1}', style: TextStyle(color: c.textSecondary, fontSize: 12))),
-                    SizedBox(
-                      width: 120,
-                      child: Text(
-                        item.cartonCode ?? '--',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 110,
-                      child: Text(
-                        item.sku,
-                        style: TextStyle(color: c.textSecondary, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        item.productName,
-                        style: TextStyle(color: c.textPrimary, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        epc,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11.5,
-                          fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
-                          color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 140,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isScanned
-                                ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                                : const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                            ),
-                          ),
-                          child: Text(
-                            isScanned ? '✓ ĐÃ ĐỐI SOÁT' : '⏳ CHỜ QUA CỔNG',
-                            style: TextStyle(
-                              color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUnexpectedCard(EyeCareColors c, List<TagInfo> unexpList) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFEF4444).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEF4444).withValues(alpha: 0.12),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.warning, size: 16, color: Color(0xFFEF4444)),
-                const SizedBox(width: 8),
-                Text(
-                  'CÓ ${unexpList.length} CHIP LẠ NGOÀI ĐƠN HÀNG!',
-                  style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          for (int idx = 0; idx < unexpList.length; idx++) ...[
-            if (idx > 0) Divider(height: 1, color: const Color(0xFFEF4444).withValues(alpha: 0.2)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  SizedBox(width: 45, child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12))),
-                  const SizedBox(width: 120, child: Text('CHIP LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12))),
-                  const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
-                  const Expanded(
-                    flex: 3,
-                    child: Text('Chip không thuộc đơn hàng đang qua cổng!', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12)),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      unexpList[idx].epc,
-                      style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, color: Color(0xFFEF4444), fontSize: 11.5),
-                    ),
-                  ),
-                  const SizedBox(
-                    width: 140,
-                    child: Center(
-                      child: Text('❌ CHIP LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -3060,7 +2606,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   }
 
 
-  // ---------- 5. THANH ĐIỀU KHIỂN DƯỚI CÙNG ----------
+  // ---------- 5. THANH ĐIỀU KHIỂN DƯỚI CÙNG (DẠT CÁC NÚT THAO TÁC SANG PHẢI) ----------
   Widget _buildBottomControlBar(
     EyeCareColors c, {
     required bool isVehicleActive,
@@ -3071,107 +2617,204 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     required List<TagInfo> unexpList,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: c.bgCardElevated,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: c.border),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: c.border),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              icon: Icon(Icons.refresh, size: 15, color: c.textSecondary),
-              label: Text('Làm Mới Quét', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
-              onPressed: _resetWizard,
-            ),
-            const SizedBox(width: 10),
-            // Bộ chọn thời gian quét: 5s, 10s, Liên tục
-            Container(
-              padding: const EdgeInsets.all(2),
-              decoration: BoxDecoration(
-                color: c.bgDeep,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: c.border),
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildScanDurationButton(5, '5s', c),
-                  const SizedBox(width: 2),
-                  _buildScanDurationButton(10, '10s', c),
-                  const SizedBox(width: 2),
-                  _buildScanDurationButton(0, 'Liên tục', c),
+                  // Bên trái: Nút bật/tắt Lọc chip đã qua cổng
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () {
+                          setState(() {
+                            _filterAlreadyPassedChips = !_filterAlreadyPassedChips;
+                            if (!_filterAlreadyPassedChips) {
+                              _filteredPassedTags.clear();
+                            }
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _filterAlreadyPassedChips ? const Color(0xFF10B981).withValues(alpha: 0.12) : c.bgDeep,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _filterAlreadyPassedChips ? const Color(0xFF10B981) : c.border,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _filterAlreadyPassedChips ? Icons.filter_alt_rounded : Icons.filter_alt_off_rounded,
+                                size: 15,
+                                color: _filterAlreadyPassedChips ? const Color(0xFF10B981) : c.textSecondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Lọc chip đã qua: ${_filterAlreadyPassedChips ? "BẬT" : "TẮT"}',
+                                style: TextStyle(
+                                  color: _filterAlreadyPassedChips ? const Color(0xFF10B981) : c.textSecondary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                              if (_filteredPassedTags.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${_filteredPassedTags.length}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_passedGateEpcs.isNotEmpty || _filteredPassedTags.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () {
+                            setState(() {
+                              _passedGateEpcs.clear();
+                              _filteredPassedTags.clear();
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                backgroundColor: Color(0xFF10B981),
+                                content: Text('✓ Đã xóa bộ nhớ đệm các chip đã qua cổng!'),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: c.bgDeep,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: c.border),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.cleaning_services_rounded, size: 13, color: c.textMuted),
+                                const SizedBox(width: 4),
+                                Text('Xóa bộ nhớ lọc', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Bên phải: Kéo dịch các nút quét, thời gian quét và làm mới quét sang bên phải
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Nút Làm Mới Quét
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: c.border),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: Icon(Icons.refresh, size: 15, color: c.textSecondary),
+                        label: Text('Làm Mới Quét', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+                        onPressed: _resetWizard,
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Bộ chọn thời gian quét: 5s, 10s, Liên tục
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: c.bgDeep,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildScanDurationButton(5, '5s', c),
+                            const SizedBox(width: 2),
+                            _buildScanDurationButton(10, '10s', c),
+                            const SizedBox(width: 2),
+                            _buildScanDurationButton(0, 'Liên tục', c),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+
+                      // Nút Bắt đầu / Dừng quét
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _wizardIsScanning ? const Color(0xFFEF4444) : c.rfidCyan,
+                          foregroundColor: _wizardIsScanning ? Colors.white : const Color(0xFF2C251E),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 2,
+                        ),
+                        icon: Icon(_wizardIsScanning ? Icons.stop : Icons.sensors, size: 16),
+                        label: Text(
+                          _wizardIsScanning
+                              ? (_wizardScanDuration == 0 ? 'DỪNG QUÉT LIÊN TỤC' : 'DỪNG QUÉT ($_wizardScanCountdown s)')
+                              : 'BẮT ĐẦU QUÉT (${_wizardScanDuration == 0 ? "LIÊN TỤC" : "${_wizardScanDuration}s"})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        onPressed: _toggleWizardScan,
+                      ),
+
+                      // Nút Xác nhận nhập kho: Bỏ nút "CHƯA ĐỌC ĐỦ", chỉ hiện khi đọc đủ 100%
+                      if (isVehicleActive && isComplete && !hasUnexpectedTags) ...[
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            elevation: 3,
+                          ),
+                          icon: const Icon(Icons.check_circle, size: 16),
+                          label: Text(
+                            'ĐÃ ĐỌC ĐỦ $scannedCount/$expectedCount (XÁC NHẬN)',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          onPressed: _completeGoodsReceiveAtGate,
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            // Nút Bắt đầu / Dừng quét
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _wizardIsScanning ? const Color(0xFFEF4444) : c.rfidCyan,
-                foregroundColor: _wizardIsScanning ? Colors.white : const Color(0xFF2C251E),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 2,
-              ),
-              icon: Icon(_wizardIsScanning ? Icons.stop : Icons.sensors, size: 16),
-              label: Text(
-                _wizardIsScanning
-                    ? (_wizardScanDuration == 0 ? 'DỪNG QUÉT LIÊN TỤC' : 'DỪNG QUÉT ($_wizardScanCountdown s)')
-                    : 'BẮT ĐẦU QUÉT (${_wizardScanDuration == 0 ? "LIÊN TỤC" : "${_wizardScanDuration}s"})',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-              ),
-              onPressed: _toggleWizardScan,
-            ),
-            if (isVehicleActive) ...[
-              const SizedBox(width: 8),
-              // Nút Báo lỗi sai sót thủ công
-              if (hasUnexpectedTags || (expectedCount > 0 && scannedCount < expectedCount))
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFEF4444),
-                    side: const BorderSide(color: Color(0xFFEF4444)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.report_problem, size: 15, color: Color(0xFFEF4444)),
-                  label: const Text('BÁO LỖI SAI SÓT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
-                  onPressed: _reportDiscrepancyError,
-                ),
-              const SizedBox(width: 8),
-              // Nút Xác nhận nhập kho (CHỈ cho phép bấm khi đọc đủ 100% và không có chip lạ)
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isComplete
-                      ? const Color(0xFF10B981)
-                      : c.bgDeep,
-                  foregroundColor: isComplete ? Colors.white : c.textMuted,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: isComplete ? 3 : 0,
-                  side: BorderSide(color: isComplete ? const Color(0xFF10B981) : c.border),
-                ),
-                icon: Icon(isComplete ? Icons.check_circle : Icons.hourglass_top_rounded, size: 16),
-                label: Text(
-                  isComplete
-                      ? 'ĐÃ ĐỌC ĐỦ $scannedCount/$expectedCount (TỰ ĐỘNG ĐẨY SANG PDA)'
-                      : (scannedCount > 0 ? 'CHƯA ĐỌC ĐỦ ($scannedCount/$expectedCount CHIP)' : 'CHƯA ĐỌC ĐỦ'),
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isComplete ? Colors.white : c.textMuted),
-                ),
-                onPressed: (isComplete && !hasUnexpectedTags) ? _completeGoodsReceiveAtGate : null,
-              ),
-            ],
-          ],
-        ),
+          );
+        },
       ),
     );
   }

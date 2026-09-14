@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/database_service.dart';
+import '../../services/uhf_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
 import 'pda_lookup_screen.dart';
@@ -153,6 +154,15 @@ class PdaDrawer extends StatelessWidget {
                   );
                 },
               ),
+              ListTile(
+                leading: Icon(Icons.settings_input_antenna_rounded, color: c.rfidCyan),
+                title: Text('Công Suất Ăng-ten (UHF)', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text('Độ nhạy & khoảng cách đọc (${UhfService().rfPower} dBm)', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showRfPowerDialog(context, c);
+                },
+              ),
               if (user?.rolePermission.canManageUsers == true) ...[
                 Divider(color: c.border),
                 ListTile(
@@ -263,6 +273,165 @@ class PdaDrawer extends StatelessWidget {
               const SizedBox(height: 12),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  void _showRfPowerDialog(BuildContext context, EyeCareColors c) {
+    final uhf = UhfService();
+    final user = AuthService().currentUser;
+    final canConfig = user?.canConfigureHardware ?? false;
+
+    if (!canConfig) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: c.bgCard,
+          title: Row(
+            children: [
+              Icon(Icons.lock_rounded, color: c.errorCoral, size: 22),
+              const SizedBox(width: 8),
+              Text('QUYỀN BỊ TỪ CHỐI', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold, fontSize: 15)),
+            ],
+          ),
+          content: Text(
+            'Tài khoản của bạn (${user?.rolePermission.name ?? "Nhân viên"}) không có quyền cấu hình phần cứng đầu đọc RFID.\n\n'
+            'Vui lòng liên hệ Kỹ thuật viên để điều chỉnh công suất phát sóng ăng-ten.',
+            style: TextStyle(color: c.textPrimary, fontSize: 13, height: 1.4),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+              child: const Text('ĐÃ HIỂU', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    int currentPower = uhf.rfPower;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        int tempPower = currentPower;
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            String getRangeText(int p) {
+              if (p <= 12) return 'Cự ly gần (< 1m) • Soát thẻ tại chỗ';
+              if (p <= 22) return 'Cự ly trung bình (1 - 3m) • Kệ hàng tầm thấp';
+              if (p <= 29) return 'Cự ly xa (3 - 5m) • Quét bao quát pallet';
+              return 'Cực đại (5 - 8m) • Quét kệ cao';
+            }
+
+            Color getPowerColor(int p) {
+              if (p <= 15) return c.rfidCyan;
+              if (p <= 25) return c.successEmerald;
+              if (p <= 30) return c.warningAmber;
+              return c.errorCoral;
+            }
+
+            return AlertDialog(
+              backgroundColor: c.bgCard,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              title: Row(
+                children: [
+                  Icon(Icons.tune_rounded, color: c.rfidCyan, size: 22),
+                  const SizedBox(width: 8),
+                  Text('Công Suất Ăng-ten (UHF)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Điều chỉnh độ nhạy & khoảng cách đọc của đầu đọc RFID cầm tay (1 - 33 dBm):',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Mức phát RF:', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: getPowerColor(tempPower).withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: getPowerColor(tempPower)),
+                        ),
+                        child: Text(
+                          '$tempPower dBm',
+                          style: TextStyle(color: getPowerColor(tempPower), fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Slider(
+                    value: tempPower.toDouble(),
+                    min: 1,
+                    max: 33,
+                    divisions: 32,
+                    activeColor: getPowerColor(tempPower),
+                    label: '$tempPower dBm',
+                    onChanged: (v) => setDialogState(() => tempPower = v.round()),
+                  ),
+                  Center(
+                    child: Text(
+                      getRangeText(tempPower),
+                      style: TextStyle(color: getPowerColor(tempPower), fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [10, 18, 26, 30, 33].map((preset) {
+                      final isCurrent = tempPower == preset;
+                      return ActionChip(
+                        label: Text('$preset dBm'),
+                        backgroundColor: isCurrent ? c.rfidCyan.withValues(alpha: 0.25) : c.bgCardElevated,
+                        side: BorderSide(color: isCurrent ? c.rfidCyan : c.border),
+                        labelStyle: TextStyle(
+                          color: isCurrent ? c.rfidCyan : c.textPrimary,
+                          fontSize: 11,
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        onPressed: () => setDialogState(() => tempPower = preset),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('HỦY', style: TextStyle(color: c.textMuted)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final ok = await uhf.setRfPower(tempPower);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: ok ? c.successEmerald : c.errorCoral,
+                          content: Text(ok
+                              ? '✓ Đã cài đặt công suất phát ăng-ten: $tempPower dBm'
+                              : 'Không thể thay đổi công suất phát (cần quyền Kỹ thuật viên)'),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('LƯU & ÁP DỤNG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
         );
       },
     );

@@ -246,7 +246,7 @@ class SupabaseSyncService extends ChangeNotifier {
 
       if (prev) {
         _addLog(
-          action: 'ERROR',
+           action: 'ERROR',
           tableName: 'SUPABASE',
           recordCount: 0,
           isSuccess: false,

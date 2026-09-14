@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'desktop_goods_receive_view.dart';
 import 'desktop_goods_delivery_view.dart';
 import 'desktop_inventory_view.dart';
-import 'desktop_lookup_view.dart';
 import 'desktop_uhf_studio_view.dart';
 import 'desktop_user_management_view.dart';
 import 'desktop_warehouse_management_view.dart';
-import 'desktop_connection_config_view.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
 import '../../services/auth_service.dart';
@@ -29,10 +27,8 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     DesktopGoodsDeliveryView(key: const ValueKey('desktop_goods_delivery'), isActive: _selectedMenuIndex == 1), // 1: Goods Delivery
     const DesktopWarehouseManagementView(key: ValueKey('desktop_warehouse_management')), // 2: Warehouse Management (Pallet, In/Out History & Audit Log)
     const DesktopInventoryView(key: ValueKey('desktop_inventory')), // 3: Inventory
-    const DesktopLookupView(key: ValueKey('desktop_lookup')), // 4: Lookup
-    const DesktopUhfStudioView(key: ValueKey('desktop_uhf_studio')), // 5: UHF Reader Studio (Hopeland SDK & Fixed Reader)
-    const DesktopUserManagementView(key: ValueKey('desktop_user_management')), // 6: User Management (Admin Account Provisioning)
-    const DesktopConnectionConfigView(key: ValueKey('desktop_connection_config')), // 7: Hardware Connection Configuration
+    const DesktopUhfStudioView(key: ValueKey('desktop_uhf_studio')), // 4: UHF Reader Studio (Hopeland SDK & Fixed Reader)
+    const DesktopUserManagementView(key: ValueKey('desktop_user_management')), // 5: User Management (Admin Account Provisioning)
   ];
 
   @override
@@ -93,9 +89,8 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     int effectiveIndex = _selectedMenuIndex;
     if (effectiveIndex == 0 && !canIn) effectiveIndex = 1;
     if (effectiveIndex == 3 && !canAud) effectiveIndex = 1;
-    if (effectiveIndex == 5 && !isTech) effectiveIndex = canManageUsers ? 6 : 1;
-    if (effectiveIndex == 6 && !canManageUsers) effectiveIndex = isTech ? 5 : 1;
-    if (effectiveIndex == 7 && !isTech) effectiveIndex = canManageUsers ? 6 : 1;
+    if (effectiveIndex == 4 && !isTech) effectiveIndex = canManageUsers ? 5 : 1;
+    if (effectiveIndex == 5 && !canManageUsers) effectiveIndex = isTech ? 4 : 1;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
@@ -239,7 +234,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(4, Icons.search, 'Tra Cứu Serial & Kiện', 'Tra cứu mã chip RFID', c, isCompact: isCompact),
                 if (isTech) ...[
                   const SizedBox(height: 8),
                   if (!isCompact)
@@ -251,21 +245,12 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       ),
                     ),
                   _buildMenuItem(
-                    5,
+                    4,
                     Icons.radar,
                     'Đầu Đọc UHF (Studio)',
                     'Hopeland SDK 4.42 & Chỉnh thông số máy',
                     c,
                     badge: 'KỸ THUẬT',
-                    isCompact: isCompact,
-                  ),
-                  _buildMenuItem(
-                    7,
-                    Icons.settings_input_antenna_rounded,
-                    'Cấu Hình Kết Nối',
-                    'IP LAN, COM & tự kết nối',
-                    c,
-                    badge: 'KẾT NỐI',
                     isCompact: isCompact,
                   ),
                 ],
@@ -280,7 +265,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       ),
                     ),
                   _buildMenuItem(
-                    6,
+                    5,
                     Icons.manage_accounts_rounded,
                     'Cấp & Quản Lý Tài Khoản',
                     'Cấp phát, phân quyền nhân viên',

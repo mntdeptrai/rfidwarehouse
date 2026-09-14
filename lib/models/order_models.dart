@@ -284,3 +284,62 @@ class DeliveryNote {
     details: details,
   );
 }
+
+/// Kết quả đối soát chi tiết của từng dòng sản phẩm cần xuất kho với tồn kho và FIFO
+class OutboundValidatedItem {
+  final String sku;
+  final String productName;
+  final String cartonCode;
+  final String palletCode;
+  final String supplier;
+  final String customer;
+  final String palletEpc;
+  final String epc;
+  final bool isInStock;
+  final String locationCode;
+  final String? palletLocation;
+  final DateTime? inboundTime;
+  final int fifoPriority;
+  final String? fifoWarning;
+  final String? matchedItemId;
+
+  OutboundValidatedItem({
+    required this.sku,
+    required this.productName,
+    required this.cartonCode,
+    required this.palletCode,
+    this.supplier = '--',
+    this.customer = '--',
+    required this.palletEpc,
+    required this.epc,
+    required this.isInStock,
+    required this.locationCode,
+    this.palletLocation,
+    this.inboundTime,
+    required this.fifoPriority,
+    this.fifoWarning,
+    this.matchedItemId,
+  });
+}
+
+/// Kết quả tổng hợp đối soát đơn xuất kho với dữ liệu hàng tồn kho thực tế và vị trí kệ FIFO
+class OutboundInventoryValidationResult {
+  final bool isStockSufficient;
+  final int totalRequested;
+  final int totalInStock;
+  final int shortageCount;
+  final Map<String, int> shortageBySku;
+  final List<OutboundValidatedItem> items;
+
+  OutboundInventoryValidationResult({
+    required this.isStockSufficient,
+    required this.totalRequested,
+    required this.totalInStock,
+    required this.shortageCount,
+    required this.shortageBySku,
+    required this.items,
+  });
+
+  List<OutboundValidatedItem> get validatedItems => items;
+}
+

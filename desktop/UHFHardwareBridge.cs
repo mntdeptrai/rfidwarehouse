@@ -18,6 +18,7 @@ namespace UHFHardwareBridge
         private static TcpListener _server;
         private static readonly List<TcpClient> _clients = new List<TcpClient>();
         private static readonly object _clientLock = new object();
+        private static readonly object _hardwareLock = new object();
         private static readonly JavaScriptSerializer _json = new JavaScriptSerializer();
 
         private static string _currentConnId = "";
@@ -125,32 +126,38 @@ namespace UHFHardwareBridge
                     // 3. Proactive Health Probe (định kỳ mỗi 6 giây và sau khi kết nối > 5s)
                     if (!_isScanning && _watchdogTicks % 12 == 0 && (DateTime.Now - _connectedTime).TotalSeconds > 5)
                     {
-                        try
+                        lock (_hardwareLock)
                         {
-                            string info = RFIDReader._ReaderConfig.GetReaderInformation(_currentConnId);
-                            if (string.IsNullOrEmpty(info) || info.StartsWith("1|") || info.StartsWith("255|"))
+                            if (!_isScanning && _isConnected && !string.IsNullOrEmpty(_currentConnId))
                             {
-                                _failedProbeCount++;
-                                if (_failedProbeCount >= 2)
+                                try
                                 {
-                                    BroadcastLog("⚠️ Đầu đọc không phản hồi (Mất nguồn hoặc lỏng dây). Tự động ngắt kết nối.");
-                                    HandleDisconnect();
-                                    continue;
+                                    string info = RFIDReader._ReaderConfig.GetReaderInformation(_currentConnId);
+                                    if (string.IsNullOrEmpty(info) || info.StartsWith("1|") || info.StartsWith("255|"))
+                                    {
+                                        _failedProbeCount++;
+                                        if (_failedProbeCount >= 2)
+                                        {
+                                            BroadcastLog("⚠️ Đầu đọc không phản hồi (Mất nguồn hoặc lỏng dây). Tự động ngắt kết nối.");
+                                            HandleDisconnect();
+                                            continue;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        _failedProbeCount = 0;
+                                    }
                                 }
-                            }
-                            else
-                            {
-                                _failedProbeCount = 0;
-                            }
-                        }
-                        catch
-                        {
-                            _failedProbeCount++;
-                            if (_failedProbeCount >= 2)
-                            {
-                                BroadcastLog("⚠️ Mất kết nối tới phần cứng đầu đọc. Tự động ngắt kết nối.");
-                                HandleDisconnect();
-                                continue;
+                                catch
+                                {
+                                    _failedProbeCount++;
+                                    if (_failedProbeCount >= 2)
+                                    {
+                                        BroadcastLog("⚠️ Mất kết nối tới phần cứng đầu đọc. Tự động ngắt kết nối.");
+                                        HandleDisconnect();
+                                        continue;
+                                    }
+                                }
                             }
                         }
                     }
@@ -421,8 +428,12 @@ namespace UHFHardwareBridge
         {
             try
             {
-                if (_isScanning) HandleStopInventory();
-                RFIDReader.CloseAllConnect();
+                lock (_hardwareLock)
+                {
+                    _isScanning = false;
+                    try { RFIDReader._Tag6C.Stop(_currentConnId); } catch { }
+                    RFIDReader.CloseAllConnect();
+                }
             }
             catch { }
             finally
@@ -469,27 +480,52 @@ namespace UHFHardwareBridge
                 }
 
                 int ret = -1;
-                if (scanMode == 0) // EPC Only
+                lock (_hardwareLock)
                 {
-                    ret = RFIDReader._Tag6C.GetEPC(_currentConnId, antMask, eReadType.Inventory);
-                }
-                else if (scanMode == 1) // EPC + TID
-                {
-                    ret = RFIDReader._Tag6C.GetEPC_TID(_currentConnId, antMask, eReadType.Inventory, 6, eMatchCode.None, "", 0);
-                }
-                else if (scanMode == 2) // EPC + TID + User
-                {
-                    ret = RFIDReader._Tag6C.GetEPC_TID_UserData(_currentConnId, antMask, eReadType.Inventory, 0, 4);
-                }
+                    // Đảm bảo dừng tiến trình quét cũ trước khi bắt đầu đợt quét mới
+                    try { RFIDReader._Tag6C.Stop(_currentConnId); } catch { }
+                    Thread.Sleep(60);
 
-                if (ret == 0)
-                {
-                    _isScanning = true;
-                    BroadcastLog(string.Format("STARTED HARDWARE INVENTORY (AntMask: {0}, Mode: {1}) - RF LED IS ON!", (int)antMask, scanMode));
-                }
-                else
-                {
-                    BroadcastLog(string.Format("Failed to start hardware inventory. Return Code: {0}", ret));
+                    if (scanMode == 0) // EPC Only
+                    {
+                        ret = RFIDReader._Tag6C.GetEPC(_currentConnId, antMask, eReadType.Inventory);
+                        if (ret != 0 && antMask != eAntennaNo._1)
+                        {
+                            BroadcastLog(string.Format("AntMask {0} trả về mã {1}. Tự động chuyển thử Anten 1...", (int)antMask, ret));
+                            ret = RFIDReader._Tag6C.GetEPC(_currentConnId, eAntennaNo._1, eReadType.Inventory);
+                            if (ret == 0) antMask = eAntennaNo._1;
+                        }
+                    }
+                    else if (scanMode == 1) // EPC + TID
+                    {
+                        ret = RFIDReader._Tag6C.GetEPC_TID(_currentConnId, antMask, eReadType.Inventory, 6, eMatchCode.None, "", 0);
+                        if (ret != 0 && antMask != eAntennaNo._1)
+                        {
+                            BroadcastLog(string.Format("AntMask {0} trả về mã {1}. Tự động chuyển thử Anten 1...", (int)antMask, ret));
+                            ret = RFIDReader._Tag6C.GetEPC_TID(_currentConnId, eAntennaNo._1, eReadType.Inventory, 6, eMatchCode.None, "", 0);
+                            if (ret == 0) antMask = eAntennaNo._1;
+                        }
+                    }
+                    else if (scanMode == 2) // EPC + TID + User
+                    {
+                        ret = RFIDReader._Tag6C.GetEPC_TID_UserData(_currentConnId, antMask, eReadType.Inventory, 0, 4);
+                        if (ret != 0 && antMask != eAntennaNo._1)
+                        {
+                            BroadcastLog(string.Format("AntMask {0} trả về mã {1}. Tự động chuyển thử Anten 1...", (int)antMask, ret));
+                            ret = RFIDReader._Tag6C.GetEPC_TID_UserData(_currentConnId, eAntennaNo._1, eReadType.Inventory, 0, 4);
+                            if (ret == 0) antMask = eAntennaNo._1;
+                        }
+                    }
+
+                    if (ret == 0)
+                    {
+                        _isScanning = true;
+                        BroadcastLog(string.Format("STARTED HARDWARE INVENTORY (AntMask: {0}, Mode: {1}) - RF LED IS ON!", (int)antMask, scanMode));
+                    }
+                    else
+                    {
+                        BroadcastLog(string.Format("Failed to start hardware inventory. Return Code: {0}", ret));
+                    }
                 }
 
                 Dictionary<string, object> res = new Dictionary<string, object>();
@@ -510,9 +546,39 @@ namespace UHFHardwareBridge
 
             try
             {
-                int ret = RFIDReader._Tag6C.Stop(_currentConnId);
-                _isScanning = false;
-                BroadcastLog("STOPPED HARDWARE INVENTORY.");
+                lock (_hardwareLock)
+                {
+                    _isScanning = false;
+
+                    // 1. Dừng quét Tag 6C (thử tối đa 3 lần)
+                    int ret6c = -1;
+                    for (int i = 0; i < 3; i++)
+                    {
+                        ret6c = RFIDReader._Tag6C.Stop(_currentConnId);
+                        if (ret6c == 0) break;
+                        Thread.Sleep(50);
+                    }
+
+                    // 2. Dừng cấu hình phát sóng RF của reader (Tắt đèn RF LED)
+                    try { RFIDReader._RFIDConfig.Stop(_currentConnId); } catch { }
+
+                    // 3. Tắt đèn báo trạng thái máy (Reader State LED)
+                    try { RFIDReader._ReaderConfig.SetReaderStateLED(_currentConnId, false, 0); } catch { }
+
+                    // 4. Reset toàn bộ cổng GPO về mức Thấp (Tắt đèn tháp / còi báo / LED phụ)
+                    try
+                    {
+                        Dictionary<eGPO, eGPOState> gpoReset = new Dictionary<eGPO, eGPOState>();
+                        gpoReset[eGPO._1] = eGPOState.Low;
+                        gpoReset[eGPO._2] = eGPOState.Low;
+                        gpoReset[eGPO._3] = eGPOState.Low;
+                        gpoReset[eGPO._4] = eGPOState.Low;
+                        RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, gpoReset);
+                    }
+                    catch { }
+
+                    BroadcastLog(string.Format("STOPPED HARDWARE INVENTORY (Result: {0}) - RF & GPO LEDs TURNED OFF.", ret6c));
+                }
 
                 Dictionary<string, object> res = new Dictionary<string, object>();
                 res["type"] = "inventory_result";
@@ -786,7 +852,7 @@ namespace UHFHardwareBridge
 
         public void OutPutTags(Tag_Model tag)
         {
-            if (tag == null) return;
+            if (!_isScanning || tag == null) return;
 
             string antNum = tag.ANT_NUM > 0 ? tag.ANT_NUM.ToString() : "1";
 

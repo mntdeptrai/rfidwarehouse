@@ -148,6 +148,340 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
     );
   }
 
+  void _showAntennaPowerDialog(BuildContext context) {
+    final c = _eyeCare.colors;
+    final user = _auth.currentUser;
+    final canConfigure = user?.canConfigureHardware ?? false;
+
+    if (!canConfigure) {
+      _showPermissionDeniedDialog(context, 'Điều chỉnh công suất phát ăng-ten');
+      return;
+    }
+
+    final initialPowers = Map<int, int>.from(_uhfService.config.antennaPowers);
+    if (initialPowers.isEmpty) {
+      for (int i = 1; i <= 4; i++) {
+        initialPowers[i] = _uhfService.config.rfPower;
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        int selectedAnt = 1;
+        bool applyAll = false;
+        final tempPowers = Map<int, int>.from(initialPowers);
+
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final curPower = tempPowers[selectedAnt] ?? 30;
+
+            String getRangeText(int p) {
+              if (p <= 12) return 'Cự ly gần (< 1m) • Tránh nhiễu & đọc nhầm';
+              if (p <= 22) return 'Cự ly trung bình (1 - 3m) • Bàn kiểm đếm, giá kệ nhỏ';
+              if (p <= 29) return 'Cự ly chuẩn kho (3 - 6m) • Xe nâng, cổng nhập xuất';
+              return 'Công suất cực đại (6 - 10m) • Không gian mở rộng';
+            }
+
+            Color getPowerColor(int p) {
+              if (p <= 15) return c.rfidCyan;
+              if (p <= 25) return c.successEmerald;
+              if (p <= 30) return c.warningAmber;
+              return c.errorCoral;
+            }
+
+            return AlertDialog(
+              backgroundColor: c.bgCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: c.border),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: c.rfidCyan.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.tune_rounded, color: c.rfidCyan, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cấu Hình Công Suất Ăng-ten UHF',
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        Text(
+                          'Hopeland SDK / Thiết lập RF Power (0 - 33 dBm)',
+                          style: TextStyle(color: c.textSecondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Antenna Selection Row
+                    Row(
+                      children: List.generate(4, (i) {
+                        final antNum = i + 1;
+                        final isSel = selectedAnt == antNum;
+                        final antPower = tempPowers[antNum] ?? 30;
+                        final isAntActive = _uhfService.activeAntennas.contains(antNum);
+
+                        return Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(right: i < 3 ? 8 : 0),
+                            child: InkWell(
+                              onTap: () => setDialogState(() => selectedAnt = antNum),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                                decoration: BoxDecoration(
+                                  color: isSel ? c.rfidCyan.withValues(alpha: 0.15) : c.bgCardElevated,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSel ? c.rfidCyan : c.border,
+                                    width: isSel ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.settings_input_antenna,
+                                          size: 14,
+                                          color: isAntActive ? c.rfidCyan : c.textMuted,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'ANT $antNum',
+                                          style: TextStyle(
+                                            color: isSel ? c.rfidCyan : c.textPrimary,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: getPowerColor(antPower).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        '$antPower dBm',
+                                        style: TextStyle(
+                                          color: getPowerColor(antPower),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Apply all checkbox
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: applyAll,
+                          activeColor: c.rfidCyan,
+                          visualDensity: VisualDensity.compact,
+                          onChanged: (val) {
+                            setDialogState(() {
+                              applyAll = val ?? false;
+                              if (applyAll) {
+                                final p = tempPowers[selectedAnt] ?? 30;
+                                for (int i = 1; i <= 4; i++) {
+                                  tempPowers[i] = p;
+                                }
+                              }
+                            });
+                          },
+                        ),
+                        Text(
+                          'Đồng bộ công suất này cho cả 4 Ăng-ten (ANT 1 - 4)',
+                          style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Power display banner
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                applyAll ? 'Công suất phát (TẤT CẢ ĂNG-TEN):' : 'Công suất phát (ĂNG-TEN $selectedAnt):',
+                                style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: getPowerColor(curPower).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: getPowerColor(curPower).withValues(alpha: 0.5)),
+                                ),
+                                child: Text(
+                                  '$curPower dBm',
+                                  style: TextStyle(
+                                    color: getPowerColor(curPower),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Slider
+                          SliderTheme(
+                            data: SliderTheme.of(dialogCtx).copyWith(
+                              activeTrackColor: getPowerColor(curPower),
+                              thumbColor: getPowerColor(curPower),
+                              inactiveTrackColor: c.border,
+                              trackHeight: 4,
+                            ),
+                            child: Slider(
+                              value: curPower.toDouble(),
+                              min: 0,
+                              max: 33,
+                              divisions: 33,
+                              label: '$curPower dBm',
+                              onChanged: (v) {
+                                setDialogState(() {
+                                  final p = v.round();
+                                  if (applyAll) {
+                                    for (int i = 1; i <= 4; i++) {
+                                      tempPowers[i] = p;
+                                    }
+                                  } else {
+                                    tempPowers[selectedAnt] = p;
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('0 dBm (Tối thiểu)', style: TextStyle(color: c.textMuted, fontSize: 10)),
+                              Text(getRangeText(curPower), style: TextStyle(color: getPowerColor(curPower), fontSize: 11, fontWeight: FontWeight.w600)),
+                              Text('33 dBm (Tối đa)', style: TextStyle(color: c.textMuted, fontSize: 10)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Quick presets
+                    Text(
+                      'Phím tắt công suất nhanh:',
+                      style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [10, 18, 26, 30, 33].map((preset) {
+                          final isCurrent = curPower == preset;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ActionChip(
+                              label: Text('$preset dBm'),
+                              backgroundColor: isCurrent ? c.rfidCyan.withValues(alpha: 0.25) : c.bgCardElevated,
+                              side: BorderSide(color: isCurrent ? c.rfidCyan : c.border),
+                              labelStyle: TextStyle(
+                                color: isCurrent ? c.rfidCyan : c.textPrimary,
+                                fontSize: 11,
+                                fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  if (applyAll) {
+                                    for (int i = 1; i <= 4; i++) {
+                                      tempPowers[i] = preset;
+                                    }
+                                  } else {
+                                    tempPowers[selectedAnt] = preset;
+                                  }
+                                });
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('HỦY', style: TextStyle(color: c.textMuted)),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _uhfService.setAntennaPower(tempPowers);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: c.successEmerald,
+                          content: Text(
+                            'Đã cập nhật công suất phát ăng-ten (${tempPowers.entries.map((e) => "ANT${e.key}: ${e.value}dBm").join(", ")})',
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+                  icon: const Icon(Icons.check, size: 16, color: Colors.white),
+                  label: const Text('LƯU & ÁP DỤNG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildPermissionBanner(EyeCareColors c, String roleName) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -675,6 +1009,21 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
           ),
+          const SizedBox(width: 8),
+
+          OutlinedButton.icon(
+            onPressed: () => _showAntennaPowerDialog(context),
+            icon: Icon(Icons.tune_rounded, size: 14, color: c.rfidCyan),
+            label: Text(
+              'CÔNG SUẤT ĂNG-TEN (${_uhfService.config.rfPower} dBm)',
+              style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: c.rfidCyan),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+          ),
           ],
         ),
       ),
@@ -854,6 +1203,34 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                     ),
                   );
                 }),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: canConfigure ? () => _showAntennaPowerDialog(context) : null,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: c.rfidCyan.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bolt, size: 13, color: c.rfidCyan),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${_uhfService.config.rfPower} dBm',
+                          style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                        if (canConfigure) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.edit, size: 11, color: c.rfidCyan),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 14),
                 Text('Chế độ: ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 Container(
@@ -1624,6 +2001,23 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 style: ElevatedButton.styleFrom(
                   backgroundColor: canConfigure ? c.errorCoral : c.bgCard,
                   foregroundColor: canConfigure ? Colors.white : c.textMuted,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: canConfigure
+                    ? () => _showAntennaPowerDialog(context)
+                    : () => _showPermissionDeniedDialog(context, 'Cấu hình công suất phát ăng-ten'),
+                icon: Icon(canConfigure ? Icons.tune : Icons.lock, size: 15),
+                label: Text(
+                  canConfigure ? 'CÔNG SUẤT ĂNG-TEN (${_uhfService.config.rfPower} dBm)' : 'CÔNG SUẤT ĂNG-TEN 🔒',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: canConfigure ? c.bgCardElevated : c.bgCard,
+                  foregroundColor: canConfigure ? c.rfidCyan : c.textMuted,
+                  side: BorderSide(color: canConfigure ? c.rfidCyan : c.border),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               ),
