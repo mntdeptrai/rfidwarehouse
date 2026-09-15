@@ -2,10 +2,33 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 import '../config/secrets.dart';
 import 'database_service.dart';
 import 'warehouse_repository.dart';
+export 'package:supabase/supabase.dart';
+
+class Supabase {
+  static SupabaseClient? _client;
+  static final Supabase _instance = Supabase._();
+  static Supabase get instance => _instance;
+  Supabase._();
+
+  SupabaseClient get client {
+    if (_client == null) {
+      throw StateError('Supabase client has not been initialized.');
+    }
+    return _client!;
+  }
+
+  static Future<void> initialize({
+    required String url,
+    required String publishableKey,
+    bool debug = false,
+  }) async {
+    _client = SupabaseClient(url, publishableKey);
+  }
+}
 
 class SupabaseConfig {
   String url;

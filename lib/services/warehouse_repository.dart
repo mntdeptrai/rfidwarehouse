@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wms_models.dart';
 import 'erp_bravo_service.dart';
 import 'database_service.dart';
@@ -115,10 +114,20 @@ class WarehouseRepository extends ChangeNotifier {
 
       _items.clear();
       _items.addAll(cleanItems.where((i) => !isBogusCommandItem(i)));
+
+      final Map<String, List<String>> palletItemsMap = {};
+      for (final it in _items) {
+        if (it.palletId != null && it.palletId!.isNotEmpty) {
+          palletItemsMap.putIfAbsent(it.palletId!, () => []).add(it.itemId);
+        }
+      }
       for (final p in _pallets) {
         p.itemIds.clear();
-        p.itemIds.addAll(_items.where((i) => i.palletId == p.palletId || i.palletId == p.palletCode).map((i) => i.itemId));
+        final byId = palletItemsMap[p.palletId] ?? [];
+        final byCode = palletItemsMap[p.palletCode] ?? [];
+        p.itemIds.addAll({...byId, ...byCode});
       }
+      _rebuildIndexes();
 
       _inboundOrders.clear();
       _inboundOrders.addAll(cleanInboundOrders);
@@ -399,13 +408,17 @@ class WarehouseRepository extends ChangeNotifier {
       }).toList();
 
       // Link pallet items:
+      final Map<String, List<String>> palletItemsMap = {};
+      for (final it in loadedItems) {
+        if (it.palletId != null && it.palletId!.isNotEmpty) {
+          palletItemsMap.putIfAbsent(it.palletId!, () => []).add(it.itemId);
+        }
+      }
       for (final p in loadedPallets) {
         p.itemIds.clear();
-        p.itemIds.addAll(
-          loadedItems
-              .where((i) => i.palletId == p.palletId || i.palletId == p.palletCode)
-              .map((i) => i.itemId),
-        );
+        final byId = palletItemsMap[p.palletId] ?? [];
+        final byCode = palletItemsMap[p.palletCode] ?? [];
+        p.itemIds.addAll({...byId, ...byCode});
       }
 
       // Commit to RAM state:
@@ -435,6 +448,8 @@ class WarehouseRepository extends ChangeNotifier {
 
       _transactions.clear();
       _transactions.addAll(loadedTransactions);
+
+      _rebuildIndexes();
 
       debugPrint('Directly synced from Supabase Cloud: ${_locations.length} locs, ${_pallets.length} pallets, ${_items.length} items, ${_products.length} prods, ${_transactions.length} txs');
 
@@ -781,7 +796,12 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<List<Item>> addInboundOrder(InboundOrder order, {bool autoGenerateEpcs = true}) async {
     await _dbService.insertInboundOrder(order);
-    _inboundOrders.add(order);
+    final existingIdx = _inboundOrders.indexWhere((o) => o.orderNo == order.orderNo || o.inboundOrderId == order.inboundOrderId);
+    if (existingIdx >= 0) {
+      _inboundOrders[existingIdx] = order;
+    } else {
+      _inboundOrders.add(order);
+    }
 
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       try {
@@ -1615,6 +1635,33 @@ class WarehouseRepository extends ChangeNotifier {
   final List<Customer> _customers = [];
   final List<DeliveryNote> _deliveryNotes = [];
 
+  final Map<String, Pallet> _palletsByCodeIndex = {};
+  final Map<String, Pallet> _palletsByRfidIndex = {};
+  final Map<String, Pallet> _palletsByHexIndex = {};
+  final Map<String, Item> _itemsByEpcIndex = {};
+
+  void _rebuildIndexes() {
+    _palletsByCodeIndex.clear();
+    _palletsByRfidIndex.clear();
+    _palletsByHexIndex.clear();
+    for (final p in _pallets) {
+      final pCode = p.palletCode.trim().toUpperCase();
+      final pId = p.palletId.trim().toUpperCase();
+      if (pCode.isNotEmpty) _palletsByCodeIndex[pCode] = p;
+      if (pId.isNotEmpty) _palletsByCodeIndex[pId] = p;
+      final rfid = (p.rfidEpc ?? '').trim().toUpperCase();
+      if (rfid.isNotEmpty) _palletsByRfidIndex[rfid] = p;
+      final hexCode = p.palletCode.codeUnits.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join('');
+      if (hexCode.isNotEmpty) _palletsByHexIndex[hexCode] = p;
+    }
+
+    _itemsByEpcIndex.clear();
+    for (final it in _items) {
+      final cleanEpc = it.epc.trim().toUpperCase();
+      if (cleanEpc.isNotEmpty) _itemsByEpcIndex[cleanEpc] = it;
+    }
+  }
+
   WarehouseFloorPlanConfig _floorPlanConfig = WarehouseFloorPlanConfig.defaultConfig();
   WarehouseFloorPlanConfig get floorPlanConfig => _floorPlanConfig;
 
@@ -1933,6 +1980,12 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  /// Tra cứu nhanh Item theo mã thẻ RFID (EPC) - O(1)
+  Item? findItemByEpc(String epc) {
+    final clean = epc.trim().toUpperCase();
+    return clean.isEmpty ? null : _itemsByEpcIndex[clean];
   }
 
   /// Lấy thông tin người đặt Pallet lên kệ

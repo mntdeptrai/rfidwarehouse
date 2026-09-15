@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/wms_models.dart';
 import 'database_service.dart';
 import 'supabase_sync_service.dart';
@@ -49,7 +48,6 @@ class AuthService extends ChangeNotifier {
           await _dbService.deleteUser(mockId);
         }
       }
-      await WarehouseRepository().reloadFromSqlite();
 
       // 2. Khôi phục phiên đăng nhập trước đó từ SQLite system_config
       final savedUserId = await _dbService.getSystemConfig('active_user_id');

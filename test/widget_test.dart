@@ -610,5 +610,113 @@ void main() {
     // Clean up session
     InboundActiveSession.clear();
   });
+
+  testWidgets('DesktopGoodsReceiveView displays pending orders list with XÓA ĐƠN and transitions on CHỌN ĐỐI SOÁT', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final testOrdNo = 'PO-TEST-ORDER-VIEW';
+    await repo.wipeAllPendingInboundOrdersAndItems();
+
+    await repo.addInboundOrder(
+      InboundOrder(
+        inboundOrderId: testOrdNo,
+        orderNo: testOrdNo,
+        sourceSupplier: 'Nhà cung cấp Kiểm Thử',
+        status: InboundOrderStatus.newOrder,
+        createdAt: DateTime.now(),
+        details: [
+          InboundOrderDetail(
+            productId: 'SKU-TEST-01',
+            sku: 'SKU-TEST-01',
+            productName: 'Sản phẩm Test',
+            requiredQty: 2,
+          ),
+        ],
+      ),
+      autoGenerateEpcs: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: const Scaffold(
+          body: DesktopGoodsReceiveView(isActive: true),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Hiển thị danh sách đơn hàng chờ qua cổng kèm nút XÓA ĐƠN & CHỌN ĐỐI SOÁT
+    expect(find.textContaining('DANH SÁCH ĐƠN HÀNG CHỜ QUA CỔNG'), findsOneWidget);
+    expect(find.text(testOrdNo), findsOneWidget);
+    expect(find.text('XÓA ĐƠN'), findsOneWidget);
+    expect(find.text('CHỌN ĐỐI SOÁT'), findsOneWidget);
+
+    // Bấm CHỌN ĐỐI SOÁT -> chuyển sang màn hình quét đối soát có nút quay lại & nút XÓA ĐƠN NÀY
+    await tester.tap(find.text('CHỌN ĐỐI SOÁT'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('DANH SÁCH ĐƠN'), findsOneWidget);
+    expect(find.text('XÓA ĐƠN NÀY'), findsOneWidget);
+    expect(find.textContaining('ĐANG ĐỐI SOÁT ĐƠN: $testOrdNo'), findsOneWidget);
+
+    // Bấm DANH SÁCH ĐƠN -> quay lại danh sách
+    await tester.tap(find.text('DANH SÁCH ĐƠN'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('DANH SÁCH ĐƠN HÀNG CHỜ QUA CỔNG'), findsOneWidget);
+
+    // Dọn dẹp
+    await repo.wipeAllPendingInboundOrdersAndItems();
+  });
+
+  testWidgets('InboundScreen (PDA) displays delete icon on pending order cards', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    InboundActiveSession.clear();
+    final repo = WarehouseRepository();
+    final pdaOrdNo = 'PO-PDA-TEST-DELETE';
+    await repo.wipeAllPendingInboundOrdersAndItems();
+
+    await repo.addInboundOrder(
+      InboundOrder(
+        inboundOrderId: pdaOrdNo,
+        orderNo: pdaOrdNo,
+        sourceSupplier: 'Nhà cung cấp PDA Test',
+        status: InboundOrderStatus.newOrder,
+        createdAt: DateTime.now(),
+        details: [
+          InboundOrderDetail(
+            productId: 'SKU-PDA-01',
+            sku: 'SKU-PDA-01',
+            productName: 'Sản phẩm PDA',
+            requiredQty: 5,
+          ),
+        ],
+      ),
+      autoGenerateEpcs: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: const InboundScreen(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text(pdaOrdNo), findsOneWidget);
+    expect(find.text('CHỌN'), findsOneWidget);
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+    // Dọn dẹp
+    await repo.wipeAllPendingInboundOrdersAndItems();
+    InboundActiveSession.clear();
+  });
 }
 

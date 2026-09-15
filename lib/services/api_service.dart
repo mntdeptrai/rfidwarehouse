@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'supabase_sync_service.dart';
 import '../models/wms_models.dart';
 import 'warehouse_repository.dart';
 

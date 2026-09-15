@@ -7,7 +7,7 @@ import '../../theme/eye_care_theme.dart';
 import 'pda_drawer.dart';
 import 'pda_goods_delivery_screen.dart';
 import 'pda_inventory_screen.dart';
-import '../inbound_screen.dart';
+import 'pda_inbound_screen.dart';
 import 'pda_transfer_screen.dart';
 import 'pda_putaway_screen.dart';
 import 'pda_warehouse_management_screen.dart';
@@ -215,7 +215,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(builder: (_) => const InboundScreen()),
+                                MaterialPageRoute(builder: (_) => const PdaInboundScreen()),
                               );
                             },
                           ),

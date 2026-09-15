@@ -109,17 +109,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           letterSpacing: 0.5,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'UHF RFID WMS SYSTEM • ĐĂNG NHẬP',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: c.textMuted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
                       const SizedBox(height: 22),
 
                       // Error message banner

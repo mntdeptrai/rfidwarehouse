@@ -967,12 +967,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   void _selectActivePendingOrder(String orderNo) {
     final pendingOrderObj = _pendingGateOrders.where((p) => p.order.orderNo == orderNo || p.order.inboundOrderId == orderNo).firstOrNull;
     if (pendingOrderObj == null) {
-      final pItems = _repo.items.where((i) => (i.orderNo == orderNo) && i.status == ItemStatus.pendingInbound).toList();
-      if (pItems.isEmpty) return;
+      final pItems = _repo.items.where((i) => (i.orderNo == orderNo || i.orderNo == 'INB-$orderNo') && i.status == ItemStatus.pendingInbound).toList();
       setState(() {
         _activeOrderNo = orderNo;
         _activeExpectedItems = pItems;
-        final pId = pItems.first.palletId;
+        final pId = pItems.firstOrNull?.palletId;
         if (pId != null) {
           _activePallet = _repo.pallets.where((p) => p.palletId.toUpperCase() == pId.toUpperCase() || p.palletCode.toUpperCase() == pId.toUpperCase()).firstOrNull;
           _wizardDetectedPallet = _activePallet;
@@ -1318,7 +1317,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _desktopUhf.clearTags();
     _invalidateCartonCaches();
 
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFEF4444),
+          duration: Duration(seconds: 2),
+          content: Text('✓ Đã xóa sạch đơn vừa nạp nhầm khỏi CSDL & Supabase Cloud!'),
+        ),
+      );
+    }
 
     // 2. Xóa sạch CSDL và đồng bộ ngầm siêu nhanh (không chặn UI, không làm quay nút Nhập hàng, không hiện dòng xanh)
     _repo.wipeAllPendingInboundOrdersAndItems().then((_) {
@@ -1326,6 +1334,461 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     }).catchError((e) {
       debugPrint('Lỗi khi xóa đơn chờ: $e');
     });
+  }
+
+  // ---------- XÓA ĐƠN HÀNG ĐƠN LẺ NẠP NHẦM KHỎI CSDL & SUPABASE ----------
+
+  Future<void> _confirmDeleteSingleOrder(String orderNo, {int chipCount = 0}) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _eyeCare.colors.bgCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: _eyeCare.colors.border),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 22),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Xác nhận xóa đơn hàng?',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bạn có chắc chắn muốn xóa đơn hàng $orderNo?',
+              style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              chipCount > 0
+                  ? 'Toàn bộ $chipCount chip RFID và dữ liệu của đơn này sẽ bị xóa sạch khỏi CSDL SQLite và Supabase Cloud.'
+                  : 'Toàn bộ dữ liệu của đơn này sẽ bị xóa sạch khỏi CSDL SQLite và Supabase Cloud.',
+              style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('HỦY', style: TextStyle(color: _eyeCare.colors.textSecondary, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.delete_forever, size: 16),
+            label: const Text('XÓA ĐƠN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // 1. Dọn dẹp RAM ngay lập tức
+    _pendingGateOrders.removeWhere((p) => p.order.orderNo == orderNo || p.order.inboundOrderId == orderNo);
+    _pendingLoadedOrderNos.remove(orderNo);
+    _scannedTagsByOrderNo.remove(orderNo);
+    _scannedPalletTagsByOrderNo.remove(orderNo);
+
+    if (_activeOrderNo == orderNo) {
+      _activeOrderNo = null;
+      _activePallet = null;
+      _activePalletTag = null;
+      _activeExpectedItems.clear();
+      _wizardScannedTags.clear();
+      _stopWizardScan();
+      _desktopUhf.clearTags();
+    }
+    _invalidateCartonCaches();
+
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 3),
+          content: Text('✓ Đã xóa đơn hàng $orderNo khỏi CSDL & Supabase Cloud!'),
+        ),
+      );
+    }
+
+    // 2. Xóa SQLite và Supabase Cloud
+    try {
+      await _repo.deleteInboundOrder(orderNo);
+      await _supabaseSync.syncNow();
+    } catch (e) {
+      debugPrint('Lỗi khi xóa đơn $orderNo: $e');
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// Lấy danh sách các đơn hàng chờ qua cổng để hiển thị thẻ chọn và xóa
+  List<Map<String, dynamic>> _getPendingOrdersList() {
+    final Map<String, Map<String, dynamic>> orderMap = {};
+
+    // 1. Lấy từ danh sách đơn trong bộ nhớ tạm _pendingGateOrders (nạp từ file phiên hiện tại)
+    for (final p in _pendingGateOrders) {
+      if (p.isGatePassed) continue;
+      final ord = p.order;
+      final ordNo = ord.orderNo;
+      final palletCodes = p.pallets.keys.where((k) => k.isNotEmpty && k != '--').toList();
+      orderMap[ordNo] = {
+        'orderNo': ordNo,
+        'supplier': p.supplier.isNotEmpty && p.supplier != 'Nhà cung cấp tổng hợp' ? p.supplier : ord.sourceSupplier,
+        'status': ord.status,
+        'createdAt': ord.createdAt,
+        'chipCount': p.items.length,
+        'skuCount': ord.details.length,
+        'palletInfo': palletCodes.isNotEmpty
+            ? palletCodes.join(', ')
+            : (p.items.firstOrNull?.palletId?.replaceAll('PAL-', '') ?? '--'),
+        'inboundOrder': ord,
+      };
+    }
+
+    // 2. Lấy từ CSDL SQLite / Supabase (_repo.inboundOrders)
+    final dbPendingOrders = _repo.inboundOrders
+        .where((o) => o.status == InboundOrderStatus.newOrder)
+        .toList();
+    for (final ord in dbPendingOrders) {
+      final ordNo = ord.orderNo;
+      if (!orderMap.containsKey(ordNo)) {
+        final items = _repo.items.where((i) =>
+            (i.orderNo == ordNo || i.orderNo == ord.inboundOrderId) &&
+            i.status == ItemStatus.pendingInbound).toList();
+        final chipCount = items.isNotEmpty ? items.length : ord.details.fold<int>(0, (s, d) => s + d.requiredQty);
+        final palletCodes = items
+            .map((i) => i.palletId?.replaceAll('PAL-', '').trim())
+            .where((p) => p != null && p.isNotEmpty && p != '--')
+            .toSet()
+            .toList();
+
+        orderMap[ordNo] = {
+          'orderNo': ordNo,
+          'supplier': ord.sourceSupplier.isNotEmpty ? ord.sourceSupplier : 'Nhà cung cấp tổng hợp',
+          'status': ord.status,
+          'createdAt': ord.createdAt,
+          'chipCount': chipCount,
+          'skuCount': ord.details.length,
+          'palletInfo': palletCodes.isNotEmpty ? palletCodes.join(', ') : '--',
+          'inboundOrder': ord,
+        };
+      }
+    }
+
+    final list = orderMap.values.toList();
+    list.sort((a, b) => (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime));
+    return list;
+  }
+
+  // ---------- GIAO DIỆN DANH SÁCH ĐƠN HÀNG CHỜ NHẬP & NÚT XÓA ĐƠN ----------
+
+  Widget _buildPendingOrdersListView(EyeCareColors c, List<Map<String, dynamic>> pendingOrders) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header danh sách đơn
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: c.bgCardElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: c.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.assignment_outlined, color: c.rfidCyan, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'DANH SÁCH ĐƠN HÀNG CHỜ QUA CỔNG (${pendingOrders.length} ĐƠN)',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Bấm [CHỌN ĐỐI SOÁT] để mở đối soát chip RFID khi xe qua cổng, hoặc bấm [XÓA ĐƠN] nếu nạp nhầm file.',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Danh sách thẻ đơn hàng
+        Expanded(
+          child: ListView.separated(
+            physics: const BouncingScrollPhysics(),
+            itemCount: pendingOrders.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final ordData = pendingOrders[index];
+              final ordNo = ordData['orderNo'] as String;
+              final supplier = ordData['supplier'] as String;
+              final chipCount = ordData['chipCount'] as int;
+              final skuCount = ordData['skuCount'] as int;
+              final palletInfo = ordData['palletInfo'] as String;
+              final createdAt = ordData['createdAt'] as DateTime;
+              final timeStr = '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')} ${createdAt.day.toString().padLeft(2, '0')}/${createdAt.month.toString().padLeft(2, '0')}/${createdAt.year}';
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: c.bgCardElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Hàng 1: Mã đơn, Trạng thái, Thời gian
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: c.rfidCyan.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.receipt_long, color: c.rfidCyan, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                ordNo,
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'NCC: $supplier',
+                                style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: c.rfidCyan.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: c.rfidCyan.withValues(alpha: 0.5)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: c.rfidCyan,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'CHỜ QUÉT CỔNG',
+                                style: TextStyle(
+                                  color: c.rfidCyan,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+                    Divider(color: c.border.withValues(alpha: 0.5), height: 1),
+                    const SizedBox(height: 12),
+
+                    // Hàng 2: Các thông số chi tiết (Chip count, SKU, Pallet, Thời gian)
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 8,
+                      children: [
+                        _buildOrderStatChip(
+                          icon: Icons.sell_outlined,
+                          label: 'Số Chip RFID',
+                          value: '$chipCount chip',
+                          color: const Color(0xFF10B981),
+                          c: c,
+                        ),
+                        _buildOrderStatChip(
+                          icon: Icons.category_outlined,
+                          label: 'Số SKU',
+                          value: '$skuCount SKU',
+                          color: const Color(0xFF0284C7),
+                          c: c,
+                        ),
+                        _buildOrderStatChip(
+                          icon: Icons.inventory_2_outlined,
+                          label: 'Xe Pallet',
+                          value: palletInfo.isNotEmpty ? palletInfo : '--',
+                          color: const Color(0xFFF59E0B),
+                          c: c,
+                        ),
+                        _buildOrderStatChip(
+                          icon: Icons.access_time,
+                          label: 'Thời Gian Tạo',
+                          value: timeStr,
+                          color: c.textSecondary,
+                          c: c,
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Hàng 3: Nút Thao Tác (Xóa Đơn & Chọn Đối Soát)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // Nút Xóa Đơn (Màu đỏ nổi bật)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFEF4444),
+                            side: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.6)),
+                            backgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.delete_outline, size: 16, color: Color(0xFFEF4444)),
+                          label: const Text(
+                            'XÓA ĐƠN',
+                            style: TextStyle(
+                              color: Color(0xFFEF4444),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                          onPressed: () => _confirmDeleteSingleOrder(ordNo, chipCount: chipCount),
+                        ),
+                        const SizedBox(width: 12),
+
+                        // Nút Chọn Đối Soát (Màu Cyan)
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: c.rfidCyan,
+                            foregroundColor: const Color(0xFF2C251E),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            elevation: 1,
+                          ),
+                          icon: const Icon(Icons.sensors, size: 16, color: Color(0xFF2C251E)),
+                          label: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'CHỌN ĐỐI SOÁT',
+                                style: TextStyle(
+                                  color: Color(0xFF2C251E),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Icon(Icons.arrow_forward, size: 14, color: Color(0xFF2C251E)),
+                            ],
+                          ),
+                          onPressed: () => _selectActivePendingOrder(ordNo),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrderStatChip({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required EyeCareColors c,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: c.bgDeep,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            '$label: ',
+            style: TextStyle(color: c.textSecondary, fontSize: 11),
+          ),
+          Text(
+            value,
+            style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _triggerClearAllPendingDialog() async {
@@ -1562,6 +2025,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
         final thisOrderPallets = <String, String?>{...resolvedPalletsToRegister};
 
+        // Lưu ngay đơn hàng và danh sách chip vào CSDL & đồng bộ lên Supabase Cloud
+        if (newProducts.isNotEmpty) {
+          await _repo.addProductsBatch(newProducts);
+        }
+        for (final palEntry in thisOrderPallets.entries) {
+          await _repo.registerOrUpdatePallet(palletCode: palEntry.key, rfidEpc: palEntry.value ?? '');
+        }
+        await _repo.addInboundOrder(order, autoGenerateEpcs: false);
+        await _repo.insertDirectItems(orderItems);
+
         _pendingGateOrders.add(_PendingGateOrder(
           order: order,
           items: orderItems,
@@ -1575,11 +2048,17 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       if (mounted) {
         setState(() => _isImporting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            content: Text('✓ Đã nạp ${explicitItems.length} chip và đồng bộ đơn $inboundOrderNo lên Supabase Cloud!'),
+          ),
+        );
       }
 
-      if (_pendingGateOrders.isNotEmpty) {
-        _selectActivePendingOrder(_pendingLoadedOrderNos.first);
-      }
+      // Giữ ở màn hình danh sách đơn hàng kèm nút [XÓA ĐƠN] và [CHỌN ĐỐI SOÁT]
+      _activeOrderNo = null;
+      _activeExpectedItems.clear();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1725,6 +2204,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           details: detailMap.values.where((d) => entry.value.any((r) => r['sku'] == d.sku)).toList(),
         );
 
+        // Lưu ngay đơn hàng PO và danh sách chip vào CSDL & đồng bộ lên Supabase Cloud
+        if (newProducts.isNotEmpty) {
+          await _repo.addProductsBatch(newProducts);
+        }
+        await _repo.addInboundOrder(order, autoGenerateEpcs: false);
+        await _repo.insertDirectItems(poItems);
+
         _pendingGateOrders.add(_PendingGateOrder(
           order: order,
           items: poItems,
@@ -1738,11 +2224,17 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       if (mounted) {
         setState(() => _isImporting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            content: Text('✓ Đã nạp đơn PO và đồng bộ ${explicitItems.length} chip lên Supabase Cloud!'),
+          ),
+        );
       }
 
-      if (_pendingGateOrders.isNotEmpty) {
-        _selectActivePendingOrder(_pendingLoadedOrderNos.first);
-      }
+      // Giữ ở màn hình danh sách đơn hàng kèm nút [XÓA ĐƠN] và [CHỌN ĐỐI SOÁT]
+      _activeOrderNo = null;
+      _activeExpectedItems.clear();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2055,10 +2547,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     final unexpList = _getFilteredUnexpectedTags();
     final hasUnexpectedTags = unexpList.isNotEmpty;
 
-    final hasPendingInbound = _pendingGateOrders.isNotEmpty ||
-        _activeExpectedItems.isNotEmpty ||
-        _repo.items.any((i) => i.status == ItemStatus.pendingInbound);
-    final isVehicleActive = hasPendingInbound;
+    final pendingOrders = _getPendingOrdersList();
+    final hasPendingOrders = pendingOrders.isNotEmpty;
+    final hasDirectPendingItems = _repo.items.any((i) => i.status == ItemStatus.pendingInbound);
+
+    final isVehicleActive = _activeOrderNo != null || (!hasPendingOrders && hasDirectPendingItems);
 
     final waitingPutawayItems = _repo.items.where((i) =>
       i.status == ItemStatus.waitingPutaway ||
@@ -2066,6 +2559,25 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
        (i.locationId == null || i.locationId!.trim().isEmpty) &&
        (i.palletId != null && i.palletId!.trim().isNotEmpty))
     ).toList();
+
+    Widget mainContent;
+    if (_activeOrderNo != null) {
+      mainContent = _buildActiveVehicleScanView(
+        c,
+        unexpList: unexpList,
+        hasUnexpectedTags: hasUnexpectedTags,
+      );
+    } else if (hasPendingOrders) {
+      mainContent = _buildPendingOrdersListView(c, pendingOrders);
+    } else if (hasDirectPendingItems) {
+      mainContent = _buildActiveVehicleScanView(
+        c,
+        unexpList: unexpList,
+        hasUnexpectedTags: hasUnexpectedTags,
+      );
+    } else {
+      mainContent = _buildIdleGateMonitor(c);
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -2084,15 +2596,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             const SizedBox(height: 12),
           ],
 
-          // 3. KHUNG NỘI DUNG CHÍNH (ĐANG CÓ XE QUA CỔNG HOẶC MÀN HÌNH CHỜ QUÉT TỰ ĐỘNG)
+          // 3. KHUNG NỘI DUNG CHÍNH (DANH SÁCH ĐƠN / ĐỐI SOÁT QUÉT QUA CỔNG / MÀN HÌNH CHỜ)
           Expanded(
-            child: isVehicleActive
-                ? _buildActiveVehicleScanView(
-                    c,
-                    unexpList: unexpList,
-                    hasUnexpectedTags: hasUnexpectedTags,
-                  )
-                : _buildIdleGateMonitor(c),
+            child: mainContent,
           ),
 
           const SizedBox(height: 12),
@@ -2350,6 +2856,92 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 0. THANH ĐIỀU HƯỚNG QUAY LẠI DANH SÁCH ĐƠN & NÚT XÓA ĐƠN ĐANG ĐỐI SOÁT
+        if (_activeOrderNo != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: c.bgCardElevated,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              children: [
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.textPrimary,
+                    side: BorderSide(color: c.border),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.arrow_back, size: 15),
+                  label: const Text(
+                    'DANH SÁCH ĐƠN',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  onPressed: () {
+                    _stopWizardScan();
+                    setState(() {
+                      _activeOrderNo = null;
+                      _activeExpectedItems.clear();
+                    });
+                  },
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.qr_code_scanner, size: 16, color: c.rfidCyan),
+                      const SizedBox(width: 8),
+                      Text(
+                        'ĐANG ĐỐI SOÁT ĐƠN: $_activeOrderNo',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (_activePallet != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: c.bgDeep,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: c.border),
+                          ),
+                          child: Text(
+                            'Xe: ${_activePallet!.palletCode}',
+                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFEF4444),
+                    side: BorderSide(color: const Color(0xFFEF4444).withValues(alpha: 0.6)),
+                    backgroundColor: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  icon: const Icon(Icons.delete_outline, size: 15, color: Color(0xFFEF4444)),
+                  label: const Text(
+                    'XÓA ĐƠN NÀY',
+                    style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  onPressed: () => _confirmDeleteSingleOrder(_activeOrderNo!, chipCount: expectedCount),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+
         // 1. Thanh tiến độ đọc & 3 Ô CHỈ SỐ: ĐÃ QUÉT - THIẾU - LẠ
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

@@ -95,7 +95,14 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     });
   }
 
+  Map<String, List<Item>>? _cachedGroups;
+
+  void _invalidateGroupsCache() {
+    _cachedGroups = null;
+  }
+
   void _onStateChange() {
+    _invalidateGroupsCache();
     if (mounted) setState(() {});
   }
 
@@ -138,6 +145,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   }
 
   Map<String, List<Item>> _pendingGroups() {
+    if (_cachedGroups != null) return _cachedGroups!;
     final groups = <String, List<Item>>{};
     for (var it in _pendingItems()) {
       final key = (it.palletId != null && it.palletId!.trim().isNotEmpty)
@@ -149,6 +157,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                   : 'LÔ_CHỜ_KỆ';
       groups.putIfAbsent(key, () => []).add(it);
     }
+    _cachedGroups = groups;
     return groups;
   }
 
@@ -341,6 +350,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         onRefresh: () async {
           await SupabaseSyncService().syncNow();
           await _repo.reloadFromSqlite();
+          _invalidateGroupsCache();
           if (mounted) setState(() {});
         },
         child: SingleChildScrollView(
@@ -818,6 +828,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 HapticFeedback.selectionClick();
                 await SupabaseSyncService().syncNow();
                 await _repo.reloadFromSqlite();
+                _invalidateGroupsCache();
                 if (mounted) setState(() {});
               },
             ),
@@ -891,6 +902,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                     HapticFeedback.selectionClick();
                     await SupabaseSyncService().syncNow();
                     await _repo.reloadFromSqlite();
+                    _invalidateGroupsCache();
                     if (mounted) setState(() {});
                   },
                 ),

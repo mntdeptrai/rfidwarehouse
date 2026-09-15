@@ -36,12 +36,11 @@ dependencies:
   cupertino_icons: ^1.0.8
   intl: ^0.20.3
   csv: ^8.0.0
-  share_plus: ^13.3.0
   path_provider: ^2.1.6
   path: ^1.9.1
   file_picker: ^12.0.0
   excel: ^4.0.6
-  supabase_flutter: ^2.17.2
+  supabase: ^2.16.1
   barcode_widget: ^2.0.4
   crypto: ^3.0.7
 
