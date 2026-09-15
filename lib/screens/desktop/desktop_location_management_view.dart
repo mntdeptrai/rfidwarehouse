@@ -2308,17 +2308,17 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                         columnSpacing: 14,
                         headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
                         columns: [
-                          DataColumn(label: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('NCC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('MÃ SP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('THÙNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('SERIAL', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                          DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                          DataColumn(label: Text('#', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NCC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('MÃ SP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('THÙNG', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('EPC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('SERIAL', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
                         ],
                         rows: pItems.asMap().entries.map((e) {
                           final idx = e.key + 1;
@@ -2360,7 +2360,17 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                               DataCell(Text(inTimeStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
                               DataCell(Text(inBy, style: TextStyle(color: c.textPrimary, fontSize: 11))),
                               DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : c.textMuted, fontSize: 11, fontWeight: FontWeight.w500))),
-                              DataCell(Text(it.epc, style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold))),
+                              DataCell(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: c.bgCardElevated,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: c.border.withValues(alpha: 0.7)),
+                                  ),
+                                  child: Text(it.epc, style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                                ),
+                              ),
                               DataCell(Text(it.serialNumber.isNotEmpty ? it.serialNumber : '--', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'monospace'))),
                               DataCell(
                                 Container(
@@ -2415,16 +2425,16 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               columnSpacing: 14,
               headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
               columns: [
-                DataColumn(label: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('NCC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('MÃ SP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('THÙNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                DataColumn(label: Text('#', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NCC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('MÃ SP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('THÙNG', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('EPC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
               ],
               rows: looseItems.asMap().entries.map((e) {
                 final idx = e.key + 1;
@@ -2455,7 +2465,17 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                     DataCell(Text(inTimeStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
                     DataCell(Text(inBy, style: TextStyle(color: c.textPrimary, fontSize: 11))),
                     DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : c.textMuted, fontSize: 11))),
-                    DataCell(Text(it.epc, style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold))),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: c.bgCardElevated,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: c.border.withValues(alpha: 0.7)),
+                        ),
+                        child: Text(it.epc, style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                      ),
+                    ),
                     DataCell(
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

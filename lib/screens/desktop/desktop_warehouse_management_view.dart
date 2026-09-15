@@ -1806,7 +1806,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                                   flex: 3,
                                   child: Text(
                                     it.epc,
-                                    style: TextStyle(color: c.rfidCyan, fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.bold),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
@@ -1983,7 +1983,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                                             SizedBox(width: 40, child: Text('${idx + 1}', style: TextStyle(color: c.textSecondary, fontSize: 11.5))),
                                             Expanded(
                                               flex: 3,
-                                              child: Text(it.epc, style: TextStyle(color: c.rfidCyan, fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                              child: Text(it.epc, style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.bold)),
                                             ),
                                             Expanded(flex: 2, child: Text(it.sku, style: TextStyle(color: c.textPrimary, fontSize: 12))),
                                             SizedBox(width: 110, child: Text(it.palletId ?? '--', style: TextStyle(color: c.textSecondary, fontSize: 11.5))),

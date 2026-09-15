@@ -357,18 +357,18 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? c.rfidCyan : Colors.transparent,
+          color: isSelected ? const Color(0xFF0284C7) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 15, color: isSelected ? const Color(0xFF2C251E) : c.textSecondary),
+            Icon(icon, size: 15, color: isSelected ? Colors.white : c.textSecondary),
             const SizedBox(width: 6),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+                color: isSelected ? Colors.white : c.textSecondary,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 11.5,
               ),
@@ -394,45 +394,45 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
         children: [
           SizedBox(
             width: 36,
-            child: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+            child: Text('#', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
           ),
           const SizedBox(width: 8),
           SizedBox(
             width: 160,
-            child: Text('MÃ SKU', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+            child: Text('MÃ SKU', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
           ),
           const SizedBox(width: 12),
           Expanded(
             flex: 4,
-            child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+            child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
           ),
           const SizedBox(width: 12),
           Expanded(
             flex: 3,
-            child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+            child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
           ),
           const SizedBox(width: 12),
           Expanded(
             flex: 3,
-            child: Text('THÙNG / PALLET', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+            child: Text('THÙNG / PALLET', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
           ),
           const SizedBox(width: 12),
           SizedBox(
             width: 95,
             child: Center(
-              child: Text('TỔNG CHIP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+              child: Text('TỔNG CHIP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
             ),
           ),
           const SizedBox(width: 12),
           SizedBox(
             width: 150,
-            child: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+            child: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
           ),
           const SizedBox(width: 8),
           SizedBox(
             width: 44,
             child: Center(
-              child: Text('CHI TIẾT', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+              child: Text('CHI TIẾT', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
             ),
           ),
         ],
@@ -493,7 +493,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
               decoration: BoxDecoration(
                 color: c.bgCard,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: isExpanded ? c.rfidCyan.withValues(alpha: 0.7) : c.border),
+                border: Border.all(color: isExpanded ? c.borderLight : c.border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -560,7 +560,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                                   Text(
                                     'ID: ${firstItem.productId}',
                                     style: TextStyle(
-                                      color: c.rfidCyan,
+                                      color: c.textSecondary,
                                       fontSize: 10,
                                       fontFamily: 'monospace',
                                     ),
@@ -683,12 +683,13 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                               child: Container(
                                 padding: const EdgeInsets.all(3),
                                 decoration: BoxDecoration(
-                                  color: isExpanded ? c.rfidCyan.withValues(alpha: 0.15) : Colors.transparent,
+                                  color: isExpanded ? c.bgCardElevated : Colors.transparent,
                                   borderRadius: BorderRadius.circular(4),
+                                  border: isExpanded ? Border.all(color: c.border) : null,
                                 ),
                                 child: Icon(
                                   isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                                  color: isExpanded ? c.rfidCyan : c.textSecondary,
+                                  color: isExpanded ? c.textPrimary : c.textSecondary,
                                   size: 20,
                                 ),
                               ),
@@ -774,18 +775,18 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                 columnSpacing: 16,
                 headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
                 columns: [
-                  DataColumn(label: Text('#', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('MÃ SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('SỐ SERIAL', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('MÃ THÙNG HÀNG', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('NGƯỜI CẤT KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
-                  DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11))),
+                  DataColumn(label: Text('#', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('MÃ SẢN PHẨM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('EPC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('SỐ SERIAL', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('MÃ THÙNG HÀNG', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('NGƯỜI CẤT KỆ', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
                 ],
                 rows: items.asMap().entries.map((e) {
                   final idx = e.key + 1;
@@ -862,9 +863,29 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
 
                       // MÃ CHIP RFID (EPC)
                       DataCell(
-                        Text(
-                          item.epc,
-                          style: TextStyle(color: c.rfidCyan, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                          decoration: BoxDecoration(
+                            color: c.bgCardElevated,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: c.border.withValues(alpha: 0.8)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.sensors, size: 12, color: c.rfidBlue),
+                              const SizedBox(width: 5),
+                              Text(
+                                item.epc,
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 11,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
 
@@ -873,13 +894,14 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: item.serialNumber.isNotEmpty ? const Color(0xFF0EA5E9).withValues(alpha: 0.1) : Colors.transparent,
+                            color: item.serialNumber.isNotEmpty ? c.bgCardElevated : Colors.transparent,
                             borderRadius: BorderRadius.circular(4),
+                            border: item.serialNumber.isNotEmpty ? Border.all(color: c.border.withValues(alpha: 0.6)) : null,
                           ),
                           child: Text(
                             item.serialNumber.isNotEmpty ? item.serialNumber : '--',
                             style: TextStyle(
-                              color: item.serialNumber.isNotEmpty ? const Color(0xFF0284C7) : c.textSecondary,
+                              color: item.serialNumber.isNotEmpty ? c.textPrimary : c.textSecondary,
                               fontSize: 11,
                               fontFamily: 'monospace',
                               fontWeight: item.serialNumber.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
@@ -893,13 +915,20 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                            color: const Color(0xFF1D4ED8).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.5)),
+                            border: Border.all(color: const Color(0xFF1D4ED8).withValues(alpha: 0.4)),
                           ),
-                          child: Text(
-                            carton,
-                            style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.inventory_2_outlined, size: 12, color: Color(0xFF1D4ED8)),
+                              const SizedBox(width: 4),
+                              Text(
+                                carton,
+                                style: const TextStyle(color: Color(0xFF1D4ED8), fontWeight: FontWeight.bold, fontSize: 11),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -988,14 +1017,14 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected ? c.rfidCyan : c.bgCardElevated,
+          color: isSelected ? const Color(0xFF0284C7) : c.bgCardElevated,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: isSelected ? c.rfidCyan : c.border),
+          border: Border.all(color: isSelected ? const Color(0xFF0284C7) : c.border),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+            color: isSelected ? Colors.white : c.textSecondary,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             fontSize: 11,
           ),
