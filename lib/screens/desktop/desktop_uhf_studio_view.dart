@@ -70,6 +70,32 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
 
+    final cfg = _uhfService.config;
+    if (cfg.connectionType.isNotEmpty) {
+      _selectedConnType = cfg.connectionType;
+    }
+    if (cfg.comPort.isNotEmpty) {
+      _selectedComPort = cfg.comPort;
+      if (!_comPorts.contains(cfg.comPort)) {
+        _comPorts.insert(0, cfg.comPort);
+      }
+    }
+    if (cfg.baudRate > 0) {
+      _selectedBaudRate = cfg.baudRate;
+      if (!_baudRates.contains(cfg.baudRate)) {
+        _baudRates.insert(0, cfg.baudRate);
+      }
+    }
+    if (cfg.tcpIp.isNotEmpty) {
+      _ipController.text = cfg.tcpIp;
+    }
+    if (cfg.tcpPort > 0) {
+      _portController.text = cfg.tcpPort.toString();
+    }
+    if (cfg.rs485Address > 0) {
+      _rs485AddressController.text = cfg.rs485Address.toString();
+    }
+
     _uhfService.addListener(_onServiceUpdate);
     _eyeCare.addListener(_onServiceUpdate);
     _auth.addListener(_onServiceUpdate);

@@ -85,8 +85,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   int get _totalFileExpected {
     if (_pendingGateOrders.isNotEmpty) {
+      final targetOrders = _activeOrderNo != null
+          ? _pendingGateOrders.where((p) => p.order.orderNo == _activeOrderNo || p.order.inboundOrderId == _activeOrderNo).toList()
+          : _pendingGateOrders.where((p) => !p.isGatePassed).toList();
+      final effectiveOrders = targetOrders.isNotEmpty ? targetOrders : _pendingGateOrders;
       final expectedEpcs = <String>{};
-      for (final p in _pendingGateOrders) {
+      for (final p in effectiveOrders) {
         for (final it in p.items) {
           expectedEpcs.add(it.epc.trim().toUpperCase());
         }
@@ -106,8 +110,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   int get _totalFileScanned {
     if (_pendingGateOrders.isNotEmpty) {
+      final targetOrders = _activeOrderNo != null
+          ? _pendingGateOrders.where((p) => p.order.orderNo == _activeOrderNo || p.order.inboundOrderId == _activeOrderNo).toList()
+          : _pendingGateOrders.where((p) => !p.isGatePassed).toList();
+      final effectiveOrders = targetOrders.isNotEmpty ? targetOrders : _pendingGateOrders;
       final expectedEpcs = <String>{};
-      for (final p in _pendingGateOrders) {
+      for (final p in effectiveOrders) {
         for (final it in p.items) {
           expectedEpcs.add(it.epc.trim().toUpperCase());
         }
@@ -288,6 +296,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   void _onDesktopUhfUpdate() {
     if (!mounted || !widget.isActive) return;
+    if (_desktopUhf.isScanning != _wizardIsScanning) {
+      setState(() {
+        _wizardIsScanning = _desktopUhf.isScanning;
+        if (!_wizardIsScanning) {
+          _wizardScanCountdown = _wizardScanDuration;
+        }
+      });
+    }
     for (final tag in _desktopUhf.tags) {
       _handleWizardGateTag(tag);
     }
@@ -479,6 +495,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     if (_wizardIsScanning) {
       _stopWizardScan();
     } else {
+      // Tự động chọn đơn nếu chỉ có đúng 1 đơn chờ (nếu nhiều đơn, để chip tự nhận diện đơn nào đến trước)
+      if (_activeOrderNo == null) {
+        final pendingOrders = _getPendingOrdersList();
+        if (pendingOrders.length == 1) {
+          _selectActivePendingOrder(pendingOrders.first['orderNo'] as String);
+        }
+      }
       _startWizardScan();
     }
   }
@@ -636,7 +659,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     );
 
     // Kiểm tra xem chip này có thuộc đơn hàng ĐANG CHỜ qua cổng hay không
-    final isInPendingOrder = _pendingGateOrders.any((p) =>
+    final isInPendingOrder = _pendingGateOrders.where((p) => !p.isGatePassed).any((p) =>
       p.items.any((i) => i.epc.trim().toUpperCase() == cleanEpc) ||
       p.pallets.values.any((v) => (v ?? '').trim().toUpperCase() == cleanEpc)
     ) || _activeExpectedItems.any((i) => i.epc.trim().toUpperCase() == cleanEpc) ||
@@ -668,6 +691,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     String? matchedPalletEpc;
 
     for (final pOrder in _pendingGateOrders) {
+      if (pOrder.isGatePassed) continue;
       for (final entry in pOrder.pallets.entries) {
         final epcVal = (entry.value ?? '').trim().toUpperCase();
         final codeVal = entry.key.trim().toUpperCase();
@@ -696,12 +720,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       // Xác định đơn hàng của pallet này
       String? targetOrderNo = matchedPendingPalletOrder?.order.orderNo ??
-          _pendingGateOrders.where((p) => p.pallets.containsKey(mPallet.palletCode) || p.items.any((i) => i.palletId == mPallet.palletId || i.palletId == mPallet.palletCode)).firstOrNull?.order.orderNo ??
+          _pendingGateOrders.where((p) => !p.isGatePassed && (p.pallets.containsKey(mPallet.palletCode) || p.items.any((i) => i.palletId == mPallet.palletId || i.palletId == mPallet.palletCode))).firstOrNull?.order.orderNo ??
           _repo.items.where((i) => (i.palletId == mPallet.palletId || i.palletId == mPallet.palletCode) && i.status == ItemStatus.pendingInbound).firstOrNull?.orderNo;
 
-      // Nếu không khớp mã pallet trong file nhưng file chỉ có 1 đơn hàng (hoặc đang có đơn active)
-      if (targetOrderNo == null && _pendingGateOrders.length == 1) {
-        targetOrderNo = _pendingGateOrders.first.order.orderNo;
+      // Nếu không khớp mã pallet trong file nhưng file chỉ có 1 đơn hàng chưa qua cổng (hoặc đang có đơn active)
+      final remainingPending = _pendingGateOrders.where((p) => !p.isGatePassed).toList();
+      if (targetOrderNo == null && remainingPending.length == 1) {
+        targetOrderNo = remainingPending.first.order.orderNo;
       }
       targetOrderNo ??= _activeOrderNo;
 
@@ -765,6 +790,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _PendingGateOrder? itemPendingOrder;
     Item? matchedItem;
     for (final pOrder in _pendingGateOrders) {
+      if (pOrder.isGatePassed) continue;
       final found = pOrder.items.where((i) =>
         i.epc.trim().toUpperCase() == cleanEpc ||
         i.serialNumber.trim().toUpperCase() == cleanEpc
@@ -913,17 +939,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         return scannedMap.containsKey(clean) || _wizardScannedTags.containsKey(clean);
       }).length;
 
-      final expectedPalletEpcs = p.pallets.values
-          .where((e) => e != null && e.isNotEmpty && e != '--')
-          .map((e) => e!.trim().toUpperCase())
-          .toSet();
-      final scannedPalletCount = expectedPalletEpcs.where((e) =>
-          scannedMap.containsKey(e) ||
-          _wizardScannedTags.containsKey(e) ||
-          _scannedPalletTagsByOrderNo[ordNo] == e).length;
-      final hasAllPallets = expectedPalletEpcs.isEmpty || scannedPalletCount >= expectedPalletEpcs.length;
-
-      if (p.items.isNotEmpty && scannedCount >= p.items.length && hasAllPallets) {
+      if (p.items.isNotEmpty && scannedCount >= p.items.length) {
         hasReadyOrder = true;
         break;
       }
@@ -1035,8 +1051,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         return;
       }
 
-      // Kiểm tra danh sách các xe pallet đã quét đủ số lượng (bao gồm cả chip sản phẩm và chip pallet)
+      // Kiểm tra danh sách các xe pallet / đơn hàng đã quét đủ số lượng chip sản phẩm
       final completedOrders = _pendingGateOrders.where((p) {
+        if (p.isGatePassed) return false;
         final ordNo = p.order.orderNo;
         final scannedMap = _scannedTagsByOrderNo[ordNo] ?? {};
         final scannedItemCount = p.items.where((i) {
@@ -1044,17 +1061,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           return scannedMap.containsKey(epc) || _wizardScannedTags.containsKey(epc);
         }).length;
 
-        final expectedPalletEpcs = p.pallets.values
-            .where((e) => e != null && e.isNotEmpty && e != '--')
-            .map((e) => e!.trim().toUpperCase())
-            .toSet();
-        final scannedPalletCount = expectedPalletEpcs.where((e) =>
-            scannedMap.containsKey(e) ||
-            _wizardScannedTags.containsKey(e) ||
-            _scannedPalletTagsByOrderNo[ordNo] == e).length;
-        final hasAllPallets = expectedPalletEpcs.isEmpty || scannedPalletCount >= expectedPalletEpcs.length;
-
-        return p.items.isNotEmpty && scannedItemCount >= p.items.length && hasAllPallets;
+        return p.items.isNotEmpty && scannedItemCount >= p.items.length;
       }).toList();
 
       if (completedOrders.isEmpty) {
@@ -1078,6 +1085,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             if (_activePalletTag != null && _activePalletTag!.isNotEmpty) {
               _passedGateEpcs.add(_activePalletTag!.trim().toUpperCase());
             }
+
+            for (final p in _pendingGateOrders) {
+              if (p.order.orderNo == ordNo || p.order.inboundOrderId == ordNo) {
+                p.isGatePassed = true;
+                _pendingLoadedOrderNos.remove(p.order.orderNo);
+              }
+            }
             _recentCompletedPasses.insert(0, {
               'orderNo': ordNo,
               'palletCode': pCode ?? '--',
@@ -1094,9 +1108,32 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             if (mounted) {
               setState(() {
                 _lastSuccessOrderNo = ordNo;
+                _lastSuccessPalletCode = pCode ?? '--';
                 _lastSuccessCount = scannedEpcs.length;
                 _invalidateCartonCaches();
               });
+
+              _successBannerTimer?.cancel();
+              _successBannerTimer = Timer(const Duration(seconds: 3), () {
+                if (mounted) {
+                  setState(() {
+                    _lastSuccessOrderNo = null;
+                    _lastSuccessPalletCode = null;
+                    _lastSuccessCount = 0;
+                    _activeOrderNo = null;
+                    _activePallet = null;
+                    _activePalletTag = null;
+                    _activeExpectedItems.clear();
+                    _wizardDetectedPallet = null;
+                    _wizardDetectedPalletTag = null;
+                    _wizardSelectedCartons.clear();
+                    _wizardSelectedEpcs.clear();
+                    _wizardScannedTags.clear();
+                    _invalidateCartonCaches();
+                  });
+                }
+              });
+
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   backgroundColor: const Color(0xFF10B981),
@@ -1180,6 +1217,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
           // Đánh dấu đơn hàng này đã đối soát qua cổng thành công (CHỜ XẾP KỆ)
           pending.isGatePassed = true;
+          _pendingLoadedOrderNos.remove(ordNo);
           // Tuyệt đối KHÔNG xóa đơn khỏi _pendingGateOrders để giữ nguyên danh sách trên màn hình!
         } catch (e) {
           debugPrint('Lỗi xác nhận đơn $ordNo: $e');
@@ -1197,9 +1235,32 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       if (mounted) {
         setState(() {
           _lastSuccessOrderNo = completedOrders.map((p) => p.order.orderNo).join(', ');
+          _lastSuccessPalletCode = completedOrders.map((p) => p.pallets.keys.firstOrNull ?? '--').join(', ');
           _lastSuccessCount = totalSaved;
           _invalidateCartonCaches();
         });
+
+        _successBannerTimer?.cancel();
+        _successBannerTimer = Timer(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _lastSuccessOrderNo = null;
+              _lastSuccessPalletCode = null;
+              _lastSuccessCount = 0;
+              _activeOrderNo = null;
+              _activePallet = null;
+              _activePalletTag = null;
+              _activeExpectedItems.clear();
+              _wizardDetectedPallet = null;
+              _wizardDetectedPalletTag = null;
+              _wizardSelectedCartons.clear();
+              _wizardSelectedEpcs.clear();
+              _wizardScannedTags.clear();
+              _invalidateCartonCaches();
+            });
+          }
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
@@ -1236,8 +1297,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _receiptCartons.clear();
       _invalidateCartonCaches();
 
-      if (_pendingGateOrders.isNotEmpty) {
-        final firstOrderNo = _pendingLoadedOrderNos.firstOrNull ?? _pendingGateOrders.first.order.orderNo;
+      final remainingPending = _pendingGateOrders.where((p) => !p.isGatePassed).toList();
+      if (remainingPending.isNotEmpty) {
+        final firstOrderNo = _pendingLoadedOrderNos.where((no) => remainingPending.any((p) => p.order.orderNo == no)).firstOrNull ?? remainingPending.first.order.orderNo;
         _selectActivePendingOrder(firstOrderNo);
       } else {
         _activeOrderNo = null;
@@ -1248,10 +1310,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _wizardDetectedPalletTag = null;
         _wizardSelectedCartons.clear();
         _wizardSelectedEpcs.clear();
-      }
-
-      for (final p in _pendingGateOrders) {
-        p.isGatePassed = false;
+        _pendingGateOrders.clear();
+        _pendingLoadedOrderNos.clear();
       }
     });
   }
@@ -2549,7 +2609,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     final pendingOrders = _getPendingOrdersList();
     final hasPendingOrders = pendingOrders.isNotEmpty;
-    final hasDirectPendingItems = _repo.items.any((i) => i.status == ItemStatus.pendingInbound);
+    final hasDirectPendingItems = _repo.items.any((i) {
+      if (i.status != ItemStatus.pendingInbound) return false;
+      final ord = _repo.inboundOrders.where((o) => o.orderNo == i.orderNo || o.inboundOrderId == i.orderNo).firstOrNull;
+      if (ord != null) {
+        return ord.status == InboundOrderStatus.newOrder;
+      }
+      return true;
+    });
 
     final isVehicleActive = _activeOrderNo != null || (!hasPendingOrders && hasDirectPendingItems);
 
@@ -2658,19 +2725,42 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.autorenew, size: 14, color: Color(0xFF10B981)),
-                SizedBox(width: 4),
-                Text('TỰ ĐỘNG CHUYỂN TIẾP', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
-              ],
+          InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () {
+              _successBannerTimer?.cancel();
+              if (mounted) {
+                setState(() {
+                  _lastSuccessOrderNo = null;
+                  _lastSuccessPalletCode = null;
+                  _lastSuccessCount = 0;
+                  _activeOrderNo = null;
+                  _activePallet = null;
+                  _activePalletTag = null;
+                  _activeExpectedItems.clear();
+                  _wizardDetectedPallet = null;
+                  _wizardDetectedPalletTag = null;
+                  _wizardSelectedCartons.clear();
+                  _wizardSelectedEpcs.clear();
+                  _wizardScannedTags.clear();
+                  _invalidateCartonCaches();
+                });
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_forward, size: 14, color: Color(0xFF10B981)),
+                  SizedBox(width: 4),
+                  Text('CHUYỂN TIẾP NGAY', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ),
           ),
         ],
@@ -2733,11 +2823,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     required List<TagInfo> unexpList,
     required bool hasUnexpectedTags,
   }) {
-    // 1. Nếu có đơn hàng nạp từ file trong _pendingGateOrders -> hiển thị đầy đủ toàn bộ sản phẩm như Xuất Kho
+    // 1. Nếu có đơn hàng nạp từ file trong _pendingGateOrders -> hiển thị sản phẩm theo đơn đang đối soát
     if (_pendingGateOrders.isNotEmpty) {
-      final allItems = _pendingGateOrders.expand((p) => p.items).toList();
+      final targetOrders = _activeOrderNo != null
+          ? _pendingGateOrders.where((p) => p.order.orderNo == _activeOrderNo || p.order.inboundOrderId == _activeOrderNo).toList()
+          : _pendingGateOrders.where((p) => !p.isGatePassed).toList();
+      final effectiveOrders = targetOrders.isNotEmpty ? targetOrders : _pendingGateOrders;
+
+      final allItems = effectiveOrders.expand((p) => p.items).toList();
       final allPallets = <String, String?>{};
-      for (final p in _pendingGateOrders) {
+      for (final p in effectiveOrders) {
         allPallets.addAll(p.pallets);
       }
 
@@ -2764,7 +2859,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         final itemPalletEpc = allPallets[itemPalletCode] ?? allPallets[cleanPallet] ?? (allPallets.values.firstOrNull ?? '--');
         final supp = (i.supplier != null && i.supplier!.isNotEmpty && i.supplier != 'Nhà cung cấp tổng hợp')
             ? i.supplier!
-            : (_pendingGateOrders.first.supplier.isNotEmpty ? _pendingGateOrders.first.supplier : '--');
+            : (effectiveOrders.first.supplier.isNotEmpty ? effectiveOrders.first.supplier : '--');
         return {
           'boxCode': i.cartonCode ?? '--',
           'palletCode': itemPalletCode,
@@ -3393,39 +3488,63 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       Builder(
                         builder: (ctx) {
                           final bool isAllGatePassed = _pendingGateOrders.isNotEmpty && _pendingGateOrders.every((p) => p.isGatePassed);
-                          final bool isLocked = (isComplete || isAllGatePassed) && !hasUnexpectedTags;
+                          final bool isScanning = _wizardIsScanning || _desktopUhf.isScanning;
+                          final bool isLocked = !isScanning && isVehicleActive && (isComplete || isAllGatePassed) && !hasUnexpectedTags;
 
                           return ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _wizardIsScanning
+                              backgroundColor: isScanning
                                   ? const Color(0xFFEF4444)
                                   : (isLocked ? const Color(0xFF10B981) : c.rfidCyan),
-                              foregroundColor: (_wizardIsScanning || isLocked) ? Colors.white : const Color(0xFF2C251E),
+                              foregroundColor: (isScanning || isLocked) ? Colors.white : const Color(0xFF2C251E),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               elevation: 2,
                             ),
                             icon: Icon(
-                              isLocked
-                                  ? Icons.check_circle_rounded
-                                  : (_wizardIsScanning ? Icons.stop : Icons.sensors),
+                              isScanning
+                                  ? Icons.stop
+                                  : (isLocked ? Icons.check_circle_rounded : Icons.sensors),
                               size: 16,
                             ),
                             label: Text(
-                              isLocked
-                                  ? 'ĐÃ ĐỐI SOÁT ĐỦ (KHOÁ QUÉT)'
-                                  : (_wizardIsScanning
-                                      ? (_wizardScanDuration == 0 ? 'DỪNG QUÉT LIÊN TỤC' : 'DỪNG QUÉT ($_wizardScanCountdown s)')
+                              isScanning
+                                  ? (_wizardScanDuration == 0 ? 'DỪNG QUÉT LIÊN TỤC' : 'DỪNG QUÉT ($_wizardScanCountdown s)')
+                                  : (isLocked
+                                      ? 'ĐÃ ĐỐI SOÁT ĐỦ (KHOÁ QUÉT)'
                                       : 'BẮT ĐẦU QUÉT (${_wizardScanDuration == 0 ? "LIÊN TỤC" : "${_wizardScanDuration}s"})'),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                             ),
-                            onPressed: isLocked ? null : _toggleWizardScan,
+                            onPressed: isScanning
+                                ? _stopWizardScan
+                                : (isLocked ? null : _toggleWizardScan),
                           );
                         },
                       ),
 
                       // Nút Xác nhận nhập kho: Bỏ nút "CHƯA ĐỌC ĐỦ", chỉ hiện khi đọc đủ 100%
-                      if (isVehicleActive && isComplete && !hasUnexpectedTags) ...[
+                      if (_lastSuccessOrderNo != null) ...[
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF10B981)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF10B981)),
+                              SizedBox(width: 6),
+                              Text(
+                                'ĐÃ ĐỐI SOÁT QUA CỔNG XONG ✓',
+                                style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else if (isVehicleActive && isComplete && !hasUnexpectedTags) ...[
                         const SizedBox(width: 10),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(

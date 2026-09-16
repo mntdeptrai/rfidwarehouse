@@ -271,6 +271,54 @@ void main() {
     expect(find.textContaining('BẬT QUÉT BARCODE (CÒ PDA)'), findsOneWidget);
   });
 
+  testWidgets('PdaPutawayScreen supports barcode scanning for pallet without dropdown selection', (WidgetTester tester) async {
+    final repo = WarehouseRepository();
+    await repo.ensureDefault10Locations();
+
+    await repo.addItem(Item(
+      itemId: 'ITEM-PUTAWAY-BC-01',
+      productId: 'PROD-01',
+      sku: 'SKU-PUTAWAY-01',
+      productName: 'SP Xe 1',
+      serialNumber: 'SN-BC-01',
+      epc: 'E280119100000000BC00001',
+      status: ItemStatus.waitingPutaway,
+      palletId: 'PAL-BARCODE-01',
+    ));
+    await repo.addItem(Item(
+      itemId: 'ITEM-PUTAWAY-BC-02',
+      productId: 'PROD-02',
+      sku: 'SKU-PUTAWAY-02',
+      productName: 'SP Xe 2',
+      serialNumber: 'SN-BC-02',
+      epc: 'E280119100000000BC00002',
+      status: ItemStatus.waitingPutaway,
+      palletId: 'PAL-BARCODE-02',
+    ));
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PdaPutawayScreen(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Không còn dropdown đổi xe/thùng
+    expect(find.textContaining('Đổi xe/thùng cần cất'), findsNothing);
+
+    // Có nút kích hoạt tia quét barcode trên tay cầm PDA
+    expect(find.textContaining('BẬT TIA QUÉT BARCODE XE (CÒ PDA)'), findsOneWidget);
+    expect(find.textContaining('PAL-BARCODE-01'), findsWidgets);
+    expect(find.textContaining('PAL-BARCODE-02'), findsWidgets);
+
+    // Giả lập quét barcode tay cầm PDA cho PAL-BARCODE-02
+    UhfService().simulateBarcode('PAL-BARCODE-02');
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Xe 2 được chọn sau khi quét
+    expect(find.textContaining('PAL-BARCODE-02'), findsWidgets);
+  });
+
   testWidgets('DesktopGoodsReceiveView shows 3 metric boxes, 9 columns, and right-aligned controls without CHƯA ĐỌC ĐỦ', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -453,6 +501,45 @@ void main() {
 
     // Xả hết timer của đèn tháp (4s) để tránh lỗi pending timer
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('DesktopGoodsReceiveView shows functional DỪNG QUÉT button while scanning and never locks idle screen', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final oldPending = repo.items.where((it) => it.status == ItemStatus.pendingInbound).map((it) => it.epc).toList();
+    await repo.deleteItemsByEpcs(oldPending);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: const Scaffold(
+          body: DesktopGoodsReceiveView(isActive: true),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // 1. Màn hình chờ rỗng (idle): Phải có nút BẮT ĐẦU QUÉT, KHÔNG ĐƯỢC khoá nút
+    expect(find.textContaining('CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG'), findsOneWidget);
+    expect(find.textContaining('BẮT ĐẦU QUÉT'), findsOneWidget);
+    expect(find.textContaining('ĐÃ ĐỐI SOÁT ĐỦ (KHOÁ QUÉT)'), findsNothing);
+
+    // 2. Bấm BẮT ĐẦU QUÉT -> Chuyển thành DỪNG QUÉT màu đỏ
+    await tester.tap(find.textContaining('BẮT ĐẦU QUÉT'));
+    await tester.pump();
+
+    expect(find.textContaining('DỪNG QUÉT'), findsOneWidget);
+    expect(find.textContaining('BẮT ĐẦU QUÉT'), findsNothing);
+
+    // 3. Bấm DỪNG QUÉT -> Dừng quét và chuyển lại BẮT ĐẦU QUÉT
+    await tester.tap(find.textContaining('DỪNG QUÉT'));
+    await tester.pump();
+
+    expect(find.textContaining('BẮT ĐẦU QUÉT'), findsOneWidget);
+    expect(find.textContaining('DỪNG QUÉT'), findsNothing);
   });
 
   testWidgets('DesktopGoodsDeliveryView matches Inbound style: cyan dropdown XUẤT HÀNG, idle gate monitor, and history toggle', (WidgetTester tester) async {

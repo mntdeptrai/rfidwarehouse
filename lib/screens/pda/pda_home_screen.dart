@@ -579,7 +579,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const PdaPutawayScreen()),
+              MaterialPageRoute(
+                builder: (_) => const PdaPutawayScreen(),
+              ),
             );
           },
           borderRadius: BorderRadius.circular(12),

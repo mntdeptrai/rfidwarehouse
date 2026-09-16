@@ -132,6 +132,20 @@ class WarehouseRepository extends ChangeNotifier {
       _inboundOrders.clear();
       _inboundOrders.addAll(cleanInboundOrders);
 
+      // Đồng bộ trạng thái mặt hàng thuộc các đơn nhập đang chờ cất kệ
+      final waitingPutawayOrderNos = _inboundOrders
+          .where((o) => o.status == InboundOrderStatus.waitingPutaway)
+          .map((o) => o.orderNo.trim().toUpperCase())
+          .toSet();
+      if (waitingPutawayOrderNos.isNotEmpty) {
+        for (final it in _items) {
+          if ((it.status == ItemStatus.pendingInbound || it.status == ItemStatus.waitingPalletize) &&
+              waitingPutawayOrderNos.contains((it.orderNo ?? '').trim().toUpperCase())) {
+            it.status = ItemStatus.waitingPutaway;
+          }
+        }
+      }
+
       _outboundOrders.clear();
       _outboundOrders.addAll(cleanOutboundOrders);
 
@@ -436,6 +450,20 @@ class WarehouseRepository extends ChangeNotifier {
 
       _inboundOrders.clear();
       _inboundOrders.addAll(loadedInbOrders);
+
+      // Đồng bộ trạng thái mặt hàng thuộc các đơn nhập đang chờ cất kệ
+      final waitingPutawayOrderNos = _inboundOrders
+          .where((o) => o.status == InboundOrderStatus.waitingPutaway)
+          .map((o) => o.orderNo.trim().toUpperCase())
+          .toSet();
+      if (waitingPutawayOrderNos.isNotEmpty) {
+        for (final it in _items) {
+          if ((it.status == ItemStatus.pendingInbound || it.status == ItemStatus.waitingPalletize) &&
+              waitingPutawayOrderNos.contains((it.orderNo ?? '').trim().toUpperCase())) {
+            it.status = ItemStatus.waitingPutaway;
+          }
+        }
+      }
 
       _outboundOrders.clear();
       _outboundOrders.addAll(loadedOutOrders);
@@ -2408,9 +2436,20 @@ class WarehouseRepository extends ChangeNotifier {
     for (var it in _items.toList()) {
       if (cleanEpcs.contains(it.epc.toUpperCase())) {
         it.palletId = pallet.palletCode;
-        if (it.status == ItemStatus.waitingPalletize) {
+        if (it.status == ItemStatus.waitingPalletize || it.status == ItemStatus.pendingInbound) {
           it.status = ItemStatus.waitingPutaway;
           await _dbService.updateItemStatus(it.epc, ItemStatus.waitingPutaway);
+          await _syncDirectOrQueue(
+            tableName: 'items',
+            recordId: it.itemId,
+            action: 'UPDATE',
+            payload: {
+              'item_id': it.itemId,
+              'status': ItemStatus.waitingPutaway.code,
+              'pallet_id': pallet.palletCode,
+              'updated_at': DateTime.now().toIso8601String(),
+            },
+          );
         }
         if (it.orderNo != null && it.orderNo!.isNotEmpty) {
           affectedOrderNos.add(it.orderNo!);
@@ -2480,9 +2519,20 @@ class WarehouseRepository extends ChangeNotifier {
       final itemOrder = it.orderNo?.toUpperCase() ?? '';
       if (cleanCartons.contains(itemCarton) || cleanCartons.contains(itemOrder)) {
         it.palletId = pallet.palletCode;
-        if (it.status == ItemStatus.waitingPalletize) {
+        if (it.status == ItemStatus.waitingPalletize || it.status == ItemStatus.pendingInbound) {
           it.status = ItemStatus.waitingPutaway;
           await _dbService.updateItemStatus(it.epc, ItemStatus.waitingPutaway);
+          await _syncDirectOrQueue(
+            tableName: 'items',
+            recordId: it.itemId,
+            action: 'UPDATE',
+            payload: {
+              'item_id': it.itemId,
+              'status': ItemStatus.waitingPutaway.code,
+              'pallet_id': pallet.palletCode,
+              'updated_at': DateTime.now().toIso8601String(),
+            },
+          );
         }
         if (it.orderNo != null && it.orderNo!.isNotEmpty) {
           affectedOrderNos.add(it.orderNo!);
@@ -2725,15 +2775,17 @@ class WarehouseRepository extends ChangeNotifier {
     ).firstOrNull;
 
     final matchedItems = _items.where((it) {
-      if (uniqueEpcs.isNotEmpty) {
-        return uniqueEpcs.contains(it.epc);
+      if (cleanOrderNo.isNotEmpty && (it.orderNo?.trim().toUpperCase() == cleanOrderNo)) {
+        return true;
+      }
+      if (uniqueEpcs.isNotEmpty && it.epc.isNotEmpty && uniqueEpcs.contains(it.epc.trim().toUpperCase())) {
+        return true;
       }
       if (cleanPallet != null) {
         return it.palletId != null &&
             (it.palletId!.trim().toUpperCase() == cleanPallet ||
              it.palletId!.trim().toUpperCase() == 'PAL-$cleanPallet');
       }
-      if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanOrderNo) return true;
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanOrderNo) return true;
       return false;
     }).toList();
@@ -2825,7 +2877,6 @@ class WarehouseRepository extends ChangeNotifier {
           'pallet_id': it.palletId,
           'order_no': it.orderNo,
           'inbound_time': now.toIso8601String(),
-          'inbound_by': it.inboundBy,
           'updated_at': now.toIso8601String(),
         },
       );

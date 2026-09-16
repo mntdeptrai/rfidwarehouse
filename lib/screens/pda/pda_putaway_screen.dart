@@ -58,11 +58,21 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
     if (widget.initialCartonOrPalletBarcode != null &&
         widget.initialCartonOrPalletBarcode!.trim().isNotEmpty) {
-      _activePalletGroup = widget.initialCartonOrPalletBarcode!.trim();
+      final input = widget.initialCartonOrPalletBarcode!.trim();
+      final pending = _pendingGroups();
+      final matchedKey = pending.keys.where((k) =>
+        k.toUpperCase() == input.toUpperCase() ||
+        k.toUpperCase() == 'PAL-${input.toUpperCase()}' ||
+        'PAL-${k.toUpperCase()}' == input.toUpperCase() ||
+        pending[k]!.any((it) => (it.orderNo?.toUpperCase() == input.toUpperCase()))
+      ).firstOrNull;
+      _activePalletGroup = matchedKey ?? input;
     } else {
       final pending = _pendingGroups();
-      if (pending.isNotEmpty) {
+      if (pending.length == 1) {
         _activePalletGroup = pending.keys.first;
+      } else {
+        _activePalletGroup = null;
       }
     }
 
@@ -103,6 +113,10 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   void _onStateChange() {
     _invalidateGroupsCache();
+    final pending = _pendingGroups();
+    if (_activePalletGroup != null && !pending.containsKey(_activePalletGroup)) {
+      _activePalletGroup = null;
+    }
     if (mounted) setState(() {});
   }
 
@@ -136,10 +150,18 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   }
 
   List<Item> _pendingItems() {
+    final waitingOrderNos = _repo.inboundOrders
+        .where((o) => o.status == InboundOrderStatus.waitingPutaway)
+        .map((o) => o.orderNo.trim().toUpperCase())
+        .toSet();
+
     return _repo.items.where((i) =>
       i.status == ItemStatus.waitingPutaway ||
       i.status == ItemStatus.waitingPalletize ||
       (i.status == ItemStatus.inStock &&
+       (i.locationId == null || i.locationId!.trim().isEmpty || i.locationId == 'LOC-GATE-IN')) ||
+      (waitingOrderNos.contains((i.orderNo ?? '').trim().toUpperCase()) &&
+       i.status != ItemStatus.out &&
        (i.locationId == null || i.locationId!.trim().isEmpty || i.locationId == 'LOC-GATE-IN'))
     ).toList();
   }
@@ -215,13 +237,39 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           i.cartonCode?.toUpperCase() == clean ||
           i.epc.toUpperCase() == clean ||
           i.serialNumber.toUpperCase() == clean ||
-          i.sku.toUpperCase() == clean
+          i.sku.toUpperCase() == clean ||
+          (i.orderNo != null && i.orderNo!.toUpperCase() == clean)
         ).firstOrNull;
 
         if (matchedItem != null) {
           final itemPal = matchedItem.palletId ?? matchedItem.cartonCode ?? matchedItem.orderNo;
           if (itemPal != null && groups.containsKey(itemPal)) {
             matchedPalletKey = itemPal;
+          }
+        }
+
+        if (matchedPalletKey == null) {
+          final matchedByOrder = _pendingItems().where((i) =>
+            i.orderNo?.toUpperCase() == clean ||
+            i.orderNo?.toUpperCase() == 'INB-$clean' ||
+            'INB-${i.orderNo?.toUpperCase()}' == clean
+          ).firstOrNull;
+          if (matchedByOrder != null) {
+            final palKey = matchedByOrder.palletId ?? matchedByOrder.cartonCode ?? matchedByOrder.orderNo;
+            if (palKey != null && groups.containsKey(palKey)) {
+              matchedPalletKey = palKey;
+            }
+          }
+        }
+
+        if (matchedPalletKey == null) {
+          for (final k in groups.keys) {
+            final strippedK = k.replaceAll(RegExp(r'^PAL-', caseSensitive: false), '').trim().toUpperCase();
+            final strippedClean = clean.replaceAll(RegExp(r'^PAL-', caseSensitive: false), '').trim().toUpperCase();
+            if (strippedK == strippedClean || strippedK == clean || k.toUpperCase() == strippedClean) {
+              matchedPalletKey = k;
+              break;
+            }
           }
         }
       }
@@ -262,6 +310,16 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     if (matchedPalletKey != null) {
       HapticFeedback.selectionClick();
       setState(() => _activePalletGroup = matchedPalletKey);
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 2),
+            content: Text('✓ Đã quét nhận diện xe: $matchedPalletKey (${groups[matchedPalletKey]?.length ?? 0} sản phẩm)'),
+          ),
+        );
+      }
     } else {
       HapticFeedback.vibrate();
       if (mounted) {
@@ -476,44 +534,110 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             ],
           ),
 
-          if (groups.length > 1) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
-              decoration: BoxDecoration(
-                color: c.bgCardElevated,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: c.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  dropdownColor: c.bgCardElevated,
-                  value: groups.containsKey(_activePalletGroup) ? _activePalletGroup : null,
-                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFF59E0B)),
-                  hint: Text('Đổi xe/thùng cần cất (${groups.length})...', style: TextStyle(color: c.textMuted, fontSize: 12)),
-                  style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
-                  items: groups.entries.map((entry) {
-                    return DropdownMenuItem(
-                      value: entry.key,
-                      child: Text(
-                        '${entry.key} • ${entry.value.length} sản phẩm',
-                        style: TextStyle(color: c.textPrimary, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _activePalletGroup = val);
-                      HapticFeedback.selectionClick();
-                    }
-                  },
-                ),
+          // KHU VỰC QUÉT BARCODE XE / PALLET (KHÔNG DÙNG DROPDOWN)
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: c.bgCardElevated,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+                width: 1.2,
               ),
             ),
-          ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.qr_code_scanner, size: 16, color: Color(0xFFF59E0B)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        hasItems
+                            ? 'ĐÃ TỰ ĐỘNG NHẬN DIỆN XE: $_activePalletGroup'
+                            : 'BÓP CÒ PDA ĐỂ QUÉT MÃ XE / PALLET',
+                        style: TextStyle(
+                          color: hasItems ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    if (hasItems)
+                      InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          setState(() => _activePalletGroup = null);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: c.bgDeep,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: c.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.refresh, size: 12, color: c.textSecondary),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Quét xe khác',
+                                style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  hasItems
+                      ? 'Hệ thống đã tự động nhận diện xe $_activePalletGroup. Bóp cò quét mã nhãn Kệ (LOC-xxx) để cất hàng.'
+                      : 'Chĩa đầu đọc PDA vào tem Barcode trên Xe/Pallet rồi bóp cò súng để tự động nhận diện.',
+                  style: TextStyle(color: c.textMuted, fontSize: 11),
+                ),
+                const SizedBox(height: 8),
+
+                // Nút kích hoạt tia quét Barcode phần cứng PDA
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: hasItems ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.barcode_reader, size: 18),
+                    label: const Text(
+                      'BẬT TIA QUÉT BARCODE XE (CÒ PDA)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    onPressed: _isProcessing ? null : () => _uhf.triggerBarcodeScan(),
+                  ),
+                ),
+
+                // Dòng text tóm tắt các mã xe đang chờ trong kho (chỉ hiển thị mã dạng tham khảo, không phải nút bấm chọn)
+                if (groups.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Mã các xe đang chờ cất: ${groups.keys.join(', ')} (${groups.length} xe)',
+                    style: TextStyle(
+                      color: c.textMuted,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
 
           if (hasItems) ...[
             const SizedBox(height: 8),

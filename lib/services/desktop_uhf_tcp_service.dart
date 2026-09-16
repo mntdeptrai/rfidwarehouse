@@ -349,6 +349,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _currentConnId = msg['connId']?.toString() ?? '';
         if (_isConnected) {
           _log('Đã kết nối đầu đọc: $_currentConnId');
+          unawaited(saveConfig(_config));
           setGpo(1, false);
           setGpo(2, false);
           setGpo(3, false);
@@ -425,6 +426,15 @@ class DesktopUhfTcpService extends ChangeNotifier {
   /// Connect via RS232 Serial COM Port
   Future<bool> connectSerial(String portName, int baudRate) async {
     await disconnect();
+    _config = _config.copyWith(
+      connectionType: 'RS232',
+      comPort: portName,
+      baudRate: baudRate,
+      autoConnectOnStartup: true,
+      autoReconnect: true,
+    );
+    unawaited(saveConfig(_config));
+
     _isConnecting = true;
     _isConnected = false;
     notifyListeners();
@@ -453,6 +463,16 @@ class DesktopUhfTcpService extends ChangeNotifier {
   /// Connect via RS485 Industrial Bus (Address:COM:BaudRate)
   Future<bool> connect485(int address, String portName, int baudRate) async {
     await disconnect();
+    _config = _config.copyWith(
+      connectionType: 'RS485',
+      rs485Address: address,
+      comPort: portName,
+      baudRate: baudRate,
+      autoConnectOnStartup: true,
+      autoReconnect: true,
+    );
+    unawaited(saveConfig(_config));
+
     _isConnecting = true;
     _isConnected = false;
     notifyListeners();
@@ -482,6 +502,15 @@ class DesktopUhfTcpService extends ChangeNotifier {
   /// Connect via TCP Client (IP + Port)
   Future<bool> connectTcp(String ip, int port) async {
     await disconnect();
+    _config = _config.copyWith(
+      connectionType: 'TCP Client',
+      tcpIp: ip,
+      tcpPort: port,
+      autoConnectOnStartup: true,
+      autoReconnect: true,
+    );
+    unawaited(saveConfig(_config));
+
     _isConnecting = true;
     _isConnected = false;
     notifyListeners();
@@ -510,6 +539,13 @@ class DesktopUhfTcpService extends ChangeNotifier {
   /// Connect via USB HID
   Future<bool> connectUsb() async {
     await disconnect();
+    _config = _config.copyWith(
+      connectionType: 'USB',
+      autoConnectOnStartup: true,
+      autoReconnect: true,
+    );
+    unawaited(saveConfig(_config));
+
     _isConnecting = true;
     _isConnected = false;
     notifyListeners();

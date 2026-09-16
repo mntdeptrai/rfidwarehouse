@@ -387,6 +387,12 @@ class SupabaseSyncService extends ChangeNotifier {
       result[snakeKey] = value;
     });
 
+    if (tableName == 'items') {
+      result.remove('inbound_by');
+      result.remove('putaway_by');
+      result.remove('carton_code');
+      result.remove('supplier');
+    }
     if (tableName == 'inbound_orders' && result.containsKey('inbound_order_id')) {
       result.remove('details');
     }

@@ -25,6 +25,7 @@ graph TD
             Desktop --> D_Studio["desktop_uhf_studio_view.dart (Hopeland Studio)"]
             Desktop --> D_Config["desktop_connection_config_view.dart (Cấu Hình Kết Nối)"]
             Desktop --> D_Users["desktop_user_management_view.dart (Phân Quyền)"]
+            Desktop --> D_Report["desktop_report_view.dart (Trung Tâm Báo Cáo)"]
         end
 
         subgraph PDA_Screens["PDA Mobile Views"]
@@ -59,6 +60,7 @@ graph TD
         
         PDA_Screens -->|Bóp cò tay súng| MobileUHF["UhfService (Native Android Plugin)"]
         D_Receive -->|Đọc phiếu Excel| Excel["ExcelImportService"]
+        D_Report -->|Xuất file báo cáo| ReportExport["ReportExportService (Excel/CSV)"]
         Repo -->|Đồng bộ ERP| ERP["ErpBravoService"]
     end
 
@@ -79,24 +81,26 @@ graph TD
 | [`lib/screens/desktop_pda_wrapper.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop_pda_wrapper.dart) | Bộ điều hướng thích ứng tự động (Desktop Layout trên PC, PDA Layout trên tay cầm Android). |
 | **`lib/services/`** | **Tầng Dịch Vụ & Nghiệp Vụ Cốt Lõi** |
 | ├── [`warehouse_repository.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/warehouse_repository.dart) | Quản lý toàn bộ dữ liệu trong RAM: danh mục hàng, pallet, vị trí kệ, đơn nhập/xuất, logic FIFO, cổng RFID, cơ chế giải phóng vị trí kệ/pallet khi xuất kho. |
-| ├── [`desktop_uhf_tcp_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/desktop_uhf_tcp_service.dart) | Kết nối TCP Socket với Cổng RFID Gate cố định (Hopeland CL7206C/Speedata), giải mã byte raw sang EPC. |
+| ├── [`desktop_uhf_tcp_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/desktop_uhf_tcp_service.dart) | Kết nối TCP/Serial COM/RS485 với Cổng RFID Gate cố định (Hopeland CL7206C/Speedata qua C# Bridge), tự động lưu và ghi nhớ cấu hình phần cứng vào `uhf_hardware_config.json`, tự động kết nối khi khởi động ứng dụng và tự phục hồi kết nối. |
 | ├── [`uhf_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/uhf_service.dart) | Driver UHF trên tay cầm PDA Android (Chainway C72e / Cruise2), bắt sự kiện nút bóp cò vật lý. |
 | ├── [`tower_light_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/tower_light_service.dart) | Điều khiển đèn tháp tín hiệu giao thông tại cổng (Xanh = Đạt, Vàng = Chờ, Đỏ = Chip lạ/Lỗi + Còi). |
 | ├── [`excel_import_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/excel_import_service.dart) | Phân tích file Excel phiếu nhập mẫu (`Template-Goods-Receive-v3.xlsx`), trích xuất SKU, Thùng, NCC. |
 | ├── [`database_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/database_service.dart) | Quản lý CSDL SQLite cục bộ trên máy trạm và PDA khi offline. |
 | ├── [`supabase_sync_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/supabase_sync_service.dart) | Đồng bộ dữ liệu 2 chiều thời gian thực lên Supabase PostgreSQL 17 Cloud. |
 | ├── [`auth_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/auth_service.dart) | Quản lý tài khoản người dùng, phiên làm việc (Session) và phân quyền chức năng (RBAC). |
+| ├── [`report_export_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/report_export_service.dart) | Xuất báo cáo kho (5 loại: Nhập/Xuất/Tồn/Kiểm Kê/Biến Động) ra file Excel (.xlsx) hoặc CSV (.csv) với header format, auto-width, BOM UTF-8. |
 | **`lib/screens/desktop/`** | **Giao Diện Máy Bàn Quản Trị (Desktop WMS)** |
 | ├── [`desktop_main_layout.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_main_layout.dart) | Khung giao diện chính Desktop (Thanh điều hướng Sidebar, tìm kiếm toàn cục, huy hiệu kết nối). |
-| ├── [`desktop_goods_receive_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_goods_receive_view.dart) | Cổng Nhập kho RFID Gate: Hiển thị danh sách thẻ đơn hàng chờ nhập (Mã đơn, NCC, Số chip, Pallet) kèm nút [XÓA ĐƠN] trực tiếp khi nạp nhầm và nút [CHỌN ĐỐI SOÁT]. Trong màn hình quét chi tiết có nút quay lại [DANH SÁCH ĐƠN] và [XÓA ĐƠN NÀY]. Đồng bộ xóa tức thì khỏi SQLite và Supabase Cloud. |
+| ├── [`desktop_goods_receive_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_goods_receive_view.dart) | Cổng Nhập kho RFID Gate: Tự động đối soát đơn hàng theo RFID, không phụ thuộc chip pallet nếu đã quét đủ 100% chip sản phẩm. Khi đối soát thành công, đánh dấu `isGatePassed = true` và chuyển sang trạng thái sẵn sàng đón đợt hàng tiếp theo. |
 | ├── [`desktop_goods_delivery_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_goods_delivery_view.dart) | Cổng Xuất kho RFID Gate Desktop, cột NGÀY NHẬP theo date xa nhất (FIFO), đối soát 2 pha theo chip EPC, wizard chỉ đường lấy hàng qua 10 kệ. |
 | ├── [`desktop_inventory_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_inventory_view.dart) | Quản lý kiểm kê kho, đối soát tồn thực tế với hệ thống, lập phiếu kiểm kê. |
 | ├── [`desktop_lookup_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_lookup_view.dart) | Tra cứu chi tiết hàng hóa & mã RFID (dạng cột chuẩn theo Mặt hàng SKU và dạng Bảng phẳng toàn bộ). Đã xuất kho hiển thị rõ "ĐÃ XUẤT KHO". |
 | ├── [`desktop_warehouse_management_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_warehouse_management_view.dart) | Sơ đồ mặt bằng kho 2D tương tác, dựng vị trí các dãy kệ, cổng Gate, vị trí Pallet. |
 | ├── [`desktop_location_management_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_location_management_view.dart) | Quản lý vị trí lưu trữ và kệ kho, chỉ tính toán sản phẩm tồn kho thực tế (`inStock`), bỏ qua hàng đã xuất. |
-| ├── [`desktop_uhf_studio_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_uhf_studio_view.dart) | Hopeland Studio cấu hình thông số kỹ thuật đầu đọc (dBm công suất, dải tần, buzzer, antenna). |
+| ├── [`desktop_uhf_studio_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_uhf_studio_view.dart) | Hopeland Studio cấu hình thông số kỹ thuật đầu đọc (RS232, TCP, RS485, USB, dBm công suất, dải tần, buzzer, antenna). Tự động nạp và ghi nhớ cấu hình đã kết nối thành công. |
 | ├── [`desktop_connection_config_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_connection_config_view.dart) | Cấu hình IP LAN, cổng Port, COM port và chế độ tự động kết nối lại. |
 | ├── [`desktop_user_management_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_user_management_view.dart) | Quản lý danh sách nhân viên, tài khoản, phân quyền thao tác. |
+| ├── [`desktop_report_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_report_view.dart) | Trung tâm xuất báo cáo kho: 5 loại (Nhập/Xuất/Tồn/Kiểm Kê/Biến Động), chọn format Excel/CSV, hiển thị số bản ghi, mở thư mục chứa file sau khi xuất. |
 | **`lib/screens/pda/`** | **Giao Diện Tay Cầm Di Động (PDA WMS)** |
 | ├── [`pda_inbound_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_inbound_screen.dart) | Nhập kho RFID trên PDA: Hiển thị danh sách đơn chờ kèm nút xóa đơn nhanh và chọn đơn, đối soát chùm RFID 3 ô (ĐÃ QUÉT, THIẾU, LẠ), đổi đơn linh hoạt và chuyển tiếp sang Cất kệ (Putaway). |
 | ├── [`pda_home_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_home_screen.dart) | Bàn làm việc di động với lưới các phím tắt tác vụ nhanh (đã thay thế Trạng thái kệ & Tra cứu mã bằng Quản lý kho). |
@@ -338,3 +342,27 @@ Hệ thống tích hợp sẵn cấu trúc Agentic Workspace để tối ưu ho�
   - Khi xe qua cổng hoặc PDA quét đủ số lượng, trạng thái chuyển tiếp thành `waitingPutaway` (CHỜ XẾP KỆ) một cách mượt mà và an toàn, không lo mất dữ liệu khi đóng/mở lại app.
 
 
+---
+
+## 9. Trung Tâm Báo Cáo Kho (Report Export Center)
+- **Màn hình**: `desktop_report_view.dart` — tab "Báo Cáo" trên sidebar (index 4), tất cả role đều truy cập được.
+- **Service**: `report_export_service.dart` — singleton service tạo file báo cáo từ dữ liệu trong `WarehouseRepository`.
+- **5 loại báo cáo**:
+  1. **Nhập Kho** (Inbound): Mã đơn, NCC, trạng thái, ngày tạo, tổng SKU, tổng chip RFID, chi tiết.
+  2. **Xuất Kho** (Outbound): Mã PO, khách hàng, trạng thái, tổng SL, vận đơn liên kết.
+  3. **Tồn Kho** (Inventory): Toàn bộ item IN_STOCK — EPC, SKU, pallet, vị trí kệ, ngày nhập.
+  4. **Kiểm Kê** (Audit): Phiên kiểm kê — khớp, thiếu, sai vị trí, thẻ lạ.
+  5. **Biến Động Kho** (Transaction Log): Lịch sử nhập/xuất/di chuyển — loại, chứng từ, người thực hiện.
+- **Định dạng**: Excel (.xlsx) với header bold/cyan + auto-width, hoặc CSV (.csv) với BOM UTF-8.
+- **Thư mục lưu**: `Documents/WMS_Reports/` — sau khi xuất có nút mở Windows Explorer highlight file.
+
+---
+
+## 10. Luồng Đồng Bộ Hóa Cất Kệ (PDA Putaway State Synchronization)
+- **Đồng bộ trạng thái**:
+  - Khi đơn hàng nhập kho chuyển sang `waitingPutaway` (CHỜ XẾP KỆ) trên Desktop hoặc PDA, toàn bộ các mặt hàng (`items`) thuộc đơn được tự động đồng bộ sang trạng thái `waitingPutaway`.
+  - Hàm `_loadFromSqlite()` và `_tryLoadFromSupabaseDirect()` trong `WarehouseRepository` đảm bảo đối soát trạng thái tức thì giữa đơn hàng và mặt hàng khi khởi động hoặc tải lại.
+  - Khi gán kiện hàng/sản phẩm lên Pallet (`assignEpcsToPallet`, `assignCartonsToPallet`), mặt hàng lập tức chuyển sang `waitingPutaway` và cập nhật trực tiếp lên Supabase Cloud.
+- **Điều hướng mượt mà từ PDA Home**:
+  - Thẻ thông báo `[CẦN CẤT KỆ]` trên `PdaHomeScreen` liên kết trực tiếp vào `PdaPutawayScreen(initialCartonOrPalletBarcode: targetPallet)`.
+  - Màn hình `PdaPutawayScreen` tự động bắt diện pallet hoặc mã đơn tương ứng, hiển thị danh sách chi tiết hàng hóa sẵn sàng để thủ kho quét mã kệ và cất hàng.
