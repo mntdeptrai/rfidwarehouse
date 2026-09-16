@@ -7,12 +7,14 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
   final String title;
   final List<Widget>? actions;
   final Widget? leading;
+  final bool? showScanMode;
 
   const HardwareStatusAppBar({
     super.key,
     required this.title,
     this.actions,
     this.leading,
+    this.showScanMode,
   });
 
   @override
@@ -71,9 +73,10 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
           ),
           actions: [
             // Scan Mode Switcher Chip
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
-              child: InkWell(
+            if (showScanMode ?? uhfService.isScanAllowed)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+                child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
                   final nextMode = switch (scanMode) {

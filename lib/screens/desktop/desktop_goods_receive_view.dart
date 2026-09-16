@@ -517,6 +517,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         return;
       }
     }
+    _uhf.enableScanning('nhap_kho');
     _uhf.startInventory();
     if (!isTest) {
       final started = await _desktopUhf.startInventory();
@@ -550,7 +551,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _autoCompleteTimer?.cancel();
     _autoCompleteTimer = null;
     _wizardCountdownTimer?.cancel();
-    _uhf.stopInventory();
+    _uhf.disableScanning();
     await _desktopUhf.stopInventory();
     if (mounted) {
       setState(() {
@@ -2398,7 +2399,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
-                                            'File Danh Sách Thùng Hàng (.xlsx)',
+                                            'Nhập File Excel / CSV (.xlsx, .csv)',
                                             style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                                           ),
                                           const SizedBox(height: 2),
@@ -2437,12 +2438,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
-                                            'File Nhập PO (Đơn Mua Hàng)',
+                                            'Nhập Từ PO (File PO)',
                                             style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            'Nạp file đơn PO: Mã PO, Nhà cung cấp, SKU, Số lượng',
+                                            'Nạp file đơn PO mua hàng: Mã PO, Nhà cung cấp, SKU, Số lượng',
                                             style: TextStyle(color: c.textSecondary, fontSize: 11),
                                             softWrap: true,
                                           ),

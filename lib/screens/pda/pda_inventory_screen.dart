@@ -840,6 +840,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   @override
   void initState() {
     super.initState();
+    _uhf.enableScanning('kiem_kho');
     // Đảm bảo module phần cứng ở chế độ đọc chip RFID UHF
     _uhf.setScanMode(PdaScanMode.rfid);
 
@@ -1034,7 +1035,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
 
   @override
   void dispose() {
-    _uhf.stopInventory();
+    _uhf.disableScanning();
     _uhf.clearTags();
     _uiRefreshTimer?.cancel();
     _tagSub?.cancel();

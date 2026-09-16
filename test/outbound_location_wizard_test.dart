@@ -115,8 +115,8 @@ void main() {
 
       // Nút XUẤT HÀNG dropdown màu cyan trên thanh tiêu đề
       expect(find.text('XUẤT HÀNG'), findsOneWidget);
-      // Nút Lịch sử xuất kho và Làm mới
-      expect(find.text('LỊCH SỬ XUẤT KHO'), findsOneWidget);
+      // Nút Lịch sử xuất kho đã được dọn sạch khỏi giao diện Cổng xuất kho
+      expect(find.text('LỊCH SỬ XUẤT KHO'), findsNothing);
       expect(find.text('LÀM MỚI'), findsOneWidget);
       // Màn hình chờ tiếp nhận hàng xuất khi chưa nạp file
       expect(find.textContaining('CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT'), findsOneWidget);

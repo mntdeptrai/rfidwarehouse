@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/tag_info.dart';
-import '../../models/wms_models.dart';
 import '../../services/auth_service.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/excel_import_service.dart';
@@ -86,8 +85,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   final ExcelImportService _excelService = ExcelImportService();
   final SupabaseSyncService _supabaseSync = SupabaseSyncService();
 
-  // Mode: 0 = Cổng xuất kho RFID, 1 = Lịch sử xuất kho
-  int _currentMode = 0;
 
   bool _isImporting = false;
   bool _isSaving = false;
@@ -261,6 +258,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       }
     }
 
+    _uhf.enableScanning('xuat_kho');
     _uhf.startInventory();
     await _desktopUhf.startInventory();
 
@@ -287,7 +285,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   Future<void> _stopGateScan() async {
     _countdownTimer?.cancel();
-    _uhf.stopInventory();
+    _uhf.disableScanning();
     await _desktopUhf.stopInventory();
 
     if (mounted) {
@@ -431,7 +429,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
           shortageCount: validation.shortageCount,
           shortageBySku: validation.shortageBySku,
         );
-        _currentMode = 0; // Chuyển ngay sang màn hình cổng xuất kho
       });
 
       if (mounted) {
@@ -458,6 +455,122 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
           SnackBar(
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi nạp file xuất hàng: $e'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isImporting = false);
+    }
+  }
+
+  // ---------- NẠP FILE ĐƠN XUẤT HÀNG PO (EXCEL / CSV) ----------
+  Future<void> _pickAndLoadOutboundPoFile() async {
+    if (_isImporting) return;
+    setState(() => _isImporting = true);
+    try {
+      final rows = await _excelService.pickAndParseBatchOrdersExcel();
+      if (rows == null || rows.isEmpty) return;
+
+      final Map<String, String?> pallets = {};
+      String orderNo = 'PO-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      String customer = 'Xuất Kho';
+      final List<Map<String, dynamic>> rawRequests = [];
+
+      for (var r in rows) {
+        final po = (r['orderNo'] ?? '').toString().trim();
+        if (po.isNotEmpty) orderNo = po;
+        final cust = (r['customer'] ?? r['supplier'] ?? '').toString().trim();
+        if (cust.isNotEmpty) customer = cust;
+
+        final sku = (r['sku'] ?? '--').toString().trim();
+        final qty = (r['quantity'] as int?) ?? 1;
+        final prodName = (r['productName'] ?? 'Sản phẩm xuất kho').toString().trim();
+        final rowEpc = (r['epc'] ?? '').toString().trim().toUpperCase();
+
+        if (rowEpc.isNotEmpty) {
+          rawRequests.add({
+            'sku': sku,
+            'cartonCode': '--',
+            'palletCode': '--',
+            'customer': customer,
+            'productName': prodName,
+            'palletEpc': '--',
+            'epc': rowEpc,
+          });
+        } else {
+          for (int i = 0; i < qty; i++) {
+            rawRequests.add({
+              'sku': sku,
+              'cartonCode': '--',
+              'palletCode': '--',
+              'customer': customer,
+              'productName': prodName,
+              'palletEpc': '--',
+              'epc': '--',
+            });
+          }
+        }
+      }
+
+      if (rawRequests.isEmpty) {
+        throw Exception('Không tìm thấy danh sách mã hàng / chip hợp lệ trong file PO!');
+      }
+
+      final validation = _repo.validateOutboundInventoryAndFifo(requestedItems: rawRequests);
+      final List<_PendingOutboundItem> validatedItems = validation.items.map((vi) => _PendingOutboundItem(
+        sku: vi.sku,
+        cartonCode: vi.cartonCode,
+        palletCode: vi.palletCode,
+        supplier: vi.supplier,
+        customer: vi.customer.isNotEmpty && vi.customer != '--' ? vi.customer : customer,
+        productName: vi.productName,
+        palletEpc: vi.palletEpc,
+        epc: vi.epc,
+        isInStock: vi.isInStock,
+        locationCode: vi.locationCode,
+        inboundTime: vi.inboundTime,
+        fifoPriority: vi.fifoPriority,
+        fifoWarning: vi.fifoWarning,
+      )).toList();
+
+      _clearGateScan();
+      setState(() {
+        _pendingOutboundOrder = _PendingOutboundOrder(
+          orderNo: orderNo,
+          customer: customer,
+          items: validatedItems,
+          pallets: pallets,
+          fileName: 'File PO: $orderNo',
+          isStockSufficient: validation.isStockSufficient,
+          shortageCount: validation.shortageCount,
+          shortageBySku: validation.shortageBySku,
+        );
+      });
+
+      if (mounted) {
+        if (!validation.isStockSufficient) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFEF4444),
+              duration: const Duration(seconds: 5),
+              content: Text('⚠️ CẢNH BÁO TỒN KHO: Đơn $orderNo thiếu ${validation.shortageCount} sản phẩm! Đã khóa xác nhận xuất.'),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF10B981),
+              content: Text('✓ Đã nạp thành công ${validatedItems.length} sản phẩm từ file PO! Sẵn sàng quét qua cổng.'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text('Lỗi nạp file PO: $e'),
           ),
         );
       }
@@ -664,9 +777,9 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               _buildTopHeaderBar(c, isNarrow),
               const SizedBox(height: 10),
 
-              // Nội dung chính
+              // Nội dung chính: Cổng đối soát xuất kho RFID
               Expanded(
-                child: _currentMode == 0 ? _buildOutboundGateMonitor(c) : _buildDeliveryHistory(c),
+                child: _buildOutboundGateMonitor(c),
               ),
             ],
           ),
@@ -739,8 +852,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               PopupMenuButton<String>(
                 tooltip: 'Chọn nạp file xuất hàng',
                 onSelected: (val) {
-                  if (val == 'file_excel' || val == 'file_po') {
+                  if (val == 'file_excel') {
                     _pickAndLoadOutboundFile();
+                  } else if (val == 'file_po') {
+                    _pickAndLoadOutboundPoFile();
                   } else if (val == 'clear_pending') {
                     setState(() {
                       _pendingOutboundOrder = null;
@@ -759,10 +874,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: c.rfidCyan.withValues(alpha: 0.15),
+                              color: const Color(0xFF10B981).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(Icons.table_view_outlined, color: c.rfidCyan, size: 20),
+                            child: const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 20),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -771,7 +886,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'File Danh Sách Xuất Kho (.xlsx, .csv)',
+                                  'Nhập File Excel / CSV (.xlsx, .csv)',
                                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                                 const SizedBox(height: 2),
@@ -810,12 +925,12 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'File Đơn Xuất Hàng (SO / PO)',
+                                  'Nhập Từ PO (File PO)',
                                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Nạp file đơn đặt hàng / xuất kho',
+                                  'Nạp file đơn đặt hàng / xuất kho: Mã PO, SKU, Số lượng',
                                   style: TextStyle(color: c.textSecondary, fontSize: 11),
                                   softWrap: true,
                                 ),
@@ -909,22 +1024,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               ),
               const SizedBox(width: 10),
 
-              // Nút xem Lịch sử xuất kho
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _currentMode == 1 ? const Color(0xFF10B981) : c.textPrimary,
-                  side: BorderSide(color: _currentMode == 1 ? const Color(0xFF10B981) : c.border),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: Icon(_currentMode == 1 ? Icons.sensors : Icons.receipt_long_outlined, size: 16),
-                label: Text(
-                  _currentMode == 1 ? 'CỔNG XUẤT KHO' : 'LỊCH SỬ XUẤT KHO',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
-                ),
-                onPressed: () => setState(() => _currentMode = _currentMode == 1 ? 0 : 1),
-              ),
-              const SizedBox(width: 10),
 
               // Nút Làm Mới
               Tooltip(
@@ -1764,77 +1863,6 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==================== TAB 2: LỊCH SỬ XUẤT KHO ====================
-  Widget _buildDeliveryHistory(EyeCareColors c) {
-    final orders = _repo.outboundOrders;
-    final transactions = _repo.transactions.where((t) => t.type == TransactionType.outbound).toList();
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'LỊCH SỬ GIAO DỊCH XUẤT KHO (${transactions.length} giao dịch)',
-            style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: transactions.isEmpty && orders.isEmpty
-                ? Center(
-                    child: Text('Chưa có giao dịch xuất kho nào.', style: TextStyle(color: c.textSecondary, fontSize: 13)),
-                  )
-                : Container(
-                    decoration: BoxDecoration(
-                      color: c.bgCardElevated,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: ListView.separated(
-                      itemCount: transactions.isNotEmpty ? transactions.length : orders.length,
-                      separatorBuilder: (context, index) => Divider(color: c.border.withValues(alpha: 0.4), height: 1),
-                      itemBuilder: (context, idx) {
-                        if (transactions.isNotEmpty) {
-                          final tx = transactions[idx];
-                          return ListTile(
-                            leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.outbox, color: Color(0xFF10B981), size: 18),
-                            ),
-                            title: Text('${tx.documentNo} • ${tx.productName}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                            subtitle: Text('Số lượng: ${tx.quantity} SP • Người xuất: ${tx.performedBy} • ${tx.timestamp.toLocal()}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                            trailing: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text('ĐÃ XUẤT', style: TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            ),
-                          );
-                        } else {
-                          final o = orders[idx];
-                          final count = o.details.fold(0, (sum, d) => sum + d.requiredQty);
-                          return ListTile(
-                            leading: const Icon(Icons.local_shipping_outlined, color: Color(0xFF10B981)),
-                            title: Text('Đơn ${o.poNo} - ${o.customer}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                            subtitle: Text('Tổng: $count sản phẩm • Ngày tạo: ${o.createdAt.toLocal()}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                            trailing: Text(o.status.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                          );
-                        }
-                      },
-                    ),
-                  ),
           ),
         ],
       ),

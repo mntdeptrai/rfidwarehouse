@@ -47,12 +47,6 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   final TextEditingController _productSearchCtrl = TextEditingController();
   String _productQuery = '';
   ItemStatus? _selectedProductStatusFilter;
-  bool _isHardwareScanning = false;
-
-  StreamSubscription? _tagSub;
-  StreamSubscription? _barcodeSub;
-  StreamSubscription? _triggerSub;
-
   @override
   void initState() {
     super.initState();
@@ -62,7 +56,8 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     _eyeCare.addListener(_onStateUpdate);
     _repo.addListener(_onStateUpdate);
 
-    _subscribeHardwareScanner();
+    // Màn hình Quản Lý Kho KHÔNG cho phép quét: khóa và dừng đầu đọc ngay lập tức
+    _uhf.disableScanning();
   }
 
   void _handleTabChange() {
@@ -75,10 +70,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
 
   @override
   void dispose() {
-    _uhf.stopInventory();
-    _tagSub?.cancel();
-    _barcodeSub?.cancel();
-    _triggerSub?.cancel();
+    _uhf.disableScanning();
     _palletSearchCtrl.dispose();
     _locationSearchCtrl.dispose();
     _productSearchCtrl.dispose();
@@ -86,75 +78,6 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     _repo.removeListener(_onStateUpdate);
     _eyeCare.removeListener(_onStateUpdate);
     super.dispose();
-  }
-
-  void _subscribeHardwareScanner() {
-    _tagSub = _uhf.onTagRead.listen((tag) {
-      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
-      if (tag.epc.isNotEmpty) {
-        _handleScannedInput(tag.epc, isEpc: true);
-      }
-    });
-
-    _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
-      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
-      if (barcode.isNotEmpty) {
-        _handleScannedInput(barcode, isEpc: false);
-      }
-    });
-
-    _triggerSub = _uhf.onTriggerStateChanged.listen((pressed) {
-      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
-      if (pressed) {
-        _startHardwareScan();
-      } else {
-        _stopHardwareScan();
-      }
-    });
-  }
-
-  void _handleScannedInput(String rawCode, {required bool isEpc}) {
-    final clean = rawCode.trim();
-    if (clean.isEmpty) return;
-
-    HapticFeedback.mediumImpact();
-
-    // Nếu đang ở Tab Vị Trí Kho (Tab 1), ưu tiên tìm kiếm kệ
-    if (_tabController.index == 1) {
-      _locationSearchCtrl.text = clean;
-      setState(() => _locationQuery = clean);
-      return;
-    }
-
-    // Nếu đang ở Tab Pallet (Tab 0)
-    if (_tabController.index == 0) {
-      _palletSearchCtrl.text = clean;
-      setState(() => _palletQuery = clean);
-      return;
-    }
-
-    // Mặc định hoặc Tab Sản Phẩm (Tab 3): Nhập vào ô tìm kiếm sản phẩm
-    _tabController.animateTo(3);
-    _productSearchCtrl.text = clean;
-    setState(() => _productQuery = clean);
-  }
-
-  void _startHardwareScan() {
-    if (_isHardwareScanning) return;
-    setState(() => _isHardwareScanning = true);
-    if (_uhf.scanMode == PdaScanMode.barcode) {
-      _uhf.triggerBarcodeScan();
-    } else {
-      _uhf.startInventory();
-    }
-  }
-
-  void _stopHardwareScan() {
-    if (!_isHardwareScanning) return;
-    setState(() => _isHardwareScanning = false);
-    if (_uhf.scanMode == PdaScanMode.rfid || _uhf.scanMode == PdaScanMode.hybrid) {
-      _uhf.stopInventory();
-    }
   }
 
   @override
@@ -165,6 +88,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
       backgroundColor: c.bgDeep,
       appBar: HardwareStatusAppBar(
         title: 'QUẢN LÝ KHO',
+        showScanMode: false,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
@@ -390,33 +314,97 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.location_on, size: 14, color: hasLocation ? const Color(0xFFEF4444) : c.textMuted),
-                const SizedBox(width: 4),
-                Text('Vị trí: ', style: TextStyle(color: c.textMuted, fontSize: 12)),
-                Text(
-                  locText,
-                  style: TextStyle(
-                    color: hasLocation ? c.textPrimary : c.textMuted,
-                    fontWeight: hasLocation ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 12,
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.location_on, size: 14, color: hasLocation ? const Color(0xFFEF4444) : c.textMuted),
+                      const SizedBox(width: 4),
+                      Text('Vị trí: ', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                      Flexible(
+                        child: Text(
+                          locText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: hasLocation ? c.textPrimary : c.textMuted,
+                            fontWeight: hasLocation ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 4),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: c.rfidCyan,
                     side: BorderSide(color: c.rfidCyan),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
-                  icon: const Icon(Icons.edit_location_alt, size: 14),
-                  label: Text(hasLocation ? 'Đổi kệ' : 'Gán kệ', style: const TextStyle(fontSize: 11)),
+                  icon: const Icon(Icons.edit_location_alt, size: 13),
+                  label: Text(hasLocation ? 'Đổi kệ' : 'Gán kệ', style: const TextStyle(fontSize: 10.5)),
                   onPressed: () => _showAssignPalletLocationDialog(p, c),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Xóa Pallet',
+                  onPressed: () => _confirmDeletePallet(p, c),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _confirmDeletePallet(Pallet p, EyeCareColors c) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 22),
+            const SizedBox(width: 8),
+            Text('Xác nhận xóa Pallet', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa Pallet ${p.palletCode} không?\nCác mặt hàng (nếu có) sẽ chuyển về trạng thái không gắn pallet.',
+          style: TextStyle(color: c.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Hủy', style: TextStyle(color: c.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _repo.deletePallet(p.palletId.isNotEmpty ? p.palletId : p.palletCode);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Đã xóa Pallet: ${p.palletCode}')),
+                );
+              }
+            },
+            child: const Text('Xóa', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

@@ -133,6 +133,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _repo.addListener(_onStateChange);
     _auth.addListener(_onStateChange);
 
+    _uhf.enableScanning('xuat_kho');
     _uhf.setScanMode(PdaScanMode.rfid);
     _initHardwareListeners();
     _initInitialData();
@@ -218,7 +219,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   @override
   void dispose() {
-    _uhf.stopInventory();
+    _uhf.disableScanning();
     HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
     _tagSubscription?.cancel();
     _triggerSubscription?.cancel();
@@ -746,141 +747,72 @@ class _OutboundScreenState extends State<OutboundScreen> {
     );
   }
 
-  // ---------- TẠO NHANH ĐƠN XUẤT ----------
-  void _showCreateQuickOrderDialog() {
+  // ---------- HỘP THOẠI LỰA CHỌN NẠP PO ----------
+  void _showOutboundPoOptionsDialog() {
     final c = _eyeCare.colors;
-    final poController = TextEditingController(text: 'XK-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}');
-    final qtyController = TextEditingController(text: '1');
-    final inStockSkus = _repo.items.where((i) => i.status == ItemStatus.inStock).map((i) => i.sku).toSet().toList();
-    String? selectedSku = inStockSkus.firstOrNull;
-
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDlgState) => AlertDialog(
-          backgroundColor: c.bgCardElevated,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.post_add, color: c.rfidCyan, size: 22),
-              const SizedBox(width: 8),
-              Text('TẠO NHANH ĐƠN XUẤT', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: Column(
+      backgroundColor: c.bgCardElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                controller: poController,
-                style: TextStyle(color: c.textPrimary, fontSize: 13),
-                decoration: InputDecoration(
-                  labelText: 'Mã Phiếu/Đơn Xuất',
-                  labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
-                  filled: true,
-                  fillColor: c.bgCard,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                ),
+              Row(
+                children: [
+                  Icon(Icons.receipt_long, color: c.rfidCyan, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'NHẬP TỪ PO (ĐƠN XUẤT KHO)',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: selectedSku,
-                dropdownColor: c.bgCardElevated,
-                decoration: InputDecoration(
-                  labelText: 'Chọn SKU Cần Xuất',
-                  labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
-                  filled: true,
-                  fillColor: c.bgCard,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.file_upload_outlined, color: c.rfidCyan, size: 20),
                 ),
-                items: inStockSkus.map((sku) {
-                  final stockCount = _repo.items.where((i) => i.sku == sku && i.status == ItemStatus.inStock).length;
-                  return DropdownMenuItem(
-                    value: sku,
-                    child: Text('$sku (Tồn: $stockCount)', style: TextStyle(color: c.textPrimary, fontSize: 12.5)),
-                  );
-                }).toList(),
-                onChanged: (v) => setDlgState(() => selectedSku = v),
+                title: Text('Nạp File Đơn PO (.xlsx, .csv)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                subtitle: Text('Chọn file Excel / CSV đơn xuất kho trên máy PDA', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndLoadOutboundPoFile();
+                },
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                style: TextStyle(color: c.textPrimary, fontSize: 13),
-                decoration: InputDecoration(
-                  labelText: 'Số Lượng Cần Xuất',
-                  labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
-                  filled: true,
-                  fillColor: c.bgCard,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              Divider(color: c.border, height: 1),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.cloud_download_outlined, color: Color(0xFFF59E0B), size: 20),
                 ),
+                title: Text('Chọn Đơn Xuất PO Có Sẵn', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                subtitle: Text('Chọn đơn xuất kho đã được tạo trên hệ thống', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showSelectOrderDialog();
+                },
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
-              onPressed: () {
-                if (selectedSku == null) return;
-                final qty = int.tryParse(qtyController.text.trim()) ?? 1;
-                Navigator.pop(ctx);
-
-                final List<Map<String, dynamic>> rawRequests = [];
-                for (int i = 0; i < qty; i++) {
-                  rawRequests.add({
-                    'sku': selectedSku,
-                    'cartonCode': '--',
-                    'palletCode': '--',
-                    'customer': 'Khách xuất kho',
-                    'productName': 'Sản phẩm xuất kho',
-                    'palletEpc': '--',
-                    'epc': '--',
-                  });
-                }
-
-                final validation = _repo.validateOutboundInventoryAndFifo(requestedItems: rawRequests);
-                final List<_PendingOutboundItem> items = validation.items.map((vi) => _PendingOutboundItem(
-                  sku: vi.sku,
-                  cartonCode: vi.cartonCode,
-                  palletCode: vi.palletCode,
-                  supplier: vi.supplier,
-                  customer: 'Khách xuất kho',
-                  productName: vi.productName,
-                  palletEpc: vi.palletEpc,
-                  epc: vi.epc,
-                  isInStock: vi.isInStock,
-                  locationCode: vi.locationCode,
-                  inboundTime: vi.inboundTime,
-                  fifoPriority: vi.fifoPriority,
-                  fifoWarning: vi.fifoWarning,
-                )).toList();
-
-                if (!validation.isStockSufficient) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('SKU "$selectedSku" không đủ hàng tồn kho (Thiếu ${validation.shortageCount} món)!')),
-                  );
-                }
-
-                _clearGateScan();
-                setState(() {
-                  _pendingOutboundOrder = _PendingOutboundOrder(
-                    orderNo: poController.text.trim(),
-                    customer: 'Khách xuất kho',
-                    items: items,
-                    pallets: {},
-                    fileName: 'Tạo nhanh: ${poController.text.trim()}',
-                    isStockSufficient: validation.isStockSufficient,
-                    shortageCount: validation.shortageCount,
-                    shortageBySku: validation.shortageBySku,
-                  );
-                });
-              },
-              child: const Text('TẠO ĐƠN', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
         ),
       ),
     );
@@ -1032,11 +964,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                 if (value == 'excel') {
                   _pickAndLoadOutboundExcelFile();
                 } else if (value == 'po') {
-                  _pickAndLoadOutboundPoFile();
-                } else if (value == 'order') {
-                  _showSelectOrderDialog();
-                } else if (value == 'manual') {
-                  _showCreateQuickOrderDialog();
+                  _showOutboundPoOptionsDialog();
                 } else if (value == 'clear') {
                   setState(() {
                     _pendingOutboundOrder = null;
@@ -1047,48 +975,36 @@ class _OutboundScreenState extends State<OutboundScreen> {
               itemBuilder: (context) => [
                 PopupMenuItem<String>(
                   value: 'excel',
-                  height: 38,
+                  height: 40,
                   child: Row(
                     children: [
                       const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 16),
                       const SizedBox(width: 8),
-                      Text('File Thùng Hàng (.xlsx)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5)),
+                      Expanded(
+                        child: Text(
+                          'Nhập File Excel / CSV (.xlsx, .csv)',
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 const PopupMenuDivider(),
                 PopupMenuItem<String>(
                   value: 'po',
-                  height: 38,
+                  height: 40,
                   child: Row(
                     children: [
                       Icon(Icons.receipt_long, color: c.rfidCyan, size: 16),
                       const SizedBox(width: 8),
-                      Text('File Đơn Xuất Hàng (SO / PO)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5)),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem<String>(
-                  value: 'order',
-                  height: 38,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.inventory, color: Color(0xFFF59E0B), size: 16),
-                      const SizedBox(width: 8),
-                      Text('Chọn Đơn Xuất Có Sẵn', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5)),
-                    ],
-                  ),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem<String>(
-                  value: 'manual',
-                  height: 38,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.post_add, color: Color(0xFF0284C7), size: 16),
-                      const SizedBox(width: 8),
-                      Text('Tạo Nhanh Đơn Xuất', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5)),
+                      Expanded(
+                        child: Text(
+                          'Nhập Từ PO',
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1096,12 +1012,18 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   const PopupMenuDivider(),
                   PopupMenuItem<String>(
                     value: 'clear',
-                    height: 38,
-                    child: const Row(
+                    height: 40,
+                    child: Row(
                       children: [
-                        Icon(Icons.delete_sweep_outlined, color: Color(0xFFEF4444), size: 16),
-                        SizedBox(width: 8),
-                        Text('Xóa Danh Sách Đang Chờ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11.5)),
+                        const Icon(Icons.delete_sweep_outlined, color: Color(0xFFEF4444), size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Xóa Danh Sách Đang Chờ',
+                            style: TextStyle(color: const Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11.5),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ),

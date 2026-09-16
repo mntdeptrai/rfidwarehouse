@@ -55,6 +55,7 @@ class MainActivity : FlutterActivity() {
     private val BEEP_MIN_INTERVAL_MS = 60L
 
     private var currentScanMode = "rfid"
+    private var isScanAllowed = false
 
     private var lastTriggerDown = 0L
     private val TRIGGER_DEBOUNCE_MS = 150L
@@ -443,6 +444,14 @@ class MainActivity : FlutterActivity() {
                         val res = stopInventory()
                         mainHandler.post { result.success(res) }
                     }
+                }
+                "setScanAllowed" -> {
+                    isScanAllowed = call.argument<Boolean>("allowed") ?: false
+                    Log.d(TAG, "setScanAllowed: $isScanAllowed")
+                    if (!isScanAllowed && isScanning.get()) {
+                        bgHandler.post { stopInventory() }
+                    }
+                    result.success(true)
                 }
                 "setScanMode" -> {
                     currentScanMode = call.argument<String>("mode") ?: "rfid"
@@ -1028,6 +1037,12 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+            // CHẶN BÓP CÒ: Chỉ cho phép quét nếu Flutter đang ở màn hình cho phép (Nhập kho, Xuất kho, Kiểm kho)
+            if (!isScanAllowed) {
+                Log.d(TAG, "Hardware trigger IGNORED: Scanning is disabled on current screen.")
+                return
+            }
+
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 // Instant trigger with 0 delay
@@ -1050,6 +1065,10 @@ class MainActivity : FlutterActivity() {
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 stopBarcodeBroadcast()
+            } else {
+                if (isScanning.get()) {
+                    bgHandler.post { stopInventory() }
+                }
             }
             notifyFlutterTrigger(false, keyCode, mode)
         }

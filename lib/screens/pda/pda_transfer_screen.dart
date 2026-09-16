@@ -735,12 +735,12 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Bước 2: Quét mã RFID EPC của sản phẩm đó
+            // Bước 2: Quét Barcode của Pallet
             _buildStepCard(
               c: c,
               step: '2',
               title: _mode == _TransferMode.pallet
-                  ? 'Quét chip RFID của Pallet'
+                  ? 'Quét Barcode của Pallet'
                   : 'Quét mã RFID EPC của sản phẩm',
               color: const Color(0xFFF59E0B),
               child: _mode == _TransferMode.pallet

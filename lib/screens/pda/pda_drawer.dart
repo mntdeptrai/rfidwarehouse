@@ -4,11 +4,7 @@ import '../../services/database_service.dart';
 import '../../services/uhf_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
-import 'pda_lookup_screen.dart';
-import 'pda_merge_pallets_screen.dart';
 import 'pda_putaway_screen.dart';
-import 'pda_warehouse_management_screen.dart';
-import '../radar_locate_screen.dart';
 import '../desktop/desktop_user_management_view.dart';
 
 class PdaDrawer extends StatelessWidget {
@@ -101,59 +97,7 @@ class PdaDrawer extends StatelessWidget {
                     );
                   },
                 ),
-              if (user?.rolePermission.canTransfer != false)
-                ListTile(
-                  leading: const Icon(Icons.call_merge_rounded, color: Color(0xFFF59E0B)),
-                  title: Text(
-                    'Gộp 2 Pallet (PDA)',
-                    style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text('Bóp cò quét Barcode/RFID dồn hàng 2 pallet', style: TextStyle(color: c.textMuted, fontSize: 11)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const PdaMergePalletsScreen()),
-                    );
-                  },
-                ),
-              ListTile(
-                leading: Icon(Icons.warehouse_rounded, color: c.rfidCyan),
-                title: Text(
-                  'Quản Lý Kho (PDA)',
-                  style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text('Pallet • Kệ • Lịch sử • Sản phẩm', style: TextStyle(color: c.textMuted, fontSize: 11)),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PdaWarehouseManagementScreen()),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.radar_rounded, color: c.rfidCyan),
-                title: Text('Định Vị Thẻ RFID (Radar)', style: TextStyle(color: c.textPrimary, fontSize: 14)),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const RadarLocateScreen()),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.search, color: c.rfidCyan),
-                title: Text('Tra Cứu Mã & Serial', style: TextStyle(color: c.textPrimary, fontSize: 14)),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PdaLookupScreen()),
-                  );
-                },
-              ),
+
               ListTile(
                 leading: Icon(Icons.settings_input_antenna_rounded, color: c.rfidCyan),
                 title: Text('Công Suất Ăng-ten (UHF)', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),

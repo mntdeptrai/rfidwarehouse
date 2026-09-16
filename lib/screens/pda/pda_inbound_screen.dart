@@ -191,6 +191,7 @@ class _InboundScreenState extends State<InboundScreen> {
     _eyeCare.addListener(_onStateChange);
     _repo.addListener(_onStateChange);
 
+    _uhf.enableScanning('nhap_kho');
     _uhf.setScanMode(PdaScanMode.rfid);
     _restoreActiveSessionOrOrder();
     _checkIfPutawayCompletedAndClear();
@@ -547,7 +548,7 @@ class _InboundScreenState extends State<InboundScreen> {
 
   @override
   void dispose() {
-    _uhf.stopInventory();
+    _uhf.disableScanning();
     _saveSessionToCache();
     HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
     _uiRefreshTimer?.cancel();
@@ -1584,42 +1585,26 @@ class _InboundScreenState extends State<InboundScreen> {
                   color: c.bgCardElevated,
                   onSelected: (value) {
                     if (_isImporting) return;
-                    if (value == 'select_order') {
-                      _showSelectInboundOrderDialog();
-                    } else if (value == 'excel') {
+                    if (value == 'excel') {
                       _pickAndLoadLiveExcelFile();
                     } else if (value == 'po') {
-                      _pickAndLoadPoFile();
-                    } else if (value == 'manual') {
-                      _showCreateOrderDialog();
+                      _showInboundPoOptionsDialog();
                     }
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem<String>(
-                      value: 'select_order',
-                      height: 38,
-                      child: Row(
-                        children: [
-                          Icon(Icons.format_list_bulleted_rounded, color: c.rfidCyan, size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Chọn Đơn Nhập (PO)',
-                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    PopupMenuItem<String>(
                       value: 'excel',
-                      height: 38,
+                      height: 40,
                       child: Row(
                         children: [
                           const Icon(Icons.table_chart, color: Color(0xFF10B981), size: 16),
                           const SizedBox(width: 8),
-                          Text(
-                            'File Thùng Hàng (.xlsx)',
-                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                          Expanded(
+                            child: Text(
+                              'Nhập File Excel / CSV (.xlsx, .csv)',
+                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
@@ -1627,29 +1612,17 @@ class _InboundScreenState extends State<InboundScreen> {
                     const PopupMenuDivider(),
                     PopupMenuItem<String>(
                       value: 'po',
-                      height: 38,
+                      height: 40,
                       child: Row(
                         children: [
                           Icon(Icons.receipt_long, color: c.rfidCyan, size: 16),
                           const SizedBox(width: 8),
-                          Text(
-                            'File Đơn Nhập PO',
-                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    PopupMenuItem<String>(
-                      value: 'manual',
-                      height: 38,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.post_add, color: Color(0xFF0284C7), size: 16),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Tạo Đơn Thủ Công',
-                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                          Expanded(
+                            child: Text(
+                              'Nhập Từ PO',
+                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
@@ -1774,25 +1747,33 @@ class _InboundScreenState extends State<InboundScreen> {
                     ),
                   ),
                 ),
-                InkWell(
-                  onTap: _showSelectInboundOrderDialog,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: c.rfidCyan.withValues(alpha: 0.15),
+                Builder(
+                  builder: (context) {
+                    final otherOrders = _repo.inboundOrders
+                        .where((o) => o.status != InboundOrderStatus.completed && o.orderNo != _selectedOrder?.orderNo)
+                        .toList();
+                    if (otherOrders.isEmpty) return const SizedBox.shrink();
+                    return InkWell(
+                      onTap: _showSelectInboundOrderDialog,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: c.rfidCyan.withValues(alpha: 0.5)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.swap_horiz, size: 13, color: c.rfidCyan),
-                        const SizedBox(width: 3),
-                        Text('ĐỔI ĐƠN', style: TextStyle(color: c.rfidCyan, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: c.rfidCyan.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: c.rfidCyan.withValues(alpha: 0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.swap_horiz, size: 13, color: c.rfidCyan),
+                            const SizedBox(width: 3),
+                            Text('ĐỔI ĐƠN', style: TextStyle(color: c.rfidCyan, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -3096,97 +3077,73 @@ class _InboundScreenState extends State<InboundScreen> {
   }
 
 
-  // Dialog Tạo Đơn Nhập PO nhanh trên PDA
-  void _showCreateOrderDialog() {
-    final orderNoController = TextEditingController();
-    final supplierController = TextEditingController();
-    final skuController = TextEditingController();
-    final nameController = TextEditingController();
-    final qtyController = TextEditingController(text: '10');
-
-    showDialog(
+  // Hộp thoại lựa chọn: Nạp File Đơn PO (.xlsx, .csv) hoặc Chọn đơn PO trên hệ thống
+  void _showInboundPoOptionsDialog() {
+    final c = _eyeCare.colors;
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _eyeCare.colors.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: _eyeCare.colors.border)),
-        title: const Row(
-          children: [
-            Icon(Icons.post_add, color: Color(0xFF0284C7), size: 22),
-            SizedBox(width: 8),
-            Text('Tạo Đơn Nhập Hàng', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SingleChildScrollView(
+      backgroundColor: c.bgCardElevated,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                controller: orderNoController,
-                decoration: const InputDecoration(labelText: 'Mã đơn nhập', hintText: 'Ví dụ: NK-001'),
+              Row(
+                children: [
+                  Icon(Icons.receipt_long, color: c.rfidCyan, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'NHẬP TỪ PO (ĐƠN MUA HÀNG)',
+                    style: TextStyle(
+                      color: c.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: supplierController,
-                decoration: const InputDecoration(labelText: 'Nhà cung cấp', hintText: 'Tên nhà cung cấp...'),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.file_upload_outlined, color: c.rfidCyan, size: 20),
+                ),
+                title: Text('Nạp File Đơn PO (.xlsx, .csv)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                subtitle: Text('Chọn file Excel / CSV đơn PO trên máy PDA', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndLoadPoFile();
+                },
               ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: skuController,
-                decoration: const InputDecoration(labelText: 'Mã SKU', hintText: 'Ví dụ: SKU-001'),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Tên hàng hóa', hintText: 'Tên sản phẩm...'),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Số lượng nhập', hintText: '10'),
+              Divider(color: c.border, height: 1),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.cloud_download_outlined, color: Color(0xFF10B981), size: 20),
+                ),
+                title: Text('Chọn Đơn PO Trên Hệ Thống', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                subtitle: Text('Danh sách đơn nhập kho đang chờ trên Supabase Cloud', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showSelectInboundOrderDialog();
+                },
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7)),
-            onPressed: () async {
-              final orderNo = orderNoController.text.trim();
-              final supplier = supplierController.text.trim();
-              final sku = skuController.text.trim();
-              final name = nameController.text.trim();
-              final qty = int.tryParse(qtyController.text.trim()) ?? 10;
-
-              if (orderNo.isEmpty || sku.isEmpty) return;
-
-              final newOrder = InboundOrder(
-                inboundOrderId: 'INB-${DateTime.now().millisecondsSinceEpoch}',
-                orderNo: orderNo,
-                sourceSupplier: supplier.isNotEmpty ? supplier : 'Nhà cung cấp',
-                status: InboundOrderStatus.newOrder,
-                createdAt: DateTime.now(),
-                details: [
-                  InboundOrderDetail(
-                    productId: 'PROD-${DateTime.now().millisecondsSinceEpoch}',
-                    sku: sku,
-                    productName: name.isNotEmpty ? name : 'Sản phẩm $sku',
-                    requiredQty: qty,
-                  ),
-                ],
-              );
-
-              await _repo.addInboundOrder(newOrder, autoGenerateEpcs: true);
-              if (ctx.mounted) Navigator.pop(ctx);
-              _selectInboundOrder(newOrder);
-            },
-            child: const Text('LƯU ĐƠN NHẬP', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }
@@ -3334,7 +3291,20 @@ class _InboundScreenState extends State<InboundScreen> {
                         '${o.sourceSupplier} • $totalQty sản phẩm',
                         style: TextStyle(color: c.textSecondary, fontSize: 11),
                       ),
-                      trailing: Icon(Icons.arrow_forward_ios, size: 14, color: c.textSecondary),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFEF4444)),
+                            tooltip: 'Xóa đơn này',
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _confirmDeleteSingleOrder(o);
+                            },
+                          ),
+                          Icon(Icons.arrow_forward_ios, size: 14, color: c.textSecondary),
+                        ],
+                      ),
                       onTap: () {
                         Navigator.pop(ctx);
                         _selectInboundOrder(o);

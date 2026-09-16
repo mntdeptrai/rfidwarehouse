@@ -136,6 +136,42 @@ class UhfService extends ChangeNotifier {
     _triggerStreamController.add(pressed);
   }
 
+  // Scope quản lý quyền quét: Chỉ cho phép quét ở Nhập kho, Xuất kho, hoặc Kiểm kho
+  bool _isScanAllowed = false;
+  String _activeScanModule = '';
+
+  bool get isScanAllowed => _isScanAllowed;
+  String get activeScanModule => _activeScanModule;
+
+  /// Cho phép quét chỉ khi ở màn hình nghiệp vụ hợp lệ (Nhập kho, Xuất kho, Kiểm kho)
+  void enableScanning(String module) {
+    _isScanAllowed = true;
+    _activeScanModule = module;
+    if (Platform.isAndroid) {
+      try {
+        _methodChannel.invokeMethod('setScanAllowed', {'allowed': true});
+      } catch (_) {}
+    }
+    debugPrint('UhfService: Scanning ENABLED for module: $module');
+    notifyListeners();
+  }
+
+  /// Khóa chặn quét triệt để khi rời màn hình hoặc ở màn hình khác (như Quản lý kho, Trang chủ...)
+  void disableScanning() {
+    _isScanAllowed = false;
+    _activeScanModule = '';
+    stopInventory();
+    if (Platform.isAndroid) {
+      try {
+        _methodChannel.invokeMethod('setScanAllowed', {'allowed': false});
+      } catch (_) {}
+    }
+    debugPrint('UhfService: Scanning BLOCKED & DISABLED');
+    scheduleMicrotask(() {
+      notifyListeners();
+    });
+  }
+
   bool get isInitialized => _isInitialized;
   bool get isScanning => _isScanning;
   int get rfPower => _rfPower;
@@ -178,6 +214,10 @@ class UhfService extends ChangeNotifier {
 
   Future<dynamic> _handleNativeMethodCall(MethodCall call) async {
     if (call.method == 'onHardwareTrigger') {
+      if (!_isScanAllowed && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        debugPrint('UhfService: Bỏ qua bóp cò vật lý vì chức năng quét đang bị chặn ở màn hình này.');
+        return;
+      }
       final Map? args = call.arguments as Map?;
       final bool pressed = args?['pressed'] ?? false;
       _isTriggerPressed = pressed;
@@ -186,6 +226,10 @@ class UhfService extends ChangeNotifier {
       _notifyThrottleTimer?.cancel();
       notifyListeners();
     } else if (call.method == 'onBarcodeRead') {
+      if (!_isScanAllowed && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        debugPrint('UhfService: Bỏ qua Barcode vì chức năng quét đang bị chặn ở màn hình này.');
+        return;
+      }
       final Map? args = call.arguments as Map?;
       final String barcode = (args?['barcode'] ?? '').toString().trim();
       if (barcode.isNotEmpty) {
@@ -349,6 +393,12 @@ class UhfService extends ChangeNotifier {
 
   /// Start Continuous Inventory Scan
   Future<bool> startInventory() async {
+    // CHẶN QUÉT: Chỉ cho phép quét khi đã enableScanning() từ Nhập kho, Xuất kho hoặc Kiểm kho
+    if (!_isScanAllowed && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      debugPrint('UhfService: startInventory() BỊ CHẶN! Chỉ cho phép quét trong màn hình Nhập kho, Xuất kho hoặc Kiểm kho.');
+      return false;
+    }
+
     _recentReadCount = 0;
     _readRate = 0.0;
     _startRateTimer();
@@ -380,20 +430,26 @@ class UhfService extends ChangeNotifier {
     _readRate = 0.0;
 
     if (!Platform.isAndroid) {
-      _isScanning = false;
-      notifyListeners();
+      if (_isScanning) {
+        _isScanning = false;
+        notifyListeners();
+      }
       return true;
     }
 
     try {
       final bool? success = await _methodChannel.invokeMethod<bool>('stopInventory');
-      _isScanning = false;
-      notifyListeners();
+      if (_isScanning) {
+        _isScanning = false;
+        notifyListeners();
+      }
       return success ?? true;
     } catch (e) {
       debugPrint('UhfService.stopInventory error: $e');
-      _isScanning = false;
-      notifyListeners();
+      if (_isScanning) {
+        _isScanning = false;
+        notifyListeners();
+      }
       return false;
     }
   }
@@ -430,6 +486,10 @@ class UhfService extends ChangeNotifier {
 
   /// Kích hoạt quét mã vạch 2D / Barcode trên tay cầm PDA
   Future<bool> triggerBarcodeScan() async {
+    if (!_isScanAllowed && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      debugPrint('UhfService: triggerBarcodeScan() BỊ CHẶN! Chỉ cho phép quét trong màn hình Nhập kho, Xuất kho hoặc Kiểm kho.');
+      return false;
+    }
     if (!Platform.isAndroid) return false;
     try {
       final bool? res = await _methodChannel.invokeMethod<bool>('triggerBarcodeScan');

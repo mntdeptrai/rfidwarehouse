@@ -14,10 +14,13 @@ import 'package:uhf/screens/desktop/desktop_warehouse_management_view.dart';
 import 'package:uhf/screens/outbound_screen.dart';
 import 'package:uhf/screens/pda/pda_putaway_screen.dart';
 import 'package:uhf/screens/pda/pda_warehouse_management_screen.dart';
+import 'package:uhf/screens/pda/pda_drawer.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/models/tag_info.dart';
 import 'package:uhf/services/warehouse_repository.dart';
 import 'package:uhf/services/uhf_service.dart';
+import 'package:uhf/screens/desktop/desktop_location_management_view.dart';
+import 'package:uhf/screens/desktop/desktop_report_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -558,23 +561,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
 
-    // Nút XUẤT HÀNG dạng dropdown màu cyan trên header
+    // Nút XUẤT HÀNG dạng dropdown màu cyan trên header & nút LÀM MỚI
     expect(find.text('XUẤT HÀNG'), findsOneWidget);
-    expect(find.text('LỊCH SỬ XUẤT KHO'), findsOneWidget);
     expect(find.text('LÀM MỚI'), findsOneWidget);
 
+    // Nút LỊCH SỬ XUẤT KHO đã được loại bỏ hoàn toàn khỏi giao diện Cổng xuất kho
+    expect(find.text('LỊCH SỬ XUẤT KHO'), findsNothing);
+
     // Màn hình chờ tiếp nhận hàng xuất khi chưa nạp file
-    expect(find.textContaining('CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT'), findsOneWidget);
-
-    // Bấm xem Lịch sử xuất kho
-    await tester.tap(find.text('LỊCH SỬ XUẤT KHO'));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.textContaining('LỊCH SỬ GIAO DỊCH XUẤT KHO'), findsOneWidget);
-    expect(find.text('CỔNG XUẤT KHO'), findsOneWidget);
-
-    // Bấm quay lại Cổng xuất kho
-    await tester.tap(find.text('CỔNG XUẤT KHO'));
-    await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT'), findsOneWidget);
 
     // Không còn nút đỏ báo lỗi sai sót
@@ -805,5 +799,426 @@ void main() {
     await repo.wipeAllPendingInboundOrdersAndItems();
     InboundActiveSession.clear();
   });
+
+  testWidgets('PdaDrawer does not render the 4 removed items', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          drawer: PdaDrawer(),
+          body: Center(child: Text('Home')),
+        ),
+      ),
+    );
+
+    // Mở drawer
+    final scaffoldState = tester.state<ScaffoldState>(find.byType(Scaffold));
+    scaffoldState.openDrawer();
+    await tester.pumpAndSettle();
+
+    // Xác nhận 4 mục đã bị gỡ hoàn toàn khỏi drawer
+    expect(find.text('Gộp 2 Pallet (PDA)'), findsNothing);
+    expect(find.text('Quản Lý Kho (PDA)'), findsNothing);
+    expect(find.text('Định Vị Thẻ RFID (Radar)'), findsNothing);
+    expect(find.text('Tra Cứu Mã & Serial'), findsNothing);
+  });
+
+  test('UhfService scan authorization gate: allows scanning only when enabled for authorized module', () async {
+    final uhf = UhfService();
+
+    // 1. Mặc định hoặc khi bị khóa: không được quét
+    uhf.disableScanning();
+    expect(uhf.isScanAllowed, isFalse);
+
+    // 2. Kích hoạt quét cho Nhập kho
+    uhf.enableScanning('nhap_kho');
+    expect(uhf.isScanAllowed, isTrue);
+    expect(uhf.activeScanModule, 'nhap_kho');
+
+    // 3. Khóa lại
+    uhf.disableScanning();
+    expect(uhf.isScanAllowed, isFalse);
+    expect(uhf.activeScanModule, '');
+
+    // 4. Kích hoạt quét cho Xuất kho
+    uhf.enableScanning('xuat_kho');
+    expect(uhf.isScanAllowed, isTrue);
+
+    // 5. Kích hoạt quét cho Kiểm kho
+    uhf.enableScanning('kiem_kho');
+    expect(uhf.isScanAllowed, isTrue);
+
+    uhf.disableScanning();
+    expect(uhf.isScanAllowed, isFalse);
+  });
+
+  testWidgets('PdaWarehouseManagementScreen disables scan on entry and pallet card shows delete button', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final uhf = UhfService();
+    // Giả lập trạng thái scan đang bật trước khi vào Quản lý kho
+    uhf.enableScanning('test');
+    expect(uhf.isScanAllowed, isTrue);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PdaWarehouseManagementScreen(),
+      ),
+    );
+    await tester.pump();
+
+    // Khi vào Quản lý kho: scan bị tắt ngay lập tức
+    expect(uhf.isScanAllowed, isFalse);
+
+    // Thêm 1 pallet giả lập để kiểm tra hiển thị nút xóa
+    final repo = WarehouseRepository();
+    repo.createOrAssignPallet(
+      palletCode: 'PAL-TEST-99',
+      newItems: [],
+      placedBy: 'Tester',
+    );
+    await tester.pump();
+
+    expect(find.text('PAL-TEST-99'), findsWidgets);
+    expect(find.byIcon(Icons.delete_outline), findsWidgets);
+
+    // Dọn dẹp
+    await repo.deletePallet('PAL-TEST-99');
+  });
+
+  testWidgets('Inbound and Outbound dropdown menus strictly contain Excel/CSV and Nhập từ PO options', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    // 1. Kiểm tra PDA InboundScreen
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: InboundScreen(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final inboundBtn = find.text('NHẬP HÀNG');
+    expect(inboundBtn, findsOneWidget);
+    await tester.tap(inboundBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nhập File Excel / CSV (.xlsx, .csv)'), findsOneWidget);
+    expect(find.text('Nhập Từ PO'), findsOneWidget);
+    expect(find.text('Tạo Đơn Thủ Công'), findsNothing);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+
+    // 2. Kiểm tra PDA OutboundScreen
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: OutboundScreen(),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final outboundBtn = find.text('XUẤT HÀNG');
+    expect(outboundBtn, findsOneWidget);
+    await tester.tap(outboundBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nhập File Excel / CSV (.xlsx, .csv)'), findsOneWidget);
+    expect(find.text('Nhập Từ PO'), findsOneWidget);
+    expect(find.text('Tạo Nhanh Đơn Xuất'), findsNothing);
+    expect(find.text('Chọn Đơn Xuất Có Sẵn'), findsNothing);
+  });
+
+  testWidgets('DesktopWarehouseManagementView shows only 3 pallet metric tiles without subtitles', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopWarehouseManagementView(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Must show exactly the 3 metric boxes
+    expect(find.text('TỔNG SỐ PALLET'), findsOneWidget);
+    expect(find.text('ĐANG CÓ HÀNG'), findsOneWidget);
+    expect(find.text('PALLET TRỐNG'), findsOneWidget);
+
+    // Removed box must not exist
+    expect(find.text('ĐÃ GẮN CHIP RFID'), findsNothing);
+
+    // Subtitles must not exist
+    expect(find.text('Đã đăng ký trong CSDL'), findsNothing);
+    expect(find.text('Đang xếp hàng trong kho'), findsNothing);
+    expect(find.text('Sẵn sàng nhận hàng mới'), findsNothing);
+  });
+
+  testWidgets('InboundScreen hides ĐỔI ĐƠN when only 1 order exists and shows when multiple exist', (WidgetTester tester) async {
+    final repo = WarehouseRepository();
+
+    // Create 1 order
+    final order1 = InboundOrder(
+      inboundOrderId: 'TEST-ORD-01',
+      orderNo: 'TEST-ORD-01',
+      sourceSupplier: 'Supplier 1',
+      status: InboundOrderStatus.newOrder,
+      createdAt: DateTime.now(),
+      details: [
+        InboundOrderDetail(productId: 'PROD-01', sku: 'SKU-01', productName: 'Prod 1', requiredQty: 5),
+      ],
+    );
+    await repo.addInboundOrder(order1, autoGenerateEpcs: true);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: InboundScreen(initialOrderNo: 'TEST-ORD-01'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // When only 1 order exists: ĐỔI ĐƠN must NOT be visible
+    expect(find.text('ĐỔI ĐƠN'), findsNothing);
+
+    // Add a second order
+    final order2 = InboundOrder(
+      inboundOrderId: 'TEST-ORD-02',
+      orderNo: 'TEST-ORD-02',
+      sourceSupplier: 'Supplier 2',
+      status: InboundOrderStatus.newOrder,
+      createdAt: DateTime.now(),
+      details: [
+        InboundOrderDetail(productId: 'PROD-02', sku: 'SKU-02', productName: 'Prod 2', requiredQty: 3),
+      ],
+    );
+    await repo.addInboundOrder(order2, autoGenerateEpcs: true);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: InboundScreen(initialOrderNo: 'TEST-ORD-01'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // When second order exists: ĐỔI ĐƠN must be visible
+    expect(find.text('ĐỔI ĐƠN'), findsOneWidget);
+
+    // Clean up
+    await repo.deleteInboundOrder('TEST-ORD-01');
+    await repo.deleteInboundOrder('TEST-ORD-02');
+  });
+
+  testWidgets('DesktopLocationManagementView shelf pallet card displays product breakdown table (Mã, Tên, Số lượng, Ngày nhập)', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+
+    // Add a test location
+    final testLoc = Location(
+      locationId: 'TEST-SHELF-01',
+      locationCode: 'TEST-SHELF-01',
+      zone: 'Zone A',
+      shelf: 'Kệ 1',
+      level: 'Tầng 1',
+      status: 'AVAILABLE',
+      maxPalletCapacity: 10,
+    );
+    await repo.addLocation(testLoc);
+
+    // Add a test pallet placed on this shelf
+    await repo.registerOrUpdatePallet(
+      palletCode: 'PL-TEST-01',
+      palletName: 'Pallet Test 1',
+      rfidEpc: 'E28011902000TEST01',
+      locationId: 'TEST-SHELF-01',
+    );
+
+    // Add items for this pallet
+    final testItem1 = Item(
+      itemId: 'ITEM-TEST-01',
+      productId: 'PROD-ABC-99',
+      sku: 'SKU-ABC-99',
+      productName: 'Cảm Biến Quang Học',
+      serialNumber: 'SN-001',
+      epc: 'E28011902000000000000101',
+      status: ItemStatus.inStock,
+      locationId: 'TEST-SHELF-01',
+      palletId: 'PL-TEST-01',
+      inboundTime: DateTime(2026, 9, 16, 10, 30),
+    );
+    final testItem2 = Item(
+      itemId: 'ITEM-TEST-02',
+      productId: 'PROD-ABC-99',
+      sku: 'SKU-ABC-99',
+      productName: 'Cảm Biến Quang Học',
+      serialNumber: 'SN-002',
+      epc: 'E28011902000000000000102',
+      status: ItemStatus.inStock,
+      locationId: 'TEST-SHELF-01',
+      palletId: 'PL-TEST-01',
+      inboundTime: DateTime(2026, 9, 16, 10, 30),
+    );
+    await repo.addItem(testItem1);
+    await repo.addItem(testItem2);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopLocationManagementView(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Filter specifically for the test location
+    await tester.enterText(find.byType(TextField), 'TEST-SHELF-01');
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Tap on "Chi tiết →" for the test location
+    final detailButton = find.text('Chi tiết →');
+    expect(detailButton, findsOneWidget);
+    await tester.tap(detailButton);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Verify the shelf detail page is shown with Pallet card and strictly 3 clean KPI boxes
+    expect(find.text('DANH SÁCH PALLET ĐANG ĐẶT TẠI KỆ (1)'), findsOneWidget);
+    expect(find.text('PALLET: PL-TEST-01'), findsOneWidget);
+    expect(find.text('SỐ PALLET TRÊN KỆ'), findsOneWidget);
+    expect(find.text('SỐ HÀNG TRÊN KỆ'), findsOneWidget);
+    expect(find.text('CHỦNG LOẠI SKU'), findsOneWidget);
+    expect(find.textContaining('Sức chứa tối đa'), findsNothing);
+    expect(find.textContaining('lối đi'), findsNothing);
+    expect(find.textContaining('Thứ tự lối đi'), findsNothing);
+
+    // Verify the product breakdown table has the 4 columns: Số lượng, Tên, Mã, Ngày nhập
+    expect(find.text('MÃ SẢN PHẨM'), findsWidgets);
+    expect(find.text('TÊN SẢN PHẨM'), findsWidgets);
+    expect(find.text('SỐ LƯỢNG'), findsWidgets);
+    expect(find.text('NGÀY NHẬP'), findsWidgets);
+
+    // Verify the grouped values:
+    expect(find.text('SKU-ABC-99'), findsWidgets);
+    expect(find.text('Cảm Biến Quang Học'), findsOneWidget);
+    expect(find.text('2 cái'), findsOneWidget);
+    expect(find.text('16/09/2026 10:30'), findsOneWidget);
+
+    // Clean up
+    await repo.deleteItem(testItem1.epc);
+    await repo.deleteItem(testItem2.epc);
+    await repo.deletePalletFromMaster('PL-TEST-01');
+    await repo.deleteLocation('TEST-SHELF-01');
+  });
+
+  testWidgets('DesktopWarehouseManagementView unified history view removes audit log sub-tab and consolidates all transactions', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopWarehouseManagementView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Switch to "Quản Lý Lịch Sử" tab
+    final historyTab = find.text('Quản Lý Lịch Sử');
+    expect(historyTab, findsOneWidget);
+    await tester.tap(historyTab);
+    await tester.pumpAndSettle();
+
+    // Assert "Nhật Ký Biến Động CSDL" and sub-tab bar are completely removed
+    expect(find.text('Nhật Ký Biến Động CSDL'), findsNothing);
+    expect(find.text('DANH MỤC LỊCH SỬ:'), findsNothing);
+    expect(find.text('Lịch Sử Giao Dịch Nhập Xuất'), findsNothing);
+
+    // Assert unified 4 metrics are present (Nhập, Xuất, Điều chuyển, Kiểm kê)
+    expect(find.text('ĐƠN NHẬP KHO'), findsOneWidget);
+    expect(find.text('ĐƠN XUẤT KHO'), findsOneWidget);
+    expect(find.text('ĐIỀU CHUYỂN KHO'), findsOneWidget);
+    expect(find.text('KIỂM KÊ KHO'), findsOneWidget);
+
+    // Assert unified table column and 5-category switcher bar are present
+    expect(find.text('NGHIỆP VỤ'), findsOneWidget);
+    expect(find.textContaining('TẤT CẢ'), findsWidgets);
+    expect(find.textContaining('NHẬP KHO'), findsWidgets);
+    expect(find.textContaining('XUẤT KHO'), findsWidgets);
+    expect(find.textContaining('ĐIỀU CHUYỂN'), findsWidgets);
+    expect(find.textContaining('KIỂM KÊ'), findsWidgets);
+    expect(find.text('Tất cả trạng thái'), findsOneWidget);
+  });
+
+  testWidgets('DesktopReportView renders without overflow in ultra-narrow window', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(200, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopReportView(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(DesktopReportView), findsOneWidget);
+  });
+
+  testWidgets('DesktopReportView interactive report selection form allows selecting orders and toggling category', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopReportView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify header
+    expect(find.text('Trung Tâm Báo Cáo Kho'), findsOneWidget);
+
+    // Verify 4 metric tiles
+    expect(find.text('ĐÃ CHỌN XUẤT FILE'), findsOneWidget);
+    expect(find.text('LƯỢNG HÀNG TRONG ĐƠN CHỌN'), findsOneWidget);
+    expect(find.text('ĐỊNH DẠNG XUẤT'), findsOneWidget);
+
+    // Verify 5 category switcher tabs
+    expect(find.textContaining('NHẬP KHO'), findsWidgets);
+    expect(find.textContaining('XUẤT KHO'), findsWidgets);
+    expect(find.textContaining('TỒN KHO'), findsWidgets);
+    expect(find.textContaining('KIỂM KÊ'), findsWidgets);
+    expect(find.textContaining('BIẾN ĐỘNG'), findsWidgets);
+
+    // Verify toolbar elements
+    expect(find.textContaining('XUẤT BÁO CÁO'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+
+    // Switch to Outbound category
+    final outboundTab = find.textContaining('XUẤT KHO');
+    await tester.tap(outboundTab.first);
+    await tester.pumpAndSettle();
+
+    // Verify table headers change to outbound
+    expect(find.text('MÃ PO / XUẤT'), findsOneWidget);
+    expect(find.text('KHÁCH HÀNG'), findsOneWidget);
+  });
 }
+
 

@@ -47,6 +47,21 @@ enum ShelfStatusType {
   });
 }
 
+class _PalletProductGroup {
+  final String sku;
+  final String productName;
+  int quantity;
+  DateTime inboundTime;
+  final List<Item> items;
+
+  _PalletProductGroup({
+    required this.sku,
+    required this.productName,
+    required this.quantity,
+    required this.inboundTime,
+    required this.items,
+  });
+}
 
 class DesktopLocationManagementView extends StatefulWidget {
   const DesktopLocationManagementView({super.key});
@@ -441,7 +456,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         final cardFull = _buildKpiCard(
           title: 'KỆ ĐẦY (FULL)',
           value: '$fullCount Kệ',
-          subtitle: '🔴 Cập nhật bởi PDA',
+          subtitle: 'Cập nhật bởi PDA',
           icon: Icons.error_outline_rounded,
           color: const Color(0xFFEF4444),
           c: c,
@@ -450,7 +465,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         final cardNearFull = _buildKpiCard(
           title: 'SẮP HẾT CHỖ',
           value: '$almostFullCount Kệ',
-          subtitle: '🟡 Cập nhật bởi PDA',
+          subtitle: 'Cập nhật bởi PDA',
           icon: Icons.warning_amber_rounded,
           color: const Color(0xFFF59E0B),
           c: c,
@@ -459,7 +474,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         final cardPlenty = _buildKpiCard(
           title: 'CÒN TRỐNG NHIỀU',
           value: '$plentyCount Kệ',
-          subtitle: '🟢 Vị trí sẵn sàng',
+          subtitle: 'Vị trí sẵn sàng',
           icon: Icons.check_circle_outline_rounded,
           color: const Color(0xFF10B981),
           c: c,
@@ -538,12 +553,12 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.palette_outlined, size: 14, color: c.textMuted),
+                      const Icon(Icons.palette_outlined, size: 14, color: Color(0xFF0F172A)),
                       const SizedBox(width: 6),
                       Text(
                         'TRẠNG THÁI:',
                         style: TextStyle(
-                          color: c.textPrimary,
+                          color: const Color(0xFF0F172A),
                           fontSize: isUltraNarrow ? 10 : 11,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 0.5,
@@ -589,32 +604,25 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
   }) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: isCompact ? 10 : 16,
-        vertical: isCompact ? 10 : 14,
+        horizontal: isCompact ? 10 : 14,
+        vertical: isCompact ? 8 : 12,
       ),
       decoration: BoxDecoration(
         color: c.bgCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: c.border),
       ),
       child: Row(
         children: [
           Container(
             padding: EdgeInsets.all(isCompact ? 7 : 10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, color: color, size: isCompact ? 18 : 22),
+            child: Icon(icon, color: color, size: isCompact ? 18 : 20),
           ),
-          SizedBox(width: isCompact ? 10 : 14),
+          SizedBox(width: isCompact ? 8 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,9 +632,9 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                   title,
                   style: TextStyle(
                     color: c.textSecondary,
-                    fontSize: isCompact ? 9.5 : 10.5,
+                    fontSize: isCompact ? 9.5 : 10,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
+                    letterSpacing: 0.3,
                   ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
@@ -635,22 +643,26 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                 Text(
                   value,
                   style: TextStyle(
-                    color: color,
-                    fontSize: isCompact ? 16 : 20,
+                    color: c.textPrimary,
+                    fontSize: isCompact ? 14 : 15,
                     fontWeight: FontWeight.bold,
                   ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: c.textMuted,
-                    fontSize: isCompact ? 9 : 10,
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: isCompact ? 9.5 : 10.5,
+                      fontWeight: FontWeight.normal,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
+                ],
               ],
             ),
           ),
@@ -718,11 +730,11 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               height: 36,
               child: TextField(
                 controller: _searchController,
-                style: TextStyle(color: c.textPrimary, fontSize: 12.5),
+                style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12.5),
                 decoration: InputDecoration(
                   hintText: 'Tìm theo mã kệ, tầng, khu...',
-                  hintStyle: TextStyle(color: c.textMuted, fontSize: 11.5),
-                  prefixIcon: Icon(Icons.search, size: 16, color: c.textMuted),
+                  hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
+                  prefixIcon: const Icon(Icons.search, size: 16, color: Color(0xFF334155)),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 14),
@@ -750,7 +762,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
             const SizedBox(width: 14),
 
             // Lọc theo Khu vực (Zone)
-            Text('Khu vực:', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+            const Text('Khu vực:', style: TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(width: 8),
             Container(
               height: 36,
@@ -764,7 +776,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                 child: DropdownButton<String>(
                   value: _selectedZoneFilter,
                   dropdownColor: c.bgCard,
-                  style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold),
                   items: zones.map((z) {
                     return DropdownMenuItem<String>(
                       value: z,
@@ -780,9 +792,9 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
             const SizedBox(width: 14),
 
             // Lọc theo Trạng thái (Đầy / Sắp đầy / Trống nhiều)
-            Text('Trạng thái:', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.bold)),
+            const Text('Trạng thái:', style: TextStyle(color: Color(0xFF0F172A), fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(width: 8),
-            _buildStatusFilterChip('Tất cả', 'ALL', c.textPrimary, c),
+            _buildStatusFilterChip('Tất cả', 'ALL', const Color(0xFF0F172A), c),
             const SizedBox(width: 6),
             _buildStatusFilterChip('🔴 Kệ đầy', 'FULL', const Color(0xFFEF4444), c),
             const SizedBox(width: 6),
@@ -813,7 +825,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? color : c.textSecondary,
+            color: isSelected ? (value == 'ALL' ? const Color(0xFF0F172A) : color) : const Color(0xFF0F172A),
             fontSize: 11,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           ),
@@ -861,14 +873,14 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               color: c.bgCard,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: status.color.withValues(alpha: 0.6),
-                width: 1.8,
+                color: c.border,
+                width: 1.2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: status.color.withValues(alpha: 0.06),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
@@ -883,7 +895,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                     Container(
                       padding: EdgeInsets.all(isCompact ? 6 : 8),
                       decoration: BoxDecoration(
-                        color: status.bgLight,
+                        color: status.color.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(Icons.shelves, color: status.color, size: isCompact ? 18 : 20),
@@ -896,7 +908,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                           Text(
                             loc.displayName,
                             style: TextStyle(
-                              color: c.textPrimary,
+                              color: const Color(0xFF0F172A),
                               fontSize: isCompact ? 13 : 14,
                               fontWeight: FontWeight.bold,
                             ),
@@ -904,14 +916,18 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                           ),
                           Text(
                             loc.displaySubtitle,
-                            style: TextStyle(color: c.textSecondary, fontSize: isCompact ? 10.5 : 11),
+                            style: TextStyle(
+                              color: const Color(0xFF334155),
+                              fontSize: isCompact ? 10.5 : 11,
+                              fontWeight: FontWeight.w500,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 6),
-                    // Badge trạng thái màu (Đỏ / Vàng / Xanh - Tự động co gọn chữ khi hẹp)
+                    // Badge trạng thái màu (Đỏ / Vàng / Xanh - Tự động co gọn chữ khi hẹp) -> THANH TRẠNG THÁI DUY NHẤT CÓ MÀU
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: isCompact ? 7 : 9, vertical: isCompact ? 4 : 5),
                       decoration: BoxDecoration(
@@ -948,10 +964,11 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                   decoration: BoxDecoration(
                     color: c.bgCardElevated,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: c.border.withValues(alpha: 0.6)),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.inventory_2_outlined, size: isCompact ? 14 : 15, color: status.color),
+                      const Icon(Icons.inventory_2_outlined, size: 15, color: Color(0xFF334155)),
                       SizedBox(width: isCompact ? 6 : 8),
                       Expanded(
                         child: Text(
@@ -965,9 +982,9 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                                   ? 'Pallet rỗng: ${palletsOnShelf.map((p) => p.palletCode).join(', ')}'
                                   : (isCompact ? 'Kệ trống' : 'Kệ trống, chưa có chip RFID')),
                           style: TextStyle(
-                            color: (itemsOnShelf.isNotEmpty || palletsOnShelf.isNotEmpty) ? c.textPrimary : c.textMuted,
+                            color: const Color(0xFF0F172A),
                             fontSize: isCompact ? 10.5 : 11,
-                            fontWeight: (itemsOnShelf.isNotEmpty || palletsOnShelf.isNotEmpty) ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight: FontWeight.w600,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -982,12 +999,16 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                     Expanded(
                       child: Row(
                         children: [
-                          Icon(Icons.phone_android_rounded, size: isCompact ? 12 : 13, color: c.textMuted),
+                          const Icon(Icons.phone_android_rounded, size: 13, color: Color(0xFF334155)),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               isCompact ? 'PDA' : 'Cập nhật từ PDA',
-                              style: TextStyle(color: c.textMuted, fontSize: isCompact ? 10 : 10.5),
+                              style: TextStyle(
+                                color: const Color(0xFF334155),
+                                fontSize: isCompact ? 10 : 10.5,
+                                fontWeight: FontWeight.w500,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -999,7 +1020,11 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                       onTap: () => setState(() => _selectedShelfDetail = loc),
                       child: Text(
                         'Chi tiết →',
-                        style: TextStyle(color: c.rfidCyan, fontSize: isCompact ? 10.5 : 11, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: c.rfidCyan,
+                          fontSize: isCompact ? 10.5 : 11,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -1654,7 +1679,8 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text('QUẢN LÝ KHO', style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.bold)),
                       Text('  /  ', style: TextStyle(color: c.textMuted, fontSize: 11)),
@@ -1743,12 +1769,12 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
       decoration: BoxDecoration(
         color: c.bgCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: curStatus.color.withValues(alpha: 0.8), width: 1.8),
+        border: Border.all(color: c.border, width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: curStatus.color.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -1761,10 +1787,10 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: curStatus.bgLight,
+                  color: curStatus.color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.shelves, color: curStatus.color, size: 30),
+                child: Icon(Icons.shelves, color: curStatus.color, size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1787,15 +1813,15 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                           ),
                           child: Text(
                             'Mã: ${loc.locationCode}',
-                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, fontFamily: 'Courier'),
+                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${loc.displaySubtitle}  •  Sức chứa tối đa: ${loc.maxPalletCapacity} Pallet  •  Dãy: ${loc.aisleSide == 'RIGHT' ? 'Dãy Phải' : (loc.aisleSide == 'LEFT' ? 'Dãy Trái' : loc.aisleSide)}  •  Thứ tự lối đi: #${loc.sortOrder}',
-                      style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                      loc.displaySubtitle,
+                      style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -1835,31 +1861,28 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     bool isNarrow,
     EyeCareColors c,
   ) {
-    final cap = loc.maxPalletCapacity > 0 ? loc.maxPalletCapacity : 1;
-    final percent = ((pallets.length / cap) * 100).toInt();
-
     final cardPallets = _buildKpiCard(
       title: 'SỐ PALLET TRÊN KỆ',
-      value: '${pallets.length} / ${loc.maxPalletCapacity} Pallet',
-      subtitle: '$percent% Công suất lưu trữ',
+      value: '${pallets.length} Pallet',
+      subtitle: pallets.isNotEmpty ? 'Đang lưu trữ trên kệ' : 'Kệ chưa có pallet',
       icon: Icons.pallet,
-      color: c.rfidCyan,
+      color: const Color(0xFF3B82F6),
       c: c,
       isCompact: false,
     );
 
     final cardItems = _buildKpiCard(
-      title: 'TỔNG CHIP RFID / KIỆN HÀNG',
-      value: '${items.length} Thẻ RFID',
+      title: 'SỐ HÀNG TRÊN KỆ',
+      value: '${items.length} Kiện / Chip',
       subtitle: items.isNotEmpty ? 'Đang lưu trữ thực tế' : 'Kệ đang trống',
-      icon: Icons.nfc_rounded,
+      icon: Icons.inventory_2_outlined,
       color: const Color(0xFF10B981),
       c: c,
       isCompact: false,
     );
 
     final cardSkus = _buildKpiCard(
-      title: 'CHỦNG LOẠI SẢN PHẨM (SKU)',
+      title: 'CHỦNG LOẠI SKU',
       value: '${distinctSkus.length} Loại SKU',
       subtitle: distinctSkus.isNotEmpty ? distinctSkus.take(2).join(', ') : 'Chưa có hàng',
       icon: Icons.category_outlined,
@@ -1868,23 +1891,18 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
       isCompact: false,
     );
 
-    final lastPallet = pallets.isNotEmpty ? pallets.first : null;
-    final cardLatest = _buildKpiCard(
-      title: 'LẦN ĐẶT PALLET GẦN NHẤT',
-      value: lastPallet != null ? _formatRelativeTime(_repo.getPalletPlacedTime(lastPallet)) : 'Chưa có',
-      subtitle: lastPallet != null ? 'Bởi ${_repo.getPalletPlacedBy(lastPallet)}' : 'Chưa có pallet',
-      icon: Icons.history_rounded,
-      color: const Color(0xFFF59E0B),
-      c: c,
-      isCompact: false,
-    );
-
     if (isNarrow) {
       return Column(
         children: [
-          Row(children: [Expanded(child: cardPallets), const SizedBox(width: 8), Expanded(child: cardItems)]),
+          cardPallets,
           const SizedBox(height: 8),
-          Row(children: [Expanded(child: cardSkus), const SizedBox(width: 8), Expanded(child: cardLatest)]),
+          Row(
+            children: [
+              Expanded(child: cardItems),
+              const SizedBox(width: 8),
+              Expanded(child: cardSkus),
+            ],
+          ),
         ],
       );
     }
@@ -1896,8 +1914,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         Expanded(child: cardItems),
         const SizedBox(width: 12),
         Expanded(child: cardSkus),
-        const SizedBox(width: 12),
-        Expanded(child: cardLatest),
       ],
     );
   }
@@ -1918,10 +1934,10 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: c.rfidCyan.withValues(alpha: 0.15),
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.pallet, color: c.rfidCyan, size: 22),
+                child: const Icon(Icons.pallet, color: Color(0xFF3B82F6), size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1930,11 +1946,11 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                   children: [
                     Text(
                       'DANH SÁCH PALLET ĐANG ĐẶT TẠI KỆ (${pallets.length})',
-                      style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15, fontWeight: FontWeight.bold),
                     ),
-                    Text(
+                    const Text(
                       'Chi tiết thông tin từng Pallet, người đặt, thời gian đặt và các kiện hàng / chip RFID bên trong',
-                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                      style: TextStyle(color: Color(0xFF334155), fontSize: 12),
                     ),
                   ],
                 ),
@@ -2009,18 +2025,36 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     ).toList();
     final isExpanded = _expandedPalletIds.contains(p.palletId);
 
-    // Group items by product/SKU for brief summary
-    final skuCounts = <String, int>{};
+    // Gom nhóm mặt hàng theo SKU để hiển thị chi tiết: Số lượng, Tên, Mã, Ngày nhập
+    final Map<String, _PalletProductGroup> productGroups = {};
     for (final it in pItems) {
-      final key = it.productName.isNotEmpty ? it.productName : it.sku;
-      skuCounts[key] = (skuCounts[key] ?? 0) + 1;
+      final skuCode = it.sku.trim().isNotEmpty ? it.sku.trim() : (it.productId.trim().isNotEmpty ? it.productId.trim() : 'CHƯA CÓ MÃ');
+      final prodName = it.productName.trim().isNotEmpty ? it.productName.trim() : skuCode;
+      final inTime = _repo.getItemInboundTime(it);
+      if (productGroups.containsKey(skuCode)) {
+        final grp = productGroups[skuCode]!;
+        grp.quantity += 1;
+        grp.items.add(it);
+        if (inTime.isAfter(grp.inboundTime)) {
+          grp.inboundTime = inTime;
+        }
+      } else {
+        productGroups[skuCode] = _PalletProductGroup(
+          sku: skuCode,
+          productName: prodName,
+          quantity: 1,
+          inboundTime: inTime,
+          items: [it],
+        );
+      }
     }
+    final groupList = productGroups.values.toList();
 
     return Container(
       decoration: BoxDecoration(
         color: c.bgCardElevated,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.border, width: 1.4),
+        border: Border.all(color: c.border, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2033,10 +2067,10 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.pallet, color: Color(0xFF10B981), size: 24),
+                  child: const Icon(Icons.pallet, color: Color(0xFF3B82F6), size: 24),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -2074,12 +2108,13 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: c.rfidCyan.withValues(alpha: 0.15),
+                              color: c.bgDeep,
                               borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: c.border),
                             ),
                             child: Text(
                               '${pItems.length} Kiện hàng / RFID',
-                              style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: c.textPrimary, fontSize: 10.5, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
@@ -2089,7 +2124,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                         p.rfidEpc != null && p.rfidEpc!.isNotEmpty
                             ? 'Mã RFID Thẻ Pallet: ${p.rfidEpc}'
                             : 'Mã Pallet ID: ${p.palletId}  •  Chưa gắn thẻ RFID Pallet',
-                        style: TextStyle(color: c.textMuted, fontSize: 11, fontFamily: 'Courier'),
+                        style: TextStyle(color: c.textSecondary, fontSize: 11, fontFamily: 'monospace'),
                       ),
                     ],
                   ),
@@ -2110,7 +2145,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
             ),
           ),
 
-          // 2. KHỐI THÔNG TIN NGƯỜI ĐẶT & THỜI GIAN ĐẶT (ĐÚNG THEO YÊU CẦU CỦA USER)
+          // 2. KHỐI THÔNG TIN NGƯỜI ĐẶT & THỜI GIAN ĐẶT
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 14),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2128,24 +2163,24 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: c.rfidCyan.withValues(alpha: 0.15),
+                          color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.person_pin_rounded, color: c.rfidCyan, size: 18),
+                        child: const Icon(Icons.person_pin_rounded, color: Color(0xFF3B82F6), size: 18),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'NGƯỜI ĐẶT PALLET',
-                              style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                              style: TextStyle(color: Color(0xFF334155), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               placedBy,
-                              style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 13, fontWeight: FontWeight.bold),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -2165,7 +2200,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.schedule_rounded, color: Color(0xFFF59E0B), size: 18),
@@ -2175,27 +2210,28 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'THỜI GIAN ĐẶT LÊN KỆ',
-                              style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                              style: TextStyle(color: Color(0xFF334155), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                             ),
                             const SizedBox(height: 2),
                             Row(
                               children: [
                                 Text(
                                   _formatDateTime(placedTime),
-                                  style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(color: Color(0xFF0F172A), fontSize: 12.5, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                    color: c.bgDeep,
                                     borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: c.border),
                                   ),
                                   child: Text(
                                     _formatRelativeTime(placedTime),
-                                    style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 10, fontWeight: FontWeight.bold),
+                                    style: const TextStyle(color: Color(0xFF334155), fontSize: 10, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                               ],
@@ -2211,91 +2247,211 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
           ),
           const SizedBox(height: 12),
 
-          // 3. Khối Hàng Hóa Trong Pallet
+          // 3. Khối Chi Tiết Hàng Hóa Trên Pallet (Số lượng, Tên, Mã, Ngày nhập)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
-                Icon(Icons.inventory_2_outlined, size: 16, color: c.textSecondary),
+                const Icon(Icons.inventory_2_outlined, size: 16, color: Color(0xFF0F172A)),
                 const SizedBox(width: 6),
-                Text(
-                  'Hàng hóa bên trong Pallet (${pItems.length} chip RFID):',
-                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5),
+                Expanded(
+                  child: Text(
+                    'Chi Tiết Hàng Hóa Trên Pallet (${groupList.length} mặt hàng, ${pItems.length} kiện/chip):',
+                    style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const Spacer(),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                if (pItems.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                    icon: Icon(
+                      isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      color: const Color(0xFF0F172A),
+                      size: 18,
+                    ),
+                    label: Text(
+                      isExpanded ? 'Thu gọn mã chip RFID' : 'Chi tiết từng chip RFID (${pItems.length})',
+                      style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11.5),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedPalletIds.remove(p.palletId);
+                        } else {
+                          _expandedPalletIds.add(p.palletId);
+                        }
+                      });
+                    },
                   ),
-                  icon: Icon(
-                    isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                    color: c.rfidCyan,
-                    size: 18,
-                  ),
-                  label: Text(
-                    isExpanded ? 'Thu gọn' : 'Xem chi tiết từng kiện (${pItems.length})',
-                    style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      if (isExpanded) {
-                        _expandedPalletIds.remove(p.palletId);
-                      } else {
-                        _expandedPalletIds.add(p.palletId);
-                      }
-                    });
-                  },
-                ),
+                ],
               ],
             ),
           ),
+          const SizedBox(height: 8),
 
-          // Tóm tắt nhanh các SKU nếu chưa mở rộng
-          if (!isExpanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-              child: skuCounts.isEmpty
-                  ? Text('Pallet rỗng, chưa gán kiện hàng nào.', style: TextStyle(color: c.textMuted, fontSize: 11.5))
-                  : Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: skuCounts.entries.map((e) {
+          // BẢNG THỐNG KÊ CHI TIẾT HÀNG TRÊN PALLET: SỐ LƯỢNG, TÊN, MÃ, NGÀY NHẬP
+          Container(
+            margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            decoration: BoxDecoration(
+              color: c.bgCard,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: c.border),
+            ),
+            child: groupList.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(
+                      child: Text(
+                        'Pallet rỗng, chưa có kiện hàng / chip RFID nào.',
+                        style: TextStyle(color: Color(0xFF334155), fontSize: 12, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      // Header bảng: Mã SP, Tên SP, Số Lượng, Ngày Nhập
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: c.bgCardElevated,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                          border: Border(bottom: BorderSide(color: c.border)),
+                        ),
+                        child: Row(
+                          children: const [
+                            SizedBox(
+                              width: 36,
+                              child: Text('STT', style: TextStyle(color: Color(0xFF0F172A), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              flex: 3,
+                              child: Text('MÃ SẢN PHẨM', style: TextStyle(color: Color(0xFF0F172A), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                            SizedBox(width: 8),
+                            Expanded(
+                              flex: 5,
+                              child: Text('TÊN SẢN PHẨM', style: TextStyle(color: Color(0xFF0F172A), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                            SizedBox(width: 8),
+                            SizedBox(
+                              width: 110,
+                              child: Text('SỐ LƯỢNG', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFF0F172A), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                            SizedBox(width: 8),
+                            SizedBox(
+                              width: 140,
+                              child: Text('NGÀY NHẬP', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFF0F172A), fontSize: 11.5, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Từng dòng mặt hàng
+                      ...groupList.asMap().entries.map((e) {
+                        final idx = e.key + 1;
+                        final grp = e.value;
+                        final inTime = grp.inboundTime;
+                        final inTimeStr = '${inTime.day.toString().padLeft(2, '0')}/${inTime.month.toString().padLeft(2, '0')}/${inTime.year} ${inTime.hour.toString().padLeft(2, '0')}:${inTime.minute.toString().padLeft(2, '0')}';
+
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           decoration: BoxDecoration(
-                            color: c.bgCard,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: c.border),
+                            border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.5))),
                           ),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.label_outline, size: 12, color: c.rfidCyan),
-                              const SizedBox(width: 4),
-                              Text('${e.key}: ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                              Text('${e.value} cái', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11)),
+                              SizedBox(
+                                width: 36,
+                                child: Text('$idx', style: const TextStyle(color: Color(0xFF334155), fontSize: 12, fontWeight: FontWeight.w500)),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  grp.sku,
+                                  style: const TextStyle(
+                                    color: Color(0xFF0F172A),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5,
+                                    fontFamily: 'monospace',
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 5,
+                                child: Text(
+                                  grp.productName,
+                                  style: const TextStyle(
+                                    color: Color(0xFF0F172A),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12.5,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 110,
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: c.bgCardElevated,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: c.border),
+                                    ),
+                                    child: Text(
+                                      '${grp.quantity} cái',
+                                      style: const TextStyle(
+                                        color: Color(0xFF0F172A),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 140,
+                                child: Text(
+                                  inTimeStr,
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                    color: Color(0xFF0F172A),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         );
-                      }).toList(),
-                    ),
-            ),
+                      }),
+                    ],
+                  ),
+          ),
 
-          // Bảng chi tiết từng kiện hàng nếu mở rộng
+          // Bảng chi tiết từng chip RFID nếu người dùng muốn tra cứu sâu
           if (isExpanded)
             Container(
-              margin: const EdgeInsets.fromLTRB(14, 6, 14, 14),
+              margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               decoration: BoxDecoration(
                 color: c.bgCard,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: c.border),
               ),
               child: pItems.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(16),
+                  ? const Padding(
+                      padding: EdgeInsets.all(16),
                       child: Center(
-                        child: Text('Pallet rỗng, chưa có chip RFID nào.', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                        child: Text('Pallet rỗng, chưa có chip RFID nào.', style: TextStyle(color: Color(0xFF334155), fontSize: 12)),
                       ),
                     )
                   : SingleChildScrollView(
@@ -2307,18 +2463,18 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                         horizontalMargin: 10,
                         columnSpacing: 14,
                         headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
-                        columns: [
-                          DataColumn(label: Text('#', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('NCC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('MÃ SP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('THÙNG', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('EPC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('SERIAL', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                          DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                        columns: const [
+                          DataColumn(label: Text('#', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NCC', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('MÃ SP', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('THÙNG', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('EPC', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('SERIAL', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                          DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
                         ],
                         rows: pItems.asMap().entries.map((e) {
                           final idx = e.key + 1;
@@ -2332,46 +2488,46 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
 
                           return DataRow(
                             cells: [
-                              DataCell(Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
-                              DataCell(Text(supplier, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                              DataCell(Text('$idx', style: const TextStyle(color: Color(0xFF334155), fontSize: 11))),
+                              DataCell(Text(supplier, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11))),
                               DataCell(
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                                    color: c.bgDeep,
                                     borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5)),
+                                    border: Border.all(color: c.border),
                                   ),
-                                  child: Text(it.sku, style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
+                                  child: Text(it.sku, style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
                                 ),
                               ),
-                              DataCell(Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11.5))),
+                              DataCell(Text(it.productName, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11.5))),
                               DataCell(
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                                    color: c.bgDeep,
                                     borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.5)),
+                                    border: Border.all(color: c.border),
                                   ),
-                                  child: Text(carton, style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11)),
+                                  child: Text(carton, style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11)),
                                 ),
                               ),
-                              DataCell(Text(inTimeStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
-                              DataCell(Text(inBy, style: TextStyle(color: c.textPrimary, fontSize: 11))),
-                              DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : c.textMuted, fontSize: 11, fontWeight: FontWeight.w500))),
+                              DataCell(Text(inTimeStr, style: const TextStyle(color: Color(0xFF334155), fontSize: 11))),
+                              DataCell(Text(inBy, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11))),
+                              DataCell(Text(putBy, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontWeight: FontWeight.w500))),
                               DataCell(
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: c.bgCardElevated,
+                                    color: c.bgDeep,
                                     borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: c.border.withValues(alpha: 0.7)),
+                                    border: Border.all(color: c.border),
                                   ),
-                                  child: Text(it.epc, style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                                  child: Text(it.epc, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
                                 ),
                               ),
-                              DataCell(Text(it.serialNumber.isNotEmpty ? it.serialNumber : '--', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontFamily: 'monospace'))),
+                              DataCell(Text(it.serialNumber.isNotEmpty ? it.serialNumber : '--', style: const TextStyle(color: Color(0xFF334155), fontSize: 10.5, fontFamily: 'monospace'))),
                               DataCell(
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -2406,7 +2562,14 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         children: [
           Row(
             children: [
-              const Icon(Icons.inventory_rounded, color: Color(0xFFF59E0B), size: 20),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.inventory_rounded, color: Color(0xFFF59E0B), size: 20),
+              ),
               const SizedBox(width: 10),
               Text(
                 'KIỆN HÀNG LẺ TRÊN KỆ (CHƯA ĐÓNG PALLET: ${looseItems.length} MẶT HÀNG)',
@@ -2424,17 +2587,17 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               horizontalMargin: 10,
               columnSpacing: 14,
               headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
-              columns: [
-                DataColumn(label: Text('#', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('NCC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('MÃ SP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('THÙNG', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('EPC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
-                DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+              columns: const [
+                DataColumn(label: Text('#', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NCC', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('MÃ SP', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('TÊN SẢN PHẨM', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('THÙNG', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NGÀY NHẬP', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NGƯỜI NHẬP', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('NGƯỜI CẤT', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('EPC', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
               ],
               rows: looseItems.asMap().entries.map((e) {
                 final idx = e.key + 1;
@@ -2448,32 +2611,43 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
 
                 return DataRow(
                   cells: [
-                    DataCell(Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 11))),
-                    DataCell(Text(supplier, style: TextStyle(color: c.textPrimary, fontSize: 11))),
+                    DataCell(Text('$idx', style: const TextStyle(color: Color(0xFF334155), fontSize: 11))),
+                    DataCell(Text(supplier, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11))),
                     DataCell(
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                          color: c.bgDeep,
                           borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: c.border),
                         ),
-                        child: Text(it.sku, style: const TextStyle(color: Color(0xFF8B5CF6), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
+                        child: Text(it.sku, style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
                       ),
                     ),
-                    DataCell(Text(it.productName, style: TextStyle(color: c.textPrimary, fontSize: 11.5))),
-                    DataCell(Text(carton, style: const TextStyle(color: Color(0xFF3B82F6), fontWeight: FontWeight.bold, fontSize: 11))),
-                    DataCell(Text(inTimeStr, style: TextStyle(color: c.textSecondary, fontSize: 11))),
-                    DataCell(Text(inBy, style: TextStyle(color: c.textPrimary, fontSize: 11))),
-                    DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : c.textMuted, fontSize: 11))),
+                    DataCell(Text(it.productName, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11.5))),
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: c.bgDeep,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Text(carton, style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 11)),
+                      ),
+                    ),
+                    DataCell(Text(inTimeStr, style: const TextStyle(color: Color(0xFF334155), fontSize: 11))),
+                    DataCell(Text(inBy, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11))),
+                    DataCell(Text(putBy, style: TextStyle(color: it.status == ItemStatus.inStock ? const Color(0xFF10B981) : const Color(0xFF334155), fontSize: 11))),
                     DataCell(
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
-                          color: c.bgCardElevated,
+                          color: c.bgDeep,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: c.border.withValues(alpha: 0.7)),
+                          border: Border.all(color: c.border),
                         ),
-                        child: Text(it.epc, style: TextStyle(color: c.textPrimary, fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                        child: Text(it.epc, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
                       ),
                     ),
                     DataCell(
@@ -2509,7 +2683,14 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         children: [
           Row(
             children: [
-              Icon(Icons.history_rounded, color: c.rfidCyan, size: 20),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.history_rounded, color: c.rfidCyan, size: 20),
+              ),
               const SizedBox(width: 10),
               Text(
                 'NHẬT KÝ BIẾN ĐỘNG / DI CHUYỂN TẠI KỆ NÀY (${transactions.length})',

@@ -582,6 +582,8 @@ class WarehouseRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+
+
   /// Xóa triệt để toàn bộ các đơn hàng nháp (NEW) và chip tạm (PENDING_INBOUND) khỏi SQLite, RAM và Supabase Cloud
   Future<void> wipeAllPendingInboundOrdersAndItems() async {
     final draftOrders = _inboundOrders.where((o) => o.status == InboundOrderStatus.newOrder).toList();
