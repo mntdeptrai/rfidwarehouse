@@ -1037,13 +1037,12 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-            // CHẶN BÓP CÒ: Chỉ cho phép quét nếu Flutter đang ở màn hình cho phép (Nhập kho, Xuất kho, Kiểm kho)
-            if (!isScanAllowed) {
+            val mode = currentScanMode.lowercase()
+            // CHẶN BÓP CÒ: Chỉ cho phép quét nếu Flutter đang ở màn hình cho phép hoặc ở chế độ Barcode
+            if (!isScanAllowed && mode != "barcode") {
                 Log.d(TAG, "Hardware trigger IGNORED: Scanning is disabled on current screen.")
                 return
             }
-
-            val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 // Instant trigger with 0 delay
                 triggerBarcodeBroadcast()

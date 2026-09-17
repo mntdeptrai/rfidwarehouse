@@ -226,7 +226,7 @@ class UhfService extends ChangeNotifier {
       _notifyThrottleTimer?.cancel();
       notifyListeners();
     } else if (call.method == 'onBarcodeRead') {
-      if (!_isScanAllowed && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      if (!_isScanAllowed && _scanMode != PdaScanMode.barcode && !Platform.environment.containsKey('FLUTTER_TEST')) {
         debugPrint('UhfService: Bỏ qua Barcode vì chức năng quét đang bị chặn ở màn hình này.');
         return;
       }
@@ -486,8 +486,8 @@ class UhfService extends ChangeNotifier {
 
   /// Kích hoạt quét mã vạch 2D / Barcode trên tay cầm PDA
   Future<bool> triggerBarcodeScan() async {
-    if (!_isScanAllowed && !Platform.environment.containsKey('FLUTTER_TEST')) {
-      debugPrint('UhfService: triggerBarcodeScan() BỊ CHẶN! Chỉ cho phép quét trong màn hình Nhập kho, Xuất kho hoặc Kiểm kho.');
+    if (!_isScanAllowed && _scanMode != PdaScanMode.barcode && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      debugPrint('UhfService: triggerBarcodeScan() BỊ CHẶN! Chỉ cho phép quét trong màn hình nghiệp vụ hoặc chế độ Barcode.');
       return false;
     }
     if (!Platform.isAndroid) return false;

@@ -76,6 +76,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       }
     }
 
+    _uhf.enableScanning('cat_ke');
     _uhf.stopInventory();
     _uhf.setScanMode(PdaScanMode.barcode);
 
@@ -137,6 +138,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   @override
   void dispose() {
+    _uhf.disableScanning();
     _uhf.stopInventory();
     _barcodeSub?.cancel();
     _tagSub?.cancel();
@@ -739,27 +741,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Nút quét barcode PDA
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: c.rfidCyan,
-                        foregroundColor: const Color(0xFF2C251E),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        elevation: 1,
-                      ),
-                      icon: const Icon(Icons.barcode_reader, size: 20),
-                      label: Text(
-                        _isProcessing ? 'ĐANG CẤT HÀNG...' : 'BẬT QUÉT BARCODE (CÒ PDA)',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                      onPressed: _isProcessing ? null : () => _uhf.triggerBarcodeScan(),
-                    ),
                   ),
                   const SizedBox(height: 10),
 

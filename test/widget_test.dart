@@ -301,9 +301,10 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Sau khi chọn vị trí: Dòng 2 quét barcode xuất hiện
+    // Sau khi chọn vị trí: Dòng 2 quét barcode xuất hiện, nút thừa BẬT QUÉT BARCODE đã được xóa bỏ
     expect(find.textContaining('DÒNG 2: QUÉT BARCODE ĐỂ CẤT HÀNG'), findsOneWidget);
-    expect(find.textContaining('BẬT QUÉT BARCODE (CÒ PDA)'), findsOneWidget);
+    expect(find.textContaining('BẬT QUÉT BARCODE (CÒ PDA)'), findsNothing);
+    expect(find.textContaining('Bóp cò PDA hoặc nhập mã quét...'), findsOneWidget);
   });
 
   testWidgets('PdaPutawayScreen supports pallet dropdown selection and barcode scanning', (WidgetTester tester) async {
