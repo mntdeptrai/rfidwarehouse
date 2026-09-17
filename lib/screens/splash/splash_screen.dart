@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:math' as math;
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/warehouse_repository.dart';
@@ -34,6 +35,12 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     // Nạp dữ liệu hệ thống ngầm và tự động chuyển sang Đăng Nhập sau 1.5 giây
     _loadAppDataAndProceed();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    precacheImage(const AssetImage('assets/images/nhat_minh_logo.png'), context);
   }
 
   Future<void> _loadAppDataAndProceed() async {
@@ -90,11 +97,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final screenWidth = media.size.width;
-
-    // Chiều rộng logo tương thích hoàn hảo: trên PDA ~220dp, trên Desktop ~320dp
-    final logoWidth = math.min(screenWidth * 0.65, 320.0);
+    final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+    // Trên Mobile / PDA: Khớp chuẩn xác 100% với @mipmap/launch_logo (200x80 dp) của Android Native,
+    // đảm bảo khi Flutter khởi động, logo đứng yên hoàn toàn không xê dịch hay nhảy kích thước.
+    final logoWidth = isDesktop ? 300.0 : 200.0;
+    final logoHeight = isDesktop ? 120.0 : 80.0;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -104,9 +111,13 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Center(
           child: SizedBox(
             width: logoWidth,
+            height: logoHeight,
             child: Image.asset(
               'assets/images/nhat_minh_logo.png',
+              width: logoWidth,
+              height: logoHeight,
               fit: BoxFit.contain,
+              gaplessPlayback: true,
               errorBuilder: (context, error, stackTrace) {
                 return Column(
                   mainAxisSize: MainAxisSize.min,

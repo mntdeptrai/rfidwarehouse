@@ -1024,9 +1024,11 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                                   Text(
                                     user.canConfigureHardware
                                         ? '⚙ Quyền hiệu chỉnh thông số máy & Anten UHF'
-                                        : (user.rolePermission.canManageUsers
-                                            ? '🛡 Quyền cấp & quản trị tài khoản'
-                                            : '📦 Nghiệp vụ kho vận & quét RFID'),
+                                        : (user.canAdjustAntennaPower
+                                            ? '📡 Quyền điều chỉnh công suất ăng-ten PDA'
+                                            : (user.rolePermission.canManageUsers
+                                                ? '🛡 Quyền cấp & quản trị tài khoản'
+                                                : '📦 Nghiệp vụ kho vận & quét RFID')),
                                     style: TextStyle(color: c.textMuted, fontSize: 10.5),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,

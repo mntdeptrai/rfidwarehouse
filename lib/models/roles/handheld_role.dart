@@ -13,10 +13,13 @@ class HandheldRole extends BaseRolePermission {
   String get name => 'Máy Cầm Tay (Handheld PDA)';
 
   @override
-  String get description => 'Quét mã RFID/Barcode thực địa, xếp kệ, kiểm đếm tồn kho. Không chỉnh thông số máy.';
+  String get description => 'Quét mã RFID/Barcode thực địa, xếp kệ, kiểm đếm tồn kho, điều chỉnh công suất ăng-ten PDA.';
 
   @override
-  bool get canConfigureHardware => false; // KHÔNG được chỉnh thông số máy
+  bool get canConfigureHardware => false; // KHÔNG được chỉnh thông số kết nối cổng/IP cố định
+
+  @override
+  bool get canAdjustAntennaPower => true; // Cấp quyền điều chỉnh công suất phát ăng-ten cho PDA
 
   @override
   bool get canInbound => true;

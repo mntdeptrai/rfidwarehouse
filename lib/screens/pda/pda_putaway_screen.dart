@@ -474,9 +474,42 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     );
   }
 
-  // ========== Ô 1: HIỆN THÔNG TIN HÀNG CẦN CẤT ==========
+  // ========== Ô 1: THANH CHỌN PALLET / XE HÀNG ==========
   Widget _buildItemInfoCard(EyeCareColors c, Map<String, List<Item>> groups, List<Item> activeItems) {
-    final hasItems = _activePalletGroup != null && activeItems.isNotEmpty;
+    final hasPallet = _activePalletGroup != null && _activePalletGroup!.trim().isNotEmpty;
+
+    // Danh sách các Pallet để chọn trong Dropdown
+    final dropdownItems = <DropdownMenuItem<String>>[];
+    for (final entry in groups.entries) {
+      dropdownItems.add(
+        DropdownMenuItem(
+          value: entry.key,
+          child: Text(
+            '${entry.key} (${entry.value.length} sản phẩm)',
+            style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    // Nếu _activePalletGroup được quét barcode/RFID mà chưa có sẵn trong key của groups
+    if (hasPallet && !groups.containsKey(_activePalletGroup)) {
+      dropdownItems.add(
+        DropdownMenuItem(
+          value: _activePalletGroup!,
+          child: Text(
+            '$_activePalletGroup (${activeItems.length} sản phẩm)',
+            style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+
+    final isValueValid = dropdownItems.any((it) => it.value == _activePalletGroup);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -484,7 +517,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         color: c.bgCard,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasItems ? const Color(0xFFF59E0B).withValues(alpha: 0.6) : c.border,
+          color: hasPallet ? const Color(0xFFF59E0B).withValues(alpha: 0.6) : c.border,
           width: 1.2,
         ),
       ),
@@ -493,177 +526,78 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.inventory_2_rounded, color: Color(0xFFF59E0B), size: 20),
+              Icon(
+                hasPallet ? Icons.check_circle_rounded : Icons.inventory_2_rounded,
+                color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                size: 20,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'HÀNG CẦN CẤT',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      hasItems
-                          ? 'Xe / Thùng: $_activePalletGroup'
-                          : (groups.isNotEmpty ? 'Chưa chọn xe/thùng' : 'Không có hàng đợi cất'),
-                      style: TextStyle(
-                        color: c.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                child: Text(
+                  hasPallet ? 'PALLET ĐÃ CHỌN: $_activePalletGroup' : 'CHỌN PALLET CẦN CẤT',
+                  style: TextStyle(
+                    color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
+              if (hasPallet)
+                InkWell(
+                  onTap: () {
+                    setState(() => _activePalletGroup = null);
+                    HapticFeedback.selectionClick();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: c.bgDeep,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Text(
+                      'Bỏ chọn',
+                      style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
             ],
           ),
-
-          // KHU VỰC QUÉT BARCODE XE / PALLET (KHÔNG DÙNG DROPDOWN)
           const SizedBox(height: 10),
+
+          // THANH ĐỂ CHỌN PALLET (DROPDOWN)
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
             decoration: BoxDecoration(
               color: c.bgCardElevated,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
-                width: 1.2,
+                color: hasPallet ? const Color(0xFFF59E0B).withValues(alpha: 0.5) : c.border,
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.qr_code_scanner, size: 16, color: Color(0xFFF59E0B)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        hasItems
-                            ? 'ĐÃ TỰ ĐỘNG NHẬN DIỆN XE: $_activePalletGroup'
-                            : 'BÓP CÒ PDA ĐỂ QUÉT MÃ XE / PALLET',
-                        style: TextStyle(
-                          color: hasItems ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    if (hasItems)
-                      InkWell(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _activePalletGroup = null);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: c.bgDeep,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: c.border),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.refresh, size: 12, color: c.textSecondary),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Quét xe khác',
-                                style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                dropdownColor: c.bgCardElevated,
+                value: isValueValid ? _activePalletGroup : null,
+                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFF59E0B)),
+                hint: Text(
+                  groups.isNotEmpty
+                      ? 'Bấm để chọn Pallet / Xe hàng (${groups.length} xe)...'
+                      : 'Không có pallet chờ cất',
+                  style: TextStyle(color: c.textMuted, fontSize: 12.5),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  hasItems
-                      ? 'Hệ thống đã tự động nhận diện xe $_activePalletGroup. Bóp cò quét mã nhãn Kệ (LOC-xxx) để cất hàng.'
-                      : 'Chĩa đầu đọc PDA vào tem Barcode trên Xe/Pallet rồi bóp cò súng để tự động nhận diện.',
-                  style: TextStyle(color: c.textMuted, fontSize: 11),
-                ),
-                const SizedBox(height: 8),
-
-                // Nút kích hoạt tia quét Barcode phần cứng PDA
-                SizedBox(
-                  width: double.infinity,
-                  height: 40,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: hasItems ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    icon: const Icon(Icons.barcode_reader, size: 18),
-                    label: const Text(
-                      'BẬT TIA QUÉT BARCODE XE (CÒ PDA)',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                    onPressed: _isProcessing ? null : () => _uhf.triggerBarcodeScan(),
-                  ),
-                ),
-
-                // Dòng text tóm tắt các mã xe đang chờ trong kho (chỉ hiển thị mã dạng tham khảo, không phải nút bấm chọn)
-                if (groups.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Mã các xe đang chờ cất: ${groups.keys.join(', ')} (${groups.length} xe)',
-                    style: TextStyle(
-                      color: c.textMuted,
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ],
+                style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                items: dropdownItems,
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() => _activePalletGroup = val);
+                    HapticFeedback.selectionClick();
+                  }
+                },
+              ),
             ),
           ),
-
-          if (hasItems) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: c.bgCardElevated,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.inventory_2_outlined, size: 14, color: Color(0xFF10B981)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Số lượng sản phẩm: ${activeItems.length}',
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );

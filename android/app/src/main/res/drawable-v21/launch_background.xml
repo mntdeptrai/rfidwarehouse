@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Native Android Launch Splash Screen for API 21+ with Density-Scaled Nhat Minh Logo -->
+<!-- Native Android Launch Background for API 21+ with Pixel-Matched Nhat Minh Logo (200x80dp) -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@android:color/white" />
 

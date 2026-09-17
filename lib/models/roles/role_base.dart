@@ -19,6 +19,9 @@ abstract class BaseRolePermission {
   /// - THỦ KHO, MÁY CẦM TAY, SELLER = FALSE (KHÔNG ĐƯỢC PHÉP CHỈNH).
   bool get canConfigureHardware;
 
+  /// Quyền hạn: Cho phép điều chỉnh công suất phát ăng-ten RFID (dBm) trên thiết bị PDA
+  bool get canAdjustAntennaPower => canConfigureHardware;
+
   /// Quyền hạn: Tạo và xác nhận đơn Nhập kho (Inbound)
   bool get canInbound;
 

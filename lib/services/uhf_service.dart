@@ -655,7 +655,7 @@ class UhfService extends ChangeNotifier {
     if (power < 1 || power > 33) return false;
     final user = AuthService().currentUser;
     final isTest = Platform.environment.containsKey('FLUTTER_TEST');
-    if (!isTest && (user == null || !user.canConfigureHardware)) {
+    if (!isTest && user != null && !user.canAdjustAntennaPower) {
       debugPrint('UhfService: Blocked setRfPower - Unauthorized access');
       return false;
     }

@@ -225,9 +225,10 @@ class PdaDrawer extends StatelessWidget {
   void _showRfPowerDialog(BuildContext context, EyeCareColors c) {
     final uhf = UhfService();
     final user = AuthService().currentUser;
-    final canConfig = user?.canConfigureHardware ?? false;
+    final canAdjust = user?.canAdjustAntennaPower ?? true;
+    final messenger = ScaffoldMessenger.maybeOf(context);
 
-    if (!canConfig) {
+    if (!canAdjust) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -236,12 +237,14 @@ class PdaDrawer extends StatelessWidget {
             children: [
               Icon(Icons.lock_rounded, color: c.errorCoral, size: 22),
               const SizedBox(width: 8),
-              Text('QUYỀN BỊ TỪ CHỐI', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold, fontSize: 15)),
+              Expanded(
+                child: Text('QUYỀN BỊ TỪ CHỐI', style: TextStyle(color: c.errorCoral, fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
             ],
           ),
           content: Text(
-            'Tài khoản của bạn (${user?.rolePermission.name ?? "Nhân viên"}) không có quyền cấu hình phần cứng đầu đọc RFID.\n\n'
-            'Vui lòng liên hệ Kỹ thuật viên để điều chỉnh công suất phát sóng ăng-ten.',
+            'Tài khoản của bạn (${user?.rolePermission.name ?? "Nhân viên"}) không có quyền điều chỉnh công suất phát sóng ăng-ten.\n\n'
+            'Vui lòng liên hệ Quản trị viên để được cấp quyền.',
             style: TextStyle(color: c.textPrimary, fontSize: 13, height: 1.4),
           ),
           actions: [
@@ -285,7 +288,14 @@ class PdaDrawer extends StatelessWidget {
                 children: [
                   Icon(Icons.tune_rounded, color: c.rfidCyan, size: 22),
                   const SizedBox(width: 8),
-                  Text('Công Suất Ăng-ten (UHF)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+                  Expanded(
+                    child: Text(
+                      'Công Suất Ăng-ten (UHF)',
+                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
               content: Column(
@@ -298,7 +308,15 @@ class PdaDrawer extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Mức phát RF:', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(
+                          'Mức phát RF:',
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -360,16 +378,14 @@ class PdaDrawer extends StatelessWidget {
                   onPressed: () async {
                     Navigator.pop(ctx);
                     final ok = await uhf.setRfPower(tempPower);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: ok ? c.successEmerald : c.errorCoral,
-                          content: Text(ok
-                              ? '✓ Đã cài đặt công suất phát ăng-ten: $tempPower dBm'
-                              : 'Không thể thay đổi công suất phát (cần quyền Kỹ thuật viên)'),
-                        ),
-                      );
-                    }
+                    messenger?.showSnackBar(
+                      SnackBar(
+                        backgroundColor: ok ? c.successEmerald : c.errorCoral,
+                        content: Text(ok
+                            ? '✓ Đã cài đặt công suất phát ăng-ten: $tempPower dBm'
+                            : 'Không thể thay đổi công suất phát (cần quyền chỉnh ăng-ten)'),
+                      ),
+                    );
                   },
                   child: const Text('LƯU & ÁP DỤNG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),

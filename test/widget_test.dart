@@ -285,11 +285,9 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Ô 1: Hiện thông tin hàng cần cất
-    expect(find.textContaining('HÀNG CẦN CẤT'), findsOneWidget);
-    expect(find.textContaining('PAL-TEST-99'), findsWidgets);
-    expect(find.textContaining('Số lượng sản phẩm: 1'), findsOneWidget);
-    expect(find.text('1 SP'), findsNothing);
+    // Ô 1: Hiện thanh chọn pallet
+    expect(find.textContaining('PALLET ĐÃ CHỌN: PAL-TEST-99'), findsOneWidget);
+    expect(find.textContaining('PAL-TEST-99 (1 sản phẩm)'), findsWidgets);
     expect(find.textContaining('Hàng Chờ Cất Kệ'), findsNothing);
 
     // Ô 2: Dòng 1 chọn vị trí kệ
@@ -308,7 +306,7 @@ void main() {
     expect(find.textContaining('BẬT QUÉT BARCODE (CÒ PDA)'), findsOneWidget);
   });
 
-  testWidgets('PdaPutawayScreen supports barcode scanning for pallet without dropdown selection', (WidgetTester tester) async {
+  testWidgets('PdaPutawayScreen supports pallet dropdown selection and barcode scanning', (WidgetTester tester) async {
     final repo = WarehouseRepository();
     await repo.ensureDefault10Locations();
 
@@ -340,20 +338,19 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Không còn dropdown đổi xe/thùng
-    expect(find.textContaining('Đổi xe/thùng cần cất'), findsNothing);
+    // Hiển thị thanh chọn pallet với số lượng xe
+    expect(find.textContaining('CHỌN PALLET CẦN CẤT'), findsOneWidget);
+    expect(find.textContaining('Bấm để chọn Pallet / Xe hàng'), findsOneWidget);
 
-    // Có nút kích hoạt tia quét barcode trên tay cầm PDA
-    expect(find.textContaining('BẬT TIA QUÉT BARCODE XE (CÒ PDA)'), findsOneWidget);
-    expect(find.textContaining('PAL-BARCODE-01'), findsWidgets);
-    expect(find.textContaining('PAL-BARCODE-02'), findsWidgets);
+    // Không còn nút quét thừa thãi trong ô 1
+    expect(find.textContaining('BẬT TIA QUÉT BARCODE XE (CÒ PDA)'), findsNothing);
 
     // Giả lập quét barcode tay cầm PDA cho PAL-BARCODE-02
     UhfService().simulateBarcode('PAL-BARCODE-02');
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Xe 2 được chọn sau khi quét
-    expect(find.textContaining('PAL-BARCODE-02'), findsWidgets);
+    // Xe 2 được tự động chọn sau khi quét barcode
+    expect(find.textContaining('PALLET ĐÃ CHỌN: PAL-BARCODE-02'), findsOneWidget);
   });
 
   testWidgets('DesktopGoodsReceiveView shows 3 metric boxes, 9 columns, and right-aligned controls without CHƯA ĐỌC ĐỦ', (WidgetTester tester) async {
@@ -858,6 +855,43 @@ void main() {
     expect(find.text('Quản Lý Kho (PDA)'), findsNothing);
     expect(find.text('Định Vị Thẻ RFID (Radar)'), findsNothing);
     expect(find.text('Tra Cứu Mã & Serial'), findsNothing);
+  });
+
+  testWidgets('PdaDrawer allows adjusting antenna power for PDA users', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          drawer: PdaDrawer(),
+          body: Center(child: Text('Home')),
+        ),
+      ),
+    );
+
+    // Mở drawer
+    final scaffoldState = tester.state<ScaffoldState>(find.byType(Scaffold));
+    scaffoldState.openDrawer();
+    await tester.pumpAndSettle();
+
+    // Tìm và bấm vào mục Công Suất Ăng-ten
+    final antennaTile = find.text('Công Suất Ăng-ten (UHF)');
+    expect(antennaTile, findsOneWidget);
+    await tester.tap(antennaTile);
+    await tester.pumpAndSettle();
+
+    // Hộp thoại điều chỉnh công suất xuất hiện, KHÔNG bị chặn QUYỀN BỊ TỪ CHỐI
+    expect(find.text('QUYỀN BỊ TỪ CHỐI'), findsNothing);
+    expect(find.text('Mức phát RF:'), findsOneWidget);
+    expect(find.text('LƯU & ÁP DỤNG'), findsOneWidget);
+
+    // Bấm lưu
+    await tester.tap(find.text('LƯU & ÁP DỤNG'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Đã cài đặt công suất phát ăng-ten'), findsOneWidget);
   });
 
   test('UhfService scan authorization gate: allows scanning only when enabled for authorized module', () async {

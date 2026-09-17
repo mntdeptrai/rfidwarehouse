@@ -26,8 +26,11 @@ class WmsUser {
   BaseRolePermission get rolePermission => RoleRegistry.fromCode(role);
 
   /// Kiểm tra xem người dùng có quyền chỉnh sửa thông số máy/đầu đọc hay không
-  /// (Chỉ duy nhất Admin = true; Thủ kho, Máy cầm tay, Seller = false)
+  /// (Chỉ duy nhất Kỹ thuật viên = true; Thủ kho, Máy cầm tay, Seller = false)
   bool get canConfigureHardware => rolePermission.canConfigureHardware;
+
+  /// Kiểm tra xem người dùng có quyền điều chỉnh công suất phát ăng-ten PDA hay không
+  bool get canAdjustAntennaPower => rolePermission.canAdjustAntennaPower;
 
   /// Kiểm tra xem người dùng có phải vai trò Kỹ thuật viên hay không
   bool get isTechnician => rolePermission.isTechnician;

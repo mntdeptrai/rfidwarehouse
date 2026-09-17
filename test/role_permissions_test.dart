@@ -159,5 +159,16 @@ void main() {
       expect(adminUser.isTechnician, isFalse);
       expect(thukhoUser.isTechnician, isFalse);
     });
+
+    test('PDA Antenna Power Permission: Handheld, Admin, WarehouseKeeper, and Tech can adjust antenna power; Seller cannot', () {
+      expect(HandheldRole().canAdjustAntennaPower, isTrue);
+      expect(AdminRole().canAdjustAntennaPower, isTrue);
+      expect(WarehouseKeeperRole().canAdjustAntennaPower, isTrue);
+      expect(TechnicianRole().canAdjustAntennaPower, isTrue);
+      expect(SellerRole().canAdjustAntennaPower, isFalse);
+
+      final pdaUser = WmsUser(userId: 'u4', username: 'camtay', fullName: 'Cầm tay', role: 'handheld');
+      expect(pdaUser.canAdjustAntennaPower, isTrue);
+    });
   });
 }

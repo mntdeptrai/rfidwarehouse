@@ -19,6 +19,9 @@ class WarehouseKeeperRole extends BaseRolePermission {
   bool get canConfigureHardware => false; // KHÔNG được chỉnh thông số máy
 
   @override
+  bool get canAdjustAntennaPower => true; // Thủ kho dùng PDA được chỉnh công suất ăng-ten
+
+  @override
   bool get canInbound => true;
 
   @override

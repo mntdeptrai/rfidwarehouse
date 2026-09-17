@@ -8,6 +8,9 @@ import 'theme/eye_care_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Kích hoạt giải mã Logo Nhật Minh sớm trong ImageCache, tránh chớp nháy trắng ở frame đầu
+  const AssetImage('assets/images/nhat_minh_logo.png').resolve(ImageConfiguration.empty);
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -45,3 +48,4 @@ class RfidWmsApp extends StatelessWidget {
     );
   }
 }
+ 

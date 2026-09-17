@@ -18,6 +18,9 @@ class AdminRole extends BaseRolePermission {
   bool get canConfigureHardware => false; // Quản trị viên chỉ quản trị tài khoản người dùng, kỹ thuật viên mới cấu hình kết nối & phần cứng
 
   @override
+  bool get canAdjustAntennaPower => true; // Quản trị viên được phép chỉnh công suất ăng-ten PDA
+
+  @override
   bool get canInbound => true;
 
   @override
