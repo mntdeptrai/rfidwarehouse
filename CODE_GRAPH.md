@@ -10,7 +10,8 @@
 ```mermaid
 graph TD
     subgraph Presentation_Layer["TẦNG GIAO DIỆN (PRESENTATION LAYER)"]
-        Main["lib/main.dart"] --> Wrapper["lib/screens/desktop_pda_wrapper.dart"]
+        Main["lib/main.dart (Non-blocking bootstrap)"] --> Splash["lib/screens/splash/splash_screen.dart (Màn hình chờ tải CSDL & Logo Nhật Minh)"]
+        Splash --> Wrapper["lib/screens/desktop_pda_wrapper.dart"]
         
         Wrapper -->|Windows / macOS / Linux / Web >= 850px| Desktop["DESKTOP PLATFORM (desktop_main_layout.dart)"]
         Wrapper -->|Android / iOS / Web < 850px| PDA["PDA HANDHELD PLATFORM (pda_home_screen.dart)"]
@@ -25,7 +26,7 @@ graph TD
             Desktop --> D_Studio["desktop_uhf_studio_view.dart (Hopeland Studio)"]
             Desktop --> D_Config["desktop_connection_config_view.dart (Cấu Hình Kết Nối)"]
             Desktop --> D_Users["desktop_user_management_view.dart (Phân Quyền)"]
-            Desktop --> D_Report["desktop_report_view.dart (Trung Tâm Báo Cáo)"]
+            Desktop --> D_Report["desktop_report_view.dart (Báo Cáo Tồn Kho RFID)"]
         end
 
         subgraph PDA_Screens["PDA Mobile Views"]
@@ -89,6 +90,8 @@ graph TD
 | ├── [`supabase_sync_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/supabase_sync_service.dart) | Đồng bộ dữ liệu 2 chiều thời gian thực lên Supabase PostgreSQL 17 Cloud. |
 | ├── [`auth_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/auth_service.dart) | Quản lý tài khoản người dùng, phiên làm việc (Session) và phân quyền chức năng (RBAC). |
 | ├── [`report_export_service.dart`](file:///d:/rfidwarehouse/lib/services/report_export_service.dart) | Xuất báo cáo kho & Form Mẫu Biểu Phiếu chuẩn doanh nghiệp (5 loại: Phiếu Nhập Kho, Phiếu Xuất Kho Kiêm Bàn Giao, Biên Bản Kiểm Kê, Báo Cáo Tồn Kho, Sổ Biến Động Kho) ra file Excel (.xlsx) hoặc CSV (.csv). Tự động điền dữ liệu thực tế từ hệ thống vào biểu mẫu có tiêu đề, thông tin đơn, bảng chi tiết hàng hóa/chip RFID, dòng tổng cộng và chữ ký xác nhận (không cần nạp file mẫu). |
+| **`lib/screens/splash/`** | **Màn Hình Khởi Động (Splash Screen)** |
+| ├── [`splash_screen.dart`](file:///d:/rfidwarehouse/lib/screens/splash/splash_screen.dart) | Màn hình mở đầu ứng dụng: Hiển thị Logo Công ty Nhật Minh ("Tiếp nối công nghệ"), hiệu ứng sóng quét vô tuyến RFID (Pulse Radar Waves 3 lớp tỏa tròn đa sắc vàng kim & ngọc bích), dòng thông điệp trạng thái động và thanh tiến trình công nghệ cao. Tự động chuyển cảnh sau 1.8s (có nút BỎ QUA). |
 | **`lib/screens/desktop/`** | **Giao Diện Máy Bàn Quản Trị (Desktop WMS)** |
 | ├── [`desktop_main_layout.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_main_layout.dart) | Khung giao diện chính Desktop (Thanh điều hướng Sidebar, tìm kiếm toàn cục, huy hiệu kết nối). |
 | ├── [`desktop_goods_receive_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_goods_receive_view.dart) | Cổng Nhập kho RFID Gate: Tự động đối soát đơn hàng theo RFID, không phụ thuộc chip pallet nếu đã quét đủ 100% chip sản phẩm. Khi đối soát thành công, đánh dấu `isGatePassed = true` và chuyển sang trạng thái sẵn sàng đón đợt hàng tiếp theo. |
@@ -100,7 +103,7 @@ graph TD
 | ├── [`desktop_uhf_studio_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_uhf_studio_view.dart) | Hopeland Studio cấu hình thông số kỹ thuật đầu đọc (RS232, TCP, RS485, USB, dBm công suất, dải tần, buzzer, antenna). Tự động nạp và ghi nhớ cấu hình đã kết nối thành công. |
 | ├── [`desktop_connection_config_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_connection_config_view.dart) | Cấu hình IP LAN, cổng Port, COM port và chế độ tự động kết nối lại. |
 | ├── [`desktop_user_management_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_user_management_view.dart) | Quản lý danh sách nhân viên, tài khoản, phân quyền thao tác. |
-| ├── [`desktop_report_view.dart`](file:///d:/rfidwarehouse/lib/screens/desktop/desktop_report_view.dart) | Form Báo Cáo Kho tương tác chuẩn phong cách Lịch Sử (EyeCare): Tự động điền dữ liệu các đơn đã chọn vào biểu mẫu phiếu (Phiếu Nhập, Phiếu Xuất, Biên Bản Kiểm Kê, Tồn Kho, Biến Động) rồi xuất file Excel/CSV mà không cần nạp file mẫu; hỗ trợ 5 tab chuyển danh mục, 4 thẻ chỉ số thống kê, thanh tìm kiếm & chọn tất cả, bảng dữ liệu chọn lọc từng đơn bằng checkbox và liên kết mở thư mục chứa tệp. |
+| ├── [`desktop_report_view.dart`](file:///d:/rfidwarehouse/lib/screens/desktop/desktop_report_view.dart) | Báo Cáo Tồn Kho chuẩn EyeCare: Thiết kế tinh giản tối đa, không cuộn ngang toàn trang, loại bỏ 3 khối chỉ số và banner barcode hero. Tích hợp ô tìm kiếm Số Seri (SN)/SKU trực tiếp vào Toolbar cùng bộ lọc vị trí kệ, badge đếm sản phẩm và cụm xuất báo cáo Excel (.xlsx)/CSV (.csv). Bảng dữ liệu chi tiết hiển thị trọn vẹn chiều cao và hỗ trợ cuộn ngang cột dữ liệu cục bộ. |
 | **`lib/screens/pda/`** | **Giao Diện Tay Cầm Di Động (PDA WMS)** |
 | ├── [`pda_inbound_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_inbound_screen.dart) | Nhập kho RFID trên PDA: Hiển thị danh sách đơn chờ kèm nút xóa đơn nhanh và chọn đơn, đối soát chùm RFID 3 ô (ĐÃ QUÉT, THIẾU, LẠ), nút ĐỔI ĐƠN chỉ hiện khi có từ 2 đơn trở lên và chuyển tiếp sang Cất kệ (Putaway). |
 | ├── [`pda_home_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_home_screen.dart) | Bàn làm việc di động với lưới các phím tắt tác vụ nhanh (đã thay thế Trạng thái kệ & Tra cứu mã bằng Quản lý kho). |
@@ -345,16 +348,15 @@ Hệ thống tích hợp sẵn cấu trúc Agentic Workspace để tối ưu ho�
 
 ---
 
-## 9. Trung Tâm Báo Cáo Kho (Report Export Center)
-- **Màn hình**: `desktop_report_view.dart` — tab "Báo Cáo" trên sidebar (index 4), tất cả role đều truy cập được.
-- **Service**: `report_export_service.dart` — singleton service tạo file báo cáo từ dữ liệu trong `WarehouseRepository`.
-- **5 loại báo cáo**:
-  1. **Nhập Kho** (Inbound): Mã đơn, NCC, trạng thái, ngày tạo, tổng SKU, tổng chip RFID, chi tiết.
-  2. **Xuất Kho** (Outbound): Mã PO, khách hàng, trạng thái, tổng SL, vận đơn liên kết.
-  3. **Tồn Kho** (Inventory): Toàn bộ item IN_STOCK — EPC, SKU, pallet, vị trí kệ, ngày nhập.
-  4. **Kiểm Kê** (Audit): Phiên kiểm kê — khớp, thiếu, sai vị trí, thẻ lạ.
-  5. **Biến Động Kho** (Transaction Log): Lịch sử nhập/xuất/di chuyển — loại, chứng từ, người thực hiện.
-- **Định dạng**: Excel (.xlsx) với header bold/cyan + auto-width, hoặc CSV (.csv) với BOM UTF-8.
+## 9. Báo Cáo Tồn Kho RFID (RFID Inventory Report Center)
+- **Màn hình**: `desktop_report_view.dart` — tab "Báo Cáo Tồn Kho" trên sidebar (index 4), tất cả role đều truy cập được.
+- **Service**: `report_export_service.dart` — singleton service tạo file báo cáo tồn kho chi tiết và tổng hợp từ dữ liệu thực tế trong `WarehouseRepository`.
+- **Thiết kế tinh gọn**:
+  1. **Không trượt ngang toàn trang**: Header Bar và Action Toolbar luôn vừa vặn 100% chiều rộng màn hình, không bị đẩy trôi nút "XUẤT BÁO CÁO".
+  2. **Tìm kiếm trực tiếp trên thanh tác vụ**: Đã loại bỏ 3 khối chỉ số và banner quét barcode lớn. Tích hợp ô `TextField` tìm kiếm (Số Seri SN, Mã SKU, Vị trí kệ,...) trực tiếp vào Toolbar.
+  3. **Bộ lọc & Thông tin số lượng**: Hỗ trợ lọc theo từng kệ hoặc tất cả kệ, hiển thị số lượng tức thì `Hiển thị: X / Y sản phẩm`.
+  4. **Bảng dữ liệu trọn vẹn**: Tận dụng tối đa chiều cao màn hình, các cột chi tiết (STT, Số Seri SN nổi bật, SKU, Tên SP, EPC, Vị trí kệ, Pallet, Ngày nhập, Nhà cung cấp, Trạng thái) tự động cuộn ngang cục bộ nếu màn hình thu nhỏ dưới 1168px.
+- **Định dạng kết xuất**: Excel (.xlsx) chuẩn biểu mẫu doanh nghiệp (có cột Số Seri SN, tiêu đề, kẻ bảng màu, dòng tổng cộng, khối ký duyệt thủ kho & kế toán) hoặc CSV (.csv) có UTF-8 BOM.
 - **Thư mục lưu**: `Documents/WMS_Reports/` — sau khi xuất có nút mở Windows Explorer highlight file.
 
 ---

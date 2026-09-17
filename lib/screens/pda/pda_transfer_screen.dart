@@ -67,6 +67,9 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     _eyeCare.addListener(_onStateChange);
     _repo.addListener(_onStateChange);
 
+    // Kích hoạt quét phần cứng và bóp cò trên PDA cho màn hình Chuyển Kho
+    _uhf.enableScanning('chuyen_kho');
+
     // Xử lý nạp sẵn sản phẩm nếu được truyền từ màn hình khác (như Tra cứu mã)
     if (widget.initialItem != null) {
       _mode = _TransferMode.items;
@@ -85,8 +88,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   void _subscribeHardwareScanner() {
     _rfidSub = _uhf.onTagRead.listen((tag) {
       if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
-      // Chỉ nhận diện chip khi người dùng đang chủ động kích hoạt quét (bóp cò hoặc bấm nút quét)
-      if (!_isScanning) return;
+      // Nhận diện chip khi đang quét hoặc bóp cò
+      if (!_isScanning && !_uhf.isScanning) return;
       if (tag.epc.isNotEmpty) {
         _handleScan(tag.epc, source: 'RFID');
       }
@@ -95,6 +98,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
       if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
       if (barcode.isNotEmpty) {
+        _stopHardwareScan();
         _handleScan(barcode, source: 'Barcode');
       }
     });
@@ -111,6 +115,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
 
   void _startHardwareScan() {
     if (_isScanning) return;
+    // Đảm bảo không bị khóa quét
+    _uhf.enableScanning('chuyen_kho');
     setState(() => _isScanning = true);
     if (_uhf.scanMode == PdaScanMode.barcode) {
       _uhf.triggerBarcodeScan();
@@ -142,6 +148,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   void dispose() {
     _stopHardwareScan();
     _uhf.stopInventory();
+    _uhf.disableScanning();
     _manualInputCtrl.dispose();
     _palletInputCtrl.dispose();
     _rfidSub?.cancel();
@@ -200,6 +207,15 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   void _handlePalletScan(String code, {String source = 'RFID'}) {
     final cleanUpper = code.toUpperCase();
 
+    // Tránh quét lặp nếu đã nhận diện đúng pallet này
+    if (_foundPallet != null) {
+      if (_foundPallet!.palletCode.toUpperCase() == cleanUpper ||
+          _foundPallet!.palletId.toUpperCase() == cleanUpper ||
+          (_foundPallet!.rfidEpc ?? '').toUpperCase() == cleanUpper) {
+        return;
+      }
+    }
+
     // 1. Tìm trực tiếp theo rfidEpc, palletId, palletCode
     Pallet? pallet = _repo.pallets.where((p) {
       return (p.rfidEpc ?? '').toUpperCase() == cleanUpper ||
@@ -241,6 +257,10 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       return;
     }
 
+    // Dừng quét ngay lập tức sau khi nhận diện pallet để tránh quét nhầm thêm mã khác
+    _stopHardwareScan();
+    _uhf.stopInventory();
+
     final items = _repo.items
         .where((it) =>
             it.palletId == pallet!.palletId ||
@@ -253,6 +273,14 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       _foundPallet = pallet;
       _palletItems = items;
       _errorMessage = null;
+    });
+
+    // Mở ngay hộp thoại xác nhận chuyển Pallet để tránh quét nhầm
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _foundPallet != null && !_isProcessing && !_isSuccess) {
+        final targetLoc = _repo.locations.where((l) => l.locationId == _selectedLocationId).firstOrNull;
+        _showPalletConfirmDialog(_foundPallet!, _palletItems, targetLoc);
+      }
     });
   }
 
@@ -436,8 +464,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                                         ),
                                         onPressed: () {
-                                          _handlePalletScan(p.palletCode, source: 'Picker');
                                           Navigator.pop(ctx);
+                                          _handlePalletScan(p.palletCode, source: 'Picker');
                                         },
                                         child: const Text('CHỌN', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                                       ),
@@ -588,6 +616,163 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     );
   }
 
+  Future<void> _showPalletConfirmDialog(Pallet pallet, List<Item> items, Location? targetLoc) async {
+    final c = _eyeCare.colors;
+    final oldLoc = pallet.locationId != null
+        ? _repo.locations.where((l) => l.locationId == pallet.locationId || l.locationCode == pallet.locationId).firstOrNull
+        : null;
+    final oldLocDisplay = oldLoc?.displayName ?? (pallet.locationId ?? 'Chưa có kệ');
+    final targetLocDisplay = targetLoc?.displayName ?? (_selectedLocationId ?? 'Chưa chọn kệ');
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.bgCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF10B981), size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Xác Nhận Chuyển Pallet',
+                    style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Kiểm tra thông tin trước khi chuyển',
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.bgDeep,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.border),
+                ),
+                child: Column(
+                  children: [
+                    _buildSummaryRow(c,
+                        label: 'Mã Pallet',
+                        value: pallet.palletCode,
+                        valueColor: c.rfidCyan),
+                    const Divider(height: 14),
+                    _buildSummaryRow(c,
+                        label: 'Vị trí hiện tại',
+                        value: oldLocDisplay),
+                    const SizedBox(height: 6),
+                    _buildSummaryRow(c,
+                        label: 'Chuyển đến Kệ đích',
+                        value: targetLocDisplay,
+                        valueColor: const Color(0xFF10B981)),
+                    const Divider(height: 14),
+                    _buildSummaryRow(c,
+                        label: 'Tổng số sản phẩm',
+                        value: '${items.length} sản phẩm',
+                        valueColor: c.textPrimary),
+                  ],
+                ),
+              ),
+              if (items.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Hàng hóa trên pallet:',
+                  style: TextStyle(color: c.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                ...items.take(3).map((it) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    '• ${it.productName} (${it.sku})',
+                    style: TextStyle(color: c.textPrimary, fontSize: 11.5),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )),
+                if (items.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '... và ${items.length - 3} sản phẩm khác',
+                      style: TextStyle(color: c.textMuted, fontSize: 10.5, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.errorCoral,
+                    side: BorderSide(color: c.errorCoral),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _reset(); // Hủy pallet này để thủ kho quét lại tránh nhầm
+                  },
+                  child: const Text('HỦY / QUÉT LẠI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.check_circle_rounded, size: 15),
+                  label: const Text('XÁC NHẬN CHUYỂN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _confirmTransfer();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _confirmTransfer() async {
     if (_selectedLocationId == null) return;
     if (_mode == _TransferMode.pallet && _foundPallet == null) return;
@@ -629,9 +814,6 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
         _lastTransferCount = count;
       });
 
-
-
-
     } catch (e) {
       setState(() {
         _isProcessing = false;
@@ -669,6 +851,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
       _mode = mode;
       _reset();
     });
+    // Giữ khóa quét luôn mở khi đổi chế độ
+    _uhf.enableScanning('chuyen_kho');
     // Tự động chuyển chế độ quét phần cứng: Pallet -> Barcode (nhanh & chính xác); Hàng riêng lẻ -> RFID
     if (mode == _TransferMode.pallet) {
       _uhf.setScanMode(PdaScanMode.barcode);
@@ -1245,24 +1429,45 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.errorCoral,
+                  side: BorderSide(color: c.errorCoral),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text(
+                  'HỦY / QUÉT LẠI',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                ),
+                onPressed: _isProcessing ? null : _reset,
+              ),
             ),
-            icon: _isProcessing
-                ? const SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.swap_horiz_rounded, color: Colors.white),
-            label: Text(
-              _isProcessing ? 'Đang xử lý...' : 'XÁC NHẬN CẬP NHẬT VỊ TRÍ',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: _isProcessing
+                    ? const SizedBox(width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.swap_horiz_rounded, color: Colors.white),
+                label: Text(
+                  _isProcessing ? 'Đang xử lý...' : 'XÁC NHẬN CẬP NHẬT VỊ TRÍ',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                onPressed: _isProcessing ? null : _confirmTransfer,
+              ),
             ),
-            onPressed: _isProcessing ? null : _confirmTransfer,
-          ),
+          ],
         ),
       ],
     );

@@ -21,6 +21,7 @@ import 'package:uhf/services/warehouse_repository.dart';
 import 'package:uhf/services/uhf_service.dart';
 import 'package:uhf/screens/desktop/desktop_location_management_view.dart';
 import 'package:uhf/screens/desktop/desktop_report_view.dart';
+import 'package:uhf/screens/splash/splash_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +30,39 @@ void main() {
     await tester.pumpWidget(const RfidWmsApp());
     await tester.pump(const Duration(milliseconds: 2500));
     expect(find.byType(RfidWmsApp), findsOneWidget);
+  });
+
+  testWidgets('SplashScreen renders Nhat Minh logo and navigates smoothly', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SplashScreen(
+          duration: Duration(milliseconds: 200),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.text('BỎ QUA'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('SplashScreen tap on screen transitions immediately', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SplashScreen(
+          duration: Duration(seconds: 5),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(Image), findsOneWidget);
+    await tester.tap(find.byType(GestureDetector).first);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('DesktopInventoryView renders without overflow in ultra-narrow window', (WidgetTester tester) async {
@@ -1177,7 +1211,7 @@ void main() {
     expect(find.byType(DesktopReportView), findsOneWidget);
   });
 
-  testWidgets('DesktopReportView interactive report selection form allows selecting orders and toggling category', (WidgetTester tester) async {
+  testWidgets('DesktopReportView allows searching inventory by Serial Number (SN) and exporting report', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
@@ -1192,32 +1226,33 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify header
-    expect(find.text('Trung Tâm Báo Cáo Kho'), findsOneWidget);
+    expect(find.text('BÁO CÁO TỒN KHO'), findsOneWidget);
 
-    // Verify 4 metric tiles
-    expect(find.text('ĐÃ CHỌN XUẤT FILE'), findsOneWidget);
-    expect(find.text('LƯỢNG HÀNG TRONG ĐƠN CHỌN'), findsOneWidget);
-    expect(find.text('ĐỊNH DẠNG XUẤT'), findsOneWidget);
-
-    // Verify 5 category switcher tabs
-    expect(find.textContaining('NHẬP KHO'), findsWidgets);
-    expect(find.textContaining('XUẤT KHO'), findsWidgets);
-    expect(find.textContaining('TỒN KHO'), findsWidgets);
-    expect(find.textContaining('KIỂM KÊ'), findsWidgets);
-    expect(find.textContaining('BIẾN ĐỘNG'), findsWidgets);
-
-    // Verify toolbar elements
-    expect(find.textContaining('XUẤT BÁO CÁO'), findsOneWidget);
+    // Verify search input in action toolbar
     expect(find.byType(TextField), findsOneWidget);
+    expect(find.textContaining('Hiển thị:'), findsOneWidget);
 
-    // Switch to Outbound category
-    final outboundTab = find.textContaining('XUẤT KHO');
-    await tester.tap(outboundTab.first);
+    // Verify table headers include SỐ SERI (SN)
+    expect(find.text('SỐ SERI (SN)'), findsOneWidget);
+    expect(find.text('MÃ SKU'), findsOneWidget);
+    expect(find.text('TÊN HÀNG HÓA'), findsOneWidget);
+    expect(find.text('MÃ CHIP RFID (EPC)'), findsOneWidget);
+
+    // Verify export button
+    expect(find.textContaining('XUẤT BÁO CÁO'), findsOneWidget);
+
+    // Test searching by non-existent SN
+    await tester.enterText(find.byType(TextField), 'SN_NON_EXISTING_9999');
     await tester.pumpAndSettle();
 
-    // Verify table headers change to outbound
-    expect(find.text('MÃ PO / XUẤT'), findsOneWidget);
-    expect(find.text('KHÁCH HÀNG'), findsOneWidget);
+    // Verify empty search result notice
+    expect(find.textContaining('Không tìm thấy sản phẩm tồn kho nào khớp với Số Seri'), findsOneWidget);
+    expect(find.text('XÓA BỘ LỌC TÌM KIẾM'), findsOneWidget);
+
+    // Clear search filter
+    await tester.tap(find.text('XÓA BỘ LỌC TÌM KIẾM'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Không tìm thấy sản phẩm tồn kho nào khớp với Số Seri'), findsNothing);
   });
 }
 

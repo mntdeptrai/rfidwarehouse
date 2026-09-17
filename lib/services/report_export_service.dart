@@ -709,12 +709,21 @@ class ReportExportService {
   }
 
   // =========================================================================
-  // 4. FORM MẪU: BÁO CÁO TỒN KHO CHI TIẾT THEO VỊ TRÍ & RFID
+  // 4. FORM MẪU: BÁO CÁO TỒN KHO CHI TIẾT THEO SỐ SERI (SN), VỊ TRÍ & RFID
   // =========================================================================
-  Future<File> _exportInventoryForm(ReportFormat format, {List<String>? selectedEpcs}) async {
-    var inStockItems = _repo.items.where((i) => i.status.code == 'IN_STOCK').toList();
-    if (selectedEpcs != null && selectedEpcs.isNotEmpty) {
-      inStockItems = inStockItems.where((i) => selectedEpcs.contains(i.epc) || selectedEpcs.contains(i.itemId)).toList();
+  /// Xuất Báo Cáo Tồn Kho trực tiếp (hỗ trợ danh sách hàng lọc theo Số Seri - SN)
+  Future<File> exportInventoryReport(ReportFormat format, {List<Item>? items}) async {
+    return _exportInventoryForm(format, customItems: items);
+  }
+
+  Future<File> _exportInventoryForm(
+    ReportFormat format, {
+    List<String>? selectedEpcs,
+    List<Item>? customItems,
+  }) async {
+    var inStockItems = customItems ?? _repo.items.where((i) => i.status.code == 'IN_STOCK').toList();
+    if (customItems == null && selectedEpcs != null && selectedEpcs.isNotEmpty) {
+      inStockItems = inStockItems.where((i) => selectedEpcs.contains(i.epc) || selectedEpcs.contains(i.itemId) || selectedEpcs.contains(i.serialNumber)).toList();
     }
 
     final dir = await _getReportDir();
@@ -723,8 +732,8 @@ class ReportExportService {
     final filePath = '${dir.path}${Platform.pathSeparator}$fileName';
 
     final headers = [
-      'STT', 'Mã Chip RFID (EPC)', 'Mã SKU', 'Tên Sản Phẩm', 'Nhà Cung Cấp',
-      'Mã Thùng', 'Mã Pallet', 'Vị Trí Kệ', 'Ngày Nhập Kho', 'Trạng Thái',
+      'STT', 'Số Seri (SN)', 'Mã SKU', 'Tên Sản Phẩm', 'Mã Chip RFID (EPC)',
+      'Vị Trí Kệ', 'Mã Pallet', 'Nhà Cung Cấp', 'Ngày Nhập Kho', 'Trạng Thái',
     ];
 
     final rows = <List<String>>[];
@@ -738,13 +747,13 @@ class ReportExportService {
 
       rows.add([
         '${i + 1}',
-        it.epc,
+        it.serialNumber.isNotEmpty ? it.serialNumber : '--',
         it.sku,
         it.productName,
-        it.supplierDisplay,
-        it.cartonDisplay,
-        palletDisplay,
+        it.epc,
         it.locationId ?? '--',
+        palletDisplay,
+        it.supplierDisplay,
         it.inboundTime != null ? _dtFmt.format(it.inboundTime!) : '--',
         it.status.label,
       ]);
@@ -753,7 +762,7 @@ class ReportExportService {
     if (format == ReportFormat.csv) {
       final buffer = StringBuffer();
       buffer.writeln('\uFEFFHỆ THỐNG QUẢN LÝ KHO THÔNG MINH RFID (RFID WMS)');
-      buffer.writeln('BÁO CÁO TỒN KHO CHI TIẾT THEO VỊ TRÍ VÀ THẺ RFID');
+      buffer.writeln('BÁO CÁO TỒN KHO THEO SỐ SERI (SN) VÀ THẺ RFID');
       buffer.writeln('Thời điểm xuất: ${_dtFmt.format(DateTime.now())};Tổng số sản phẩm tồn: ${inStockItems.length}');
       buffer.writeln();
       buffer.writeln(headers.join(','));
@@ -777,8 +786,8 @@ class ReportExportService {
       }
 
       _setCell(sheet, col: 0, row: 0, value: 'HỆ THỐNG KHO VẬN THÔNG MINH RFID (RFID WMS)', style: _companyHeaderStyle);
-      _setCell(sheet, col: 0, row: 1, value: 'BÁO CÁO TỒN KHO CHI TIẾT THEO VỊ TRÍ & RFID', style: _titleStyle);
-      _setCell(sheet, col: 0, row: 2, value: 'Thời điểm xuất: ${_dtFmt.format(DateTime.now())}   |   Tổng thẻ tồn: ${inStockItems.length}', style: _subTitleStyle);
+      _setCell(sheet, col: 0, row: 1, value: 'BÁO CÁO TỒN KHO THEO SỐ SERI (SN) & RFID', style: _titleStyle);
+      _setCell(sheet, col: 0, row: 2, value: 'Thời điểm xuất: ${_dtFmt.format(DateTime.now())}   |   Tổng sản phẩm tồn: ${inStockItems.length}', style: _subTitleStyle);
 
       const startRow = 4;
       for (int c = 0; c < headers.length; c++) {
@@ -788,7 +797,7 @@ class ReportExportService {
       int r = startRow + 1;
       for (final rowData in rows) {
         for (int c = 0; c < rowData.length; c++) {
-          _setCell(sheet, col: c, row: r, value: rowData[c], style: (c == 0 || c == 7 || c == 8 || c == 9) ? _dataCellCenterStyle : null);
+          _setCell(sheet, col: c, row: r, value: rowData[c], style: (c == 0 || c == 1 || c == 2 || c == 5 || c == 8 || c == 9) ? _dataCellCenterStyle : null);
         }
         r++;
       }
@@ -807,6 +816,139 @@ class ReportExportService {
       _setCell(sheet, col: 1, row: signRow + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
       _setCell(sheet, col: 4, row: signRow + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
       _setCell(sheet, col: 7, row: signRow + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
+
+      _autoFitColumns(sheet, headers.length, signRow + 3);
+
+      final bytes = excel.encode();
+      if (bytes == null) throw Exception('Không thể tạo file Excel.');
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+      return file;
+    }
+  }
+
+  // =========================================================================
+  // 4b. FORM MẪU: BÁO CÁO TỔNG HỢP TỒN KHO THEO MẶT HÀNG (SKU SUMMARY)
+  // =========================================================================
+  Future<File> exportInventorySkuSummary(ReportFormat format, {List<String>? selectedSkus}) async {
+    final inStockItems = _repo.items.where((i) => i.status.code == 'IN_STOCK').toList();
+
+    // Gom nhóm theo SKU
+    final Map<String, List<Item>> skuMap = {};
+    for (final it in inStockItems) {
+      skuMap.putIfAbsent(it.sku, () => []).add(it);
+    }
+
+    var skus = skuMap.keys.toList()..sort();
+    if (selectedSkus != null && selectedSkus.isNotEmpty) {
+      skus = skus.where((s) => selectedSkus.contains(s)).toList();
+    }
+
+    final dir = await _getReportDir();
+    final timestamp = _fileFmt.format(DateTime.now());
+    final fileName = 'bao_cao_ton_kho_tong_hop_$timestamp.${format.name}';
+    final filePath = '${dir.path}${Platform.pathSeparator}$fileName';
+
+    final headers = [
+      'STT', 'Mã SKU', 'Tên Sản Phẩm', 'Nhà Cung Cấp',
+      'Số Lượng Tồn', 'Vị Trí Kệ Lưu Trữ', 'Mã Pallet',
+    ];
+
+    final rows = <List<String>>[];
+    int totalQty = 0;
+    for (int i = 0; i < skus.length; i++) {
+      final sku = skus[i];
+      final items = skuMap[sku] ?? [];
+      totalQty += items.length;
+      final productName = items.isNotEmpty ? items.first.productName : sku;
+      final supplier = items.isNotEmpty ? items.first.supplierDisplay : '--';
+
+      final locations = items
+          .map((it) => it.locationId ?? '')
+          .where((l) => l.isNotEmpty)
+          .toSet()
+          .join(', ');
+
+      final pallets = items
+          .map((it) => it.palletId ?? '')
+          .where((p) => p.isNotEmpty)
+          .toSet()
+          .map((pid) {
+            final p = _repo.pallets.where((x) => x.palletId == pid || x.palletCode == pid).toList();
+            return p.isNotEmpty ? p.first.displayName : pid;
+          })
+          .join(', ');
+
+      rows.add([
+        '${i + 1}',
+        sku,
+        productName,
+        supplier,
+        '${items.length}',
+        locations.isNotEmpty ? locations : '--',
+        pallets.isNotEmpty ? pallets : '--',
+      ]);
+    }
+
+    if (format == ReportFormat.csv) {
+      final buffer = StringBuffer();
+      buffer.writeln('\uFEFFHỆ THỐNG QUẢN LÝ KHO THÔNG MINH RFID (RFID WMS)');
+      buffer.writeln('BÁO CÁO TỔNG HỢP TỒN KHO THEO MẶT HÀNG (SKU)');
+      buffer.writeln('Thời điểm xuất: ${_dtFmt.format(DateTime.now())};Tổng số SKU: ${skus.length};Tổng sản phẩm tồn: $totalQty');
+      buffer.writeln();
+      buffer.writeln(headers.join(','));
+      for (final r in rows) {
+        buffer.writeln(r.map((c) => '"$c"').join(','));
+      }
+      buffer.writeln();
+      buffer.writeln('TỔNG CỘNG,,,"Tổng số SKU: ${skus.length}","Tổng tồn: $totalQty",,');
+      buffer.writeln();
+      buffer.writeln('NGƯỜI LẬP BÁO CÁO,THỦ KHO,KẾ TOÁN KHO');
+      buffer.writeln('(Ký ghi rõ họ tên),(Ký ghi rõ họ tên),(Ký ghi rõ họ tên)');
+
+      final file = File(filePath);
+      await file.writeAsString(buffer.toString());
+      return file;
+    } else {
+      final excel = Excel.createExcel();
+      final sheet = excel['Tong_Hop_Ton_Kho'];
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+
+      _setCell(sheet, col: 0, row: 0, value: 'HỆ THỐNG KHO VẬN THÔNG MINH RFID (RFID WMS)', style: _companyHeaderStyle);
+      _setCell(sheet, col: 0, row: 1, value: 'BÁO CÁO TỔNG HỢP TỒN KHO THEO MẶT HÀNG (SKU)', style: _titleStyle);
+      _setCell(sheet, col: 0, row: 2, value: 'Thời điểm xuất: ${_dtFmt.format(DateTime.now())}   |   Tổng SKU: ${skus.length}   |   Tổng tồn: $totalQty sản phẩm', style: _subTitleStyle);
+
+      const startRow = 4;
+      for (int c = 0; c < headers.length; c++) {
+        _setCell(sheet, col: c, row: startRow, value: headers[c], style: _tableHeaderStyle('#047857'));
+      }
+
+      int r = startRow + 1;
+      for (final rowData in rows) {
+        for (int c = 0; c < rowData.length; c++) {
+          _setCell(sheet, col: c, row: r, value: rowData[c], style: (c == 0 || c == 4) ? _dataCellCenterStyle : null);
+        }
+        r++;
+      }
+
+      _setCell(sheet, col: 0, row: r, value: 'TỔNG CỘNG', style: _totalRowStyle);
+      _setCell(sheet, col: 1, row: r, value: '${skus.length} SKU', style: _totalRowStyle);
+      _setCell(sheet, col: 2, row: r, value: '', style: _totalRowStyle);
+      _setCell(sheet, col: 3, row: r, value: '', style: _totalRowStyle);
+      _setCell(sheet, col: 4, row: r, value: '$totalQty Sản phẩm', style: _totalRowStyle);
+      _setCell(sheet, col: 5, row: r, value: '', style: _totalRowStyle);
+      _setCell(sheet, col: 6, row: r, value: '', style: _totalRowStyle);
+
+      final signRow = r + 3;
+      _setCell(sheet, col: 1, row: signRow, value: 'NGƯỜI LẬP BÁO CÁO', style: _signTitleStyle);
+      _setCell(sheet, col: 3, row: signRow, value: 'THỦ KHO', style: _signTitleStyle);
+      _setCell(sheet, col: 5, row: signRow, value: 'KẾ TOÁN KHO', style: _signTitleStyle);
+
+      _setCell(sheet, col: 1, row: signRow + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
+      _setCell(sheet, col: 3, row: signRow + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
+      _setCell(sheet, col: 5, row: signRow + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
 
       _autoFitColumns(sheet, headers.length, signRow + 3);
 

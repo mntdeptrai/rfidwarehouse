@@ -1,30 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/desktop_pda_wrapper.dart';
+import 'screens/splash/splash_screen.dart';
 import 'services/uhf_service.dart';
 import 'services/supabase_sync_service.dart';
 import 'services/api_service.dart';
-import 'services/auth_service.dart';
-import 'services/warehouse_repository.dart';
 import 'theme/eye_care_theme.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
     ),
   );
-  // Khởi tạo UHF service sớm
+  // Khởi tạo UHF service sớm (non-blocking)
   UhfService().init();
-  // Khởi tạo Supabase Cloud Sync & Realtime APIs
+  // Khởi tạo Supabase Cloud Sync & Realtime APIs (non-blocking)
   SupabaseSyncService();
   ApiService().init();
-  // Khởi tạo Auth service (phiên làm việc & tài khoản offline)
-  await AuthService().init();
-  // Nạp toàn bộ CSDL Pallet, vị trí, danh mục vào RAM trước khi hiển thị UI
-  await WarehouseRepository().ensureInitialized();
+
+  // Khởi chạy UI ngay lập tức: Màn hình chờ (SplashScreen) xuất hiện tức thì trên frame đầu tiên,
+  // CSDL và phiên làm việc sẽ được nạp ngầm song song trong lúc người dùng xem logo.
   runApp(const RfidWmsApp());
 }
 
@@ -42,7 +39,7 @@ class RfidWmsApp extends StatelessWidget {
           title: 'RFIDwarehouse',
           debugShowCheckedModeBanner: false,
           theme: eyeCare.themeData,
-          home: const DesktopPdaWrapper(),
+          home: const SplashScreen(),
         );
       },
     );

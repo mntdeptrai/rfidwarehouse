@@ -260,7 +260,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(4, Icons.assessment_rounded, 'Báo Cáo', c, isCompact: isCompact),
+                _buildMenuItem(4, Icons.assessment_rounded, 'Báo Cáo Tồn Kho', c, isCompact: isCompact),
                 if (isTech) ...[
                   const SizedBox(height: 8),
                   if (!isCompact)
