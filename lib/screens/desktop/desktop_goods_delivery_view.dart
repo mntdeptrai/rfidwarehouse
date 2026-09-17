@@ -1246,39 +1246,46 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
           // Ô TÊN KHÁCH HÀNG: TRÊN BẢNG DANH SÁCH PHÍA BÊN TRÁI DƯỚI DÒNG TIẾN ĐỘ
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.5), width: 1.2),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.person_pin, size: 15, color: Color(0xFF0284C7)),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'KHÁCH HÀNG:',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0284C7),
-                        letterSpacing: 0.5,
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.5), width: 1.2),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.person_pin, size: 15, color: Color(0xFF0284C7)),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'KHÁCH HÀNG:',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0284C7),
+                          letterSpacing: 0.5,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      order.customer.trim().isNotEmpty && order.customer.trim() != '--' && order.customer.trim() != 'Khách mua xuất kho'
-                          ? order.customer.trim()
-                          : 'Xuất Kho',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.bold,
-                        color: c.textPrimary,
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          order.customer.trim().isNotEmpty && order.customer.trim() != '--' && order.customer.trim() != 'Khách mua xuất kho'
+                              ? order.customer.trim()
+                              : 'Xuất Kho',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: c.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1418,14 +1425,18 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                                         : const Color(0xFFEF4444),
                                                   ),
                                                   const SizedBox(width: 4),
-                                                  Text(
-                                                    item.isInStock ? item.locationCode : 'Không có',
-                                                    style: TextStyle(
-                                                      color: item.isInStock
-                                                          ? (item.locationCode != '--' ? const Color(0xFF0284C7) : c.textMuted)
-                                                          : const Color(0xFFEF4444),
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.bold,
+                                                  Flexible(
+                                                    child: Text(
+                                                      item.isInStock ? item.locationCode : 'Không có',
+                                                      style: TextStyle(
+                                                        color: item.isInStock
+                                                            ? (item.locationCode != '--' ? const Color(0xFF0284C7) : c.textMuted)
+                                                            : const Color(0xFFEF4444),
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   ),
                                                 ],
@@ -1458,14 +1469,18 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                                           color: Color(0xFF10B981),
                                                         ),
                                                         const SizedBox(width: 5),
-                                                        Text(
-                                                          item.inboundTime != null
-                                                              ? DateFormat('dd/MM/yyyy').format(item.inboundTime!)
-                                                              : '--',
-                                                          style: const TextStyle(
-                                                            color: Color(0xFF10B981),
-                                                            fontSize: 11,
-                                                            fontWeight: FontWeight.bold,
+                                                        Flexible(
+                                                          child: Text(
+                                                            item.inboundTime != null
+                                                                ? DateFormat('dd/MM/yyyy').format(item.inboundTime!)
+                                                                : '--',
+                                                            style: const TextStyle(
+                                                              color: Color(0xFF10B981),
+                                                              fontSize: 11,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
                                                           ),
                                                         ),
                                                       ],
@@ -1556,12 +1571,16 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                                     const Icon(Icons.check_circle, size: 12, color: Color(0xFF10B981)),
                                                     const SizedBox(width: 4),
                                                   ],
-                                                  Text(
-                                                    antenStr,
-                                                    style: TextStyle(
-                                                      color: isScanned ? const Color(0xFF10B981) : c.textMuted,
-                                                      fontSize: 11,
-                                                      fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
+                                                  Flexible(
+                                                    child: Text(
+                                                      antenStr,
+                                                      style: TextStyle(
+                                                        color: isScanned ? const Color(0xFF10B981) : c.textMuted,
+                                                        fontSize: 11,
+                                                        fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
                                                   ),
                                                 ],
@@ -1592,7 +1611,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                         const SizedBox(width: 8),
                                         const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 115, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                        const SizedBox(width: 120, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
                                         const SizedBox(width: 8),
                                         const SizedBox(width: 130, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
                                         const SizedBox(width: 8),
@@ -1683,94 +1702,96 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: c.border),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Bên phải: Kéo dịch các nút quét, thời gian quét và làm mới quét sang bên phải
-          SingleChildScrollView(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Nút Làm Mới Quét
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: c.textPrimary,
-                    side: BorderSide(color: c.border),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            physics: const BouncingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // Nút Làm Mới Quét
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.textPrimary,
+                      side: BorderSide(color: c.border),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.replay, size: 14),
+                    label: const Text('Làm Mới Quét', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                    onPressed: _clearGateScan,
                   ),
-                  icon: const Icon(Icons.replay, size: 14),
-                  label: const Text('Làm Mới Quét', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
-                  onPressed: _clearGateScan,
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
 
-                // Chọn thời gian quét: 5s, 10s, Liên tục
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: c.bgDeep,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: c.border),
+                  // Chọn thời gian quét: 5s, 10s, Liên tục
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: c.bgDeep,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildScanDurationButton(5, '5s', c),
+                        const SizedBox(width: 3),
+                        _buildScanDurationButton(10, '10s', c),
+                        const SizedBox(width: 3),
+                        _buildScanDurationButton(0, 'Liên tục', c),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildScanDurationButton(5, '5s', c),
-                      const SizedBox(width: 3),
-                      _buildScanDurationButton(10, '10s', c),
-                      const SizedBox(width: 3),
-                      _buildScanDurationButton(0, 'Liên tục', c),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
 
-                // Nút Bắt đầu quét / Dừng quét
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _isScanning ? const Color(0xFFEF4444) : c.rfidCyan,
-                    foregroundColor: _isScanning ? Colors.white : const Color(0xFF2C251E),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  icon: Icon(_isScanning ? Icons.stop_rounded : Icons.sensors, size: 16),
-                  label: Text(
-                    _isScanning
-                        ? (_scanDurationSeconds > 0 ? 'DỪNG (${_scanCountdown}s)' : 'DỪNG QUÉT')
-                        : (_scanDurationSeconds > 0 ? 'BẮT ĐẦU (${_scanDurationSeconds}s)' : 'BẮT ĐẦU QUÉT (LIÊN TỤC)'),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                  onPressed: _toggleGateScan,
-                ),
-
-                // Nút Xác Nhận Xuất Kho: CHỈ HIỆN KHI ĐÃ ĐỌC ĐỦ 100% VÀ KHÔNG CÓ CHIP LẠ
-                if (isComplete && !hasUnexpectedTags) ...[
-                  const SizedBox(width: 10),
+                  // Nút Bắt đầu quét / Dừng quét
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isStockSufficient ? const Color(0xFF10B981) : const Color(0xFF9CA3AF),
-                      foregroundColor: Colors.white,
+                      backgroundColor: _isScanning ? const Color(0xFFEF4444) : c.rfidCyan,
+                      foregroundColor: _isScanning ? Colors.white : const Color(0xFF2C251E),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      elevation: isStockSufficient ? 3 : 0,
+                      elevation: 0,
                     ),
-                    icon: Icon(isStockSufficient ? Icons.check_circle : Icons.block, size: 16),
+                    icon: Icon(_isScanning ? Icons.stop_rounded : Icons.sensors, size: 16),
                     label: Text(
-                      !isStockSufficient
-                          ? 'KHÓA XUẤT (THIẾU TỒN KHO)'
-                          : (_isSaving ? 'ĐANG LƯU...' : 'ĐÃ ĐỌC ĐỦ $scannedCount/$expectedCount (XÁC NHẬN XUẤT KHO)'),
+                      _isScanning
+                          ? (_scanDurationSeconds > 0 ? 'DỪNG (${_scanCountdown}s)' : 'DỪNG QUÉT')
+                          : (_scanDurationSeconds > 0 ? 'BẮT ĐẦU (${_scanDurationSeconds}s)' : 'BẮT ĐẦU QUÉT (LIÊN TỤC)'),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
-                    onPressed: (_isSaving || !isStockSufficient) ? null : _confirmOutboundDelivery,
+                    onPressed: _toggleGateScan,
                   ),
+
+                  // Nút Xác Nhận Xuất Kho: CHỈ HIỆN KHI ĐÃ ĐỌC ĐỦ 100% VÀ KHÔNG CÓ CHIP LẠ
+                  if (isComplete && !hasUnexpectedTags) ...[
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isStockSufficient ? const Color(0xFF10B981) : const Color(0xFF9CA3AF),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: isStockSufficient ? 3 : 0,
+                      ),
+                      icon: Icon(isStockSufficient ? Icons.check_circle : Icons.block, size: 16),
+                      label: Text(
+                        !isStockSufficient
+                            ? 'KHÓA XUẤT (THIẾU TỒN KHO)'
+                            : (_isSaving ? 'ĐANG LƯU...' : 'ĐÃ ĐỌC ĐỦ $scannedCount/$expectedCount (XÁC NHẬN XUẤT KHO)'),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      onPressed: (_isSaving || !isStockSufficient) ? null : _confirmOutboundDelivery,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

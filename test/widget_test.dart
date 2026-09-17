@@ -18,10 +18,12 @@ import 'package:uhf/screens/pda/pda_drawer.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/models/tag_info.dart';
 import 'package:uhf/services/warehouse_repository.dart';
+import 'package:uhf/services/database_service.dart';
 import 'package:uhf/services/uhf_service.dart';
 import 'package:uhf/screens/desktop/desktop_location_management_view.dart';
 import 'package:uhf/screens/desktop/desktop_report_view.dart';
 import 'package:uhf/screens/splash/splash_screen.dart';
+import 'package:uhf/models/inventory_models.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -1288,6 +1290,68 @@ void main() {
     await tester.tap(find.text('XÓA BỘ LỌC TÌM KIẾM'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Không tìm thấy sản phẩm tồn kho nào khớp với Số Seri'), findsNothing);
+  });
+
+  testWidgets('DesktopWarehouseManagementView includes Outbound and Transfer transactions in history tab', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final now = DateTime.now();
+
+    final moveTx = InventoryTransaction(
+      transactionId: 'TX-TEST-MOVE-1',
+      type: TransactionType.movement,
+      documentNo: 'PALLET-TEST-01',
+      sku: 'PALLET_PALLET-TEST-01',
+      productName: 'Chuyển kho 10 Items',
+      quantity: 10,
+      fromLocation: 'KHO_TONG-A1',
+      toLocation: 'KHO_TONG-B2',
+      palletCode: 'PALLET-TEST-01',
+      performedBy: 'Thủ kho Test',
+      timestamp: now,
+      notes: 'Test chuyển kho',
+    );
+    final outTx = InventoryTransaction(
+      transactionId: 'TX-TEST-OUT-1',
+      type: TransactionType.outbound,
+      documentNo: 'PO-OUT-TEST-888',
+      sku: 'SKU-OUT-888',
+      productName: 'Xuất hàng đối soát test',
+      quantity: 5,
+      fromLocation: 'KHO_TONG',
+      toLocation: 'Khách hàng Đại Lý ABC',
+      performedBy: 'Cổng RFID Gate Outbound',
+      timestamp: now,
+      notes: 'Test xuất kho cổng RFID',
+    );
+
+    await DatabaseService().insertTransaction(moveTx);
+    await DatabaseService().insertTransaction(outTx);
+    await repo.reloadFromSqlite();
+
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopWarehouseManagementView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Switch to History Tab (Tab 3: Quản Lý Lịch Sử)
+    await tester.tap(find.text('Quản Lý Lịch Sử'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ĐIỀU CHUYỂN KHO'), findsOneWidget);
+    expect(find.text('PO-OUT-TEST-888'), findsOneWidget);
+    expect(find.text('PALLET-TEST-01'), findsOneWidget);
   });
 }
 

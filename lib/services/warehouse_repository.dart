@@ -90,6 +90,7 @@ class WarehouseRepository extends ChangeNotifier {
       final dbCustomers = await _dbService.getCustomers();
       final dbDeliveryNotes = await _dbService.getDeliveryNotes();
       final dbInventorySessions = await _dbService.getInventorySessions();
+      final dbTransactions = await _dbService.getTransactions();
 
       _products.clear();
       _products.addAll(cleanProducts);
@@ -160,6 +161,9 @@ class WarehouseRepository extends ChangeNotifier {
 
       _inventorySessions.clear();
       _inventorySessions.addAll(dbInventorySessions);
+
+      _transactions.clear();
+      _transactions.addAll(dbTransactions);
 
       notifyListeners();
     } catch (e) {
@@ -476,6 +480,9 @@ class WarehouseRepository extends ChangeNotifier {
 
       _transactions.clear();
       _transactions.addAll(loadedTransactions);
+      for (final tx in loadedTransactions) {
+        await _dbService.insertTransaction(tx);
+      }
 
       _rebuildIndexes();
 
@@ -1613,6 +1620,7 @@ class WarehouseRepository extends ChangeNotifier {
   }
 
   Future<void> _syncInventoryTransaction(InventoryTransaction tx) async {
+    await _dbService.insertTransaction(tx);
     final effectiveRecordId = (tx.documentNo.isNotEmpty && !tx.documentNo.startsWith('PDA-DIRECT'))
         ? tx.documentNo
         : tx.transactionId;
@@ -4125,6 +4133,15 @@ class WarehouseRepository extends ChangeNotifier {
     if (existingOrder != null) {
       existingOrder.status = OutboundOrderStatus.shipped;
       await _dbService.updateOutboundOrderStatus(existingOrder.outboundOrderId, OutboundOrderStatus.shipped);
+      await _syncDirectOrQueue(
+        tableName: 'outbound_orders',
+        recordId: existingOrder.outboundOrderId,
+        action: 'UPDATE',
+        payload: {
+          'outbound_order_id': existingOrder.outboundOrderId,
+          'status': OutboundOrderStatus.shipped.code,
+        },
+      );
     } else {
       final newOrder = OutboundOrder(
         outboundOrderId: outboundId,
@@ -4145,6 +4162,18 @@ class WarehouseRepository extends ChangeNotifier {
       );
       _outboundOrders.insert(0, newOrder);
       await _dbService.insertOutboundOrder(newOrder);
+      await _syncDirectOrQueue(
+        tableName: 'outbound_orders',
+        recordId: newOrder.outboundOrderId,
+        action: 'INSERT',
+        payload: {
+          'outbound_order_id': newOrder.outboundOrderId,
+          'po_no': newOrder.poNo,
+          'customer': newOrder.customer,
+          'status': newOrder.status.code,
+          'created_at': newOrder.createdAt.toIso8601String(),
+        },
+      );
     }
 
     final tx = InventoryTransaction(
@@ -4426,23 +4455,22 @@ class WarehouseRepository extends ChangeNotifier {
       _dbService.updateItemLocationAndPallet(item.epc, newLocationId, palletId);
     }
 
-    _transactions.insert(
-      0,
-      InventoryTransaction(
-        transactionId: 'TX-MOVE-${DateTime.now().millisecondsSinceEpoch}',
-        type: TransactionType.movement,
-        documentNo: pallet.palletCode,
-        sku: 'PALLET_${pallet.palletCode}',
-        productName: 'Di chuyển ${pallet.itemIds.length} Items',
-        quantity: pallet.itemIds.length,
-        fromLocation: oldLocation.locationCode,
-        toLocation: newLocation?.locationCode ?? newLocationId,
-        palletCode: pallet.palletCode,
-        performedBy: performedBy,
-        timestamp: DateTime.now(),
-        notes: 'Di chuyển Pallet từ ${oldLocation.locationCode} sang ${newLocation?.locationCode ?? newLocationId}',
-      ),
+    final tx = InventoryTransaction(
+      transactionId: 'TX-MOVE-${DateTime.now().millisecondsSinceEpoch}',
+      type: TransactionType.movement,
+      documentNo: pallet.palletCode,
+      sku: 'PALLET_${pallet.palletCode}',
+      productName: 'Di chuyển ${pallet.itemIds.length} Items',
+      quantity: pallet.itemIds.length,
+      fromLocation: oldLocation.locationCode,
+      toLocation: newLocation?.locationCode ?? newLocationId,
+      palletCode: pallet.palletCode,
+      performedBy: performedBy,
+      timestamp: DateTime.now(),
+      notes: 'Di chuyển Pallet từ ${oldLocation.locationCode} sang ${newLocation?.locationCode ?? newLocationId}',
     );
+    _transactions.insert(0, tx);
+    _syncInventoryTransaction(tx);
 
     _syncDirectOrQueue(
       tableName: 'pallet_moves',
@@ -4541,23 +4569,22 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     // Ghi transaction
-    _transactions.insert(
-      0,
-      InventoryTransaction(
-        transactionId: 'TX-TRANSFER-${DateTime.now().millisecondsSinceEpoch}',
-        type: TransactionType.movement,
-        documentNo: pallet.palletCode,
-        sku: 'PALLET_${pallet.palletCode}',
-        productName: 'Chuyển kho ${palletItems.length} Items',
-        quantity: palletItems.length,
-        fromLocation: oldLocation?.locationCode ?? (oldLocationId ?? ''),
-        toLocation: newLocation?.locationCode ?? newLocationId,
-        palletCode: pallet.palletCode,
-        performedBy: actualPerformer,
-        timestamp: DateTime.now(),
-        notes: 'Chuyển kho PDA: ${oldLocation?.locationCode ?? oldLocationId} → ${newLocation?.locationCode ?? newLocationId}',
-      ),
+    final tx = InventoryTransaction(
+      transactionId: 'TX-TRANSFER-${DateTime.now().millisecondsSinceEpoch}',
+      type: TransactionType.movement,
+      documentNo: pallet.palletCode,
+      sku: 'PALLET_${pallet.palletCode}',
+      productName: 'Chuyển kho ${palletItems.length} Items',
+      quantity: palletItems.length,
+      fromLocation: oldLocation?.locationCode ?? (oldLocationId ?? ''),
+      toLocation: newLocation?.locationCode ?? newLocationId,
+      palletCode: pallet.palletCode,
+      performedBy: actualPerformer,
+      timestamp: DateTime.now(),
+      notes: 'Chuyển kho PDA: ${oldLocation?.locationCode ?? oldLocationId} → ${newLocation?.locationCode ?? newLocationId}',
     );
+    _transactions.insert(0, tx);
+    await _syncInventoryTransaction(tx);
 
     _triggerBackgroundSync();
     notifyListeners();
@@ -4604,22 +4631,21 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     if (count > 0) {
-      _transactions.insert(
-        0,
-        InventoryTransaction(
-          transactionId: 'TX-TRANSFER-${DateTime.now().millisecondsSinceEpoch}',
-          type: TransactionType.movement,
-          documentNo: 'MANUAL-TRANSFER',
-          sku: 'ĐA_SKU',
-          productName: 'Chuyển kho $count Items',
-          quantity: count,
-          fromLocation: '',
-          toLocation: newLocation?.locationCode ?? newLocationId,
-          performedBy: actualPerformer,
-          timestamp: DateTime.now(),
-          notes: 'Chuyển kho PDA (quét từng item): $count items → ${newLocation?.locationCode ?? newLocationId}',
-        ),
+      final tx = InventoryTransaction(
+        transactionId: 'TX-TRANSFER-${DateTime.now().millisecondsSinceEpoch}',
+        type: TransactionType.movement,
+        documentNo: 'MANUAL-TRANSFER',
+        sku: 'ĐA_SKU',
+        productName: 'Chuyển kho $count Items',
+        quantity: count,
+        fromLocation: '',
+        toLocation: newLocation?.locationCode ?? newLocationId,
+        performedBy: actualPerformer,
+        timestamp: DateTime.now(),
+        notes: 'Chuyển kho PDA (quét từng item): $count items → ${newLocation?.locationCode ?? newLocationId}',
       );
+      _transactions.insert(0, tx);
+      await _syncInventoryTransaction(tx);
       _triggerBackgroundSync();
       notifyListeners();
     }
@@ -4693,23 +4719,22 @@ class WarehouseRepository extends ChangeNotifier {
       },
     );
 
-    _transactions.insert(
-      0,
-      InventoryTransaction(
-        transactionId: 'TX-ITEM-MOVE-${DateTime.now().millisecondsSinceEpoch}',
-        type: TransactionType.movement,
-        documentNo: item.sku,
-        sku: item.sku,
-        productName: 'Chuyển sản phẩm: ${item.productName}',
-        quantity: 1,
-        fromLocation: oldLocation?.locationCode ?? oldLocationId,
-        toLocation: newLocation?.locationCode ?? newLocationId,
-        palletCode: effectivePalletId,
-        performedBy: actualPerformer,
-        timestamp: DateTime.now(),
-        notes: 'Chuyển SP riêng lẻ [${item.sku} - EPC: ${item.epc}] từ ${oldLocation?.displayName ?? oldLocationId} sang ${newLocation?.displayName ?? newLocationId}${effectivePalletId != null ? " (Pallet: $effectivePalletId)" : ""}',
-      ),
+    final tx = InventoryTransaction(
+      transactionId: 'TX-ITEM-MOVE-${DateTime.now().millisecondsSinceEpoch}',
+      type: TransactionType.movement,
+      documentNo: item.sku,
+      sku: item.sku,
+      productName: 'Chuyển sản phẩm: ${item.productName}',
+      quantity: 1,
+      fromLocation: oldLocation?.locationCode ?? oldLocationId,
+      toLocation: newLocation?.locationCode ?? newLocationId,
+      palletCode: effectivePalletId,
+      performedBy: actualPerformer,
+      timestamp: DateTime.now(),
+      notes: 'Chuyển SP riêng lẻ [${item.sku} - EPC: ${item.epc}] từ ${oldLocation?.displayName ?? oldLocationId} sang ${newLocation?.displayName ?? newLocationId}${effectivePalletId != null ? " (Pallet: $effectivePalletId)" : ""}',
     );
+    _transactions.insert(0, tx);
+    await _syncInventoryTransaction(tx);
 
     _triggerBackgroundSync();
     notifyListeners();
@@ -4872,23 +4897,22 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     // Ghi nhận nhật ký chuyển kho / gộp pallet
-    _transactions.insert(
-      0,
-      InventoryTransaction(
-        transactionId: 'TX-MERGE-${DateTime.now().millisecondsSinceEpoch}',
-        type: TransactionType.movement,
-        documentNo: 'MERGE-${sourcePallet.palletCode}->${targetPallet.palletCode}',
-        sku: 'PALLET_MERGE',
-        productName: 'Gộp $movedItemCount mặt hàng từ ${sourcePallet.palletCode} sang ${targetPallet.palletCode}',
-        quantity: movedItemCount,
-        fromLocation: sourcePallet.locationId ?? 'N/A',
-        toLocation: targetPallet.locationId ?? 'N/A',
-        palletCode: targetPallet.palletCode,
-        performedBy: performedBy,
-        timestamp: DateTime.now(),
-        notes: 'Nhập gộp $movedItemCount sản phẩm từ Pallet ${sourcePallet.palletCode} vào Pallet ${targetPallet.palletCode}',
-      ),
+    final tx = InventoryTransaction(
+      transactionId: 'TX-MERGE-${DateTime.now().millisecondsSinceEpoch}',
+      type: TransactionType.movement,
+      documentNo: 'MERGE-${sourcePallet.palletCode}->${targetPallet.palletCode}',
+      sku: 'PALLET_MERGE',
+      productName: 'Gộp $movedItemCount mặt hàng từ ${sourcePallet.palletCode} sang ${targetPallet.palletCode}',
+      quantity: movedItemCount,
+      fromLocation: sourcePallet.locationId ?? 'N/A',
+      toLocation: targetPallet.locationId ?? 'N/A',
+      palletCode: targetPallet.palletCode,
+      performedBy: performedBy,
+      timestamp: DateTime.now(),
+      notes: 'Nhập gộp $movedItemCount sản phẩm từ Pallet ${sourcePallet.palletCode} vào Pallet ${targetPallet.palletCode}',
     );
+    _transactions.insert(0, tx);
+    await _syncInventoryTransaction(tx);
 
     _triggerBackgroundSync();
     notifyListeners();

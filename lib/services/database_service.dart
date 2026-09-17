@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/wms_models.dart';
+import '../models/inventory_models.dart';
 
 /// DatabaseService thuần In-Memory (Bộ nhớ RAM) - Đã loại bỏ hoàn toàn SQLite
 /// 
@@ -28,6 +29,7 @@ class DatabaseService {
   final Map<String, Customer> _customers = {};
   final Map<String, DeliveryNote> _deliveryNotes = {};
   final Map<String, InventorySession> _inventorySessions = {};
+  final Map<String, InventoryTransaction> _transactions = {};
   final Map<String, String> _systemConfig = {};
   final List<Map<String, dynamic>> _syncQueue = [];
   int _nextQueueId = 1;
@@ -130,6 +132,7 @@ class DatabaseService {
     _customers.clear();
     _deliveryNotes.clear();
     _inventorySessions.clear();
+    _transactions.clear();
     _systemConfig.clear();
     _syncQueue.clear();
   }
@@ -591,5 +594,14 @@ class DatabaseService {
       return false;
     });
     return count;
+  }
+
+  // --- INVENTORY TRANSACTIONS ---
+  Future<List<InventoryTransaction>> getTransactions() async {
+    return _transactions.values.toList();
+  }
+
+  Future<void> insertTransaction(InventoryTransaction tx) async {
+    _transactions[tx.transactionId] = tx;
   }
 }

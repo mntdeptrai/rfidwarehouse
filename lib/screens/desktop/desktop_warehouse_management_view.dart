@@ -735,7 +735,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
       });
     }
 
-    // Giao dịch điều chuyển vị trí & điều chỉnh kiểm kê từ CSDL
+    // Giao dịch điều chuyển vị trí, xuất kho, nhập kho & điều chỉnh kiểm kê từ CSDL
     for (var t in allTransactions) {
       if (t.type == TransactionType.movement || t.type == TransactionType.auditAdjustment) {
         final isMove = t.type == TransactionType.movement;
@@ -761,6 +761,52 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
           'items': <Item>[],
           'transaction': t,
         });
+      } else if (t.type == TransactionType.outbound) {
+        final doc = t.documentNo.trim();
+        final alreadyRepresented = historyRecords.any((h) =>
+            h['recordType'] == 'OUTBOUND' &&
+            (h['orderNo'] == doc || h['orderId'] == doc || h['orderId'] == t.transactionId));
+        if (!alreadyRepresented) {
+          historyRecords.add({
+            'recordType': 'OUTBOUND',
+            'isOutbound': true,
+            'orderNo': t.documentNo.isNotEmpty ? t.documentNo : t.transactionId,
+            'orderId': t.transactionId,
+            'partner': t.toLocation ?? 'Khách mua xuất kho',
+            'createdAt': t.timestamp,
+            'status': OutboundOrderStatus.shipped,
+            'statusLabel': 'ĐÃ XUẤT KHO',
+            'totalQty': t.quantity,
+            'doneQty': t.quantity,
+            'pallets': t.palletCode != null && t.palletCode!.isNotEmpty ? [t.palletCode!] : <String>[],
+            'details': <dynamic>[],
+            'items': <Item>[],
+            'transaction': t,
+          });
+        }
+      } else if (t.type == TransactionType.inbound) {
+        final doc = t.documentNo.trim();
+        final alreadyRepresented = historyRecords.any((h) =>
+            h['recordType'] == 'INBOUND' &&
+            (h['orderNo'] == doc || h['orderId'] == doc || h['orderId'] == t.transactionId));
+        if (!alreadyRepresented) {
+          historyRecords.add({
+            'recordType': 'INBOUND',
+            'isOutbound': false,
+            'orderNo': t.documentNo.isNotEmpty ? t.documentNo : t.transactionId,
+            'orderId': t.transactionId,
+            'partner': t.fromLocation ?? 'Nhà cung cấp',
+            'createdAt': t.timestamp,
+            'status': InboundOrderStatus.completed,
+            'statusLabel': 'ĐÃ HOÀN TẤT',
+            'totalQty': t.quantity,
+            'doneQty': t.quantity,
+            'pallets': t.palletCode != null && t.palletCode!.isNotEmpty ? [t.palletCode!] : <String>[],
+            'details': <dynamic>[],
+            'items': <Item>[],
+            'transaction': t,
+          });
+        }
       }
     }
 
@@ -1070,7 +1116,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                                       width: 125,
                                       child: Center(
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                           decoration: BoxDecoration(
                                             color: typeColor.withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(6),
@@ -1081,12 +1127,15 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                                             children: [
                                               Icon(typeIcon, size: 13, color: typeColor),
                                               const SizedBox(width: 4),
-                                              Text(
-                                                typeTitle,
-                                                style: TextStyle(
-                                                  color: typeColor,
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.bold,
+                                              Flexible(
+                                                child: Text(
+                                                  typeTitle,
+                                                  style: TextStyle(
+                                                    color: typeColor,
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             ],
