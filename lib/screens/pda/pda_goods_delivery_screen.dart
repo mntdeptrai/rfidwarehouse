@@ -164,10 +164,11 @@ class _OutboundScreenState extends State<OutboundScreen> {
       if (isPressed) {
         _lastTriggerPressTime = DateTime.now();
         if (_pendingOutboundOrder == null) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: Color(0xFFF59E0B),
-              content: Text('⚠️ Vui lòng bấm [XUẤT HÀNG] ở góc trên để nạp file trước khi quét!'),
+              content: Text('⚠️ Vui lòng bấm [XUẤT HÀNG] ở góc trên để chọn đơn hoặc nạp file trước khi quét!'),
               duration: Duration(seconds: 2),
             ),
           );
@@ -292,10 +293,11 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   void _toggleGateScan() {
     if (_pendingOutboundOrder == null) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFFF59E0B),
-          content: Text('⚠️ Vui lòng bấm nút [XUẤT HÀNG] ở góc trên để nạp file trước khi quét!'),
+          content: Text('⚠️ Vui lòng bấm [XUẤT HÀNG] ở góc trên để chọn đơn hoặc nạp file trước khi quét!'),
           duration: Duration(seconds: 2),
         ),
       );
@@ -463,16 +465,19 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
       if (mounted) {
         if (!validation.isStockSufficient) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFFEF4444),
-              duration: const Duration(seconds: 5),
+              duration: const Duration(seconds: 2),
               content: Text('⚠️ CẢNH BÁO TỒN KHO: Không đủ hàng tồn để xuất (Thiếu ${validation.shortageCount} món)! Đã khóa xác nhận xuất.'),
             ),
           );
         } else {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
+          duration: const Duration(seconds: 2),
               backgroundColor: const Color(0xFF10B981),
               content: Text('✓ Đã nạp thành công ${validatedItems.length} chip xuất kho (Đủ tồn kho & đã định vị kệ)'),
             ),
@@ -481,8 +486,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi nạp file xuất hàng: $e'),
           ),
@@ -579,16 +586,19 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
       if (mounted) {
         if (!validation.isStockSufficient) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFFEF4444),
-              duration: const Duration(seconds: 5),
+              duration: const Duration(seconds: 2),
               content: Text('⚠️ CẢNH BÁO TỒN KHO: Đơn $orderNo thiếu ${validation.shortageCount} sản phẩm! Đã khóa xác nhận xuất.'),
             ),
           );
         } else {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
+          duration: const Duration(seconds: 2),
               backgroundColor: const Color(0xFF10B981),
               content: Text('✓ Đã nạp thành công đơn $orderNo (${validatedItems.length} SP - Đủ tồn kho)'),
             ),
@@ -597,8 +607,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi nạp file PO: $e'),
           ),
@@ -675,16 +687,19 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
     if (mounted) {
       if (!validation.isStockSufficient) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFFEF4444),
-            duration: const Duration(seconds: 5),
+            duration: const Duration(seconds: 2),
             content: Text('⚠️ CẢNH BÁO TỒN KHO: Đơn ${order.poNo} thiếu ${validation.shortageCount} sản phẩm! Đã khóa xác nhận xuất.'),
           ),
         );
       } else {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
             content: Text('✓ Đã nạp đơn ${order.poNo} (${validatedItems.length} sản phẩm - Đủ tồn kho)'),
           ),
@@ -824,8 +839,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
     final order = _pendingOutboundOrder!;
 
     if (!order.isStockSufficient || order.items.any((i) => !i.isInStock)) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           backgroundColor: const Color(0xFFEF4444),
           content: Text('Không thể xuất kho: Kho không đủ hàng tồn (Thiếu ${order.shortageCount} sản phẩm)! Vui lòng kiểm tra lại tồn kho.'),
         ),
@@ -840,8 +857,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
     final unexp = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
     if (scannedMatching < totalExpected || unexp.isNotEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          duration: Duration(seconds: 2),
           backgroundColor: Color(0xFFEF4444),
           content: Text('Không thể xuất kho: Chưa quét đủ mã pallet/hàng hoặc có chip lạ ngoài đơn!'),
         ),
@@ -901,8 +920,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
       );
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi xác nhận xuất kho: $e'),
           ),

@@ -25,7 +25,6 @@ class _DesktopReportViewState extends State<DesktopReportView> {
 
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
-  String _selectedLocationFilter = 'ALL';
 
   @override
   void initState() {
@@ -62,11 +61,12 @@ class _DesktopReportViewState extends State<DesktopReportView> {
 
   Future<void> _exportReport(List<Item> itemsToExport) async {
     if (itemsToExport.isEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFFF59E0B),
           content: Text('⚠️ Không có mặt hàng nào để xuất báo cáo.'),
-          duration: Duration(seconds: 3),
+          duration: Duration(seconds: 2),
         ),
       );
       return;
@@ -86,6 +86,7 @@ class _DesktopReportViewState extends State<DesktopReportView> {
           _lastExportPath = file.path;
         });
 
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF047857),
@@ -105,18 +106,19 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                 ),
               ],
             ),
-            duration: const Duration(seconds: 5),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isExporting = false);
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFFEF4444),
             content: Text('❌ Lỗi xuất báo cáo tồn kho: $e'),
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -134,13 +136,8 @@ class _DesktopReportViewState extends State<DesktopReportView> {
     final c = _eyeCare.colors;
     final allInStock = _inStockItems;
 
-    // 1. Lọc theo kệ
+    // Lọc theo Số Seri (SN) hoặc từ khóa tìm kiếm
     var filteredItems = allInStock;
-    if (_selectedLocationFilter != 'ALL') {
-      filteredItems = filteredItems
-          .where((it) => it.locationId == _selectedLocationFilter)
-          .toList();
-    }
 
     // 2. Lọc theo Số Seri (SN) hoặc từ khóa tìm kiếm
     final q = _searchQuery.trim().toLowerCase();
@@ -171,7 +168,6 @@ class _DesktopReportViewState extends State<DesktopReportView> {
 
             // 2. Thanh Công Cụ & Tìm Kiếm Theo Số Seri (SN), SKU
             _buildActionToolbar(
-              allInStock: allInStock,
               filteredItems: filteredItems,
               c: c,
             ),
@@ -318,19 +314,9 @@ class _DesktopReportViewState extends State<DesktopReportView> {
   // 2. ACTION TOOLBAR & SEARCH CONTROLS
   // ==========================================
   Widget _buildActionToolbar({
-    required List<Item> allInStock,
     required List<Item> filteredItems,
     required EyeCareColors c,
   }) {
-    // Thu thập danh sách vị trí kệ
-    final shelfOptions = <String>{'ALL'};
-    for (final it in allInStock) {
-      if (it.locationId != null && it.locationId!.isNotEmpty) {
-        shelfOptions.add(it.locationId!);
-      }
-    }
-    final sortedShelves = shelfOptions.toList()..sort();
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -347,13 +333,13 @@ class _DesktopReportViewState extends State<DesktopReportView> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Cụm điều khiển tìm kiếm & lọc (bên trái)
+                  // Cụm điều khiển tìm kiếm (bên trái)
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // 1. Ô Tìm Kiếm Số Seri (SN), SKU, Kệ đơn giản & trực quan
+                      // Ô Tìm Kiếm Số Seri (SN), SKU, Kệ đơn giản & trực quan
                       Container(
-                        width: 280,
+                        width: 320,
                         height: 38,
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
@@ -397,60 +383,6 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                                   child: Icon(Icons.clear_rounded, size: 16, color: c.textSecondary),
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(width: 10),
-
-                      // 2. Lọc Vị Trí Kệ
-                      Container(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: c.bgDeep,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: c.border),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: sortedShelves.contains(_selectedLocationFilter) ? _selectedLocationFilter : 'ALL',
-                            dropdownColor: c.bgCard,
-                            icon: Icon(Icons.filter_list_rounded, size: 16, color: c.textSecondary),
-                            style: TextStyle(fontSize: 12, color: c.textPrimary),
-                            items: sortedShelves.map((loc) {
-                              return DropdownMenuItem<String>(
-                                value: loc,
-                                child: Text(loc == 'ALL' ? 'Tất cả vị trí kệ' : 'Kệ: $loc'),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) setState(() => _selectedLocationFilter = val);
-                            },
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 10),
-
-                      // 3. Số lượng hiển thị
-                      Container(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: c.bgDeep,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: c.border),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.inventory_2_outlined, size: 15, color: c.textSecondary),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Hiển thị: ${filteredItems.length} / ${allInStock.length}',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.textPrimary),
-                            ),
                           ],
                         ),
                       ),
@@ -616,14 +548,13 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                                       'Vui lòng kiểm tra lại Số Seri (SN), mã SKU hoặc thử xóa bộ lọc tìm kiếm.',
                                       style: TextStyle(fontSize: 12, color: c.textSecondary),
                                     ),
-                                    if (_searchQuery.isNotEmpty || _selectedLocationFilter != 'ALL') ...[
+                                    if (_searchQuery.isNotEmpty) ...[
                                       const SizedBox(height: 14),
                                       OutlinedButton.icon(
                                         onPressed: () {
                                           _searchCtrl.clear();
                                           setState(() {
                                             _searchQuery = '';
-                                            _selectedLocationFilter = 'ALL';
                                           });
                                         },
                                         icon: const Icon(Icons.clear_all_rounded, size: 16),

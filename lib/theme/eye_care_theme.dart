@@ -86,6 +86,17 @@ class EyeCareThemeService extends ChangeNotifier {
           letterSpacing: 0.3,
         ),
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        dismissDirection: DismissDirection.down,
+        showCloseIcon: true,
+        closeIconColor: Colors.white,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import 'desktop_location_management_view.dart';
 import 'desktop_lookup_view.dart';
+import '../../widgets/app_notification_bar.dart';
 
 class _PalletGroupSummary {
   final String sku;
@@ -1534,8 +1535,10 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                       : () async {
                           final code = codeCtrl.text.trim().toUpperCase();
                           if (code.isEmpty) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng nhập Mã Pallet (Barcode)!')),
+                              const SnackBar(
+          duration: Duration(seconds: 2),backgroundColor: Color(0xFFEF4444), content: Text('Vui lòng nhập Mã Pallet (Barcode)!')),
                             );
                             return;
                           }
@@ -1559,18 +1562,15 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
 
                             if (dialogCtx.mounted) {
                               Navigator.pop(dialogCtx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  backgroundColor: const Color(0xFF10B981),
-                                  content: Text('✓ Đã lưu thành công Pallet "$code" vào CSDL!'),
-                                ),
+                              final isEdit = editingPallet != null;
+                              AppSnackBar.showSuccess(
+                                context,
+                                isEdit ? '✓ Đã cập nhật thành công Pallet "$code"!' : '✓ Đã tạo mới thành công Pallet "$code"!',
                               );
                             }
                           } catch (e) {
                             if (dialogCtx.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi: $e')),
-                              );
+                              AppSnackBar.showError(context, 'Lỗi: $e');
                             }
                           } finally {
                             if (dialogCtx.mounted) setDlgState(() => isProcessing = false);
@@ -1625,17 +1625,10 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
     try {
       await _repo.deletePalletFromMaster(p.palletCode, palletId: p.palletId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF10B981),
-          content: Text('✓ Đã xóa Pallet "${p.palletCode}" thành công!'),
-        ),
-      );
+      AppSnackBar.showSuccess(context, '✓ Đã xóa Pallet "${p.palletCode}" thành công!');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi xóa: $e')),
-      );
+      AppSnackBar.showError(context, 'Lỗi khi xóa: $e');
     }
   }
 

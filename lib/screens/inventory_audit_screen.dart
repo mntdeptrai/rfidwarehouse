@@ -43,8 +43,10 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
       _activeSession = session;
       _scannedEpcs.clear();
     });
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+          duration: const Duration(seconds: 2),
         backgroundColor: const Color(0xFF0284C7),
         content: Text('Đã khởi tạo Phiên kiểm kê ${session.sessionCode}!'),
       ),
@@ -89,8 +91,10 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
     if (_activeSession == null) return;
     await _repo.completeInventorySession(_activeSession!.sessionId, 'Quản lý kho Trần Văn B');
     if (mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          duration: Duration(seconds: 2),
           backgroundColor: Color(0xFF10B981),
           content: Text('Đã chốt và duyệt sai lệch phiên kiểm kê thành công!'),
         ),

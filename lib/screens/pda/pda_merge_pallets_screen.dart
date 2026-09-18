@@ -254,7 +254,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
   }
 
   void _showFeedbackSnackBar(String msg, {bool isError = false, bool isSuccess = false}) {
-    if (!mounted || !isError) return;
+    if (!mounted) return;
     final c = _eyeCare.colors;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -263,7 +263,7 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
             ? const Color(0xFFEF4444)
             : (isSuccess ? const Color(0xFF10B981) : c.rfidCyan),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2),
         content: Row(
           children: [
             Icon(

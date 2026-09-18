@@ -232,11 +232,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
 
       final ordNames = fullyPutawayOrders.map((p) => p.order.orderNo).join(', ');
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF10B981),
-          duration: const Duration(seconds: 4),
-          content: Text('✓ Nhập hàng thành công! Đơn hàng $ordNames đã được cất lên kệ hoàn tất.'),
+          duration: const Duration(seconds: 2),
+          content: Text('✓ Đơn hàng $ordNames đã được cất lên vị trí kệ kho hoàn tất.'),
         ),
       );
     }
@@ -260,11 +261,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _wizardScannedTags.clear();
         _stopWizardScan();
         _desktopUhf.clearTags();
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 4),
-            content: Text('✓ Nhập hàng thành công! Đơn hàng $ord đã được cất lên kệ hoàn tất.'),
+            duration: const Duration(seconds: 2),
+            content: Text('✓ Đơn hàng $ord đã được cất lên vị trí kệ kho hoàn tất.'),
           ),
         );
       }
@@ -1135,8 +1137,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 }
               });
 
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
+          duration: const Duration(seconds: 2),
                   backgroundColor: const Color(0xFF10B981),
                   content: Text('✓ Đã đối soát đủ đơn $ordNo và đẩy sang PDA! Đang chờ cất lên kệ.'),
                 ),
@@ -1262,8 +1266,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           }
         });
 
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
             content: Text('✓ Đã đối soát đủ $totalSaved chip qua cổng! Đang chờ tay cầm PDA cất lên kệ.'),
           ),
@@ -1345,6 +1351,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _invalidateCartonCaches();
       if (mounted) {
         setState(() {});
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF10B981),
@@ -1355,8 +1362,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi đồng bộ: $e')),
+          SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi đồng bộ: $e')),
         );
       }
     } finally {
@@ -1380,6 +1389,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     if (mounted) {
       setState(() {});
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFFEF4444),
@@ -1485,10 +1495,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     if (mounted) {
       setState(() {});
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFEF4444),
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 2),
           content: Text('✓ Đã xóa đơn hàng $orderNo khỏi CSDL & Supabase Cloud!'),
         ),
       );
@@ -2109,8 +2120,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       if (mounted) {
         setState(() => _isImporting = false);
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
             content: Text('✓ Đã nạp ${explicitItems.length} chip và đồng bộ đơn $inboundOrderNo lên Supabase Cloud!'),
           ),
@@ -2122,8 +2135,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _activeExpectedItems.clear();
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file Excel: $e')),
+        SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file Excel: $e')),
       );
     } finally {
       if (mounted) {
@@ -2285,8 +2300,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
       if (mounted) {
         setState(() => _isImporting = false);
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
             content: Text('✓ Đã nạp đơn PO và đồng bộ ${explicitItems.length} chip lên Supabase Cloud!'),
           ),
@@ -2298,8 +2315,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _activeExpectedItems.clear();
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file PO: $e')),
+        SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file PO: $e')),
       );
     } finally {
       if (mounted) {
@@ -2720,7 +2739,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Xe Pallet: ${_lastSuccessPalletCode ?? "--"} • Đã ghi nhận $_lastSuccessCount/$_lastSuccessCount chip (Trạng thái: Chờ Xếp Kệ) • Đang sẵn sàng đón xe tiếp theo...',
+                  'Pallet/Kiện: ${_lastSuccessPalletCode ?? "--"} • Đã ghi nhận $_lastSuccessCount/$_lastSuccessCount chip (Trạng thái: Chờ Xếp Kệ) • Đang sẵn sàng đón kiện tiếp theo...',
                   style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                 ),
               ],

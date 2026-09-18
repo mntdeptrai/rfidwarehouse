@@ -6,6 +6,7 @@ import '../widgets/hardware_status_appbar.dart';
 import '../widgets/pda_location_barcode_card.dart';
 import '../theme/eye_care_theme.dart';
 import 'pda/pda_merge_pallets_screen.dart';
+import '../widgets/app_notification_bar.dart';
 
 class StorageScreen extends StatefulWidget {
   final bool enablePalletMerge;
@@ -455,8 +456,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
   /// CHỨC NĂNG DI CHUYỂN 1 SẢN PHẨM RIÊNG LẺ SANG VỊ TRÍ KỆ / PALLET MỚI
   void _showMoveSingleItemDialog([Item? initialItem]) {
     if (_repo.items.isEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           backgroundColor: _eyeCare.colors.warningAmber,
           content: const Text('Kho hiện chưa có sản phẩm nào để di chuyển!'),
         ),
@@ -464,8 +467,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
       return;
     }
     if (_repo.locations.isEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           backgroundColor: _eyeCare.colors.warningAmber,
           content: const Text('Hệ thống chưa có vị trí kệ kho nào!'),
         ),
@@ -723,11 +728,17 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                           );
 
                           if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                          if (mounted) {
+                            final prodName = selectedItem!.productName.isNotEmpty ? selectedItem!.productName : selectedItem!.epc;
+                            AppSnackBar.showSuccess(context, '✓ Đã cập nhật vị trí sản phẩm "$prodName" thành công!');
+                          }
                         } catch (e) {
                           setModalState(() => isProcessing = false);
                           if (mounted) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(backgroundColor: c.errorCoral, content: Text('Lỗi: $e')),
+                              SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: c.errorCoral, content: Text('Lỗi: $e')),
                             );
                           }
                         }
@@ -755,8 +766,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     }).toList();
 
     if (palletsWithItems.isEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           backgroundColor: c.warningAmber,
           content: const Text('Hiện không có Pallet nào chứa hàng hóa để thực hiện gộp!'),
         ),
@@ -765,8 +778,10 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
     }
 
     if (allPallets.length < 2) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           backgroundColor: c.warningAmber,
           content: const Text('Cần ít nhất 2 Pallet trong hệ thống để thực hiện chức năng nhập gộp hàng!'),
         ),
@@ -1056,11 +1071,16 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                           );
 
                           if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            AppSnackBar.showSuccess(context, '✓ Đã gộp Pallet "$selectedSourceId" vào "$selectedTargetId" thành công!');
+                          }
                         } catch (e) {
                           setModalState(() => isProcessing = false);
                           if (mounted) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(backgroundColor: c.errorCoral, content: Text('Lỗi khi gộp Pallet: $e')),
+                              SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: c.errorCoral, content: Text('Lỗi khi gộp Pallet: $e')),
                             );
                           }
                         }

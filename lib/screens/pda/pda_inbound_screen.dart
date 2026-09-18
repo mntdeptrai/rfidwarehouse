@@ -365,6 +365,7 @@ class _InboundScreenState extends State<InboundScreen> {
           key == LogicalKeyboardKey.f12;
       if (isScanKey) {
         if (!_hasLoadedInboundData) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: Color(0xFFF59E0B),
@@ -395,10 +396,11 @@ class _InboundScreenState extends State<InboundScreen> {
       if (isPressed) {
         _lastTriggerPressTime = DateTime.now();
         if (!_hasLoadedInboundData) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               backgroundColor: Color(0xFFF59E0B),
-              content: Text('⚠️ Vui lòng nạp file trước khi quét hàng!'),
+              content: Text('⚠️ Vui lòng chọn đơn hoặc nạp file trước khi quét hàng!'),
               duration: Duration(seconds: 2),
             ),
           );
@@ -579,10 +581,11 @@ class _InboundScreenState extends State<InboundScreen> {
 
   void _toggleScan() {
     if (!_hasLoadedInboundData) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFFF59E0B),
-          content: Text('⚠️ Vui lòng nạp file trước khi quét hàng!'),
+          content: Text('⚠️ Vui lòng chọn đơn hoặc nạp file trước khi quét hàng!'),
           duration: Duration(seconds: 2),
         ),
       );
@@ -613,6 +616,7 @@ class _InboundScreenState extends State<InboundScreen> {
       _uhf.clearTags();
     });
     _saveSessionToCache();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         backgroundColor: Color(0xFF10B981),
@@ -817,6 +821,7 @@ class _InboundScreenState extends State<InboundScreen> {
       await _repo.ensureInitialized();
       if (mounted) {
         setState(() {});
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF10B981),
@@ -827,8 +832,10 @@ class _InboundScreenState extends State<InboundScreen> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi làm mới: $e')),
+          SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi làm mới: $e')),
         );
       }
     } finally {
@@ -1148,8 +1155,10 @@ class _InboundScreenState extends State<InboundScreen> {
       if (!mounted) return;
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file Excel: $e')),
+        SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file Excel: $e')),
       );
     } finally {
       if (mounted) setState(() => _isImporting = false);
@@ -1320,8 +1329,10 @@ class _InboundScreenState extends State<InboundScreen> {
       if (!mounted) return;
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file PO: $e')),
+        SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file PO: $e')),
       );
     } finally {
       if (mounted) setState(() => _isImporting = false);
@@ -2354,10 +2365,12 @@ class _InboundScreenState extends State<InboundScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   onPressed: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
+                        duration: const Duration(seconds: 2),
                         backgroundColor: const Color(0xFFEF4444),
-                        content: Text('⛔ Phát hiện ${_unexpectedTags.length} chip lạ ngoài đơn! Vui lòng nhặt hàng lạ khỏi xe Pallet trước khi lưu.'),
+                        content: Text('⛔ Phát hiện ${_unexpectedTags.length} chip lạ ngoài đơn! Vui lòng nhặt hàng lạ khỏi kiện hàng/Pallet trước khi lưu.'),
                       ),
                     );
                   },
@@ -2863,10 +2876,12 @@ class _InboundScreenState extends State<InboundScreen> {
   Future<void> _confirmGoodsReceiveAtGate() async {
     // 1. Kiểm tra chip lạ ngoài đơn
     if (_unexpectedTags.isNotEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          duration: Duration(seconds: 2),
           backgroundColor: Color(0xFFEF4444),
-          content: Text('Không thể hoàn tất khi còn chip lạ! Hãy kiểm tra và loại bỏ khỏi xe Pallet.'),
+          content: Text('Không thể hoàn tất khi còn chip lạ! Hãy kiểm tra và loại bỏ khỏi kiện hàng/Pallet.'),
         ),
       );
       return;
@@ -2990,11 +3005,12 @@ class _InboundScreenState extends State<InboundScreen> {
       _saveSessionToCache();
       if (_uhf.hapticEnabled) HapticFeedback.heavyImpact();
 
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF10B981),
-          content: Text('✓ Đã hoàn tất nhập kho $scannedCount/$expectedCount chip (${targetPallets.length} xe chờ cất kệ)'),
-          duration: const Duration(seconds: 4),
+          content: Text('✓ Đã hoàn tất nhập kho $scannedCount/$expectedCount chip (${targetPallets.length} Pallet/kiện chờ cất kệ)'),
+          duration: const Duration(seconds: 2),
           action: SnackBarAction(
             label: 'CẤT KỆ',
             textColor: Colors.white,
@@ -3014,8 +3030,10 @@ class _InboundScreenState extends State<InboundScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi lưu nhập kho: $e')),
+        SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi lưu nhập kho: $e')),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -3067,11 +3085,12 @@ class _InboundScreenState extends State<InboundScreen> {
     InboundActiveSession.clear();
     _uhf.clearTags();
 
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         backgroundColor: Color(0xFF10B981),
-        content: Text('🎉 Nhập hàng thành công! Đã cất toàn bộ hàng lên kệ kho.'),
-        duration: Duration(seconds: 4),
+        content: Text('✓ Toàn bộ hàng hóa trong đơn đã được cất lên kệ kho hoàn tất.'),
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -3207,6 +3226,7 @@ class _InboundScreenState extends State<InboundScreen> {
 
     if (mounted) {
       setState(() {});
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF10B981),
@@ -3385,6 +3405,7 @@ class _InboundScreenState extends State<InboundScreen> {
       await _supabaseSync.syncNow();
       if (mounted) {
         setState(() {});
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFFEF4444),

@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
 import 'pda_transfer_screen.dart';
+import '../../widgets/app_notification_bar.dart';
 
 /// Màn hình Quản Lý Kho tối ưu chuyên biệt cho tay cầm PDA (Handheld Terminal)
 /// Đồng bộ 4 Tabs nghiệp vụ với app Desktop:
@@ -397,9 +398,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
               Navigator.pop(ctx);
               await _repo.deletePallet(p.palletId.isNotEmpty ? p.palletId : p.palletCode);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Đã xóa Pallet: ${p.palletCode}')),
-                );
+                AppSnackBar.showSuccess(context, '✓ Đã xóa thành công Pallet "${p.palletCode}"!');
               }
             },
             child: const Text('Xóa', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -452,7 +451,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
               Navigator.pop(ctx);
               setState(() {});
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã tạo Pallet: $code')));
+                AppSnackBar.showSuccess(context, '✓ Đã tạo thành công Pallet "$code"!');
               }
             },
             child: const Text('Tạo Pallet', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -517,7 +516,9 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
                   Navigator.pop(ctx);
                   setState(() {});
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xếp pallet lên kệ: $selectedLocId')));
+                    final loc = _repo.locations.where((l) => l.locationId == selectedLocId).firstOrNull;
+                    final locDisplay = loc?.displayName ?? loc?.locationCode ?? selectedLocId;
+                    AppSnackBar.showSuccess(context, '✓ Đã xếp Pallet lên kệ $locDisplay thành công!');
                   }
                 }
               },
@@ -838,13 +839,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     });
     await _repo.updateLocationStatus(loc.locationId, newStatus);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Đã cập nhật kệ ${loc.locationCode}: $newStatus'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+    AppSnackBar.showSuccess(context, '✓ Đã cập nhật kệ ${loc.locationCode}: $newStatus');
   }
 
   void _showShelfItemsDialog(Location loc, List<Item> items, List<Pallet> pallets, EyeCareColors c) {

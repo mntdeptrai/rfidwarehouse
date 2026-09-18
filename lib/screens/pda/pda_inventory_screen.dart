@@ -80,6 +80,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             icon: const Icon(Icons.cloud_sync, color: Color(0xFF0284C7)),
             tooltip: 'Đồng bộ Đám mây',
             onPressed: () async {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Đang đồng bộ dữ liệu kiểm kê...'), duration: Duration(seconds: 1)),
               );
@@ -967,8 +968,10 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     FocusScope.of(context).unfocus();
 
     if (_scannedEpcs.contains(raw)) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mã EPC này đã được quét hoặc nhập trước đó.')),
+        const SnackBar(
+          duration: Duration(seconds: 2),content: Text('Mã EPC này đã được quét hoặc nhập trước đó.')),
       );
       return;
     }
@@ -989,8 +992,10 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   Future<void> _relocateItem(InventoryItemResult result) async {
     final targetCode = widget.session.locationCode;
     if (targetCode == null || targetCode.isEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          duration: Duration(seconds: 2),
           backgroundColor: Color(0xFFEF4444),
           content: Text('Không thể chuyển vị trí vì phiên kiểm kê theo phân khu, chưa chọn kệ cụ thể.'),
         ),
@@ -1022,8 +1027,10 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
           );
         }
       });
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           backgroundColor: ok ? const Color(0xFF10B981) : const Color(0xFFEF4444),
           content: Text(ok
               ? '✓ Đã cập nhật sản phẩm "${result.productName ?? result.epc}" về vị trí ${targetLoc?.displayName ?? targetCode}!'
@@ -1091,10 +1098,12 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
 
               await _repo.completeInventorySession(widget.session.sessionId, _repo.resolveUserFullName(null, defaultRole: 'handheld'));
               if (mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
+          duration: Duration(seconds: 2),
                     backgroundColor: Color(0xFF10B981),
-                    content: Text('Đã hoàn tất và lưu số liệu phiếu kiểm kê!'),
+                    content: Text('✓ Đã hoàn tất và lưu số liệu phiếu kiểm kê!'),
                   ),
                 );
               }

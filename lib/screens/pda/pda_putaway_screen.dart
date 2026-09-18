@@ -8,6 +8,7 @@ import '../../services/warehouse_repository.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
+import '../../widgets/app_notification_bar.dart';
 
 /// Màn hình Cất Hàng Lên Kệ (Putaway) trên tay cầm PDA
 /// Tối ưu: Ít chữ, không chú thích rườm rà, chọn vị trí -> quét mã Pallet -> hoàn tất.
@@ -295,14 +296,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       } else {
         HapticFeedback.vibrate();
         if (mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFFF59E0B),
-              duration: const Duration(seconds: 2),
-              content: Text('Mã quét "$clean" không nằm trong danh sách hàng cần cất kệ!'),
-            ),
-          );
+          AppSnackBar.showWarning(context, 'Mã quét "$clean" không nằm trong danh sách hàng cần cất kệ!');
         }
         return;
       }
@@ -310,29 +304,21 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
     // 4. Nếu chưa chọn vị trí kệ mà quét mã Pallet/Thùng hàng:
     if (matchedPalletKey != null) {
+      final typeLabel = (matchedPalletKey.toUpperCase().startsWith('PAL-') || matchedPalletKey.toUpperCase().startsWith('PALLET'))
+          ? 'Pallet'
+          : 'kiện hàng';
       HapticFeedback.selectionClick();
       setState(() => _activePalletGroup = matchedPalletKey);
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            duration: const Duration(seconds: 2),
-            content: Text('✓ Đã quét nhận diện xe: $matchedPalletKey (${groups[matchedPalletKey]?.length ?? 0} sản phẩm)'),
-          ),
+        AppSnackBar.showSuccess(
+          context,
+          '✓ Đã quét nhận diện $typeLabel: $matchedPalletKey (${groups[matchedPalletKey]?.length ?? 0} sản phẩm)',
         );
       }
     } else {
       HapticFeedback.vibrate();
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
-            duration: const Duration(seconds: 2),
-            content: Text('Không tìm thấy kiện hàng/kệ tương ứng với mã "$clean"'),
-          ),
-        );
+        AppSnackBar.showError(context, 'Không tìm thấy kiện hàng/kệ tương ứng với mã "$clean"');
       }
     }
   }
@@ -370,6 +356,21 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           _activePalletGroup = remaining.isNotEmpty ? remaining.keys.first : null;
         });
         _barcodeInputController.clear();
+        if (mounted) {
+          final locDisplay = loc?.displayName ?? loc?.locationCode ?? locationId;
+          final remaining = _pendingGroups();
+          if (remaining.isEmpty) {
+            AppSnackBar.showSuccess(
+              context,
+              '✓ Đã cất thành công $savedCount sản phẩm vào kệ $locDisplay! Toàn bộ hàng đã cất kệ hoàn tất.',
+            );
+          } else {
+            AppSnackBar.showSuccess(
+              context,
+              '✓ Đã cất thành công $savedCount sản phẩm vào kệ $locDisplay!',
+            );
+          }
+        }
       } else {
         HapticFeedback.vibrate();
         setState(() {
@@ -380,13 +381,16 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             success: false,
           );
         });
+        if (mounted) {
+          AppSnackBar.showWarning(
+            context,
+            'Không có sản phẩm nào được cất vào kệ (có thể đã được cất trước đó)!',
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          backgroundColor: const Color(0xFFEF4444),
-          content: Text('Lỗi cất hàng: $e'),
-        ));
+        AppSnackBar.showError(context, 'Lỗi cất hàng: $e');
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -585,7 +589,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFF59E0B)),
                 hint: Text(
                   groups.isNotEmpty
-                      ? 'Bấm để chọn Pallet / Xe hàng (${groups.length} xe)...'
+                      ? 'Bấm để chọn Pallet / Xe hàng (${groups.length} kiện)...'
                       : 'Không có pallet chờ cất',
                   style: TextStyle(color: c.textMuted, fontSize: 12.5),
                 ),

@@ -428,6 +428,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
       badge: badge,
       onTap: () {
         if (isLocked) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFFEF4444),

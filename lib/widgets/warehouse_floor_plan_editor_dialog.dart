@@ -70,8 +70,10 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi lưu sơ đồ: $e')),
+          SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi khi lưu sơ đồ: $e')),
         );
       }
     } finally {

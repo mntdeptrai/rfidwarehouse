@@ -655,8 +655,10 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
 
   void _confirmDeleteUser(BuildContext context, WmsUser user, EyeCareColors c) async {
     if (_auth.currentUser?.userId == user.userId) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: c.errorCoral, content: const Text('Không thể xóa tài khoản Quản trị viên đang đăng nhập!')),
+        SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: c.errorCoral, content: const Text('Không thể xóa tài khoản Quản trị viên đang đăng nhập!')),
       );
       return;
     }
@@ -693,8 +695,10 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
         if (success) {
           // Success
         } else {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: c.errorCoral, content: Text(_auth.authError ?? 'Lỗi khi xóa tài khoản!')),
+            SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: c.errorCoral, content: Text(_auth.authError ?? 'Lỗi khi xóa tài khoản!')),
           );
         }
       }
@@ -1134,8 +1138,10 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                                     color: user.isActive ? const Color(0xFFF59E0B) : c.successEmerald,
                                     onPressed: () async {
                                       if (isCurrentLogged) {
+                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(backgroundColor: c.errorCoral, content: const Text('Không thể tự khóa tài khoản của chính mình!')),
+                                          SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: c.errorCoral, content: const Text('Không thể tự khóa tài khoản của chính mình!')),
                                         );
                                         return;
                                       }

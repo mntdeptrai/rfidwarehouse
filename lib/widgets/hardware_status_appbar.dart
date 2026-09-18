@@ -94,6 +94,7 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                     PdaScanMode.hybrid => 'Quét song song cả RFID & Barcode',
                   };
 
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       backgroundColor: c.bgCardElevated,
@@ -136,6 +137,7 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () async {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       backgroundColor: c.bgCardElevated,

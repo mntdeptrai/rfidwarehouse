@@ -158,8 +158,10 @@ class PdaDrawer extends StatelessWidget {
                     if (confirm == true) {
                       await WarehouseRepository().clearAllData();
                       if (context.mounted) {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
+                          SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: c.successEmerald, content: const Text('✓ Đã xóa sạch dữ liệu thử nghiệm trong hệ thống!')),
                         );
                       }
                     }
@@ -174,8 +176,10 @@ class PdaDrawer extends StatelessWidget {
                     await DatabaseService.wipePhysicalSqliteDatabases();
                     await WarehouseRepository().reloadFromSqlite();
                     if (context.mounted) {
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
+          duration: const Duration(seconds: 2),
                           backgroundColor: c.successEmerald,
                           content: const Text('✓ Đã dọn sạch cache cục bộ! Đang dùng 100% Supabase Cloud.'),
                         ),
@@ -380,6 +384,7 @@ class PdaDrawer extends StatelessWidget {
                     final ok = await uhf.setRfPower(tempPower);
                     messenger?.showSnackBar(
                       SnackBar(
+          duration: const Duration(seconds: 2),
                         backgroundColor: ok ? c.successEmerald : c.errorCoral,
                         content: Text(ok
                             ? '✓ Đã cài đặt công suất phát ăng-ten: $tempPower dBm'

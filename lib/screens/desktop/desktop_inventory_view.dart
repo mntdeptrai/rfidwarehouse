@@ -232,8 +232,10 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
       final user = _auth.currentUser?.fullName ?? 'Thủ kho (Admin)';
       await _repo.completeInventorySession(s.sessionId, user);
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
             content: Text('✓ Đã chốt và lưu kết quả đợt kiểm kê ${s.sessionCode} thành công!'),
           ),
@@ -544,8 +546,10 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
       });
 
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
             content: Text('✓ Đã nạp thành công $totalLoaded mặt hàng từ file Excel vào đơn kiểm kê!'),
           ),
@@ -553,8 +557,10 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file: $e')),
+          SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file: $e')),
         );
       }
     }

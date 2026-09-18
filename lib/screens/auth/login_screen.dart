@@ -34,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (success && mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFF10B981),

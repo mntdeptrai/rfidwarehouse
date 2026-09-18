@@ -114,6 +114,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
             child: InkWell(
               borderRadius: BorderRadius.circular(20),
               onTap: () async {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     backgroundColor: c.bgCardElevated,
@@ -309,8 +310,10 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
       child: InkWell(
         onTap: () {
           if (isLocked) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
+          duration: const Duration(seconds: 2),
                 backgroundColor: colors.bgCardElevated,
                 content: Row(
                   children: [

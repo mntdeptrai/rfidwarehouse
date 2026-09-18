@@ -433,16 +433,19 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
       if (mounted) {
         if (!validation.isStockSufficient) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFFEF4444),
-              duration: const Duration(seconds: 5),
+              duration: const Duration(seconds: 2),
               content: Text('⚠️ CẢNH BÁO TỒN KHO: Không đủ hàng tồn để xuất (Thiếu ${validation.shortageCount} món)! Đã khóa nút xác nhận xuất.'),
             ),
           );
         } else {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
+          duration: const Duration(seconds: 2),
               backgroundColor: const Color(0xFF10B981),
               content: Text('✓ Đã nạp thành công ${validatedItems.length} chip xuất kho từ file "${result.fileName}" (Đủ tồn kho & đã định vị kệ)'),
             ),
@@ -451,8 +454,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi nạp file xuất hàng: $e'),
           ),
@@ -549,16 +554,19 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
       if (mounted) {
         if (!validation.isStockSufficient) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: const Color(0xFFEF4444),
-              duration: const Duration(seconds: 5),
+              duration: const Duration(seconds: 2),
               content: Text('⚠️ CẢNH BÁO TỒN KHO: Đơn $orderNo thiếu ${validation.shortageCount} sản phẩm! Đã khóa xác nhận xuất.'),
             ),
           );
         } else {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
+          duration: const Duration(seconds: 2),
               backgroundColor: const Color(0xFF10B981),
               content: Text('✓ Đã nạp thành công ${validatedItems.length} sản phẩm từ file PO! Sẵn sàng quét qua cổng.'),
             ),
@@ -567,8 +575,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+          duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi nạp file PO: $e'),
           ),
@@ -585,8 +595,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     final order = _pendingOutboundOrder!;
 
     if (!order.isStockSufficient || order.items.any((i) => !i.isInStock)) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          duration: const Duration(seconds: 2),
           backgroundColor: const Color(0xFFEF4444),
           content: Text('Không thể xuất kho: Kho không đủ tồn kho (Thiếu ${order.shortageCount} sản phẩm)! Vui lòng kiểm tra lại tồn kho.'),
         ),
@@ -601,8 +613,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     final unexp = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
     if (scannedMatching < totalExpected || unexp.isNotEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          duration: Duration(seconds: 2),
           backgroundColor: Color(0xFFEF4444),
           content: Text('Không thể xuất kho: Chưa quét đủ mã pallet/hàng hoặc có chip lạ ngoài đơn!'),
         ),
@@ -695,8 +709,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       );
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi xác nhận xuất kho: $e')),
+          SnackBar(
+          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi xác nhận xuất kho: $e')),
         );
       }
     } finally {

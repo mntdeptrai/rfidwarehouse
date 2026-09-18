@@ -1267,7 +1267,7 @@ void main() {
 
     // Verify search input in action toolbar
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.textContaining('Hiển thị:'), findsOneWidget);
+    expect(find.textContaining('Hiển thị:'), findsNothing);
 
     // Verify table headers include SỐ SERI (SN)
     expect(find.text('SỐ SERI (SN)'), findsOneWidget);

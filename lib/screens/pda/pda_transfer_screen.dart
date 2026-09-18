@@ -8,6 +8,7 @@ import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
+import '../../widgets/app_notification_bar.dart';
 
 enum _TransferMode { pallet, items }
 
@@ -814,11 +815,22 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
         _lastTransferCount = count;
       });
 
+      if (mounted) {
+        final loc = _repo.locations.where((l) => l.locationId == _selectedLocationId).firstOrNull;
+        final locDisplay = loc?.displayName ?? loc?.locationCode ?? _selectedLocationId ?? '';
+        AppSnackBar.showSuccess(
+          context,
+          '✓ Đã chuyển thành công $count sản phẩm sang kệ $locDisplay!',
+        );
+      }
     } catch (e) {
       setState(() {
         _isProcessing = false;
         _errorMessage = 'Lỗi: $e';
       });
+      if (mounted) {
+        AppSnackBar.showError(context, 'Lỗi chuyển kho: $e');
+      }
     }
   }
 
