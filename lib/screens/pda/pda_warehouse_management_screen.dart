@@ -470,26 +470,58 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
         builder: (dialogCtx, setDlgState) => AlertDialog(
           backgroundColor: c.bgCard,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text('Gán Vị Trí Kệ: ${p.palletCode}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
+          title: Row(
             children: [
-              DropdownButtonFormField<String>(
-                initialValue: selectedLocId,
-                dropdownColor: c.bgCard,
-                decoration: InputDecoration(
-                  labelText: 'Chọn Vị Trí Kệ',
-                  labelStyle: TextStyle(color: c.textSecondary),
+              Icon(Icons.shelves, color: c.rfidCyan, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Gán Vị Trí Kệ: ${p.palletCode}',
+                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                items: _repo.locations.map((loc) {
-                  return DropdownMenuItem(
-                    value: loc.locationId,
-                    child: Text('${loc.locationCode} (${loc.displayName})', style: TextStyle(color: c.textPrimary, fontSize: 12)),
-                  );
-                }).toList(),
-                onChanged: (val) => setDlgState(() => selectedLocId = val),
               ),
             ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_repo.locations.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text('Chưa có vị trí kệ nào trong kho.', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    initialValue: _repo.locations.any((l) => l.locationId == selectedLocId) ? selectedLocId : null,
+                    dropdownColor: c.bgCard,
+                    decoration: InputDecoration(
+                      labelText: 'Chọn Vị Trí Kệ',
+                      labelStyle: TextStyle(color: c.textSecondary),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.rfidCyan, width: 1.5)),
+                    ),
+                    items: _repo.locations.map((loc) {
+                      return DropdownMenuItem(
+                        value: loc.locationId,
+                        child: Text(
+                          '${loc.locationCode} (${loc.displayName})',
+                          style: TextStyle(color: c.textPrimary, fontSize: 12.5),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (val) => setDlgState(() => selectedLocId = val),
+                  ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -506,22 +538,22 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
-              onPressed: () {
-                if (selectedLocId != null) {
-                  _repo.movePallet(
-                    palletId: p.palletId,
-                    newLocationId: selectedLocId!,
-                    performedBy: _auth.currentUser?.fullName ?? 'Thủ kho PDA',
-                  );
-                  Navigator.pop(ctx);
-                  setState(() {});
-                  if (mounted) {
-                    final loc = _repo.locations.where((l) => l.locationId == selectedLocId).firstOrNull;
-                    final locDisplay = loc?.displayName ?? loc?.locationCode ?? selectedLocId;
-                    AppSnackBar.showSuccess(context, '✓ Đã xếp Pallet lên kệ $locDisplay thành công!');
-                  }
-                }
-              },
+              onPressed: selectedLocId == null
+                  ? null
+                  : () {
+                      _repo.movePallet(
+                        palletId: p.palletId,
+                        newLocationId: selectedLocId!,
+                        performedBy: _auth.currentUser?.fullName ?? 'Thủ kho PDA',
+                      );
+                      Navigator.pop(ctx);
+                      setState(() {});
+                      if (mounted) {
+                        final loc = _repo.locations.where((l) => l.locationId == selectedLocId).firstOrNull;
+                        final locDisplay = loc?.displayName ?? loc?.locationCode ?? selectedLocId;
+                        AppSnackBar.showSuccess(context, '✓ Đã xếp Pallet lên kệ $locDisplay thành công!');
+                      }
+                    },
               child: const Text('Lưu Vị Trí', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],

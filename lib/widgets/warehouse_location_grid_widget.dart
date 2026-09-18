@@ -1065,6 +1065,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: selectedStatus,
                     decoration: InputDecoration(
                       labelText: 'Trạng thái kệ',

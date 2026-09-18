@@ -1485,6 +1485,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                     // Vị trí kệ lưu mặc định
                     if (_repo.locations.isNotEmpty) ...[
                       DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _repo.locations.any((l) => l.locationId == selectedLocationId) ? selectedLocationId : null,
                         dropdownColor: c.bgCard,
                         style: TextStyle(color: c.textPrimary, fontSize: 13),
@@ -1498,11 +1499,11 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                         items: [
                           const DropdownMenuItem<String>(
                             value: null,
-                            child: Text('Chưa xếp kệ (Lưu tạm dưới sàn)'),
+                            child: Text('Chưa xếp kệ (Lưu tạm dưới sàn)', overflow: TextOverflow.ellipsis, maxLines: 1),
                           ),
                           ..._repo.locations.map((loc) => DropdownMenuItem<String>(
                                 value: loc.locationId,
-                                child: Text('${loc.locationCode} - ${loc.displayName}'),
+                                child: Text('${loc.locationCode} - ${loc.displayName}', overflow: TextOverflow.ellipsis, maxLines: 1),
                               )),
                         ],
                         onChanged: (val) => setDlgState(() => selectedLocationId = val),

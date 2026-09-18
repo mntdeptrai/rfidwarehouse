@@ -707,6 +707,7 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
                   const SizedBox(height: 12),
                   // Vị trí trên lối đi
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: selectedSide,
                     dropdownColor: c.bgCard,
                     style: TextStyle(color: c.textPrimary, fontSize: 13),

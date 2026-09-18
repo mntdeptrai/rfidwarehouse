@@ -379,6 +379,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     Padding(
                       padding: const EdgeInsets.only(left: 32, right: 8, bottom: 8),
                       child: DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: selectedShelf,
                         hint: Text('Chọn vị trí kệ...', style: TextStyle(color: c.textMuted, fontSize: 13)),
                         decoration: InputDecoration(
@@ -389,7 +390,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                         style: TextStyle(color: c.textPrimary, fontSize: 13),
                         items: allShelves.map((s) => DropdownMenuItem(
                           value: s.locationCode,
-                          child: Text('${s.displayName} (${s.locationCode})'),
+                          child: Text('${s.displayName} (${s.locationCode})', overflow: TextOverflow.ellipsis, maxLines: 1),
                         )).toList(),
                         onChanged: (val) => setDialogState(() => selectedShelf = val),
                       ),

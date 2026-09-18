@@ -962,6 +962,56 @@ void main() {
     await repo.deletePallet('PAL-TEST-99');
   });
 
+  testWidgets('PdaWarehouseManagementScreen assign pallet location dialog renders without overflow on narrow PDA screen', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final testLoc = Location(
+      locationId: 'LOC-TEST-LONG-99',
+      locationCode: 'KHU-DU-PHONG',
+      zone: 'DP',
+      shelf: 'KHU DỰ PHÒNG',
+      level: '1',
+    );
+    await repo.addLocation(testLoc);
+
+    final pal = repo.createOrAssignPallet(
+      palletCode: '945321988',
+      newItems: [],
+      placedBy: 'Tester',
+    );
+    pal.locationId = testLoc.locationId;
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PdaWarehouseManagementScreen(),
+      ),
+    );
+    await tester.pump();
+
+    // Tìm nút Đổi kệ của pallet 945321988
+    final changeShelfBtn = find.text('Đổi kệ');
+    expect(changeShelfBtn, findsWidgets);
+    await tester.tap(changeShelfBtn.first);
+    await tester.pumpAndSettle();
+
+    // Dialog mở ra, kiểm tra title và không có RenderFlex overflow exception
+    expect(find.textContaining('945321988'), findsWidgets);
+    expect(tester.takeException(), isNull);
+
+    // Bấm Lưu Vị Trí
+    final saveBtn = find.text('Lưu Vị Trí');
+    expect(saveBtn, findsOneWidget);
+    await tester.tap(saveBtn);
+    await tester.pumpAndSettle();
+
+    // Dọn dẹp
+    await repo.deletePallet('945321988');
+    await repo.deleteLocation('LOC-TEST-LONG-99');
+  });
+
   testWidgets('Inbound and Outbound dropdown menus strictly contain Excel/CSV and Nhập từ PO options', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(360, 780);
     tester.view.devicePixelRatio = 1.0;
