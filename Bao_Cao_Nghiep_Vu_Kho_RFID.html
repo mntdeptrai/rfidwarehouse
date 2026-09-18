@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Báo Cáo Nghiệp Vụ Kho Vận Thông Minh RFID (WMS Business Process - Report Ready)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-page: #F8FAFC;
+      --bg-card: #FFFFFF;
+      --bg-alt: #F1F5F9;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+      --text-sub: #64748B;
+      --border-color: #E2E8F0;
+      --border-dark: #CBD5E1;
+      --primary: #0284C7;
+      --primary-dark: #0369A1;
+      --primary-light: #E0F2FE;
+      --success: #16A34A;
+      --success-light: #DCFCE7;
+      --warning: #D97706;
+      --warning-light: #FEF3C7;
+      --danger: #DC2626;
+      --danger-light: #FEE2E2;
+      --purple: #7C3AED;
+      --purple-light: #F3E8FF;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    [data-theme="dark"] {
+      --bg-page: #0B1120;
+      --bg-card: #1E293B;
+      --bg-alt: #0F172A;
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-sub: #64748B;
+      --border-color: #334155;
+      --border-dark: #475569;
+      --primary: #38BDF8;
+      --primary-dark: #0284C7;
+      --primary-light: #0C4A6E;
+      --success: #4ADE80;
+      --success-light: #064E3B;
+      --warning: #FBBF24;
+      --warning-light: #78350F;
+      --danger: #F87171;
+      --danger-light: #7F1D1D;
+      --purple: #C084FC;
+      --purple-light: #581C87;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.6;
+      transition: background-color 0.2s, color 0.2s;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* TOP NAVBAR */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .tag-badge {
+      background: var(--primary);
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+
+    .brand-title h1 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .brand-title p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid var(--border-dark);
+      background: var(--bg-alt);
+      color: var(--text-main);
+      transition: all 0.15s ease-in-out;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #FFFFFF;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #FFFFFF;
+      border-color: var(--primary-dark);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: #FFFFFF;
+      border-color: var(--success);
+    }
+
+    .btn-success:hover {
+      filter: brightness(0.9);
+    }
+
+    /* CONTAINER & LAYOUT */
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    /* REPORT HEADER HERO */
+    .report-hero {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 32px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .report-hero h2 {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .report-hero p.subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      padding-top: 16px;
+      border-top: 1px dashed var(--border-color);
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .meta-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-sub);
+    }
+
+    .meta-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 2px;
+    }
+
+    /* PILL NAVIGATION TABS */
+    .tab-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 28px;
+      position: sticky;
+      top: 66px;
+      z-index: 900;
+      background: var(--bg-page);
+      padding: 8px 0;
+    }
+
+    .pill-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .pill-btn:hover, .pill-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #FFFFFF;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* CARD SECTIONS */
+    .diagram-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 40px;
+      box-shadow: var(--shadow-sm);
+      page-break-inside: avoid;
+    }
+
+    .diagram-card:hover {
+      box-shadow: var(--shadow-md);
+      transition: box-shadow 0.2s;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .card-title-group h3 {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .card-title-group p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* DIAGRAM WRAPPER */
+    .svg-wrapper {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 24px;
+      overflow-x: auto;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .svg-wrapper svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+    }
+
+    /* RACI & NOTES EXPANDABLE */
+    .notes-box {
+      background: var(--bg-alt);
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-left: 4px solid var(--primary);
+      line-height: 1.7;
+    }
+
+    .notes-box strong {
+      color: var(--text-main);
+    }
+
+    .notes-box ul {
+      margin-left: 20px;
+      margin-top: 6px;
+    }
+
+    /* TABLE STYLES */
+    .table-container {
+      overflow-x: auto;
+      margin-top: 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      text-align: left;
+    }
+
+    th {
+      background: var(--bg-alt);
+      color: var(--text-main);
+      font-weight: 700;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-muted);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(2, 132, 199, 0.03);
+    }
+
+    .badge-raci {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 800;
+      font-size: 11px;
+    }
+
+    .raci-r { background: #E0F2FE; color: #0369A1; }
+    .raci-a { background: #FEF3C7; color: #92400E; }
+    .raci-c { background: #F3E8FF; color: #6B21A8; }
+    .raci-i { background: #F1F5F9; color: #475569; }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 40px 0 20px;
+      font-size: 12px;
+      color: var(--text-sub);
+      border-top: 1px solid var(--border-color);
+    }
+
+    /* PRINT STYLES FOR A4 REPORT */
+    @media print {
+      body {
+        background: #FFFFFF !important;
+        color: #000000 !important;
+        font-size: 10pt;
+      }
+
+      .navbar, .tab-pills, .card-actions, footer, .no-print {
+        display: none !important;
+      }
+
+      .container {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      .report-hero {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 0 15px 0 !important;
+        border-bottom: 2px solid #000000 !important;
+        margin-bottom: 20px !important;
+      }
+
+      .diagram-card {
+        border: 1px solid #CCCCCC !important;
+        box-shadow: none !important;
+        padding: 15px !important;
+        margin-bottom: 30px !important;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .svg-wrapper {
+        border: none !important;
+        padding: 5px !important;
+      }
+
+      svg {
+        max-width: 95% !important;
+      }
+    }
+  </style>
+</head>
+<body data-theme="light">
+
+  <!-- TOP STICKY NAVBAR -->
+  <header class="navbar no-print">
+    <div class="brand-wrap">
+      <span class="tag-badge">BÁO CÁO KHO VẬN</span>
+      <div class="brand-title">
+        <h1>Sơ Đồ Quy Trình Nghiệp Vụ Kho Vận Thông Minh RFID (WMS)</h1>
+        <p>Chuẩn hóa quy trình vận hành: Desktop Gateway + Android PDA + Supabase Cloud</p>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <button class="btn" onclick="toggleTheme()">🌓 Đổi Màu Sáng/Tối</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ In / Lưu Báo Cáo PDF</button>
+      <a class="btn btn-success" href="BAO_CAO_NGHIEP_VU_KHO_RFID.md" target="_blank">📄 Tài Liệu Markdown (.md)</a>
+    </div>
+  </header>
+
+  <main class="container">
+    
+    <!-- REPORT HERO SUMMARY -->
+    <section class="report-hero">
+      <h2>BÁO CÁO ĐẶC TẢ QUY TRÌNH NGHIỆP VỤ KHO VẬN THÔNG MINH RFID</h2>
+      <p class="subtitle">
+        Tài liệu phục vụ thuyết minh đồ án / báo cáo nghiên cứu & chuyển giao kỹ thuật. Trực quan hóa quy trình khép kín 5 phân đoạn: 
+        Tiếp nhận & Cổng RFID Gate &rarr; Cất kệ 2-hộp PDA &rarr; Quản lý kho & Kiểm kê 4 nhóm &rarr; Xuất kho FIFO & Cổng xuất 2 pha &rarr; Giải phóng vị trí kệ tự động.
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span class="meta-label">Đầu Đọc Cổng RFID Cố Định</span>
+          <span class="meta-value">Hopeland CL7206C2 (TCP Port 9090)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Tay Cầm Quét Hiện Trường</span>
+          <span class="meta-value">SEUIC UTouch 2 Android (UHF AAR)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Điều Khiển Ngoại Vi Bến</span>
+          <span class="meta-value">Đèn tháp Modbus TCP / GPO 3 màu + Còi</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Cơ Sở Dữ Liệu & Đồng Bộ</span>
+          <span class="meta-value">PostgreSQL 17 (Supabase) + SQLite Cache</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Nguyên Tắc Cốt Lõi</span>
+          <span class="meta-value">No Mock Data &bull; FIFO &bull; Cất kệ 2-hộp</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- PILL ANCHOR NAVIGATION -->
+    <nav class="tab-pills no-print">
+      <button class="pill-btn active" onclick="scrollToSection('sec-overview')">0. Chuỗi Giá Trị Toàn Trình (Overview)</button>
+      <button class="pill-btn" onclick="scrollToSection('sec-inbound')">1. Nhập Kho & Cổng RFID Gate</button>
+      <button class="pill-btn" onclick="scrollToSection('sec-putaway')">2. Cất Kệ & Sơ Đồ 2D (PDA)</button>
+      <button class="pill-btn" onclick="scrollToSection('sec-internal')">3. Nội Bộ & Kiểm Kê RFID</button>
+      <button class="pill-btn" onclick="scrollToSection('sec-outbound')">4. Xuất Kho FIFO & Cổng Xuất</button>
+      <button class="pill-btn" onclick="scrollToSection('sec-raci')">5. Ma Trận RACI Chi Tiết</button>
+    </nav>
+
+    <!-- ========================================== -->
+    <!-- SƠ ĐỒ 0: CHUỖI GIÁ TRỊ TOÀN TRÌNH (OVERVIEW) -->
+    <!-- ========================================== -->
+    <section class="diagram-card" id="sec-overview">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h3>SƠ ĐỒ 0: CHUỖI GIÁ TRỊ NGHIỆP VỤ TOÀN TRÌNH (MASTER PIPELINE)</h3>
+          <p>Mô hình hóa dòng chảy hàng hóa và thông tin từ khâu tiếp nhận đến khâu giao hàng (Thích hợp chèn trang mở đầu báo cáo)</p>
+        </div>
+        <div class="card-actions no-print">
+          <button class="btn" onclick="exportSvgToPng('svg-overview', 'So_Do_0_Chuoi_Gia_Tri_Toan_Trinh.png')">📷 Tải Ảnh PNG</button>
+        </div>
+      </div>
+
+      <div class="svg-wrapper">
+        <svg id="svg-overview" viewBox="0 0 1200 320" xmlns="http://www.w3.org/2000/svg" font-family="'Inter', sans-serif">
+          <defs>
+            <linearGradient id="gradBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0284C7"/>
+              <stop offset="100%" stop-color="#0369A1"/>
+            </linearGradient>
+            <linearGradient id="gradGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#10B981"/>
+              <stop offset="100%" stop-color="#059669"/>
+            </linearGradient>
+            <linearGradient id="gradPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#8B5CF6"/>
+              <stop offset="100%" stop-color="#6D28D9"/>
+            </linearGradient>
+            <linearGradient id="gradAmber" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#F59E0B"/>
+              <stop offset="100%" stop-color="#D97706"/>
+            </linearGradient>
+            <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+              <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/>
+            </filter>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748B"/>
+            </marker>
+            <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 10 5 L 0 9 z" fill="#DC2626"/>
+            </marker>
+          </defs>
+
+          <!-- STAGE 1: MUA HÀNG & TIẾP NHẬN -->
+          <g filter="url(#shadow)">
+            <rect x="20" y="50" width="200" height="130" rx="10" fill="#FFFFFF" stroke="#0284C7" stroke-width="2"/>
+            <rect x="20" y="50" width="200" height="34" rx="10" fill="url(#gradBlue)"/>
+            <rect x="20" y="74" width="200" height="10" fill="url(#gradBlue)"/>
+            <text x="120" y="72" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">1. MUA HÀNG & TIẾP NHẬN</text>
+            <text x="120" y="105" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">Lập PO / Nạp File Excel</text>
+            <text x="120" y="125" fill="#64748B" font-size="10" text-anchor="middle">Dán tem chip RFID</text>
+            <text x="120" y="142" fill="#64748B" font-size="10" text-anchor="middle">Đóng Pallet chuẩn</text>
+            <text x="120" y="165" fill="#0369A1" font-size="10" font-weight="700" text-anchor="middle">[PENDING_INBOUND]</text>
+          </g>
+
+          <!-- ARROW 1 -> 2 -->
+          <path d="M 220 115 L 252 115" stroke="#64748B" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- STAGE 2: CỔNG RFID GATE NHẬP -->
+          <g filter="url(#shadow)">
+            <rect x="260" y="50" width="210" height="130" rx="10" fill="#FFFFFF" stroke="#10B981" stroke-width="2"/>
+            <rect x="260" y="50" width="210" height="34" rx="10" fill="url(#gradGreen)"/>
+            <rect x="260" y="74" width="210" height="10" fill="url(#gradGreen)"/>
+            <text x="365" y="72" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">2. CỔNG RFID GATE NHẬP</text>
+            <text x="365" y="105" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">Hopeland CL7206C2</text>
+            <text x="365" y="125" fill="#64748B" font-size="10" text-anchor="middle">Quét chùm sóng không chạm</text>
+            <text x="365" y="142" fill="#64748B" font-size="10" text-anchor="middle">Đèn Xanh: Khớp 100%</text>
+            <text x="365" y="165" fill="#059669" font-size="10" font-weight="700" text-anchor="middle">[WAITING_PUTAWAY]</text>
+          </g>
+
+          <!-- ARROW 2 -> 3 -->
+          <path d="M 470 115 L 502 115" stroke="#64748B" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- STAGE 3: CẤT KỆ THÔNG MINH PDA -->
+          <g filter="url(#shadow)">
+            <rect x="510" y="50" width="200" height="130" rx="10" fill="#FFFFFF" stroke="#8B5CF6" stroke-width="2"/>
+            <rect x="510" y="50" width="200" height="34" rx="10" fill="url(#gradPurple)"/>
+            <rect x="510" y="74" width="200" height="10" fill="url(#gradPurple)"/>
+            <text x="610" y="72" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">3. CẤT KỆ 2-HỘP (PDA)</text>
+            <text x="610" y="105" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">Gợi ý kệ tối ưu + Bản đồ 2D</text>
+            <text x="610" y="125" fill="#64748B" font-size="10" text-anchor="middle">Quét Barcode Kệ vật lý</text>
+            <text x="610" y="142" fill="#64748B" font-size="10" text-anchor="middle">Khóa tọa độ lưu trữ</text>
+            <text x="610" y="165" fill="#6D28D9" font-size="10" font-weight="700" text-anchor="middle">[IN_STOCK]</text>
+          </g>
+
+          <!-- ARROW 3 -> 4 -->
+          <path d="M 710 115 L 742 115" stroke="#64748B" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- STAGE 4: QUẢN LÝ KHO & KIỂM KÊ -->
+          <g filter="url(#shadow)">
+            <rect x="750" y="50" width="200" height="130" rx="10" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2"/>
+            <rect x="750" y="50" width="200" height="34" rx="10" fill="url(#gradAmber)"/>
+            <rect x="750" y="74" width="200" height="10" fill="url(#gradAmber)"/>
+            <text x="850" y="72" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">4. NỘI BỘ & KIỂM KÊ</text>
+            <text x="850" y="105" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">Chuyển kệ / Dồn Pallet</text>
+            <text x="850" y="125" fill="#64748B" font-size="10" text-anchor="middle">Súng PDA quét kiểm kê</text>
+            <text x="850" y="142" fill="#64748B" font-size="10" text-anchor="middle">Phân loại 4 nhóm sai lệch</text>
+            <text x="850" y="165" fill="#B45309" font-size="10" font-weight="700" text-anchor="middle">[AUDIT & ADJUST]</text>
+          </g>
+
+          <!-- ARROW 4 -> 5 -->
+          <path d="M 950 115 L 982 115" stroke="#64748B" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- STAGE 5: XUẤT KHO FIFO & CỔNG GATE -->
+          <g filter="url(#shadow)">
+            <rect x="990" y="50" width="190" height="130" rx="10" fill="#FFFFFF" stroke="#0284C7" stroke-width="2"/>
+            <rect x="990" y="50" width="190" height="34" rx="10" fill="url(#gradBlue)"/>
+            <rect x="990" y="74" width="190" height="10" fill="url(#gradBlue)"/>
+            <text x="1085" y="72" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">5. XUẤT FIFO & CỔNG</text>
+            <text x="1085" y="105" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">Thuật toán FIFO nghiêm ngặt</text>
+            <text x="1085" y="125" fill="#64748B" font-size="10" text-anchor="middle">Wizard nhặt hàng qua 10 kệ</text>
+            <text x="1085" y="142" fill="#64748B" font-size="10" text-anchor="middle">Cổng đối soát 2 pha</text>
+            <text x="1085" y="165" fill="#0369A1" font-size="10" font-weight="700" text-anchor="middle">[RELEASE & SHIPPED]</text>
+          </g>
+
+          <!-- BOTTOM EXCEPTION TRACK -->
+          <!-- Inbound Exception -->
+          <path d="M 365 180 L 365 240 L 400 240" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+          <g filter="url(#shadow)">
+            <rect x="400" y="220" width="220" height="50" rx="6" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5"/>
+            <text x="510" y="240" fill="#991B1B" font-size="11" font-weight="700" text-anchor="middle">Báo Động Đỏ: Thẻ Lạ / Thiếu Hàng</text>
+            <text x="510" y="256" fill="#DC2626" font-size="9" text-anchor="middle">Khóa cổng, còi hú, thủ kho quét bù</text>
+          </g>
+          <path d="M 620 245 L 650 245 L 650 185" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowRed)" fill="none"/>
+
+          <!-- Outbound Exception -->
+          <path d="M 1085 180 L 1085 240 L 1050 240" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,3" fill="none"/>
+          <g filter="url(#shadow)">
+            <rect x="810" y="220" width="240" height="50" rx="6" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5"/>
+            <text x="930" y="240" fill="#991B1B" font-size="11" font-weight="700" text-anchor="middle">Cảnh Báo: Vi Phạm FIFO / Sai Hàng</text>
+            <text x="930" y="256" fill="#DC2626" font-size="9" text-anchor="middle">Chặn xe xuất, buộc nhặt đúng lô cũ nhất</text>
+          </g>
+          <path d="M 810 245 L 780 245 L 780 185" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowRed)" fill="none"/>
+
+          <!-- FOOTER TEXT -->
+          <text x="600" y="305" fill="#94A3B8" font-size="11" font-weight="500" text-anchor="middle">Quy trình tự động hóa khép kín: Triệt tiêu thao tác ghi chép thủ công &bull; CSDL cập nhật tức thì (Supabase PostgreSQL 17)</text>
+        </svg>
+      </div>
+
+      <div class="notes-box">
+        <strong>Tóm tắt chuỗi giá trị:</strong> Dòng chảy thông tin đi song song với dòng chảy hàng hóa vật lý. Cổng kiểm soát RFID tự động hóa khâu thu thập dữ liệu (Data Capture), kết hợp màn hình hướng dẫn trên PDA giúp người vận hành không cần nhớ vị trí hay kiểm đếm thủ công.
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SƠ ĐỒ 1: QUY TRÌNH NHẬP KHO & CỔNG RFID GATE -->
+    <!-- ========================================== -->
+    <section class="diagram-card" id="sec-inbound">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h3>SƠ ĐỒ 1: QUY TRÌNH NHẬP KHO & ĐỐI SOÁT CỔNG RFID GATE TỰ ĐỘNG</h3>
+          <p>Thu thập sóng chùm UHF qua đầu đọc Hopeland CL7206C2, đối soát thời gian thực và điều khiển đèn tháp Modbus</p>
+        </div>
+        <div class="card-actions no-print">
+          <button class="btn" onclick="exportSvgToPng('svg-inbound', 'So_Do_1_Nhap_Kho_Cong_Gate.png')">📷 Tải Ảnh PNG</button>
+        </div>
+      </div>
+
+      <div class="svg-wrapper">
+        <svg id="svg-inbound" viewBox="0 0 1150 480" xmlns="http://www.w3.org/2000/svg" font-family="'Inter', sans-serif">
+          <!-- 3 SWIMLANES -->
+          <!-- Lane 1: Điều phối / Kinh doanh -->
+          <rect x="20" y="30" width="1110" height="120" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5"/>
+          <rect x="20" y="30" width="160" height="120" rx="8" fill="#E2E8F0"/>
+          <text x="100" y="85" fill="#334155" font-size="11" font-weight="700" text-anchor="middle">LÀN 1: KINH DOANH<br/>& ĐIỀU PHỐI WMS</text>
+
+          <!-- Lane 2: Hiện trường & Cổng RFID -->
+          <rect x="20" y="165" width="1110" height="160" rx="8" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.5"/>
+          <rect x="20" y="165" width="160" height="160" rx="8" fill="#DCFCE7"/>
+          <text x="100" y="235" fill="#166534" font-size="11" font-weight="700" text-anchor="middle">LÀN 2: HIỆN TRƯỜNG<br/>& CỔNG RFID GATE<br/>(Hopeland CL7206C2)</text>
+
+          <!-- Lane 3: Tầng CSDL & PDA -->
+          <rect x="20" y="340" width="1110" height="120" rx="8" fill="#FAF5FF" stroke="#D8B4FE" stroke-width="1.5"/>
+          <rect x="20" y="340" width="160" height="120" rx="8" fill="#F3E8FF"/>
+          <text x="100" y="395" fill="#581C87" font-size="11" font-weight="700" text-anchor="middle">LÀN 3: CSDL SUPABASE<br/>& THỦ KHO PDA</text>
+
+          <!-- STEP 1: Lập đơn PO / Nạp Excel -->
+          <g filter="url(#shadow)">
+            <rect x="200" y="55" width="170" height="70" rx="8" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+            <text x="285" y="80" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">1. Nạp File Excel / PO</text>
+            <text x="285" y="98" fill="#64748B" font-size="10" text-anchor="middle">Khởi tạo inbound_orders</text>
+            <text x="285" y="112" fill="#0369A1" font-size="9" font-weight="600" text-anchor="middle">Trạng thái: PENDING</text>
+          </g>
+
+          <path d="M 285 125 L 285 365" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- STEP 2: CSDL Lưu Expected EPCs -->
+          <g filter="url(#shadow)">
+            <rect x="200" y="365" width="170" height="70" rx="8" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.5"/>
+            <text x="285" y="390" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">2. Lưu Danh Mục EPCs</text>
+            <text x="285" y="408" fill="#64748B" font-size="10" text-anchor="middle">Lưu items (pendingInbound)</text>
+            <text x="285" y="422" fill="#6D28D9" font-size="9" font-weight="600" text-anchor="middle">Chuẩn bị tập Hash Set O(1)</text>
+          </g>
+
+          <path d="M 370 400 L 415 400 L 415 250 L 435 250" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- STEP 3: Xe nâng qua Cổng RFID Gate -->
+          <g filter="url(#shadow)">
+            <rect x="440" y="195" width="180" height="100" rx="8" fill="#FFFFFF" stroke="#10B981" stroke-width="1.5"/>
+            <text x="530" y="220" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">3. Xe Qua Cổng RFID</text>
+            <text x="530" y="240" fill="#0284C7" font-size="10" font-weight="600" text-anchor="middle">Hopeland TCP 9090</text>
+            <text x="530" y="258" fill="#64748B" font-size="10" text-anchor="middle">Quét chùm sóng đồng thời</text>
+            <text x="530" y="278" fill="#D97706" font-size="10" font-weight="700" text-anchor="middle">Đèn Vàng: Đang quét</text>
+          </g>
+
+          <path d="M 620 245 L 655 245" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- STEP 4: Bộ máy đối soát & Quyết định -->
+          <g filter="url(#shadow)">
+            <polygon points="720,195 785,245 720,295 655,245" fill="#FFFBEB" stroke="#D97706" stroke-width="1.5"/>
+            <text x="720" y="240" fill="#B45309" font-size="10" font-weight="700" text-anchor="middle">Khớp 100%</text>
+            <text x="720" y="255" fill="#B45309" font-size="10" font-weight="700" text-anchor="middle">Sản Phẩm?</text>
+          </g>
+
+          <!-- Branch NO: Báo động Đỏ -->
+          <path d="M 720 195 L 720 125" stroke="#DC2626" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+          <g filter="url(#shadow)">
+            <rect x="635" y="65" width="170" height="60" rx="6" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5"/>
+            <text x="720" y="88" fill="#991B1B" font-size="10" font-weight="700" text-anchor="middle">ĐÈN ĐỎ + CÒI BÁO (GPO 1)</text>
+            <text x="720" y="105" fill="#DC2626" font-size="9" text-anchor="middle">Thẻ lạ / Thiếu hàng -> Khóa cổng</text>
+          </g>
+          <path d="M 635 95 L 530 95 L 530 190" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowRed)"/>
+
+          <!-- Branch YES: Đèn xanh -->
+          <path d="M 785 245 L 830 245" stroke="#16A34A" stroke-width="2" marker-end="url(#arrow)"/>
+          <g filter="url(#shadow)">
+            <rect x="835" y="205" width="180" height="80" rx="8" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+            <text x="925" y="230" fill="#15803D" font-size="11" font-weight="800" text-anchor="middle">CỔNG ĐẠT: ĐÈN XANH</text>
+            <text x="925" y="250" fill="#0F172A" font-size="10" text-anchor="middle">Bật GPO 2 (Đèn Xanh)</text>
+            <text x="925" y="268" fill="#166534" font-size="10" font-weight="600" text-anchor="middle">isGatePassed = true</text>
+          </g>
+
+          <path d="M 925 285 L 925 365" stroke="#16A34A" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- STEP 5: Cập nhật CSDL WAITING_PUTAWAY & Báo PDA -->
+          <g filter="url(#shadow)">
+            <rect x="835" y="365" width="180" height="75" rx="8" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.5"/>
+            <text x="925" y="390" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">5. Đồng Bộ Sổ Kho CSDL</text>
+            <text x="925" y="408" fill="#6D28D9" font-size="10" font-weight="600" text-anchor="middle">WAITING_PUTAWAY</text>
+            <text x="925" y="425" fill="#64748B" font-size="9" text-anchor="middle">Đẩy thẻ [CẦN CẤT KỆ] tới PDA</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="notes-box">
+        <strong>Điểm cải tiến vượt trội:</strong> Hệ thống tự động so khớp Real-time bằng tập `HashSet<String>` với độ phức tạp $O(1)$. Nếu phát hiện đủ 100% chip sản phẩm thì hệ thống tự động kích hoạt thông qua mà không bắt buộc có chip Pallet, giúp giảm chi phí đầu tư tem RFID cho doanh nghiệp.
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SƠ ĐỒ 2: QUY TRÌNH CẤT KỆ 2-HỘP (PDA) -->
+    <!-- ========================================== -->
+    <section class="diagram-card" id="sec-putaway">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h3>SƠ ĐỒ 2: QUY TRÌNH CẤT KỆ 2-HỘP & BẢN ĐỒ KHO 2D TRÊN PDA</h3>
+          <p>Loại bỏ rủi ro cất nhầm vị trí: Xác thực tem Barcode dán trên kệ vật lý và hiển thị lộ trình di chuyển 2D</p>
+        </div>
+        <div class="card-actions no-print">
+          <button class="btn" onclick="exportSvgToPng('svg-putaway', 'So_Do_2_Cat_Ke_PDA.png')">📷 Tải Ảnh PNG</button>
+        </div>
+      </div>
+
+      <div class="svg-wrapper">
+        <svg id="svg-putaway" viewBox="0 0 1150 460" xmlns="http://www.w3.org/2000/svg" font-family="'Inter', sans-serif">
+          <!-- Step 1: Nhận việc -->
+          <g filter="url(#shadow)">
+            <rect x="30" y="170" width="160" height="90" rx="8" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+            <text x="110" y="200" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">1. Mở Tay Cầm PDA</text>
+            <text x="110" y="220" fill="#64748B" font-size="10" text-anchor="middle">Nhận thông báo:</text>
+            <text x="110" y="238" fill="#0284C7" font-size="11" font-weight="700" text-anchor="middle">[CẦN CẤT KỆ]</text>
+          </g>
+
+          <path d="M 190 215 L 225 215" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- Step 2: Quét Pallet -->
+          <g filter="url(#shadow)">
+            <rect x="230" y="170" width="160" height="90" rx="8" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+            <text x="310" y="200" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">2. Quét Pallet/Thùng</text>
+            <text x="310" y="220" fill="#64748B" font-size="10" text-anchor="middle">Bóp cò súng PDA quét</text>
+            <text x="310" y="238" fill="#0284C7" font-size="10" font-weight="600" text-anchor="middle">Mở PdaPutawayScreen</text>
+          </g>
+
+          <path d="M 390 215 L 425 215" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- Step 3: GIAO DIỆN 2-HỘP & MAP 2D -->
+          <rect x="430" y="60" width="280" height="310" rx="10" fill="#F8FAFC" stroke="#7C3AED" stroke-width="2" stroke-dasharray="6,4"/>
+          <text x="570" y="90" fill="#6D28D9" font-size="12" font-weight="800" text-anchor="middle">GIAO DIỆN 2-HỘP TRÊN PDA</text>
+
+          <!-- Box 1 -->
+          <g filter="url(#shadow)">
+            <rect x="450" y="110" width="240" height="65" rx="6" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.5"/>
+            <text x="570" y="132" fill="#581C87" font-size="11" font-weight="700" text-anchor="middle">HỘP 1: THÔNG TIN HÀNG</text>
+            <text x="570" y="152" fill="#64748B" font-size="10" text-anchor="middle">Mã Pallet &bull; SKU &bull; Số lượng &bull; Đơn PO</text>
+          </g>
+
+          <!-- Box 2 -->
+          <g filter="url(#shadow)">
+            <rect x="450" y="190" width="240" height="85" rx="6" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+            <text x="570" y="212" fill="#0369A1" font-size="11" font-weight="700" text-anchor="middle">HỘP 2: GỢI Ý VỊ TRÍ KỆ</text>
+            <text x="570" y="232" fill="#64748B" font-size="10" text-anchor="middle">Thuật toán tìm Zone -> Kệ còn chỗ</text>
+            <text x="570" y="252" fill="#15803D" font-size="10" font-weight="700" text-anchor="middle">Đề xuất Kệ: A1-02-01 (Ưu tiên cùng SKU)</text>
+          </g>
+
+          <!-- 2D Map -->
+          <g filter="url(#shadow)">
+            <rect x="450" y="290" width="240" height="60" rx="6" fill="#EFF6FF" stroke="#38BDF8" stroke-width="1.5"/>
+            <text x="570" y="312" fill="#0284C7" font-size="10" font-weight="700" text-anchor="middle">🗺️ SƠ ĐỒ KHO 2D DẪN ĐƯỜNG</text>
+            <text x="570" y="332" fill="#64748B" font-size="9" text-anchor="middle">Vẽ đường line chỉ dẫn tới ô kệ đích</text>
+          </g>
+
+          <path d="M 710 215 L 755 215" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- Step 4: Quét Tem Kệ & Kiểm tra -->
+          <g filter="url(#shadow)">
+            <rect x="760" y="170" width="160" height="90" rx="8" fill="#FFFFFF" stroke="#D97706" stroke-width="1.5"/>
+            <text x="840" y="195" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">4. Đến Kệ & Quét Tem</text>
+            <text x="840" y="215" fill="#64748B" font-size="10" text-anchor="middle">Bóp cò quét Barcode Kệ</text>
+            <text x="840" y="235" fill="#B45309" font-size="10" font-weight="600" text-anchor="middle">(Kiểm tra trùng khớp)</text>
+          </g>
+
+          <!-- Check Match -->
+          <path d="M 920 215 L 955 215" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+          <g filter="url(#shadow)">
+            <polygon points="985,185 1025,215 985,245 945,215" fill="#FFFBEB" stroke="#D97706" stroke-width="1.5"/>
+            <text x="985" y="218" fill="#B45309" font-size="9" font-weight="700" text-anchor="middle">Khớp?</text>
+          </g>
+
+          <!-- Error Alert -->
+          <path d="M 985 185 L 985 120 L 920 120" stroke="#DC2626" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+          <rect x="760" y="100" width="160" height="45" rx="6" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5"/>
+          <text x="840" y="120" fill="#991B1B" font-size="10" font-weight="700" text-anchor="middle">Sai Kệ / Kệ Đã Đầy!</text>
+          <text x="840" y="135" fill="#DC2626" font-size="9" text-anchor="middle">Chuông rung, yêu cầu quét lại</text>
+
+          <!-- Success: Cam kết CSDL -->
+          <path d="M 985 245 L 985 360 L 950 360" stroke="#16A34A" stroke-width="2" marker-end="url(#arrow)"/>
+          <g filter="url(#shadow)">
+            <rect x="730" y="330" width="220" height="85" rx="8" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+            <text x="840" y="355" fill="#15803D" font-size="11" font-weight="800" text-anchor="middle">5. CAM KẾT LƯU KHO CSDL</text>
+            <text x="840" y="375" fill="#0F172A" font-size="10" text-anchor="middle">items -> IN_STOCK &bull; Gán locationId</text>
+            <text x="840" y="392" fill="#166534" font-size="10" font-weight="600" text-anchor="middle">Ghi Transaction Log: IN (Putaway)</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="notes-box">
+        <strong>Nguyên tắc bảo vệ vị trí:</strong> Thủ kho không thể tùy tiện bấm nút "Cất Kệ" nếu chưa đứng trước kệ vật lý và quét mã Barcode dán trên kệ. Điều này loại bỏ hoàn toàn lỗi "hàng một nơi, phần mềm ghi một nẻo".
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SƠ ĐỒ 3: NỘI BỘ & KIỂM KÊ RFID -->
+    <!-- ========================================== -->
+    <section class="diagram-card" id="sec-internal">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h3>SƠ ĐỒ 3: QUẢN LÝ KHO NỘI BỘ, ĐIỀU CHUYỂN, DỒN PALLET & KIỂM KÊ RFID</h3>
+          <p>4 phân hệ nghiệp vụ độc lập: Điều chuyển vị trí (Transfer), Dồn gộp Pallet (Merge), Kiểm kê 4 nhóm và Quản trị 4-Tab</p>
+        </div>
+        <div class="card-actions no-print">
+          <button class="btn" onclick="exportSvgToPng('svg-internal', 'So_Do_3_Quan_Ly_Noi_Bo_Kiem_Ke.png')">📷 Tải Ảnh PNG</button>
+        </div>
+      </div>
+
+      <div class="svg-wrapper">
+        <svg id="svg-internal" viewBox="0 0 1150 490" xmlns="http://www.w3.org/2000/svg" font-family="'Inter', sans-serif">
+          <!-- 4 COLUMNS / BLOCKS -->
+          
+          <!-- PHÂN HỆ A: ĐIỀU CHUYỂN KỆ -->
+          <g filter="url(#shadow)">
+            <rect x="20" y="30" width="260" height="430" rx="10" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+            <rect x="20" y="30" width="260" height="40" rx="10" fill="#0284C7"/>
+            <rect x="20" y="55" width="260" height="15" fill="#0284C7"/>
+            <text x="150" y="55" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">A. ĐIỀU CHUYỂN KỆ (TRANSFER)</text>
+            
+            <rect x="40" y="90" width="220" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="150" y="115" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">1. Quét mã Kệ Nguồn</text>
+            <text x="150" y="133" fill="#64748B" font-size="10" text-anchor="middle">Xem danh sách thùng tại kệ</text>
+
+            <path d="M 150 150 L 150 175" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="40" y="180" width="220" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="150" y="205" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">2. Chọn Kiện / Pallet</text>
+            <text x="150" y="223" fill="#64748B" font-size="10" text-anchor="middle">Đánh dấu hàng cần chuyển</text>
+
+            <path d="M 150 240 L 150 265" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="40" y="270" width="220" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="150" y="295" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">3. Quét mã Kệ Đích</text>
+            <text x="150" y="313" fill="#64748B" font-size="10" text-anchor="middle">Kiểm tra sức chứa kệ mới</text>
+
+            <path d="M 150 330 L 150 355" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="40" y="360" width="220" height="75" rx="6" fill="#EFF6FF" stroke="#0284C7" stroke-width="1.5"/>
+            <text x="150" y="385" fill="#0369A1" font-size="11" font-weight="700" text-anchor="middle">4. Cập Nhật locationId Mới</text>
+            <text x="150" y="405" fill="#64748B" font-size="10" text-anchor="middle">Ghi log Transaction: MOVE</text>
+            <text x="150" y="420" fill="#0284C7" font-size="9" font-weight="600" text-anchor="middle">Đồng bộ Supabase & SQLite</text>
+          </g>
+
+          <!-- PHÂN HỆ B: DỒN PALLET -->
+          <g filter="url(#shadow)">
+            <rect x="305" y="30" width="260" height="430" rx="10" fill="#FFFFFF" stroke="#10B981" stroke-width="1.5"/>
+            <rect x="305" y="30" width="260" height="40" rx="10" fill="#10B981"/>
+            <rect x="305" y="55" width="260" height="15" fill="#10B981"/>
+            <text x="435" y="55" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">B. DỒN GỘP PALLET (MERGE)</text>
+
+            <rect x="325" y="90" width="220" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="435" y="115" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">1. Quét Pallet Nguồn</text>
+            <text x="435" y="133" fill="#64748B" font-size="10" text-anchor="middle">Hiển thị các thùng đang gắn</text>
+
+            <path d="M 435 150 L 435 175" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="325" y="180" width="220" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="435" y="205" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">2. Chọn Thùng Gom</text>
+            <text x="435" y="223" fill="#64748B" font-size="10" text-anchor="middle">Đánh dấu checklist gom thùng</text>
+
+            <path d="M 435 240 L 435 265" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="325" y="270" width="220" height="60" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="435" y="295" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">3. Quét Pallet Đích</text>
+            <text x="435" y="313" fill="#64748B" font-size="10" text-anchor="middle">Xác định pallet tổng tiếp nhận</text>
+
+            <path d="M 435 330 L 435 355" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="325" y="360" width="220" height="75" rx="6" fill="#F0FDF4" stroke="#10B981" stroke-width="1.5"/>
+            <text x="435" y="385" fill="#15803D" font-size="11" font-weight="700" text-anchor="middle">4. Gán palletId Mới</text>
+            <text x="435" y="405" fill="#64748B" font-size="10" text-anchor="middle">Giải phóng Pallet cũ nếu rỗng</text>
+            <text x="435" y="420" fill="#10B981" font-size="9" font-weight="600" text-anchor="middle">Tối ưu không gian sàn kho</text>
+          </g>
+
+          <!-- PHÂN HỆ C: KIỂM KÊ RFID 4 NHÓM -->
+          <g filter="url(#shadow)">
+            <rect x="590" y="30" width="270" height="430" rx="10" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.5"/>
+            <rect x="590" y="30" width="270" height="40" rx="10" fill="#7C3AED"/>
+            <rect x="590" y="55" width="270" height="15" fill="#7C3AED"/>
+            <text x="725" y="55" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">C. KIỂM KÊ RFID (AUDIT 4 NHÓM)</text>
+
+            <rect x="610" y="85" width="230" height="50" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="725" y="105" fill="#0F172A" font-size="11" font-weight="600" text-anchor="middle">1. Tạo Phiên & Bóp Cò Súng</text>
+            <text x="725" y="122" fill="#64748B" font-size="9" text-anchor="middle">SEUIC UTouch 2 quét chùm sóng RFID</text>
+
+            <path d="M 725 135 L 725 155" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="605" y="155" width="240" height="195" rx="6" fill="#FAF5FF" stroke="#7C3AED" stroke-width="1.5"/>
+            <text x="725" y="175" fill="#6D28D9" font-size="11" font-weight="700" text-anchor="middle">2. PHÂN LOẠI 4 NHÓM TỨC THÌ</text>
+            
+            <rect x="615" y="185" width="220" height="32" rx="4" fill="#DCFCE7" stroke="#16A34A"/>
+            <text x="725" y="205" fill="#15803D" font-size="10" font-weight="700" text-anchor="middle">[MATCH] Khớp Đúng Sổ Kho</text>
+
+            <rect x="615" y="222" width="220" height="32" rx="4" fill="#FEE2E2" stroke="#DC2626"/>
+            <text x="725" y="242" fill="#B91C1C" font-size="10" font-weight="700" text-anchor="middle">[MISSING] Thiếu Thực Tế Kệ</text>
+
+            <rect x="615" y="259" width="220" height="32" rx="4" fill="#FEF3C7" stroke="#D97706"/>
+            <text x="725" y="279" fill="#B45309" font-size="10" font-weight="700" text-anchor="middle">[WRONG_LOC] Lạc Vị Trí Kệ</text>
+
+            <rect x="615" y="296" width="220" height="32" rx="4" fill="#F3E8FF" stroke="#7C3AED"/>
+            <text x="725" y="316" fill="#6D28D9" font-size="10" font-weight="700" text-anchor="middle">[UNKNOWN_EPC] Thẻ Lạ Ngoài Kho</text>
+
+            <path d="M 725 350 L 725 370" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+            <rect x="610" y="375" width="230" height="65" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+            <text x="725" y="398" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">3. Cân Chỉnh Kho (ADJUST)</text>
+            <text x="725" y="415" fill="#64748B" font-size="10" text-anchor="middle">Lưu session_details & Xuất Excel</text>
+          </g>
+
+          <!-- PHÂN HỆ D: QUẢN LÝ KHO 4-TAB -->
+          <g filter="url(#shadow)">
+            <rect x="885" y="30" width="245" height="430" rx="10" fill="#FFFFFF" stroke="#D97706" stroke-width="1.5"/>
+            <rect x="885" y="30" width="245" height="40" rx="10" fill="#D97706"/>
+            <rect x="885" y="55" width="245" height="15" fill="#D97706"/>
+            <text x="1007" y="55" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">D. QUẢN TRỊ 4-TAB & BẢN ĐỒ</text>
+
+            <rect x="900" y="90" width="215" height="75" rx="6" fill="#FFFBEB" stroke="#FCD34D"/>
+            <text x="1007" y="115" fill="#B45309" font-size="11" font-weight="700" text-anchor="middle">TAB 1: PALLET</text>
+            <text x="1007" y="135" fill="#64748B" font-size="10" text-anchor="middle">Theo dõi mã Pallet & Vị trí kệ</text>
+            <text x="1007" y="150" fill="#64748B" font-size="9" text-anchor="middle">Số lượng thùng gắn trên pallet</text>
+
+            <rect x="900" y="180" width="215" height="75" rx="6" fill="#FFFBEB" stroke="#FCD34D"/>
+            <text x="1007" y="205" fill="#B45309" font-size="11" font-weight="700" text-anchor="middle">TAB 2: VỊ TRÍ KHO</text>
+            <text x="1007" y="225" fill="#64748B" font-size="10" text-anchor="middle">3 nút 1-chạm: ĐẦY / SẮP / CÒN</text>
+            <text x="1007" y="240" fill="#15803D" font-size="9" font-weight="600" text-anchor="middle">Chỉ đếm hàng IN_STOCK</text>
+
+            <rect x="900" y="270" width="215" height="75" rx="6" fill="#FFFBEB" stroke="#FCD34D"/>
+            <text x="1007" y="295" fill="#B45309" font-size="11" font-weight="700" text-anchor="middle">TAB 3: LỊCH SỬ</text>
+            <text x="1007" y="315" fill="#64748B" font-size="10" text-anchor="middle">Audit Trail: IN, OUT, MOVE</text>
+            <text x="1007" y="330" fill="#64748B" font-size="9" text-anchor="middle">Theo dõi người thực hiện</text>
+
+            <rect x="900" y="360" width="215" height="75" rx="6" fill="#FFFBEB" stroke="#FCD34D"/>
+            <text x="1007" y="385" fill="#B45309" font-size="11" font-weight="700" text-anchor="middle">TAB 4: SP & BẢN ĐỒ 2D</text>
+            <text x="1007" y="405" fill="#64748B" font-size="10" text-anchor="middle">Tra cứu nhanh mã RFID/Barcode</text>
+            <text x="1007" y="420" fill="#0284C7" font-size="9" font-weight="600" text-anchor="middle">Hiển thị mặt bằng kệ kho 2D</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="notes-box">
+        <strong>Thuật toán kiểm kê 4 nhóm:</strong> Khi quét tại Kệ A, chip xuất hiện nhưng trên sổ sách thuộc Kệ B sẽ được xếp vào `[WRONG_LOC]` thay vì báo thừa. Nếu chip hoàn toàn chưa đăng ký trong CSDL sẽ được xếp vào `[UNKNOWN_EPC]`. Cơ chế phân định này giúp thủ kho phát hiện ngay hàng bị để nhầm chỗ chỉ sau 1 lượt bóp cò.
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SƠ ĐỒ 4: XUẤT KHO FIFO & CỔNG XUẤT -->
+    <!-- ========================================== -->
+    <section class="diagram-card" id="sec-outbound">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h3>SƠ ĐỒ 4: QUY TRÌNH XUẤT KHO CHUẨN FIFO & ĐỐI SOÁT CỔNG 2 PHA</h3>
+          <p>Tuân thủ nghiêm ngặt First-In, First-Out: Wizard dẫn đường nhặt hàng qua 10 kệ và tự động giải phóng vị trí ô kệ</p>
+        </div>
+        <div class="card-actions no-print">
+          <button class="btn" onclick="exportSvgToPng('svg-outbound', 'So_Do_4_Xuat_Kho_FIFO.png')">📷 Tải Ảnh PNG</button>
+        </div>
+      </div>
+
+      <div class="svg-wrapper">
+        <svg id="svg-outbound" viewBox="0 0 1150 480" xmlns="http://www.w3.org/2000/svg" font-family="'Inter', sans-serif">
+          <!-- Step 1: Đơn SO -->
+          <g filter="url(#shadow)">
+            <rect x="20" y="170" width="160" height="90" rx="8" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+            <text x="100" y="195" fill="#0F172A" font-size="11" font-weight="700" text-anchor="middle">1. Tạo Đơn Xuất SO</text>
+            <text x="100" y="215" fill="#64748B" font-size="10" text-anchor="middle">Khởi tạo outbound_orders</text>
+            <text x="100" y="235" fill="#0284C7" font-size="10" font-weight="600" text-anchor="middle">SKU & Số lượng yêu cầu</text>
+          </g>
+
+          <path d="M 180 215 L 215 215" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- Step 2: Thuật toán FIFO -->
+          <g filter="url(#shadow)">
+            <rect x="220" y="160" width="180" height="110" rx="8" fill="#FAF5FF" stroke="#7C3AED" stroke-width="2"/>
+            <text x="310" y="185" fill="#6D28D9" font-size="11" font-weight="800" text-anchor="middle">2. THUẬT TOÁN FIFO</text>
+            <text x="310" y="205" fill="#0F172A" font-size="10" text-anchor="middle">Lọc items có status IN_STOCK</text>
+            <text x="310" y="222" fill="#64748B" font-size="10" text-anchor="middle">Sắp xếp theo created_at</text>
+            <text x="310" y="242" fill="#7C3AED" font-size="10" font-weight="700" text-anchor="middle">Ưu tiên lô nhập cũ nhất!</text>
+          </g>
+
+          <path d="M 400 215 L 435 215" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- Step 3: Wizard nhặt hàng -->
+          <g filter="url(#shadow)">
+            <rect x="440" y="160" width="180" height="110" rx="8" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+            <text x="530" y="185" fill="#0369A1" font-size="11" font-weight="700" text-anchor="middle">3. Wizard Nhặt Hàng</text>
+            <text x="530" y="205" fill="#0F172A" font-size="10" text-anchor="middle">Chỉ đường qua 10 kệ kho</text>
+            <text x="530" y="222" fill="#64748B" font-size="10" text-anchor="middle">Bóp cò PDA quét đúng kiện</text>
+            <text x="530" y="242" fill="#D97706" font-size="10" font-weight="700" text-anchor="middle">Chặn nếu nhặt sai lô FIFO</text>
+          </g>
+
+          <path d="M 620 215 L 655 215" stroke="#64748B" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+          <!-- Step 4: CỔNG RFID XUẤT 2 PHA -->
+          <rect x="660" y="90" width="220" height="250" rx="10" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+          <text x="770" y="115" fill="#15803D" font-size="12" font-weight="800" text-anchor="middle">4. CỔNG XUẤT: ĐỐI SOÁT 2 PHA</text>
+
+          <g filter="url(#shadow)">
+            <rect x="680" y="130" width="180" height="55" rx="6" fill="#FFFFFF" stroke="#16A34A"/>
+            <text x="770" y="152" fill="#15803D" font-size="10" font-weight="700" text-anchor="middle">PHA 1: QUÉT RFID PALLET</text>
+            <text x="770" y="168" fill="#64748B" font-size="9" text-anchor="middle">Nhận diện cấu trúc Pallet</text>
+          </g>
+
+          <g filter="url(#shadow)">
+            <rect x="680" y="195" width="180" height="55" rx="6" fill="#FFFFFF" stroke="#16A34A"/>
+            <text x="770" y="217" fill="#15803D" font-size="10" font-weight="700" text-anchor="middle">PHA 2: CHÙM EPC SẢN PHẨM</text>
+            <text x="770" y="233" fill="#64748B" font-size="9" text-anchor="middle">Đối soát số lượng với đơn PO</text>
+          </g>
+
+          <rect x="680" y="260" width="180" height="60" rx="6" fill="#DCFCE7"/>
+          <text x="770" y="282" fill="#166534" font-size="10" font-weight="700" text-anchor="middle">ĐỦ 100% -> ĐÈN XANH (GPO 2)</text>
+          <text x="770" y="300" fill="#15803D" font-size="9" text-anchor="middle">isGatePassed = true</text>
+
+          <!-- Gate Fail Branch -->
+          <path d="M 770 90 L 770 45 L 530 45 L 530 155" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowRed)" fill="none"/>
+          <rect x="580" y="25" width="170" height="35" rx="4" fill="#FEF2F2" stroke="#DC2626"/>
+          <text x="665" y="47" fill="#991B1B" font-size="9" font-weight="700" text-anchor="middle">Còi Hú: Thiếu / Sai kiện -> Trả lại</text>
+
+          <path d="M 880 215 L 915 215" stroke="#16A34A" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- Step 5: GIẢI PHÓNG KỆ & HOÀN TẤT -->
+          <g filter="url(#shadow)">
+            <rect x="920" y="130" width="210" height="170" rx="8" fill="#FFFFFF" stroke="#16A34A" stroke-width="2"/>
+            <text x="1025" y="155" fill="#15803D" font-size="11" font-weight="800" text-anchor="middle">5. GIẢI PHÓNG Ô KỆ CSDL</text>
+            
+            <text x="1025" y="180" fill="#0F172A" font-size="10" font-weight="600" text-anchor="middle">&bull; item.status = 'DELIVERED'</text>
+            <text x="1025" y="200" fill="#166534" font-size="10" font-weight="700" text-anchor="middle">&bull; item.locationId = null</text>
+            <text x="1025" y="220" fill="#166534" font-size="10" font-weight="700" text-anchor="middle">&bull; pallet.locationId = null</text>
+            <text x="1025" y="240" fill="#0369A1" font-size="10" font-weight="600" text-anchor="middle">Kệ trở về: CÒN CHỖ / TRỐNG</text>
+            <text x="1025" y="260" fill="#64748B" font-size="9" text-anchor="middle">Ghi Transaction Log: OUT</text>
+            <text x="1025" y="280" fill="#059669" font-size="10" font-weight="700" text-anchor="middle">In Phiếu Delivery Note</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="notes-box">
+        <strong>Giải phóng vị trí tức thì:</strong> Ngay khi xe hàng vượt qua cổng xuất (Đèn Xanh), hệ thống lập tức gán `locationId = null` cho toàn bộ các kiện hàng thuộc đơn xuất. Sức chứa ô kệ tự động tăng lên để phục vụ đón nhận đợt nhập hàng tiếp theo, ngăn ngừa tình trạng ô kệ bị chiếm dụng ảo trên hệ thống.
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- BẢNG RACI CHI TIẾT DÀNH CHO BÁO CÁO -->
+    <!-- ========================================== -->
+    <section class="diagram-card" id="sec-raci">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h3>MA TRẬN PHÂN ĐỊNH TRÁCH NHIỆM RACI TOÀN HỆ THỐNG</h3>
+          <p>Có thể sao chép trực tiếp vào bảng biểu Microsoft Word hoặc Google Docs</p>
+        </div>
+        <div class="card-actions no-print">
+          <button class="btn" onclick="copyTableToClipboard('raci-table')">📋 Sao Chép Bảng Vào Word</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="raci-table">
+          <thead>
+            <tr>
+              <th style="width: 60px;">Mã</th>
+              <th>Bước Nghiệp Vụ Vận Hành Thực Tế</th>
+              <th style="text-align: center;">Kinh Doanh / Mua Hàng</th>
+              <th style="text-align: center;">Trưởng Kho / Kế Toán</th>
+              <th style="text-align: center;">Thủ Kho & Lái Xe Nâng</th>
+              <th style="text-align: center;">Hệ Thống RFID WMS & Cổng</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1.1</strong></td>
+              <td>Khởi tạo Đơn Mua Hàng (PO) hoặc nạp file Excel Packing List</td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Chính)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Duyệt)</span></td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-i">I (Nạp)</span></td>
+            </tr>
+            <tr>
+              <td><strong>1.2</strong></td>
+              <td>Xe hàng qua Cổng RFID Gate Hopeland CL7206C2 (TCP 9090)</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-i">I</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Lái xe)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Đối soát 100%)</span></td>
+            </tr>
+            <tr>
+              <td><strong>1.3</strong></td>
+              <td>Xử lý ngoại lệ: Báo động Đỏ + Còi hú khi có thẻ lạ ngoài đơn / thiếu hàng</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Chỉ đạo)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Quét bù/cách ly)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Khóa cổng)</span></td>
+            </tr>
+            <tr>
+              <td><strong>1.4</strong></td>
+              <td>Cổng Đèn Xanh thông qua, chuyển trạng thái WAITING_PUTAWAY</td>
+              <td style="text-align: center;"><span class="badge-raci raci-i">I</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Ký nhận)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Bàn giao)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Ghi CSDL & Báo PDA)</span></td>
+            </tr>
+            <tr>
+              <td><strong>2.1</strong></td>
+              <td>Mở PDA nhận tác vụ [CẦN CẤT KỆ] & Quét Barcode Pallet</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Quét súng)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Phân tích đơn)</span></td>
+            </tr>
+            <tr>
+              <td><strong>2.2</strong></td>
+              <td>Thuật toán đề xuất ô kệ trống + Bản đồ chỉ đường 2D</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-i">I (Đi theo line)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Gợi ý tối ưu)</span></td>
+            </tr>
+            <tr>
+              <td><strong>2.3</strong></td>
+              <td>Quét Barcode xác nhận tem dán trên kệ & Bấm [XÁC NHẬN CẤT KỆ]</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Thực hiện)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Khóa vị trí)</span></td>
+            </tr>
+            <tr>
+              <td><strong>3.1</strong></td>
+              <td>Điều chuyển Kệ (Transfer) & Dồn gộp Pallet (Merge)</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Giám sát)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Quét nguồn/đích)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Cập nhật vị trí)</span></td>
+            </tr>
+            <tr>
+              <td><strong>3.2</strong></td>
+              <td>Kiểm kê RFID di động phân loại 4 nhóm: Match, Missing, Wrong_Loc, Unknown</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Duyệt biên bản)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Cầm súng quét)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Phân loại & Báo cáo)</span></td>
+            </tr>
+            <tr>
+              <td><strong>4.1</strong></td>
+              <td>Thuật toán kiểm soát xuất hàng FIFO (Lọc lô nhập cũ nhất)</td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Tạo đơn)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Kiểm soát hạn)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-i">I (Tuân thủ)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Thuật toán FIFO)</span></td>
+            </tr>
+            <tr>
+              <td><strong>4.2</strong></td>
+              <td>Wizard chỉ đường nhặt hàng qua 10 kệ kho</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Nhặt hàng)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Dẫn đường)</span></td>
+            </tr>
+            <tr>
+              <td><strong>4.3</strong></td>
+              <td>Xe hàng qua Cổng RFID Xuất đối soát 2 pha (Pallet + Hàng)</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;"><span class="badge-raci raci-i">I</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Lái xe nâng)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Đối soát 2 pha)</span></td>
+            </tr>
+            <tr>
+              <td><strong>4.4</strong></td>
+              <td>Tự động giải phóng vị trí kệ (locationId = null) & In Delivery Note</td>
+              <td style="text-align: center;"><span class="badge-raci raci-i">I</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-a">A (Ký phiếu xuất)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Bàn giao khách)</span></td>
+              <td style="text-align: center;"><span class="badge-raci raci-r">R (Giải phóng CSDL)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Hệ Thống Quản Lý Kho RFID Thông Minh &bull; Bản Quyền Tài Liệu Báo Cáo Kỹ Thuật 2026</p>
+    <p style="margin-top: 4px; color: var(--text-sub);">Được xây dựng đồng bộ với Flutter Engine, Hopeland RFID SDK và Supabase Realtime</p>
+  </footer>
+
+  <!-- SCRIPT UTILITIES FOR REPORT EXPORT -->
+  <script>
+    // THEME TOGGLE
+    function toggleTheme() {
+      const current = document.body.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.body.setAttribute('data-theme', next);
+    }
+
+    // SCROLL TO SECTION
+    function scrollToSection(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+        if (event && event.target) {
+          event.target.classList.add('active');
+        }
+      }
+    }
+
+    // EXPORT SVG TO HIGH-RES PNG FOR WORD
+    function exportSvgToPng(svgId, fileName) {
+      const svg = document.getElementById(svgId);
+      if (!svg) return;
+
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const img = new Image();
+
+      // High DPI scaling (x3 for crisp printing in Word)
+      const scale = 3;
+      const rect = svg.getBoundingClientRect();
+      const viewBox = svg.viewBox.baseVal;
+      const width = (viewBox.width || rect.width || 1200);
+      const height = (viewBox.height || rect.height || 400);
+
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      ctx.scale(scale, scale);
+
+      // White background for report
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, width, height);
+
+      img.onload = function () {
+        ctx.drawImage(img, 0, 0, width, height);
+        const a = document.createElement("a");
+        a.download = fileName;
+        a.href = canvas.toDataURL("image/png");
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      };
+
+      img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+    }
+
+    // COPY TABLE TO CLIPBOARD
+    function copyTableToClipboard(tableId) {
+      const table = document.getElementById(tableId);
+      if (!table) return;
+
+      const range = document.createRange();
+      range.selectNode(table);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+
+      try {
+        document.execCommand('copy');
+        alert("Đã sao chép Bảng RACI vào bộ nhớ đệm! Bạn có thể dán (Ctrl+V) ngay vào Microsoft Word.");
+      } catch (err) {
+        alert("Không thể tự động sao chép. Vui lòng bôi đen và nhấn Ctrl+C.");
+      }
+      window.getSelection().removeAllRanges();
+    }
+  </script>
+</body>
+</html>

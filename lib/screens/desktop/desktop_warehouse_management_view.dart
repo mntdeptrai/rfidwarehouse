@@ -691,8 +691,53 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
     }
 
     for (var o in allOutboundOrders) {
-      final totalQty = o.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
-      final pickedQty = o.details.fold<int>(0, (sum, d) => sum + d.pickedQty);
+      final relatedTxs = allTransactions.where((t) =>
+          t.type == TransactionType.outbound &&
+          (t.documentNo.trim().toUpperCase() == o.poNo.trim().toUpperCase() ||
+           t.documentNo.trim().toUpperCase() == o.outboundOrderId.trim().toUpperCase() ||
+           (o.poNo.isNotEmpty && t.transactionId.contains(o.poNo)) ||
+           (o.outboundOrderId.isNotEmpty && t.transactionId.contains(o.outboundOrderId)))).toList();
+      final txQty = relatedTxs.fold<int>(0, (sum, t) => sum + t.quantity);
+
+      final ordItems = allItems.where((i) =>
+          i.orderNo != null &&
+          (i.orderNo!.trim().toUpperCase() == o.poNo.trim().toUpperCase() ||
+           i.orderNo!.trim().toUpperCase() == o.outboundOrderId.trim().toUpperCase())).toList();
+
+      var totalQty = o.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
+      var pickedQty = o.details.fold<int>(0, (sum, d) => sum + d.pickedQty);
+
+      if (totalQty == 0) {
+        if (txQty > 0) {
+          totalQty = txQty;
+          pickedQty = txQty;
+        } else if (ordItems.isNotEmpty) {
+          totalQty = ordItems.length;
+          pickedQty = ordItems.where((i) => i.status == ItemStatus.out).length;
+          if (pickedQty == 0 && o.status == OutboundOrderStatus.shipped) {
+            pickedQty = totalQty;
+          }
+        }
+      } else if (pickedQty == 0 && o.status == OutboundOrderStatus.shipped) {
+        pickedQty = totalQty;
+      }
+
+      final pallets = <String>{
+        ...relatedTxs.map((t) => t.palletCode).where((p) => p != null && p.isNotEmpty).cast<String>(),
+        ...ordItems.map((i) => i.palletId).where((p) => p != null && p.isNotEmpty).cast<String>(),
+      }.toList();
+
+      final dynamicDetails = o.details.isNotEmpty
+          ? o.details
+          : (relatedTxs.isNotEmpty
+              ? relatedTxs.map((t) => OutboundOrderDetail(
+                  productId: t.sku,
+                  sku: t.sku,
+                  productName: t.productName.isNotEmpty ? t.productName : 'Sản phẩm xuất kho',
+                  requiredQty: t.quantity,
+                  pickedQty: t.quantity,
+                )).toList()
+              : <dynamic>[]);
 
       historyRecords.add({
         'recordType': 'OUTBOUND',
@@ -705,9 +750,10 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
         'statusLabel': o.status == OutboundOrderStatus.shipped ? 'ĐÃ XUẤT KHO' : 'ĐANG XỬ LÝ',
         'totalQty': totalQty,
         'doneQty': pickedQty,
-        'pallets': <String>[],
-        'details': o.details,
-        'items': <Item>[],
+        'pallets': pallets,
+        'details': dynamicDetails,
+        'items': ordItems,
+        'transaction': relatedTxs.firstOrNull,
       });
     }
 
@@ -784,6 +830,23 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
             'items': <Item>[],
             'transaction': t,
           });
+        } else {
+          final rec = historyRecords.where((h) =>
+              h['recordType'] == 'OUTBOUND' &&
+              (h['orderNo'] == doc || h['orderId'] == doc || h['orderId'] == t.transactionId)).firstOrNull;
+          if (rec != null) {
+            if ((rec['totalQty'] as int? ?? 0) == 0) {
+              rec['totalQty'] = t.quantity;
+              rec['doneQty'] = t.quantity;
+            }
+            rec['transaction'] ??= t;
+            if (t.palletCode != null && t.palletCode!.isNotEmpty) {
+              final palList = (rec['pallets'] as List).cast<String>();
+              if (!palList.contains(t.palletCode!)) {
+                palList.add(t.palletCode!);
+              }
+            }
+          }
         }
       } else if (t.type == TransactionType.inbound) {
         final doc = t.documentNo.trim();

@@ -6,6 +6,7 @@ import '../../models/tag_info.dart';
 import '../../services/auth_service.dart';
 import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
 import '../../widgets/app_notification_bar.dart';
@@ -814,6 +815,11 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
         _isSuccess = true;
         _lastTransferCount = count;
       });
+
+      // Lập tức kích hoạt đẩy các biến động điều chuyển lên Supabase Cloud
+      try {
+        await SupabaseSyncService().syncNow();
+      } catch (_) {}
 
       if (mounted) {
         final loc = _repo.locations.where((l) => l.locationId == _selectedLocationId).firstOrNull;

@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ Đồ Luồng Nghiệp Vụ Kho RFID Toàn Diện (Interactive Viewer)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0F172A;
+      color: #F8FAFC;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: #1E293B;
+      border-bottom: 1px solid #334155;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .badge {
+      background: #0284C7;
+      color: white;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .title-group h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #F8FAFC;
+    }
+    .title-group p {
+      font-size: 12px;
+      color: #94A3B8;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      background: #334155;
+      color: #F8FAFC;
+      border: 1px solid #475569;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      background: #0284C7;
+      border-color: #38BDF8;
+    }
+    .btn-primary {
+      background: #0284C7;
+      border-color: #38BDF8;
+    }
+    .btn-primary:hover {
+      background: #0369A1;
+    }
+    nav.tabs-nav {
+      background: #1E293B;
+      display: flex;
+      padding: 4px 20px 0;
+      border-bottom: 2px solid #334155;
+      gap: 6px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: #94A3B8;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-top-left-radius: 6px;
+      border-top-right-radius: 6px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover {
+      color: #F8FAFC;
+      background: #334155;
+    }
+    .tab-btn.active {
+      color: #38BDF8;
+      background: #0F172A;
+      border-bottom: 2px solid #38BDF8;
+    }
+    main.viewport {
+      flex: 1;
+      position: relative;
+      overflow: auto;
+      background: #0B1120;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 24px;
+    }
+    .page-container {
+      display: none;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      transition: transform 0.1s ease;
+      transform-origin: top center;
+    }
+    .page-container.active {
+      display: block;
+    }
+    .flow-node {
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .flow-node:hover {
+      filter: brightness(1.1);
+    }
+    .controls {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      display: flex;
+      gap: 6px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    .control-btn {
+      background: #334155;
+      color: white;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .control-btn:hover {
+      background: #0284C7;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="badge">RFID WMS</span>
+      <div class="title-group">
+        <h1>Sơ Đồ Nghiệp Vụ Toàn Diện Kho RFID (Master Business Flow)</h1>
+        <p>Phân định 5 làn rõ ràng, đầy đủ 7 pha nghiệp vụ, tương thích Draw.io (.drawio) và Vector SVG</p>
+      </div>
+    </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="DrawIO_Editor.html">
+        ✏️ Mở Trình Vẽ Draw.io Editor
+      </a>
+      <a class="btn" href="RFID_Warehouse_Workflow_Diagram.drawio" download>
+        💾 Tải file (.drawio)
+      </a>
+    </div>
+  </header>
+
+  <nav class="tabs-nav">
+    <button class='tab-btn active' onclick='switchTab(0)'>1. SƠ ĐỒ NGHIỆP VỤ TOÀN DIỆN...</button><button class='tab-btn ' onclick='switchTab(1)'>2. QUY TRÌNH NHẬP KHO & ĐỐI ...</button><button class='tab-btn ' onclick='switchTab(2)'>3. QUY TRÌNH CẤT KỆ & LƯU TR...</button><button class='tab-btn ' onclick='switchTab(3)'>4. QUẢN LÝ KHO NỘI BỘ, ĐIỀU ...</button><button class='tab-btn ' onclick='switchTab(4)'>5. QUY TRÌNH XUẤT KHO & ĐỐI ...</button>
+  </nav>
+
+  <main class="viewport" id="viewport">
+    
+        <div id='page-container-0' class='page-container active'>
+          <svg id='svg-0' width='2600' height='1150' viewBox='0 0 2600 1150' xmlns='http://www.w3.org/2000/svg'>
+            <defs>
+          <pattern id='grid_m_0' width='20' height='20' patternUnits='userSpaceOnUse'>
+            <path d='M 20 0 L 0 0 0 20' fill='none' stroke='#E2E8F0' stroke-width='0.75'/>
+          </pattern>
+          <marker id='arrow_m_0' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#64748B'/>
+          </marker>
+          <marker id='arrow_green_m_0' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#10B981'/>
+          </marker>
+          <marker id='arrow_red_m_0' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#EF4444'/>
+          </marker>
+        </defs>
+        <rect width='100%' height='100%' fill='#F8FAFC'/>
+        <rect width='100%' height='100%' fill='url(#grid_m_0)'/><g transform='translate(40, 20)'>
+          <rect width='2520' height='55' rx='8' fill='#0F172A' stroke='#38BDF8' stroke-width='2'/>
+          <text x='20' y='25' fill='#38BDF8' font-size='16' font-weight='bold' font-family='Segoe UI, sans-serif'>1. SƠ ĐỒ NGHIỆP VỤ TOÀN DIỆN KHO THÔNG MINH RFID (MASTER BUSINESS FLOW)</text>
+          <text x='20' y='44' fill='#94A3B8' font-size='11.5' font-family='Segoe UI, sans-serif'>Quy trình khép kín: Nhập kho -&gt; Cổng RFID Gate -&gt; Cất kệ -&gt; Điều chuyển/Dồn pallet -&gt; Kiểm kê -&gt; Xuất FIFO -&gt; Giải phóng kệ</text>
+        </g><g>
+              <rect x='40' y='90' width='2520' height='140' rx='8' fill='#F1F5F9' stroke='#94A3B8' stroke-width='1.5'/>
+              <rect x='40' y='90' width='2520' height='28' rx='8' fill='#94A3B8' opacity='0.25'/>
+              <text x='55' y='109' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>LÀN 1: ĐỐI TÁC &amp; VẬN TẢI (Suppliers / Customers / Logistics Carriers)</text>
+            </g><g>
+              <rect x='40' y='250' width='2520' height='170' rx='8' fill='#F0F9FF' stroke='#7DD3FC' stroke-width='1.5'/>
+              <rect x='40' y='250' width='2520' height='28' rx='8' fill='#7DD3FC' opacity='0.25'/>
+              <text x='55' y='269' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>LÀN 2: QUẢN TRỊ &amp; ĐIỀU PHỐI WMS (Desktop Admin / System Dispatcher)</text>
+            </g><g>
+              <rect x='40' y='440' width='2520' height='190' rx='8' fill='#ECFDF5' stroke='#6EE7B7' stroke-width='1.5'/>
+              <rect x='40' y='440' width='2520' height='28' rx='8' fill='#6EE7B7' opacity='0.25'/>
+              <text x='55' y='459' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>LÀN 3: CỔNG RFID GATE TỰ ĐỘNG (Hopeland CL7206C2 TCP 9090 &amp; Modbus Tower Light)</text>
+            </g><g>
+              <rect x='40' y='650' width='2520' height='220' rx='8' fill='#FFFBEB' stroke='#FCD34D' stroke-width='1.5'/>
+              <rect x='40' y='650' width='2520' height='28' rx='8' fill='#FCD34D' opacity='0.25'/>
+              <text x='55' y='669' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>LÀN 4: THỦ KHO HIỆN TRƯỜNG &amp; TAY CẦM PDA (Handheld SEUIC Utouch 2 Android)</text>
+            </g><g>
+              <rect x='40' y='890' width='2520' height='220' rx='8' fill='#FAF5FF' stroke='#D8B4FE' stroke-width='1.5'/>
+              <rect x='40' y='890' width='2520' height='28' rx='8' fill='#D8B4FE' opacity='0.25'/>
+              <text x='55' y='909' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>LÀN 5: TẦNG DỮ LIỆU &amp; ĐỒNG BỘ CSDL (WarehouseRepository / SQLite Cache / Supabase Cloud)</text>
+            </g><g>
+              <path d='M 175.0 195 L 175.0 285' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              
+            </g><g>
+              <path d='M 175.0 360 L 180.0 940' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(177.5, 646.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Ghi CSDL</text>
+                </g>
+            </g><g>
+              <path d='M 290 982.5 L 445.0 982.5 L 445.0 565' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(367.5, 769.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chờ quét</text>
+                </g>
+            </g><g>
+              <path d='M 290 982.5 L 445.0 982.5 L 445.0 785' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(367.5, 879.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chọn đơn</text>
+                </g>
+            </g><g>
+              <path d='M 550 525.0 L 580 527.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(565.0, 522.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chùm EPC</text>
+                </g>
+            </g><g>
+              <path d='M 550 745.0 L 660.0 745.0 L 660.0 570' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(605.0, 653.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chùm EPC</text>
+                </g>
+            </g><g>
+              <path d='M 660.0 485 L 660.0 360' fill='none' stroke='#EF4444' stroke-width='2' marker-end='url(#arrow_red_m_0)'/>
+              <g transform='translate(660.0, 418.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Lạ / Thiếu</text>
+                </g>
+            </g><g>
+              <path d='M 565 322.5 L 445.0 322.5 L 445.0 485' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(505.0, 399.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Quét lại</text>
+                </g>
+            </g><g>
+              <path d='M 740 527.5 L 770 525.0' fill='none' stroke='#10B981' stroke-width='2' marker-end='url(#arrow_green_m_0)'/>
+              <g transform='translate(755.0, 522.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Khớp 100%</text>
+                </g>
+            </g><g>
+              <path d='M 870.0 565 L 870.0 940' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(870.0, 748.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Lưu WAITING</text>
+                </g>
+            </g><g>
+              <path d='M 975 982.5 L 1120.0 982.5 L 1120.0 785' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1047.5, 879.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Thông báo PDA</text>
+                </g>
+            </g><g>
+              <path d='M 1120.0 785 L 1120.0 800' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1120.0, 788.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Gợi ý</text>
+                </g>
+            </g><g>
+              <path d='M 1220 830.0 L 1360.0 830.0 L 1360.0 785' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1290.0, 803.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Đến kệ</text>
+                </g>
+            </g><g>
+              <path d='M 1360.0 785 L 1360.0 940' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1360.0, 858.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Xác nhận</text>
+                </g>
+            </g><g>
+              <path d='M 1470 982.5 L 1615.0 982.5 L 1615.0 750' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1542.5, 862.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Lưu kho</text>
+                </g>
+            </g><g>
+              <path d='M 1470 982.5 L 1615.0 982.5 L 1615.0 850' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1542.5, 912.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Định kỳ</text>
+                </g>
+            </g><g>
+              <path d='M 1615.0 750 L 1615.0 940' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1615.0, 841.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Ghi log MOVE</text>
+                </g>
+            </g><g>
+              <path d='M 1615.0 850 L 1615.0 940' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1615.0, 891.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Lưu kết quả</text>
+                </g>
+            </g><g>
+              <path d='M 1720 982.5 L 1875.0 982.5 L 1875.0 360' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1797.5, 667.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Tạo đơn xuất</text>
+                </g>
+            </g><g>
+              <path d='M 1980 322.5 L 2020 322.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(2000.0, 318.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Áp dụng FIFO</text>
+                </g>
+            </g><g>
+              <path d='M 2020 322.5 L 1875.0 322.5 L 1875.0 705' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(1947.5, 509.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chỉ đường</text>
+                </g>
+            </g><g>
+              <path d='M 1980 745.0 L 2130.0 745.0 L 2130.0 565' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(2055.0, 651.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Tập kết xuất</text>
+                </g>
+            </g><g>
+              <path d='M 2240 525.0 L 2280 527.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(2260.0, 522.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Bắt 2 pha</text>
+                </g>
+            </g><g>
+              <path d='M 2360.0 485 L 2360.0 430' fill='none' stroke='#EF4444' stroke-width='2' marker-end='url(#arrow_red_m_0)'/>
+              <g transform='translate(2360.0, 453.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Vi phạm / Sai</text>
+                </g>
+            </g><g>
+              <path d='M 2270 405.0 L 2130.0 405.0 L 2130.0 485' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(2200.0, 441.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Xử lý lại</text>
+                </g>
+            </g><g>
+              <path d='M 2360.0 570 L 2360.0 590' fill='none' stroke='#10B981' stroke-width='2' marker-end='url(#arrow_green_m_0)'/>
+              <g transform='translate(2360.0, 576.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Đạt 100%</text>
+                </g>
+            </g><g>
+              <path d='M 2360.0 640 L 2360.0 940' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(2360.0, 786.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Kích hoạt</text>
+                </g>
+            </g><g>
+              <path d='M 2360.0 940 L 2360.0 195' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_0)'/>
+              <g transform='translate(2360.0, 563.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Giao hàng</text>
+                </g>
+            </g><g class='flow-node'>
+              <rect x='70' y='130' width='210' height='65' rx='32.5' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='175.0' y='159.0'>NCC Giao Hàng</tspan><tspan x='175.0' y='174.0'>kèm Packing List / PO</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='70' y='285' width='210' height='75' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='175.0' y='319.0'>Nạp File Excel Packing List</tspan><tspan x='175.0' y='334.0'>hoặc Lấy PO Supabase</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='70' y='940' width='220' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='180.0' y='971.5'>GHI CSDL TỨC THÌ:</tspan><tspan x='180.0' y='986.5'>- inbound_orders: newOrder</tspan><tspan x='180.0' y='1001.5'>- items: pendingInbound</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='340' y='485' width='210' height='80' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='445.0' y='514.0'>Xe Hàng Qua Cổng Gate</tspan><tspan x='445.0' y='529.0'>Hopeland CL7206C2 quét chùm</tspan><tspan x='445.0' y='544.0'>Đèn tháp bật VÀNG (GPO 3 ON)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='340' y='705' width='210' height='80' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='445.0' y='734.0'>Hoặc Quét Di Động (PDA)</tspan><tspan x='445.0' y='749.0'>Thủ kho bóp cò súng PDA</tspan><tspan x='445.0' y='764.0'>Lọc trùng thẻ (Debounce 250ms)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='660.0,485 740,527.5 660.0,570 580,527.5' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='660.0' y='524.0'>Khớp 100% Chip</tspan><tspan x='660.0' y='539.0'>Sản Phẩm Trong Đơn?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='565' y='285' width='190' height='75' rx='8' fill='#EF4444' stroke='#DC2626' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='660.0' y='311.5'>BẬT ĐÈN ĐỎ + CÒI BÁO (GPO 1)</tspan><tspan x='660.0' y='326.5'>Khóa cổng, yêu cầu thủ kho</tspan><tspan x='660.0' y='341.5'>loại bỏ thẻ lạ / quét bù</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='770' y='485' width='200' height='80' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='870.0' y='514.0'>CỔNG ĐẠT: ĐÈN XANH (GPO 2)</tspan><tspan x='870.0' y='529.0'>isGatePassed = true</tspan><tspan x='870.0' y='544.0'>Không cần chip pallet nếu đủ SP</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='765' y='940' width='210' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='870.0' y='971.5'>ĐỒNG BỘ TRẠNG THÁI CSDL:</tspan><tspan x='870.0' y='986.5'>- inbound_orders -&gt; WAITING_PUTAWAY</tspan><tspan x='870.0' y='1001.5'>- Toàn bộ items -&gt; WAITING_PUTAWAY</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1020' y='705' width='200' height='80' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1120.0' y='734.0'>PDA: Thông Báo [CẦN CẤT KỆ]</tspan><tspan x='1120.0' y='749.0'>Quét Barcode Thùng / Pallet</tspan><tspan x='1120.0' y='764.0'>Xem thông tin kiện hàng</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1020' y='800' width='200' height='60' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1120.0' y='826.5'>Thuật toán gợi ý Kệ trống</tspan><tspan x='1120.0' y='841.5'>+ Dẫn đường Sơ đồ 2D</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1260' y='705' width='200' height='80' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1360.0' y='734.0'>Đến kệ đích thực tế</tspan><tspan x='1360.0' y='749.0'>Bóp cò PDA quét tem kệ kho</tspan><tspan x='1360.0' y='764.0'>Bấm [XÁC NHẬN CẤT KỆ]</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1250' y='940' width='220' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1360.0' y='956.5'>LƯU TRỮ VỊ TRÍ CSDL:</tspan><tspan x='1360.0' y='971.5'>- items: IN_STOCK</tspan><tspan x='1360.0' y='986.5'>- item.locationId = targetLocation</tspan><tspan x='1360.0' y='1001.5'>- locations: ĐẦY / CÒN CHỖ</tspan><tspan x='1360.0' y='1016.5'>- Log Transaction: IN (Putaway)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1510' y='680' width='210' height='70' rx='8' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1615.0' y='704.0'>Điều Chuyển Kệ (Transfer)</tspan><tspan x='1615.0' y='719.0'>&amp; Dồn Pallet (Merge)</tspan><tspan x='1615.0' y='734.0'>Quét nguồn -&gt; Quét đích</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1510' y='765' width='210' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1615.0' y='796.5'>Kiểm Kê RFID Định Kỳ (Audit)</tspan><tspan x='1615.0' y='811.5'>Phân loại 4 nhóm sai lệch:</tspan><tspan x='1615.0' y='826.5'>MATCH - MISSING - WRONG - UNKNOWN</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1510' y='940' width='210' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1615.0' y='964.0'>CẬP NHẬT GIAO DỊCH KHO:</tspan><tspan x='1615.0' y='979.0'>- Cập nhật locationId mới (MOVE)</tspan><tspan x='1615.0' y='994.0'>- Lưu inventory_session_details</tspan><tspan x='1615.0' y='1009.0'>- Cân chỉnh tồn kho (ADJUST)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1770' y='285' width='210' height='75' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1875.0' y='311.5'>Tiếp nhận Đơn Xuất PO</tspan><tspan x='1875.0' y='326.5'>Khởi tạo outbound_orders (NEW)</tspan><tspan x='1875.0' y='341.5'>(SKU, Số lượng yêu cầu)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='2020' y='285' width='210' height='75' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='2125.0' y='311.5'>THUẬT TOÁN ĐỐI SOÁT FIFO:</tspan><tspan x='2125.0' y='326.5'>Lọc hàng IN_STOCK theo created_at</tspan><tspan x='2125.0' y='341.5'>Ưu tiên xuất lô nhập cũ nhất!</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1770' y='705' width='210' height='80' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1875.0' y='734.0'>PDA: Wizard Nhặt Hàng</tspan><tspan x='1875.0' y='749.0'>Chỉ đường qua 10 kệ kho</tspan><tspan x='1875.0' y='764.0'>Quét xác nhận đúng kiện FIFO</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='2020' y='485' width='220' height='80' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='2130.0' y='514.0'>Xe Hàng Qua Cổng Xuất RFID</tspan><tspan x='2130.0' y='529.0'>Đối soát 2 pha tự động:</tspan><tspan x='2130.0' y='544.0'>Pha 1: Pallet -&gt; Pha 2: Chùm EPC</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='2360.0,485 2440,527.5 2360.0,570 2280,527.5' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='2360.0' y='524.0'>Đủ Hàng &amp; Đúng</tspan><tspan x='2360.0' y='539.0'>Chuẩn Đơn PO?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='2270' y='380' width='180' height='50' rx='8' fill='#EF4444' stroke='#DC2626' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='2360.0' y='409.0'>Đèn Đỏ + Còi Báo Động</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='2260' y='590' width='200' height='50' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='2360.0' y='619.0'>ĐÈN XANH: isGatePassed=true</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='2240' y='940' width='240' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='2360.0' y='956.5'>GIẢI PHÓNG LƯU TRỮ CSDL:</tspan><tspan x='2360.0' y='971.5'>- items: DELIVERED (hoặc OUT)</tspan><tspan x='2360.0' y='986.5'>- Xóa item.locationId = null</tspan><tspan x='2360.0' y='1001.5'>- Trả Kệ về: CÒN CHỖ / TRỐNG</tspan><tspan x='2360.0' y='1016.5'>- Ghi log Transaction: OUT</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='2260' y='130' width='200' height='65' rx='32.5' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='2360.0' y='159.0'>Xuất Phiếu Giao Hàng</tspan><tspan x='2360.0' y='174.0'>Delivery Note -&gt; Khách Hàng</tspan>
+              </text>
+            </g>
+          </svg>
+        </div>
+        <div id='page-container-1' class='page-container '>
+          <svg id='svg-1' width='1800' height='980' viewBox='0 0 1800 980' xmlns='http://www.w3.org/2000/svg'>
+            <defs>
+          <pattern id='grid_m_1' width='20' height='20' patternUnits='userSpaceOnUse'>
+            <path d='M 20 0 L 0 0 0 20' fill='none' stroke='#E2E8F0' stroke-width='0.75'/>
+          </pattern>
+          <marker id='arrow_m_1' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#64748B'/>
+          </marker>
+          <marker id='arrow_green_m_1' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#10B981'/>
+          </marker>
+          <marker id='arrow_red_m_1' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#EF4444'/>
+          </marker>
+        </defs>
+        <rect width='100%' height='100%' fill='#F8FAFC'/>
+        <rect width='100%' height='100%' fill='url(#grid_m_1)'/><g transform='translate(40, 20)'>
+          <rect width='1720' height='55' rx='8' fill='#0F172A' stroke='#38BDF8' stroke-width='2'/>
+          <text x='20' y='25' fill='#38BDF8' font-size='16' font-weight='bold' font-family='Segoe UI, sans-serif'>2. QUY TRÌNH NHẬP KHO &amp; ĐỐI SOÁT CỔNG RFID GATE (INBOUND VERIFICATION FLOW)</text>
+          <text x='20' y='44' fill='#94A3B8' font-size='11.5' font-family='Segoe UI, sans-serif'>Chi tiết luồng nạp đơn, thu sóng chùm thẻ, bộ máy đối soát thời gian thực và điều khiển ngoại vi đèn tháp</text>
+        </g><g>
+              <rect x='40' y='100' width='1720' height='180' rx='8' fill='#F0F9FF' stroke='#7DD3FC' stroke-width='1.5'/>
+              <rect x='40' y='100' width='1720' height='28' rx='8' fill='#7DD3FC' opacity='0.25'/>
+              <text x='55' y='119' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>GIAI ĐOẠN 1: KHỞI TẠO ĐƠN &amp; DANH MỤC ĐỐI SOÁT (Order Initialization)</text>
+            </g><g>
+              <rect x='40' y='300' width='1720' height='190' rx='8' fill='#ECFDF5' stroke='#6EE7B7' stroke-width='1.5'/>
+              <rect x='40' y='300' width='1720' height='28' rx='8' fill='#6EE7B7' opacity='0.25'/>
+              <text x='55' y='319' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>GIAI ĐOẠN 2: THU THẬP TÍN HIỆU RFID (Cổng Gate CL7206C2 / Súng PDA)</text>
+            </g><g>
+              <rect x='40' y='510' width='1720' height='220' rx='8' fill='#FFFBEB' stroke='#FCD34D' stroke-width='1.5'/>
+              <rect x='40' y='510' width='1720' height='28' rx='8' fill='#FCD34D' opacity='0.25'/>
+              <text x='55' y='529' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>GIAI ĐOẠN 3: BỘ MÁY ĐỐI SOÁT REALTIME &amp; ĐÈN THÁP (Verification Engine)</text>
+            </g><g>
+              <rect x='40' y='750' width='1720' height='180' rx='8' fill='#FAF5FF' stroke='#D8B4FE' stroke-width='1.5'/>
+              <rect x='40' y='750' width='1720' height='28' rx='8' fill='#D8B4FE' opacity='0.25'/>
+              <text x='55' y='769' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>GIAI ĐOẠN 4: CHỐT CỔNG &amp; ĐỒNG BỘ CHỜ CẤT KỆ (Gate Pass &amp; State Commit)</text>
+            </g><g>
+              <path d='M 260 185.0 L 300 185.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              
+            </g><g>
+              <path d='M 480 185.0 L 660.0 185.0 L 660.0 185' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(570.0, 181.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>File Excel</text>
+                </g>
+            </g><g>
+              <path d='M 480 185.0 L 660.0 185.0 L 660.0 200' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(570.0, 188.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>PO Online</text>
+                </g>
+            </g><g>
+              <path d='M 780 155.0 L 980.0 155.0 L 980.0 145' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(880.0, 146.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Parse</text>
+                </g>
+            </g><g>
+              <path d='M 780 230.0 L 980.0 230.0 L 980.0 225' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(880.0, 223.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Load</text>
+                </g>
+            </g><g>
+              <path d='M 850 185.0 L 390.0 185.0 L 390.0 355' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(620.0, 266.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chọn phương thức</text>
+                </g>
+            </g><g>
+              <path d='M 480 395.0 L 680.0 395.0 L 680.0 390' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(580.0, 388.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Cổng Gate</text>
+                </g>
+            </g><g>
+              <path d='M 480 395.0 L 680.0 395.0 L 680.0 405' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(580.0, 396.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Súng PDA</text>
+                </g>
+            </g><g>
+              <path d='M 810 357.5 L 980.0 357.5 L 980.0 570' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(895.0, 459.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>TCP Stream</text>
+                </g>
+            </g><g>
+              <path d='M 810 437.5 L 980.0 437.5 L 980.0 570' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(895.0, 499.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>AAR Stream</text>
+                </g>
+            </g><g>
+              <path d='M 1110 612.5 L 1170 612.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(1140.0, 608.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Cập nhật metrics</text>
+                </g>
+            </g><g>
+              <path d='M 1410 612.5 L 1470 612.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(1440.0, 608.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Kiểm tra</text>
+                </g>
+            </g><g>
+              <path d='M 1555.0 570 L 1555.0 490' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(1555.0, 526.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Có sai lệch</text>
+                </g>
+            </g><g>
+              <path d='M 1460 455.0 L 980.0 455.0 L 980.0 570' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(1220.0, 508.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Quét lại</text>
+                </g>
+            </g><g>
+              <path d='M 1470 612.5 L 980.0 612.5 L 980.0 800' fill='none' stroke='#10B981' stroke-width='2' marker-end='url(#arrow_green_m_1)'/>
+              <g transform='translate(1225.0, 702.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Khớp 100%</text>
+                </g>
+            </g><g>
+              <path d='M 1110 840.0 L 1170 840.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(1140.0, 836.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Tự động đổi</text>
+                </g>
+            </g><g>
+              <path d='M 1420 840.0 L 1470 840.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_1)'/>
+              <g transform='translate(1445.0, 836.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Đẩy nhiệm vụ</text>
+                </g>
+            </g><g class='flow-node'>
+              <rect x='80' y='150' width='180' height='70' rx='35.0' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='170.0' y='189.0'>Bắt đầu Nhập Kho</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='390.0,145 480,185.0 390.0,225 300,185.0' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='390.0' y='181.5'>Nguồn Dữ Liệu</tspan><tspan x='390.0' y='196.5'>Đơn Hàng?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='540' y='125' width='240' height='60' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='660.0' y='151.5'>Nạp file Excel Packing List</tspan><tspan x='660.0' y='166.5'>(Template-Goods-Receive-v3)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='540' y='200' width='240' height='60' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='660.0' y='226.5'>Chọn Đơn PO từ Supabase</tspan><tspan x='660.0' y='241.5'>(Danh sách đơn hàng chờ)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='850' y='145' width='260' height='80' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='980.0' y='174.0'>LƯU TRỮ TỨC THÌ CSDL:</tspan><tspan x='980.0' y='189.0'>- inbound_orders: newOrder</tspan><tspan x='980.0' y='204.0'>- items: pendingInbound</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='390.0,355 480,395.0 390.0,435 300,395.0' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='390.0' y='391.5'>Phương Thức</tspan><tspan x='390.0' y='406.5'>Quét RFID?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='550' y='325' width='260' height='65' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='680.0' y='346.5'>CỔNG RFID CỐ ĐỊNH (Desktop)</tspan><tspan x='680.0' y='361.5'>Hopeland CL7206C2 (TCP 9090)</tspan><tspan x='680.0' y='376.5'>Đèn tháp bật VÀNG (GPO 3 ON)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='550' y='405' width='260' height='65' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='680.0' y='426.5'>SÚNG CẦM TAY (PDA)</tspan><tspan x='680.0' y='441.5'>SEUIC Utouch 2 Android</tspan><tspan x='680.0' y='456.5'>Bóp cò quét chùm sóng</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='850' y='570' width='260' height='85' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='980.0' y='601.5'>BỘ MÁY ĐỐI SOÁT REALTIME</tspan><tspan x='980.0' y='616.5'>So khớp Tag Read Stream với</tspan><tspan x='980.0' y='631.5'>Expected EPC Hash Set O(1)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1170' y='570' width='240' height='85' rx='8' fill='#1E293B' stroke='#0F172A' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1290.0' y='594.0'>HIỂN THỊ 3 Ô CHỈ SỐ:</tspan><tspan x='1290.0' y='609.0'>[ĐÃ QUÉT] Khớp trong đơn</tspan><tspan x='1290.0' y='624.0'>[THIẾU] Chưa thấy</tspan><tspan x='1290.0' y='639.0'>[LẠ] Thẻ ngoài đơn</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='1555.0,570 1640,612.5 1555.0,655 1470,612.5' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1555.0' y='609.0'>Có Thẻ Lạ hoặc</tspan><tspan x='1555.0' y='624.0'>Thiếu Hàng?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1460' y='420' width='190' height='70' rx='8' fill='#EF4444' stroke='#DC2626' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1555.0' y='444.0'>BẬT ĐÈN ĐỎ + CÒI BÁO</tspan><tspan x='1555.0' y='459.0'>Khóa cổng, kiểm tra thẻ lạ</tspan><tspan x='1555.0' y='474.0'>hoặc quét bù kiện thiếu</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='850' y='800' width='260' height='80' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='980.0' y='829.0'>ĐỦ 100% SẢN PHẨM!</tspan><tspan x='980.0' y='844.0'>Bật Đèn Xanh (GPO 2 ON)</tspan><tspan x='980.0' y='859.0'>isGatePassed = true</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1170' y='800' width='250' height='80' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1295.0' y='829.0'>ĐỒNG BỘ TRẠNG THÁI CSDL:</tspan><tspan x='1295.0' y='844.0'>- inbound_orders -&gt; WAITING_PUTAWAY</tspan><tspan x='1295.0' y='859.0'>- items -&gt; WAITING_PUTAWAY</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1470' y='805' width='210' height='70' rx='35.0' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1575.0' y='829.0'>SẴN SÀNG CẤT KỆ</tspan><tspan x='1575.0' y='844.0'>Đẩy thông báo [CẦN CẤT KỆ]</tspan><tspan x='1575.0' y='859.0'>đến tất cả máy PDA</tspan>
+              </text>
+            </g>
+          </svg>
+        </div>
+        <div id='page-container-2' class='page-container '>
+          <svg id='svg-2' width='1800' height='980' viewBox='0 0 1800 980' xmlns='http://www.w3.org/2000/svg'>
+            <defs>
+          <pattern id='grid_m_2' width='20' height='20' patternUnits='userSpaceOnUse'>
+            <path d='M 20 0 L 0 0 0 20' fill='none' stroke='#E2E8F0' stroke-width='0.75'/>
+          </pattern>
+          <marker id='arrow_m_2' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#64748B'/>
+          </marker>
+          <marker id='arrow_green_m_2' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#10B981'/>
+          </marker>
+          <marker id='arrow_red_m_2' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#EF4444'/>
+          </marker>
+        </defs>
+        <rect width='100%' height='100%' fill='#F8FAFC'/>
+        <rect width='100%' height='100%' fill='url(#grid_m_2)'/><g transform='translate(40, 20)'>
+          <rect width='1720' height='55' rx='8' fill='#0F172A' stroke='#38BDF8' stroke-width='2'/>
+          <text x='20' y='25' fill='#38BDF8' font-size='16' font-weight='bold' font-family='Segoe UI, sans-serif'>3. QUY TRÌNH CẤT KỆ &amp; LƯU TRỮ VỊ TRÍ KHO (PDA PUTAWAY &amp; STORAGE FLOW)</text>
+          <text x='20' y='44' fill='#94A3B8' font-size='11.5' font-family='Segoe UI, sans-serif'>Luồng 2-hộp thao tác trên PDA: Quét Pallet/Thùng -&gt; Xem gợi ý kệ &amp; dẫn đường 2D -&gt; Quét Barcode Kệ -&gt; IN_STOCK</text>
+        </g><g>
+              <rect x='40' y='100' width='1720' height='180' rx='8' fill='#FFFBEB' stroke='#FCD34D' stroke-width='1.5'/>
+              <rect x='40' y='100' width='1720' height='28' rx='8' fill='#FCD34D' opacity='0.25'/>
+              <text x='55' y='119' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 1: TIẾP NHẬN TÁC VỤ &amp; NHẬN DIỆN KIỆN HÀNG (PDA Task Pickup)</text>
+            </g><g>
+              <rect x='40' y='300' width='1720' height='200' rx='8' fill='#F0F9FF' stroke='#7DD3FC' stroke-width='1.5'/>
+              <rect x='40' y='300' width='1720' height='28' rx='8' fill='#7DD3FC' opacity='0.25'/>
+              <text x='55' y='319' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 2: ĐỐI SOÁT THÔNG TIN &amp; GỢI Ý VỊ TRÍ KỆ (Location Recommendation &amp; 2D Map)</text>
+            </g><g>
+              <rect x='40' y='520' width='1720' height='200' rx='8' fill='#ECFDF5' stroke='#6EE7B7' stroke-width='1.5'/>
+              <rect x='40' y='520' width='1720' height='28' rx='8' fill='#6EE7B7' opacity='0.25'/>
+              <text x='55' y='539' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 3: DI CHUYỂN &amp; QUÉT XÁC NHẬN VỊ TRÍ KỆ ĐÍCH (Physical Location Scan)</text>
+            </g><g>
+              <rect x='40' y='740' width='1720' height='190' rx='8' fill='#FAF5FF' stroke='#D8B4FE' stroke-width='1.5'/>
+              <rect x='40' y='740' width='1720' height='28' rx='8' fill='#D8B4FE' opacity='0.25'/>
+              <text x='55' y='759' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 4: XÁC NHẬN LƯU KHO &amp; ĐỒNG BỘ TOÀN HỆ THỐNG (Inventory Commit &amp; Sync)</text>
+            </g><g>
+              <path d='M 270 185.0 L 320 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              
+            </g><g>
+              <path d='M 550 187.5 L 600 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(575.0, 183.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chọn tác vụ</text>
+                </g>
+            </g><g>
+              <path d='M 830 187.5 L 880 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(855.0, 183.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Mở màn hình</text>
+                </g>
+            </g><g>
+              <path d='M 880 187.5 L 425.0 187.5 L 425.0 360' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(652.5, 269.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Nạp dữ liệu</text>
+                </g>
+            </g><g>
+              <path d='M 550 402.5 L 610 402.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(580.0, 398.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Đề xuất kệ</text>
+                </g>
+            </g><g>
+              <path d='M 870 402.5 L 930 402.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(900.0, 398.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Dẫn đường</text>
+                </g>
+            </g><g>
+              <path d='M 930 402.5 L 435.0 402.5 L 435.0 580' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(682.5, 487.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Di chuyển</text>
+                </g>
+            </g><g>
+              <path d='M 550 620.0 L 610 620.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(580.0, 616.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Đến kệ</text>
+                </g>
+            </g><g>
+              <path d='M 860 620.0 L 930 620.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(895.0, 616.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Kiểm tra</text>
+                </g>
+            </g><g>
+              <path d='M 1110 620.0 L 1180 620.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(1145.0, 616.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Không hợp lệ</text>
+                </g>
+            </g><g>
+              <path d='M 1180 620.0 L 860 620.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(1020.0, 616.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Quét lại</text>
+                </g>
+            </g><g>
+              <path d='M 930 620.0 L 730.0 620.0 L 730.0 795' fill='none' stroke='#10B981' stroke-width='2' marker-end='url(#arrow_green_m_2)'/>
+              <g transform='translate(830.0, 703.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Hợp lệ</text>
+                </g>
+            </g><g>
+              <path d='M 850 832.5 L 920 837.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(885.0, 831.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Ghi nhận</text>
+                </g>
+            </g><g>
+              <path d='M 1200 837.5 L 1270 837.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_2)'/>
+              <g transform='translate(1235.0, 833.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Hoàn thành</text>
+                </g>
+            </g><g class='flow-node'>
+              <rect x='80' y='150' width='190' height='70' rx='35.0' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='175.0' y='181.5'>Thủ kho mở PDA</tspan><tspan x='175.0' y='196.5'>(pda_home_screen)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='320' y='150' width='230' height='75' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='435.0' y='176.5'>Thẻ [CẦN CẤT KỆ]</tspan><tspan x='435.0' y='191.5'>Hiển thị danh sách Pallet/Đơn</tspan><tspan x='435.0' y='206.5'>ở trạng thái WAITING_PUTAWAY</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='600' y='150' width='230' height='75' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='715.0' y='176.5'>Chạm thẻ hoặc quét Barcode</tspan><tspan x='715.0' y='191.5'>Pallet / Thùng hàng</tspan><tspan x='715.0' y='206.5'>(initialCartonOrPalletBarcode)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='880' y='150' width='230' height='75' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='995.0' y='176.5'>Điều hướng trực tiếp vào</tspan><tspan x='995.0' y='191.5'>PdaPutawayScreen</tspan><tspan x='995.0' y='206.5'>(Kích hoạt luồng 2-hộp)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='300' y='360' width='250' height='85' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='425.0' y='384.0'>HỘP 1: THÔNG TIN HÀNG HÓA</tspan><tspan x='425.0' y='399.0'>- Mã Pallet / Thùng</tspan><tspan x='425.0' y='414.0'>- Mã SKU &amp; Tên Sản Phẩm</tspan><tspan x='425.0' y='429.0'>- Số lượng &amp; Đơn hàng nguồn</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='610' y='360' width='260' height='85' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='740.0' y='384.0'>HỘP 2: GỢI Ý VỊ TRÍ KỆ</tspan><tspan x='740.0' y='399.0'>Thuật toán quét vị trí còn chỗ:</tspan><tspan x='740.0' y='414.0'>Zone -&gt; Dãy Kệ -&gt; Tầng</tspan><tspan x='740.0' y='429.0'>(Ưu tiên kệ cùng SKU)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='930' y='360' width='240' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1050.0' y='384.0'>SƠ ĐỒ BẢN ĐỒ KHO 2D</tspan><tspan x='1050.0' y='399.0'>warehouse_floor_plan_widget</tspan><tspan x='1050.0' y='414.0'>Hiển thị đường đi ngắn nhất</tspan><tspan x='1050.0' y='429.0'>tới vị trí kệ đích</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='320' y='580' width='230' height='80' rx='8' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='435.0' y='616.5'>Thủ kho di chuyển tới vị trí</tspan><tspan x='435.0' y='631.5'>kệ theo hướng dẫn chỉ đường</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='610' y='580' width='250' height='80' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='735.0' y='609.0'>Bóp cò súng PDA quét mã Barcode</tspan><tspan x='735.0' y='624.0'>tem vị trí dán trên kệ kho</tspan><tspan x='735.0' y='639.0'>(Ví dụ: A1-01-01 / B2-03-02)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='1020.0,580 1110,620.0 1020.0,660 930,620.0' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1020.0' y='616.5'>Mã Kệ Hợp Lệ</tspan><tspan x='1020.0' y='631.5'>&amp; Còn Chỗ?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1180' y='585' width='180' height='70' rx='8' fill='#EF4444' stroke='#DC2626' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1270.0' y='616.5'>Cảnh báo sai vị trí</tspan><tspan x='1270.0' y='631.5'>hoặc kệ đã đầy!</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='610' y='795' width='240' height='75' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='730.0' y='829.0'>BẤM &apos;XÁC NHẬN CẤT KỆ&apos;</tspan><tspan x='730.0' y='844.0'>Khóa thao tác, cam kết dữ liệu</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='920' y='795' width='280' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1060.0' y='804.0'>CẬP NHẬT CSDL TOÀN DIỆN:</tspan><tspan x='1060.0' y='819.0'>- items: IN_STOCK</tspan><tspan x='1060.0' y='834.0'>- item.locationId = targetLocation.id</tspan><tspan x='1060.0' y='849.0'>- pallet.locationId = targetLocation.id</tspan><tspan x='1060.0' y='864.0'>- locations: FULL / AVAILABLE</tspan><tspan x='1060.0' y='879.0'>- Transaction: IN (Putaway)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1270' y='800' width='220' height='75' rx='37.5' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1380.0' y='826.5'>HOÀN TẤT LƯU KHO</tspan><tspan x='1380.0' y='841.5'>Đồng bộ Supabase Cloud</tspan><tspan x='1380.0' y='856.5'>&amp; Cập nhật Sơ đồ 2D</tspan>
+              </text>
+            </g>
+          </svg>
+        </div>
+        <div id='page-container-3' class='page-container '>
+          <svg id='svg-3' width='1800' height='980' viewBox='0 0 1800 980' xmlns='http://www.w3.org/2000/svg'>
+            <defs>
+          <pattern id='grid_m_3' width='20' height='20' patternUnits='userSpaceOnUse'>
+            <path d='M 20 0 L 0 0 0 20' fill='none' stroke='#E2E8F0' stroke-width='0.75'/>
+          </pattern>
+          <marker id='arrow_m_3' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#64748B'/>
+          </marker>
+          <marker id='arrow_green_m_3' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#10B981'/>
+          </marker>
+          <marker id='arrow_red_m_3' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#EF4444'/>
+          </marker>
+        </defs>
+        <rect width='100%' height='100%' fill='#F8FAFC'/>
+        <rect width='100%' height='100%' fill='url(#grid_m_3)'/><g transform='translate(40, 20)'>
+          <rect width='1720' height='55' rx='8' fill='#0F172A' stroke='#38BDF8' stroke-width='2'/>
+          <text x='20' y='25' fill='#38BDF8' font-size='16' font-weight='bold' font-family='Segoe UI, sans-serif'>4. QUẢN LÝ KHO NỘI BỘ, ĐIỀU CHUYỂN, DỒN PALLET &amp; KIỂM KÊ (INTERNAL &amp; AUDIT)</text>
+          <text x='20' y='44' fill='#94A3B8' font-size='11.5' font-family='Segoe UI, sans-serif'>4 phân hệ độc lập: Điều chuyển vị trí kệ, Dồn gộp Pallet, Kiểm kê RFID 4 nhóm &amp; Quản lý kệ 4-Tab</text>
+        </g><g>
+              <rect x='40' y='100' width='1720' height='180' rx='8' fill='#F0FDF4' stroke='#86EFAC' stroke-width='1.5'/>
+              <rect x='40' y='100' width='1720' height='28' rx='8' fill='#86EFAC' opacity='0.25'/>
+              <text x='55' y='119' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>PHÂN HỆ A: ĐIỀU CHUYỂN VỊ TRÍ KỆ (Internal Location Transfer - pda_transfer_screen)</text>
+            </g><g>
+              <rect x='40' y='300' width='1720' height='180' rx='8' fill='#F0F9FF' stroke='#7DD3FC' stroke-width='1.5'/>
+              <rect x='40' y='300' width='1720' height='28' rx='8' fill='#7DD3FC' opacity='0.25'/>
+              <text x='55' y='319' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>PHÂN HỆ B: DỒN GỘP PALLET (Pallet Consolidation / Merge - pda_merge_pallets_screen)</text>
+            </g><g>
+              <rect x='40' y='500' width='1720' height='210' rx='8' fill='#FAF5FF' stroke='#D8B4FE' stroke-width='1.5'/>
+              <rect x='40' y='500' width='1720' height='28' rx='8' fill='#D8B4FE' opacity='0.25'/>
+              <text x='55' y='519' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>PHÂN HỆ C: KIỂM KÊ RFID ĐỊNH KỲ (RFID Handheld Inventory Audit - 4 Variance Groups)</text>
+            </g><g>
+              <rect x='40' y='730' width='1720' height='200' rx='8' fill='#FFFBEB' stroke='#FCD34D' stroke-width='1.5'/>
+              <rect x='40' y='730' width='1720' height='28' rx='8' fill='#FCD34D' opacity='0.25'/>
+              <text x='55' y='749' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>PHÂN HỆ D: QUẢN LÝ KHO 4-TAB &amp; BẢN ĐỒ 2D (Warehouse Management &amp; Floor Plan)</text>
+            </g><g>
+              <path d='M 330 187.5 L 440 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 670 187.5 L 780 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 1010 187.5 L 1120 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 330 387.5 L 440 387.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 670 387.5 L 780 387.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 1010 387.5 L 1120 387.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 330 600.0 L 440 600.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 670 600.0 L 780 600.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 1050 600.0 L 1150 600.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 340 827.5 L 440 827.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 690 827.5 L 780 827.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g>
+              <path d='M 1020 827.5 L 1120 827.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_3)'/>
+              
+            </g><g class='flow-node'>
+              <rect x='100' y='150' width='230' height='75' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='215.0' y='184.0'>1. Quét mã Kệ Nguồn</tspan><tspan x='215.0' y='199.0'>(Hiển thị danh sách hàng tại kệ)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='440' y='150' width='230' height='75' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='555.0' y='184.0'>2. Quét / Chọn Kiện Hàng</tspan><tspan x='555.0' y='199.0'>hoặc Pallet cần di chuyển</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='780' y='150' width='230' height='75' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='895.0' y='184.0'>3. Quét mã Kệ Đích</tspan><tspan x='895.0' y='199.0'>(Kiểm tra sức chứa kệ mới)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1120' y='150' width='250' height='75' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1245.0' y='176.5'>4. Cập nhật locationId mới</tspan><tspan x='1245.0' y='191.5'>Ghi log Transaction: MOVE</tspan><tspan x='1245.0' y='206.5'>Đồng bộ Supabase &amp; SQLite</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='100' y='350' width='230' height='75' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='215.0' y='384.0'>1. Quét Pallet Nguồn</tspan><tspan x='215.0' y='399.0'>(Hiển thị danh sách thùng hàng)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='440' y='350' width='230' height='75' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='555.0' y='384.0'>2. Chọn các thùng cần gom</tspan><tspan x='555.0' y='399.0'>(Đánh dấu checklist dồn)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='780' y='350' width='230' height='75' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='895.0' y='384.0'>3. Quét mã Pallet Đích</tspan><tspan x='895.0' y='399.0'>(Kiểm tra tải trọng/sức chứa)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1120' y='350' width='250' height='75' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1245.0' y='376.5'>4. Chuyển palletId thùng sang đích</tspan><tspan x='1245.0' y='391.5'>Giải phóng pallet cũ nếu trống</tspan><tspan x='1245.0' y='406.5'>Ghi nhận giao dịch dồn</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='100' y='560' width='230' height='80' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='215.0' y='589.0'>1. Tạo Phiên Kiểm Kê</tspan><tspan x='215.0' y='604.0'>Chọn Zone hoặc Kệ cụ thể</tspan><tspan x='215.0' y='619.0'>(inventory_sessions: created)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='440' y='560' width='230' height='80' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='555.0' y='589.0'>2. Bóp cò súng PDA quét</tspan><tspan x='555.0' y='604.0'>Quét chùm sóng RFID xung quanh</tspan><tspan x='555.0' y='619.0'>Bắt toàn bộ EPC thực tế</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='780' y='555' width='270' height='90' rx='8' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='915.0' y='574.0'>3. PHÂN LOẠI 4 NHÓM SAI LỆCH:</tspan><tspan x='915.0' y='589.0'>- [MATCH] Khớp đúng kệ (Xanh)</tspan><tspan x='915.0' y='604.0'>- [MISSING] Thiếu thực tế (Đỏ)</tspan><tspan x='915.0' y='619.0'>- [WRONG_LOC] Lạc vị trí (Cam)</tspan><tspan x='915.0' y='634.0'>- [UNKNOWN_EPC] Thẻ lạ (Tím)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1150' y='560' width='240' height='80' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1270.0' y='581.5'>4. Đóng phiên &amp; Báo Cáo</tspan><tspan x='1270.0' y='596.5'>Ghi inventory_session_details</tspan><tspan x='1270.0' y='611.5'>Điều chỉnh chênh lệch (ADJUST)</tspan><tspan x='1270.0' y='626.5'>Xuất báo cáo Excel kiểm kê</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='100' y='790' width='240' height='75' rx='8' fill='#1E293B' stroke='#0F172A' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='220.0' y='816.5'>TAB 1: PALLET</tspan><tspan x='220.0' y='831.5'>Danh sách Pallet đang lưu,</tspan><tspan x='220.0' y='846.5'>vị trí kệ và số thùng gán</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='440' y='790' width='250' height='75' rx='8' fill='#1E293B' stroke='#0F172A' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='565.0' y='809.0'>TAB 2: VỊ TRÍ KHO</tspan><tspan x='565.0' y='824.0'>3 nút thao tác 1-chạm:</tspan><tspan x='565.0' y='839.0'>ĐẦY / SẮP HẾT / CÒN CHỖ</tspan><tspan x='565.0' y='854.0'>Xem chi tiết hàng IN_STOCK</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='780' y='790' width='240' height='75' rx='8' fill='#1E293B' stroke='#0F172A' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='900.0' y='809.0'>TAB 3: LỊCH SỬ GIAO DỊCH</tspan><tspan x='900.0' y='824.0'>Toàn bộ biến động kho</tspan><tspan x='900.0' y='839.0'>(IN, OUT, MOVE, ADJUST)</tspan><tspan x='900.0' y='854.0'>Theo dõi theo người thực hiện</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1120' y='790' width='240' height='75' rx='8' fill='#1E293B' stroke='#0F172A' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1240.0' y='809.0'>TAB 4: SẢN PHẨM &amp; 2D MAP</tspan><tspan x='1240.0' y='824.0'>Tra cứu Barcode/RFID</tspan><tspan x='1240.0' y='839.0'>Sơ đồ 2D mặt bằng trực quan</tspan><tspan x='1240.0' y='854.0'>Hiển thị vị trí kệ &amp; cổng Gate</tspan>
+              </text>
+            </g>
+          </svg>
+        </div>
+        <div id='page-container-4' class='page-container '>
+          <svg id='svg-4' width='1800' height='980' viewBox='0 0 1800 980' xmlns='http://www.w3.org/2000/svg'>
+            <defs>
+          <pattern id='grid_m_4' width='20' height='20' patternUnits='userSpaceOnUse'>
+            <path d='M 20 0 L 0 0 0 20' fill='none' stroke='#E2E8F0' stroke-width='0.75'/>
+          </pattern>
+          <marker id='arrow_m_4' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#64748B'/>
+          </marker>
+          <marker id='arrow_green_m_4' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#10B981'/>
+          </marker>
+          <marker id='arrow_red_m_4' viewBox='0 0 10 10' refX='7' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>
+            <path d='M 0 1 L 9 5 L 0 9 z' fill='#EF4444'/>
+          </marker>
+        </defs>
+        <rect width='100%' height='100%' fill='#F8FAFC'/>
+        <rect width='100%' height='100%' fill='url(#grid_m_4)'/><g transform='translate(40, 20)'>
+          <rect width='1720' height='55' rx='8' fill='#0F172A' stroke='#38BDF8' stroke-width='2'/>
+          <text x='20' y='25' fill='#38BDF8' font-size='16' font-weight='bold' font-family='Segoe UI, sans-serif'>5. QUY TRÌNH XUẤT KHO &amp; ĐỐI SOÁT FIFO CỔNG RFID (OUTBOUND FIFO PICKING &amp; GATE)</text>
+          <text x='20' y='44' fill='#94A3B8' font-size='11.5' font-family='Segoe UI, sans-serif'>Nguyên tắc FIFO nghiêm ngặt: Lô nhập cũ xuất trước -&gt; Wizard chỉ đường 10 kệ -&gt; Đối soát 2 pha -&gt; Giải phóng kệ</text>
+        </g><g>
+              <rect x='40' y='100' width='1720' height='180' rx='8' fill='#F0F9FF' stroke='#7DD3FC' stroke-width='1.5'/>
+              <rect x='40' y='100' width='1720' height='28' rx='8' fill='#7DD3FC' opacity='0.25'/>
+              <text x='55' y='119' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 1: TIẾP NHẬN ĐƠN XUẤT &amp; ĐỀ XUẤT FIFO (Outbound Order &amp; FIFO Algorithm)</text>
+            </g><g>
+              <rect x='40' y='300' width='1720' height='190' rx='8' fill='#FFFBEB' stroke='#FCD34D' stroke-width='1.5'/>
+              <rect x='40' y='300' width='1720' height='28' rx='8' fill='#FCD34D' opacity='0.25'/>
+              <text x='55' y='319' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 2: WIZARD CHỈ ĐƯỜNG LẤY HÀNG QUA CÁC KỆ (Picking Route Optimization)</text>
+            </g><g>
+              <rect x='40' y='510' width='1720' height='220' rx='8' fill='#ECFDF5' stroke='#6EE7B7' stroke-width='1.5'/>
+              <rect x='40' y='510' width='1720' height='28' rx='8' fill='#6EE7B7' opacity='0.25'/>
+              <text x='55' y='529' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 3: ĐỐI SOÁT 2 PHA TẠI CỔNG RFID XUẤT / PDA (2-Phase Gate Verification)</text>
+            </g><g>
+              <rect x='40' y='750' width='1720' height='180' rx='8' fill='#FAF5FF' stroke='#D8B4FE' stroke-width='1.5'/>
+              <rect x='40' y='750' width='1720' height='28' rx='8' fill='#D8B4FE' opacity='0.25'/>
+              <text x='55' y='769' fill='#334155' font-size='12' font-weight='bold' font-family='Segoe UI, sans-serif'>BƯỚC 4: GIẢI PHÓNG VỊ TRÍ KỆ &amp; GIAO HÀNG (Location Release &amp; Delivery Note)</text>
+            </g><g>
+              <path d='M 280 185.0 L 350 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              
+            </g><g>
+              <path d='M 570 187.5 L 640 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              
+            </g><g>
+              <path d='M 900 187.5 L 970 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(935.0, 183.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Kiểm tra</text>
+                </g>
+            </g><g>
+              <path d='M 1140 187.5 L 1200 185.0' fill='none' stroke='#EF4444' stroke-width='2' marker-end='url(#arrow_red_m_4)'/>
+              <g transform='translate(1170.0, 182.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Vi phạm</text>
+                </g>
+            </g><g>
+              <path d='M 1200 185.0 L 900 187.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(1050.0, 182.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chọn lại</text>
+                </g>
+            </g><g>
+              <path d='M 970 187.5 L 470.0 187.5 L 470.0 355' fill='none' stroke='#10B981' stroke-width='2' marker-end='url(#arrow_green_m_4)'/>
+              <g transform='translate(720.0, 267.25)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Đúng FIFO</text>
+                </g>
+            </g><g>
+              <path d='M 590 395.0 L 660 395.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(625.0, 391.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chỉ đường</text>
+                </g>
+            </g><g>
+              <path d='M 900 395.0 L 970 395.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(935.0, 391.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Gom đủ kiện</text>
+                </g>
+            </g><g>
+              <path d='M 970 395.0 L 475.0 395.0 L 475.0 575' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(722.5, 481.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Qua cổng</text>
+                </g>
+            </g><g>
+              <path d='M 600 617.5 L 670 617.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(635.0, 613.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Thu sóng</text>
+                </g>
+            </g><g>
+              <path d='M 930 617.5 L 1000 617.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(965.0, 613.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>So khớp</text>
+                </g>
+            </g><g>
+              <path d='M 1085.0 575 L 1095.0 505' fill='none' stroke='#EF4444' stroke-width='2' marker-end='url(#arrow_red_m_4)'/>
+              <g transform='translate(1090.0, 536.0)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Sai lệch</text>
+                </g>
+            </g><g>
+              <path d='M 1000 472.5 L 475.0 472.5 L 475.0 575' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(737.5, 519.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Kiểm tra lại</text>
+                </g>
+            </g><g>
+              <path d='M 1000 617.5 L 475.0 617.5 L 475.0 800' fill='none' stroke='#10B981' stroke-width='2' marker-end='url(#arrow_green_m_4)'/>
+              <g transform='translate(737.5, 704.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Chuẩn xác 100%</text>
+                </g>
+            </g><g>
+              <path d='M 600 837.5 L 670 837.5' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(635.0, 833.5)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Kích hoạt giải phóng</text>
+                </g>
+            </g><g>
+              <path d='M 950 837.5 L 1020 840.0' fill='none' stroke='#64748B' stroke-width='2' marker-end='url(#arrow_m_4)'/>
+              <g transform='translate(985.0, 834.75)'>
+                  <rect x='-35' y='-10' width='70' height='16' rx='4' fill='#FFFFFF' stroke='#CBD5E1' stroke-width='1'/>
+                  <text x='0' y='2' text-anchor='middle' fill='#1E293B' font-size='9.5' font-weight='bold' font-family='Segoe UI'>Hoàn tất</text>
+                </g>
+            </g><g class='flow-node'>
+              <rect x='80' y='150' width='200' height='70' rx='35.0' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='180.0' y='181.5'>Tiếp nhận Yêu Cầu Xuất</tspan><tspan x='180.0' y='196.5'>(Đơn PO Khách Hàng)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='350' y='150' width='220' height='75' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='460.0' y='169.0'>Khởi tạo Đơn Xuất Kho</tspan><tspan x='460.0' y='184.0'>outbound_orders (status: NEW)</tspan><tspan x='460.0' y='199.0'>outbound_order_details</tspan><tspan x='460.0' y='214.0'>(SKU, Số lượng yêu cầu)</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='640' y='145' width='260' height='85' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='770.0' y='169.0'>THUẬT TOÁN ĐỐI SOÁT FIFO:</tspan><tspan x='770.0' y='184.0'>Truy vấn danh mục items IN_STOCK</tspan><tspan x='770.0' y='199.0'>Sắp xếp theo ngày nhập (created_at)</tspan><tspan x='770.0' y='214.0'>Ưu tiên tuyệt đối lô hàng nhập trước!</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='1055.0,145 1140,187.5 1055.0,230 970,187.5' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1055.0' y='184.0'>Kiện chọn có</tspan><tspan x='1055.0' y='199.0'>đúng chuẩn FIFO?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1200' y='150' width='200' height='70' rx='8' fill='#EF4444' stroke='#DC2626' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1300.0' y='174.0'>CẢNH BÁO VI PHẠM FIFO!</tspan><tspan x='1300.0' y='189.0'>Có lô hàng cũ hơn chưa xuất</tspan><tspan x='1300.0' y='204.0'>Yêu cầu lấy đúng lô đề xuất</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='350' y='355' width='240' height='80' rx='8' fill='#0284C7' stroke='#0369A1' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='470.0' y='384.0'>WIZARD CHỈ ĐƯỜNG LẤY HÀNG:</tspan><tspan x='470.0' y='399.0'>Tính toán thứ tự di chuyển qua 10 kệ</tspan><tspan x='470.0' y='414.0'>để gom đủ danh mục hàng cần xuất</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='660' y='355' width='240' height='80' rx='8' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='780.0' y='384.0'>Thủ kho đến từng vị trí kệ</tspan><tspan x='780.0' y='399.0'>Bóp cò PDA quét mã Pallet/Thùng</tspan><tspan x='780.0' y='414.0'>để xác nhận nhặt đúng kiện hàng</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='970' y='355' width='240' height='80' rx='8' fill='#06B6D4' stroke='#0891B2' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1090.0' y='384.0'>Đưa hàng ra khu vực tập kết xuất</tspan><tspan x='1090.0' y='399.0'>Chuẩn bị cho xe nâng vận chuyển</tspan><tspan x='1090.0' y='414.0'>qua Cổng RFID Gate Xuất</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='350' y='575' width='250' height='85' rx='8' fill='#4F46E5' stroke='#4338CA' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='475.0' y='599.0'>XE HÀNG QUA CỔNG RFID XUẤT</tspan><tspan x='475.0' y='614.0'>(Hopeland CL7206C2 hoặc PDA)</tspan><tspan x='475.0' y='629.0'>Đèn tháp bật VÀNG (GPO 3 ON)</tspan><tspan x='475.0' y='644.0'>Bắt đầu chu trình quét đối soát</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='670' y='575' width='260' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='800.0' y='599.0'>QUY TRÌNH ĐỐI SOÁT 2 PHA:</tspan><tspan x='800.0' y='614.0'>- Pha 1: Nhận diện mã RFID Pallet</tspan><tspan x='800.0' y='629.0'>- Pha 2: Quét toàn bộ chip EPC sản phẩm</tspan><tspan x='800.0' y='644.0'>Đối soát với danh mục đơn xuất</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <polygon points='1085.0,575 1170,617.5 1085.0,660 1000,617.5' fill='#F59E0B' stroke='#D97706' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#0F172A' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1085.0' y='614.0'>Đủ Hàng &amp; Đúng</tspan><tspan x='1085.0' y='629.0'>Chuẩn Đơn PO?</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1000' y='440' width='190' height='65' rx='8' fill='#EF4444' stroke='#DC2626' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1095.0' y='461.5'>BÁO ĐỘNG ĐỎ + CÒI HÚ</tspan><tspan x='1095.0' y='476.5'>Thiếu / sai hàng / chip lạ</tspan><tspan x='1095.0' y='491.5'>Chặn xe không cho qua cổng</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='350' y='800' width='250' height='75' rx='8' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='475.0' y='819.0'>CỔNG XUẤT THÔNG QUA!</tspan><tspan x='475.0' y='834.0'>Bật Đèn Xanh (GPO 2 ON)</tspan><tspan x='475.0' y='849.0'>Đánh dấu đơn PO: SHIPPED</tspan><tspan x='475.0' y='864.0'>isGatePassed = true</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='670' y='795' width='280' height='85' rx='8' fill='#8B5CF6' stroke='#7C3AED' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='810.0' y='811.5'>GIẢI PHÓNG LƯU TRỮ CSDL:</tspan><tspan x='810.0' y='826.5'>- item.status = DELIVERED / OUT</tspan><tspan x='810.0' y='841.5'>- item.locationId = null (Xóa vị trí kệ)</tspan><tspan x='810.0' y='856.5'>- pallet.locationId = null (Giải phóng)</tspan><tspan x='810.0' y='871.5'>- Vị trí kệ -&gt; CÒN CHỖ / TRỐNG</tspan>
+              </text>
+            </g><g class='flow-node'>
+              <rect x='1020' y='805' width='220' height='70' rx='35.0' fill='#10B981' stroke='#059669' stroke-width='2' filter='drop-shadow(0px 2px 4px rgba(0,0,0,0.08))'/>
+              <text text-anchor='middle' fill='#FFFFFF' font-size='11' font-weight='600' font-family='Segoe UI, sans-serif'>
+                <tspan x='1130.0' y='821.5'>XUẤT PHIẾU GIAO HÀNG</tspan><tspan x='1130.0' y='836.5'>Tạo delivery_notes &amp; details</tspan><tspan x='1130.0' y='851.5'>Giao hàng cho khách hàng</tspan><tspan x='1130.0' y='866.5'>Đồng bộ Supabase Cloud</tspan>
+              </text>
+            </g>
+          </svg>
+        </div>
+    
+    <div class="controls">
+      <button class="control-btn" onclick="zoom(0.1)">+</button>
+      <button class="control-btn" onclick="zoom(-0.1)">−</button>
+      <button class="control-btn" onclick="resetZoom()">1:1</button>
+    </div>
+  </main>
+
+  <script>
+    let currentZoom = 1.0;
+    let currentTab = 0;
+
+    function switchTab(index) {
+      currentTab = index;
+      document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+        btn.classList.toggle('active', i === index);
+      });
+      document.querySelectorAll('.page-container').forEach((page, i) => {
+        page.classList.toggle('active', i === index);
+      });
+      resetZoom();
+    }
+
+    function zoom(delta) {
+      currentZoom = Math.max(0.4, Math.min(2.5, currentZoom + delta));
+      const activePage = document.querySelector('.page-container.active');
+      if (activePage) {
+        activePage.style.transform = `scale(${currentZoom})`;
+      }
+    }
+
+    function resetZoom() {
+      currentZoom = 1.0;
+      const activePage = document.querySelector('.page-container.active');
+      if (activePage) {
+        activePage.style.transform = `scale(1.0)`;
+      }
+    }
+  </script>
+</body>
+</html>

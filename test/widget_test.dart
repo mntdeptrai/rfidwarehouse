@@ -23,7 +23,6 @@ import 'package:uhf/services/uhf_service.dart';
 import 'package:uhf/screens/desktop/desktop_location_management_view.dart';
 import 'package:uhf/screens/desktop/desktop_report_view.dart';
 import 'package:uhf/screens/splash/splash_screen.dart';
-import 'package:uhf/models/inventory_models.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -1402,6 +1401,145 @@ void main() {
     expect(find.text('ĐIỀU CHUYỂN KHO'), findsOneWidget);
     expect(find.text('PO-OUT-TEST-888'), findsOneWidget);
     expect(find.text('PALLET-TEST-01'), findsOneWidget);
+  });
+
+  testWidgets('DesktopWarehouseManagementView displays actual shipped quantity for outbound orders even with empty initial details', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final now = DateTime.now();
+
+    final outOrder = OutboundOrder(
+      outboundOrderId: 'OUT-TEST-ZERO-DETAILS',
+      poNo: 'XK-20260918-999999',
+      customer: 'Khách hàng đối tác VIP',
+      status: OutboundOrderStatus.shipped,
+      createdAt: now,
+      details: [],
+    );
+
+    final outTx = InventoryTransaction(
+      transactionId: 'TX-OUT-TEST-999999',
+      type: TransactionType.outbound,
+      documentNo: 'XK-20260918-999999',
+      sku: 'SKU-VIP-01',
+      productName: 'Sản phẩm VIP xuất kho',
+      quantity: 12,
+      fromLocation: 'KHO_TONG',
+      toLocation: 'Khách hàng đối tác VIP',
+      performedBy: 'Thủ kho RFID Gate',
+      timestamp: now,
+      notes: 'Xuất kho 12 chip',
+    );
+
+    await DatabaseService().insertOutboundOrder(outOrder);
+    await DatabaseService().insertTransaction(outTx);
+    await repo.reloadFromSqlite();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DesktopWarehouseManagementView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Chuyển sang Tab Quản Lý Lịch Sử
+    await tester.tap(find.text('Quản Lý Lịch Sử'));
+    await tester.pumpAndSettle();
+
+    // Xác nhận không còn hiển thị '0 / 0 chip', mà hiển thị đúng '12 / 12 chip'
+    expect(find.text('XK-20260918-999999'), findsOneWidget);
+    expect(find.text('12 / 12 chip'), findsOneWidget);
+    expect(find.text('0 / 0 chip'), findsNothing);
+  });
+
+  testWidgets('PdaWarehouseManagementScreen Tab 2 displays all 5 categories: Inbound, Outbound, Movement, Audit and allows filtering', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(480, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final now = DateTime.now();
+
+    final moveTx = InventoryTransaction(
+      transactionId: 'TX-PDA-MOVE-001',
+      type: TransactionType.movement,
+      documentNo: 'PAL-MOVE-888',
+      sku: 'PALLET_PAL-MOVE-888',
+      productName: 'Chuyển kho 8 Items',
+      quantity: 8,
+      fromLocation: 'KHO_A1',
+      toLocation: 'KHO_B2',
+      palletCode: 'PAL-MOVE-888',
+      performedBy: 'Thủ kho PDA Test',
+      timestamp: now,
+      notes: 'Test chuyển kho trên PDA',
+    );
+
+    final auditSession = InventorySession(
+      sessionId: 'SESS-PDA-001',
+      sessionCode: 'KK-20260918-001',
+      zone: 'Khu A',
+      locationCode: 'A-01-01',
+      startedAt: now,
+      completedAt: now,
+      isCompleted: true,
+      results: [
+        InventoryItemResult(
+          epc: 'EPC_TEST_001',
+          sku: 'SKU_01',
+          productName: 'SP Test 1',
+          expectedLocation: 'A-01-01',
+          actualLocation: 'A-01-01',
+          resultType: InventoryVarianceType.match,
+          readAt: now,
+        ),
+      ],
+    );
+
+    await DatabaseService().insertTransaction(moveTx);
+    await DatabaseService().insertInventorySession(auditSession);
+    await repo.reloadFromSqlite();
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: PdaWarehouseManagementScreen(initialTabIndex: 2),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify all 5 categories are displayed with their count brackets
+    expect(find.textContaining('TẤT CẢ ('), findsOneWidget);
+    expect(find.textContaining('NHẬP KHO ('), findsOneWidget);
+    expect(find.textContaining('XUẤT KHO ('), findsOneWidget);
+    expect(find.textContaining('ĐIỀU CHUYỂN ('), findsOneWidget);
+    expect(find.textContaining('KIỂM KÊ ('), findsOneWidget);
+
+    // Verify both move transaction and audit session are visible in ALL
+    expect(find.text('PAL-MOVE-888'), findsNWidgets(2));
+    expect(find.text('KK-20260918-001'), findsOneWidget);
+
+    // Filter by ĐIỀU CHUYỂN
+    await tester.ensureVisible(find.textContaining('ĐIỀU CHUYỂN ('));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('ĐIỀU CHUYỂN ('));
+    await tester.pumpAndSettle();
+    expect(find.text('PAL-MOVE-888'), findsNWidgets(2));
+    expect(find.text('KK-20260918-001'), findsNothing);
+
+    // Filter by KIỂM KÊ
+    await tester.ensureVisible(find.textContaining('KIỂM KÊ ('));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('KIỂM KÊ ('));
+    await tester.pumpAndSettle();
+    expect(find.text('KK-20260918-001'), findsOneWidget);
+    expect(find.text('PAL-MOVE-888'), findsNothing);
   });
 }
 

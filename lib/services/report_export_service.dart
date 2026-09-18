@@ -344,8 +344,31 @@ class ReportExportService {
       buffer.writeln();
 
       for (final ord in orders) {
-        final totalReq = ord.details.fold<int>(0, (s, d) => s + d.requiredQty);
-        final totalPicked = ord.details.fold<int>(0, (s, d) => s + d.pickedQty);
+        var effectiveDetails = ord.details;
+        if (effectiveDetails.isEmpty) {
+          final txs = _repo.transactions.where((t) =>
+              t.type == TransactionType.outbound &&
+              (t.documentNo.trim().toUpperCase() == ord.poNo.trim().toUpperCase() ||
+               t.documentNo.trim().toUpperCase() == ord.outboundOrderId.trim().toUpperCase() ||
+               (ord.poNo.isNotEmpty && t.transactionId.contains(ord.poNo)) ||
+               (ord.outboundOrderId.isNotEmpty && t.transactionId.contains(ord.outboundOrderId)))).toList();
+          if (txs.isNotEmpty) {
+            effectiveDetails = txs.map((t) => OutboundOrderDetail(
+              productId: t.sku,
+              sku: t.sku,
+              productName: t.productName.isNotEmpty ? t.productName : 'Sản phẩm xuất kho',
+              requiredQty: t.quantity,
+              pickedQty: t.quantity,
+            )).toList();
+          }
+        }
+
+        var totalReq = effectiveDetails.fold<int>(0, (s, d) => s + d.requiredQty);
+        var totalPicked = effectiveDetails.fold<int>(0, (s, d) => s + d.pickedQty);
+        if (totalReq > 0 && totalPicked == 0 && ord.status == OutboundOrderStatus.shipped) {
+          totalPicked = totalReq;
+        }
+
         final delivery = deliveries.where((d) => d.poNo == ord.poNo).toList();
         final deliveryNos = delivery.map((d) => d.deliveryNo).join(', ');
 
@@ -357,9 +380,9 @@ class ReportExportService {
 
         buffer.writeln('STT,Mã SKU,Tên Sản Phẩm,SL Yêu Cầu,SL Thực Xuất,Vị Trí Lấy Hàng,Mã Pallet,Mã Chip RFID (EPC),Ghi Chú');
 
-        if (ord.details.isNotEmpty) {
-          for (int r = 0; r < ord.details.length; r++) {
-            final d = ord.details[r];
+        if (effectiveDetails.isNotEmpty) {
+          for (int r = 0; r < effectiveDetails.length; r++) {
+            final d = effectiveDetails[r];
             final epcs = d.epcList != null && d.epcList!.isNotEmpty ? d.epcList!.join('; ') : '--';
             buffer.writeln('${r + 1},${d.sku},"${d.productName}",${d.requiredQty},${d.pickedQty},Kho Tổng,Pallet xuất,"$epcs",Đạt chuẩn FIFO');
           }
@@ -402,8 +425,30 @@ class ReportExportService {
   }
 
   void _buildSingleOutboundOrderSheet(Sheet sheet, OutboundOrder ord, List<DeliveryNote> deliveries) {
-    final totalReq = ord.details.fold<int>(0, (s, d) => s + d.requiredQty);
-    final totalPicked = ord.details.fold<int>(0, (s, d) => s + d.pickedQty);
+    var effectiveDetails = ord.details;
+    if (effectiveDetails.isEmpty) {
+      final txs = _repo.transactions.where((t) =>
+          t.type == TransactionType.outbound &&
+          (t.documentNo.trim().toUpperCase() == ord.poNo.trim().toUpperCase() ||
+           t.documentNo.trim().toUpperCase() == ord.outboundOrderId.trim().toUpperCase() ||
+           (ord.poNo.isNotEmpty && t.transactionId.contains(ord.poNo)) ||
+           (ord.outboundOrderId.isNotEmpty && t.transactionId.contains(ord.outboundOrderId)))).toList();
+      if (txs.isNotEmpty) {
+        effectiveDetails = txs.map((t) => OutboundOrderDetail(
+          productId: t.sku,
+          sku: t.sku,
+          productName: t.productName.isNotEmpty ? t.productName : 'Sản phẩm xuất kho',
+          requiredQty: t.quantity,
+          pickedQty: t.quantity,
+        )).toList();
+      }
+    }
+
+    var totalReq = effectiveDetails.fold<int>(0, (s, d) => s + d.requiredQty);
+    var totalPicked = effectiveDetails.fold<int>(0, (s, d) => s + d.pickedQty);
+    if (totalReq > 0 && totalPicked == 0 && ord.status == OutboundOrderStatus.shipped) {
+      totalPicked = totalReq;
+    }
     final delivery = deliveries.where((d) => d.poNo == ord.poNo).toList();
     final deliveryNos = delivery.map((d) => d.deliveryNo).join(', ');
 
@@ -433,9 +478,9 @@ class ReportExportService {
     }
 
     int currentRow = startRow + 1;
-    if (ord.details.isNotEmpty) {
-      for (int i = 0; i < ord.details.length; i++) {
-        final d = ord.details[i];
+    if (effectiveDetails.isNotEmpty) {
+      for (int i = 0; i < effectiveDetails.length; i++) {
+        final d = effectiveDetails[i];
         final epcs = d.epcList != null && d.epcList!.isNotEmpty ? d.epcList!.join('; ') : '--';
 
         _setCell(sheet, col: 0, row: currentRow, value: '${i + 1}', style: _dataCellCenterStyle);

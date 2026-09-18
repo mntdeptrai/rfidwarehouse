@@ -81,7 +81,7 @@ graph TD
 | [`lib/main.dart`](file:///c:/Users/MNT/Documents/uhf/lib/main.dart) | Điểm khởi chạy ứng dụng, nạp CSDL vào RAM, khởi tạo UHF/Auth/Sync, áp dụng theme EyeCare. |
 | [`lib/screens/desktop_pda_wrapper.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop_pda_wrapper.dart) | Bộ điều hướng thích ứng tự động (Desktop Layout trên PC, PDA Layout trên tay cầm Android). |
 | **`lib/services/`** | **Tầng Dịch Vụ & Nghiệp Vụ Cốt Lõi** |
-| ├── [`warehouse_repository.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/warehouse_repository.dart) | Quản lý toàn bộ dữ liệu trong RAM: danh mục hàng, pallet, vị trí kệ, đơn nhập/xuất, logic FIFO, cổng RFID, cơ chế giải phóng vị trí kệ/pallet khi xuất kho. Tự động đồng bộ hai chiều toàn bộ giao dịch kho (Nhập kho, Xuất kho, Luân chuyển vị trí kệ, Dồn gộp pallet) lên Supabase `inventory_transactions` và lưu vào cache SQLite cục bộ. |
+| ├── [`warehouse_repository.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/warehouse_repository.dart) | Quản lý toàn bộ dữ liệu trong RAM: danh mục hàng, pallet, vị trí kệ, đơn nhập/xuất, logic FIFO, cổng RFID, cơ chế giải phóng vị trí kệ/pallet khi xuất kho. Tự động đồng bộ hai chiều toàn bộ giao dịch kho (Nhập kho, Xuất kho, Luân chuyển vị trí kệ, Dồn gộp pallet) lên Supabase `inventory_transactions` với cơ chế kênh phụ tự động qua `sync_logs` khi bị RLS chặn, đồng thời duy trì và hợp nhất dữ liệu cục bộ an toàn. |
 | ├── [`desktop_uhf_tcp_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/desktop_uhf_tcp_service.dart) | Kết nối TCP/Serial COM/RS485 với Cổng RFID Gate cố định (Hopeland CL7206C/Speedata qua C# Bridge), tự động lưu và ghi nhớ cấu hình phần cứng vào `uhf_hardware_config.json`, tự động kết nối khi khởi động ứng dụng và tự phục hồi kết nối. |
 | ├── [`uhf_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/uhf_service.dart) | Driver UHF trên tay cầm PDA Android (Chainway C72e / Cruise2 / SEUIC UTouch 2), tích hợp Cổng Ủy Quyền Quét (Scan Authorization Gate) chặn quét tự động, chỉ cho phép bóp cò/quét khi ở màn hình Nhập, Xuất hoặc Kiểm kho. |
 | ├── [`tower_light_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/tower_light_service.dart) | Điều khiển đèn tháp tín hiệu giao thông tại cổng (Xanh = Đạt, Vàng = Chờ, Đỏ = Chip lạ/Lỗi + Còi). |
@@ -109,11 +109,11 @@ graph TD
 | ├── [`pda_home_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_home_screen.dart) | Bàn làm việc di động với lưới các phím tắt tác vụ nhanh (đã thay thế Trạng thái kệ & Tra cứu mã bằng Quản lý kho). |
 | ├── [`pda_goods_delivery_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_goods_delivery_screen.dart) | Xuất kho RFID PDA đồng bộ với Desktop, cột NGÀY NHẬP theo date xa nhất (FIFO), đối soát 2 pha theo chip EPC, 3 ô chỉ số ĐÃ QUÉT - THIẾU - LẠ. |
 | ├── [`pda_putaway_screen.dart`](file:///d:/rfidwarehouse/lib/screens/pda/pda_putaway_screen.dart) | Quy trình cất hàng lên kệ: Ô 1 tinh gọn thành thanh Dropdown chọn Pallet/Xe hàng (tự động cập nhật khi bóp cò quét mã), loại bỏ các khối hướng dẫn rườm rà; Ô 2 chọn vị trí kệ và kích hoạt quét xác nhận cất kệ. Tích hợp thanh thông báo thành công xanh lá tức thì khi hoàn tất cất kiện/toàn bộ lô hàng vào kệ đích. |
-| ├── [`pda_transfer_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_transfer_screen.dart) | Luân chuyển hàng hóa hoặc thùng giữa các vị trí kệ trong kho. Bổ sung thông báo trạng thái tức thì xác nhận số lượng sản phẩm và kệ kho đích khi hoàn tất chuyển kho. |
+| ├── [`pda_transfer_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_transfer_screen.dart) | Luân chuyển hàng hóa hoặc thùng giữa các vị trí kệ trong kho. Bổ sung thông báo trạng thái tức thì xác nhận số lượng sản phẩm và kệ kho đích khi hoàn tất chuyển kho, tự động đồng bộ ngay lập tức lên Supabase Cloud. |
 | ├── [`pda_merge_pallets_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_merge_pallets_screen.dart) | Dồn gộp thùng hàng từ nhiều pallet vào một pallet tổng để tối ưu không gian. |
 | ├── [`pda_inventory_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_inventory_screen.dart) | Bóp cò kiểm kê theo từng ô kệ, cảnh báo chip lạ lạc vị trí (Được cấp quyền quét `kiem_kho`). |
 | ├── [`pda_drawer.dart`](file:///d:/rfidwarehouse/lib/screens/pda/pda_drawer.dart) | Menu ngăn kéo trượt (Navigation Drawer) trên PDA: Đã cấp quyền chỉnh công suất phát sóng ăng-ten UHF (1 - 33 dBm) trực tiếp cho nhân viên cầm tay PDA (Handheld/Thủ kho/Admin), hiển thị slider cự ly quét và áp dụng ngay lập tức mà không bị chặn quyền. |
-| ├── [`pda_warehouse_management_screen.dart`](file:///d:/rfidwarehouse/lib/screens/pda/pda_warehouse_management_screen.dart) | Quản lý kho di động chuyên dụng cho tay cầm PDA gồm 4 tabs (Pallet, Vị Trí Kho, Lịch Sử, Sản Phẩm). Chặn quét tự động hoàn toàn, ẩn chế độ quét phần cứng, bổ sung nút xóa Pallet trực tiếp kèm hộp thoại xác nhận và thanh thông báo phản hồi thao tác chuẩn. |
+| ├── [`pda_warehouse_management_screen.dart`](file:///d:/rfidwarehouse/lib/screens/pda/pda_warehouse_management_screen.dart) | Quản lý kho di động chuyên dụng cho tay cầm PDA gồm 4 tabs (Pallet, Vị Trí Kho, Lịch Sử, Sản Phẩm). Tab 2 (Lịch Sử) đồng bộ 100% tính năng với Desktop: hiển thị đầy đủ 5 danh mục nghiệp vụ (Tất cả, Nhập kho, Xuất kho, Điều chuyển, Kiểm kê), thanh tìm kiếm đa năng, bộ lọc trạng thái (Hoàn tất / Đang xử lý), nút Làm Mới đồng bộ dữ liệu đám mây tức thời và xem chi tiết phiếu/giao dịch. |
 | **`lib/widgets/`** | **Thư Viện Widget Dùng Chung** |
 | ├── [`warehouse_floor_plan_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/warehouse_floor_plan_widget.dart) | Canvas vẽ sơ đồ 2D mặt bằng kho, cổng RFID, vị trí pallet và đường đi dẫn hướng. |
 | ├── [`warehouse_location_grid_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/warehouse_location_grid_widget.dart) | Ma trận trực quan hóa các ô kệ kho kèm màu sắc trạng thái đầy/trống. |
@@ -403,4 +403,34 @@ Hệ thống tích hợp sẵn cấu trúc Agentic Workspace để tối ưu ho�
   - Đã loại bỏ hoàn toàn các nút nhập liệu thủ công hoặc tùy chọn mồ côi (`Tạo Đơn Thủ Công`, `Tạo Nhanh Đơn Xuất`, `Chọn Đơn Xuất Có Sẵn` rời rạc).
   - Khắc phục triệt để lỗi tràn pixel (RenderFlex overflow) trên menu thả xuống ở các màn hình có chiều rộng hẹp của tay cầm PDA bằng cách đóng gói `Expanded` và `TextOverflow.ellipsis`.
 
+---
 
+## 13. Hệ Thống Sơ Đồ Luồng Nghiệp Vụ Visio & Vector Diagram Suite
+- **Tài liệu đặc tả**: [`SO_DO_LUONG_HE_THONG.md`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/SO_DO_LUONG_HE_THONG.md) — Tài liệu thuyết minh chi tiết 5 phân hệ luồng với Mermaid diagrams.
+- **File Microsoft Visio (.vsdx)**: [`RFID_Warehouse_Workflow_Diagram.vsdx`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/RFID_Warehouse_Workflow_Diagram.vsdx) — Định dạng hiện đại OpenXML Visio (5 trang tab, 175 shapes, hoàn toàn chỉnh sửa được).
+- **File Visio XML (.vdx)**: [`RFID_Warehouse_Workflow_Diagram.vdx`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/RFID_Warehouse_Workflow_Diagram.vdx) — Chuẩn Visio XML tương thích mọi phiên bản Visio 2003-2024.
+- **File Draw.io (.drawio)**: [`RFID_Warehouse_Workflow_Diagram.drawio`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/RFID_Warehouse_Workflow_Diagram.drawio) — Bản vẽ 5 tabs trên Diagrams.net / Draw.io.
+- **Trình soạn thảo Draw.io nhúng (.html)**: [`DrawIO_Editor.html`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/DrawIO_Editor.html) — Mở trực tiếp trình vẽ Draw.io với 5 tab đã nạp sẵn, chỉnh sửa và lưu lại ngay trên trình duyệt.
+- **Giao diện Vector Viewer (.html)**: [`RFID_Warehouse_Workflow_Viewer.html`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/RFID_Warehouse_Workflow_Viewer.html) — Giao diện xem trực quan độ phân giải cao, pan, zoom, đổi tab và tải file trực tiếp.
+
+---
+
+## 14. Sơ Đồ Quy Trình Nghiệp Vụ Kho Vận Chuẩn BPMN (Business Process Model)
+- **Ảnh đồ họa độ phân giải cao (.png)**: [`SO_DO_NGHIEP_VU_KHO.png`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/SO_DO_NGHIEP_VU_KHO.png) — Mở trực tiếp bằng Windows Photos với 5 làn nghiệp vụ chuẩn (Đối tác, Mua hàng/Kinh doanh, Kế toán/Trưởng kho, Thủ kho/Xe nâng, RFID WMS).
+- **Giao diện xem nghiệp vụ trực quan (.html)**: [`SO_DO_NGHIEP_VU_KHO.html`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/SO_DO_NGHIEP_VU_KHO.html) — Mở trên trình duyệt để zoom, pan, xem toàn màn hình và in ấn.
+- **Tài liệu hướng dẫn nghiệp vụ & Ma trận RACI (.md)**: [`SO_DO_NGHIEP_VU_KHO.md`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/SO_DO_NGHIEP_VU_KHO.md) — Đặc tả trách nhiệm, luồng chứng từ và 4 nguyên tắc vận hành cốt lõi.
+
+---
+
+## 15. Bộ Công Cụ & Tài Liệu Báo Cáo Nghiệp Vụ Kho RFID (Report-Ready Business Process Suite)
+- **Báo cáo kỹ thuật chi tiết (.md)**: [`BAO_CAO_NGHIEP_VU_KHO_RFID.md`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/BAO_CAO_NGHIEP_VU_KHO_RFID.md) — Thuyết minh khoa học 6 chương, đầy đủ ma trận RACI, 4 nguyên tắc bất biến, chi tiết từng luồng nghiệp vụ (Inbound, Putaway, Internal/Audit, Outbound FIFO) và mã Mermaid tương thích.
+- **Trang web Báo Cáo & Xuất Ảnh Sắc Nét (.html)**: [`Bao_Cao_Nghiep_Vu_Kho_RFID.html`](file:///c:/Users/NGO%20VAN%20HAI/OneDrive/Documents/rfidwarehouse/Bao_Cao_Nghiep_Vu_Kho_RFID.html) — Giao diện Light Theme chuẩn in ấn A4 học thuật/công nghiệp, tích hợp 5 sơ đồ Vector SVG tách riêng từng phân hệ, nút xuất ảnh PNG độ nét cao (300 DPI) để chèn thẳng vào Microsoft Word / LaTeX và nút In/Lưu PDF A4 ngắt trang hoàn hảo.
+
+---
+
+## 16. Khắc Phục Ghi Nhận Số Lượng Hàng Xuất Trong Lịch Sử Quản Lý Kho (Outbound Quantity History Fix)
+- **Vấn đề**: Các đơn xuất kho đã xuất thành công (`ĐÃ XUẤT KHO`) hiển thị `0 / 0 chip` trên bảng Lịch Sử Quản Lý Kho (Desktop & PDA) do bảng `outbound_orders` khi tải về không có bảng chi tiết `outbound_order_details` đi kèm, và vòng lặp giao dịch bỏ qua các đơn đã có trong danh sách.
+- **Giải pháp xử lý triệt để**:
+  1. **Đồng bộ hóa 2 chiều với biến động kho (`inventory_transactions`)**: Cả `DesktopWarehouseManagementView` và `PdaWarehouseManagementScreen` tự động phân giải số lượng thực xuất từ `inventory_transactions` (theo mã đơn `poNo`, `outboundOrderId` hoặc `transactionId`) và các mặt hàng `Item` mang mã đơn xuất tương ứng nếu danh sách chi tiết ban đầu rỗng.
+  2. **Tự động khôi phục cấu trúc chi tiết hàng hóa (`OutboundOrderDetail`)**: Khi khởi động hoặc đồng bộ dữ liệu từ Supabase / SQLite (`_tryLoadFromSupabaseDirect` và `_loadFromSqlite`), hệ thống tự động tái tạo chi tiết số lượng sản phẩm xuất kho từ giao dịch kho thực tế, đảm bảo các chức năng xem "Chi Tiết" và xuất báo cáo Excel/CSV luôn đủ số liệu.
+  3. **Lưu trữ & Phân rã theo SKU khi xuất kho qua cổng RFID Gate**: Khi xác nhận xuất kho (`confirmGateOutbound`, `confirmDirectOutbound`), hệ thống tự động phân loại chip đã quét theo SKU/mặt hàng thực tế, cập nhật `pickedQty`, gán `item.orderNo` cho các chip đã xuất và đẩy dữ liệu đồng bộ an toàn lên Supabase Cloud.

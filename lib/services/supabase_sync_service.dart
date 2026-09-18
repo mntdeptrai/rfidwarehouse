@@ -337,6 +337,7 @@ class SupabaseSyncService extends ChangeNotifier {
         'delivery_note_details',
         'inventory_sessions',
         'inventory_session_details',
+        'inventory_transactions',
         'users',
       ];
 
@@ -474,10 +475,22 @@ class SupabaseSyncService extends ChangeNotifier {
 
             try {
               await supa.from(targetTable).upsert(normalized);
-            } on PostgrestException {
+            } on PostgrestException catch (_) {
               if (normalized.containsKey('pallet_name')) {
                 normalized.remove('pallet_name');
                 await supa.from(targetTable).upsert(normalized);
+              } else if (targetTable == 'inventory_transactions') {
+                try {
+                  await supa.from('sync_logs').insert({
+                    'log_id': recordId,
+                    'action': normalized['transaction_type'] ?? action,
+                    'table_name': 'inventory_transactions',
+                    'record_count': normalized['quantity'] ?? 1,
+                    'is_success': true,
+                    'message': jsonEncode(normalized),
+                  });
+                } catch (_) {}
+                rethrow;
               } else {
                 rethrow;
               }
@@ -594,6 +607,18 @@ class SupabaseSyncService extends ChangeNotifier {
                 if (payload.containsKey('pallet_name')) {
                   payload.remove('pallet_name');
                   await supa.from(tableName).upsert(payload);
+                } else if (tableName == 'inventory_transactions') {
+                  try {
+                    await supa.from('sync_logs').insert({
+                      'log_id': recordId,
+                      'action': payload['transaction_type'] ?? action,
+                      'table_name': 'inventory_transactions',
+                      'record_count': payload['quantity'] ?? 1,
+                      'is_success': true,
+                      'message': jsonEncode(payload),
+                    });
+                  } catch (_) {}
+                  rethrow;
                 } else {
                   rethrow;
                 }

@@ -5,6 +5,7 @@ import '../../models/wms_models.dart';
 import '../../services/warehouse_repository.dart';
 import '../../services/uhf_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
 import 'pda_transfer_screen.dart';
@@ -41,8 +42,12 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   String _locationQuery = '';
   String _selectedZoneFilter = 'ALL';
 
-  // Tab 2: Lịch Sử
-  int _historySubTabIndex = 0; // 0: Giao dịch, 1: Nhật ký (Audit)
+  // Tab 2: Lịch Sử (Đồng bộ 5 mục đầy đủ với Desktop: Tất cả, Nhập kho, Xuất kho, Điều chuyển, Kiểm kê)
+  final TextEditingController _historySearchCtrl = TextEditingController();
+  String _historyQuery = '';
+  String _historyCategoryFilter = 'ALL'; // ALL, INBOUND, OUTBOUND, MOVEMENT, AUDIT
+  String _historyStatusFilter = 'ALL'; // ALL, COMPLETED, IN_PROGRESS
+  bool _isHistoryRefreshing = false;
 
   // Tab 3: Sản Phẩm (Tra Cứu)
   final TextEditingController _productSearchCtrl = TextEditingController();
@@ -74,6 +79,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     _uhf.disableScanning();
     _palletSearchCtrl.dispose();
     _locationSearchCtrl.dispose();
+    _historySearchCtrl.dispose();
     _productSearchCtrl.dispose();
     _tabController.dispose();
     _repo.removeListener(_onStateUpdate);
@@ -937,74 +943,425 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   }
 
   // ===========================================================================
-  // TAB 2: QUẢN LÝ LỊCH SỬ
+  // TAB 2: QUẢN LÝ LỊCH SỬ (ĐỒNG BỘ ĐẦY ĐỦ 5 MỤC NHƯ DESKTOP)
   // ===========================================================================
   Widget _buildHistoryTab(EyeCareColors c) {
+    final historyRecords = <Map<String, dynamic>>[];
+    final allInboundOrders = _repo.inboundOrders;
+    final allOutboundOrders = _repo.outboundOrders;
+    final allSessions = _repo.inventorySessions;
+    final allTransactions = _repo.transactions;
+    final allItems = _repo.items;
+
+    // 1. Đơn nhập kho
+    for (var o in allInboundOrders) {
+      final ordItems = allItems.where((i) =>
+          i.orderNo != null && i.orderNo!.trim().toUpperCase() == o.orderNo.trim().toUpperCase()).toList();
+      var totalQty = o.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
+      var receivedQty = o.details.fold<int>(0, (sum, d) => sum + d.receivedQty);
+      if (totalQty == 0 && ordItems.isNotEmpty) {
+        totalQty = ordItems.length;
+        receivedQty = ordItems.where((i) => i.status == ItemStatus.inStock || i.status == ItemStatus.waitingPutaway).length;
+      }
+      final pallets = ordItems.map((i) => i.palletId).where((p) => p != null && p.isNotEmpty).cast<String>().toSet().toList();
+
+      historyRecords.add({
+        'recordType': 'INBOUND',
+        'isOutbound': false,
+        'orderNo': o.orderNo,
+        'orderId': o.inboundOrderId,
+        'partner': o.sourceSupplier.isNotEmpty ? o.sourceSupplier : 'Nhà cung cấp',
+        'createdAt': o.createdAt,
+        'status': o.status,
+        'statusLabel': o.status == InboundOrderStatus.completed ? 'ĐÃ HOÀN TẤT' : (o.status == InboundOrderStatus.processing ? 'ĐANG NHẬN HÀNG' : 'MỚI TẠO'),
+        'totalQty': totalQty,
+        'doneQty': receivedQty,
+        'pallets': pallets,
+        'details': o.details,
+        'items': ordItems,
+        'inboundOrder': o,
+      });
+    }
+
+    // 2. Đơn xuất kho
+    for (var o in allOutboundOrders) {
+      final relatedTxs = allTransactions.where((t) =>
+          t.type == TransactionType.outbound &&
+          (t.documentNo.trim().toUpperCase() == o.poNo.trim().toUpperCase() ||
+           t.documentNo.trim().toUpperCase() == o.outboundOrderId.trim().toUpperCase() ||
+           (o.poNo.isNotEmpty && t.transactionId.contains(o.poNo)) ||
+           (o.outboundOrderId.isNotEmpty && t.transactionId.contains(o.outboundOrderId)))).toList();
+      final txQty = relatedTxs.fold<int>(0, (sum, t) => sum + t.quantity);
+
+      final ordItems = allItems.where((i) =>
+          i.orderNo != null &&
+          (i.orderNo!.trim().toUpperCase() == o.poNo.trim().toUpperCase() ||
+           i.orderNo!.trim().toUpperCase() == o.outboundOrderId.trim().toUpperCase())).toList();
+
+      var totalQty = o.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
+      var pickedQty = o.details.fold<int>(0, (sum, d) => sum + d.pickedQty);
+
+      if (totalQty == 0) {
+        if (txQty > 0) {
+          totalQty = txQty;
+          pickedQty = txQty;
+        } else if (ordItems.isNotEmpty) {
+          totalQty = ordItems.length;
+          pickedQty = ordItems.where((i) => i.status == ItemStatus.out).length;
+          if (pickedQty == 0 && o.status == OutboundOrderStatus.shipped) {
+            pickedQty = totalQty;
+          }
+        }
+      } else if (pickedQty == 0 && o.status == OutboundOrderStatus.shipped) {
+        pickedQty = totalQty;
+      }
+
+      final pallets = <String>{
+        ...relatedTxs.map((t) => t.palletCode).where((p) => p != null && p.isNotEmpty).cast<String>(),
+        ...ordItems.map((i) => i.palletId).where((p) => p != null && p.isNotEmpty).cast<String>(),
+      }.toList();
+
+      historyRecords.add({
+        'recordType': 'OUTBOUND',
+        'isOutbound': true,
+        'orderNo': o.poNo,
+        'orderId': o.outboundOrderId,
+        'partner': o.customer.isNotEmpty ? o.customer : 'Khách hàng xuất kho',
+        'createdAt': o.createdAt,
+        'status': o.status,
+        'statusLabel': o.status == OutboundOrderStatus.shipped ? 'ĐÃ XUẤT KHO' : 'ĐANG XỬ LÝ',
+        'totalQty': totalQty,
+        'doneQty': pickedQty,
+        'pallets': pallets,
+        'details': o.details,
+        'items': ordItems,
+        'outboundOrder': o,
+        'transaction': relatedTxs.firstOrNull,
+      });
+    }
+
+    // 3. Đợt kiểm kê kho (Inventory Sessions)
+    for (var s in allSessions) {
+      final locDisplay = (s.locationCode != null && s.locationCode!.isNotEmpty)
+          ? 'Kệ: ${s.locationCode} (${s.zone})'
+          : 'Khu vực: ${s.zone}';
+
+      historyRecords.add({
+        'recordType': 'AUDIT',
+        'isOutbound': false,
+        'orderNo': s.sessionCode.isNotEmpty ? s.sessionCode : s.sessionId,
+        'orderId': s.sessionId,
+        'partner': locDisplay,
+        'createdAt': s.completedAt ?? s.startedAt,
+        'status': s.isCompleted ? InboundOrderStatus.completed : InboundOrderStatus.processing,
+        'statusLabel': s.isCompleted ? 'ĐÃ KIỂM KÊ' : 'ĐANG KIỂM KÊ',
+        'totalQty': s.actualScannedCount,
+        'doneQty': s.matchCount,
+        'pallets': <String>[],
+        'details': <dynamic>[],
+        'items': <Item>[],
+        'session': s,
+      });
+    }
+
+    // 4. Biến động kho: Điều chuyển vị trí kệ/Pallet & Giao dịch chưa đại diện
+    for (var t in allTransactions) {
+      if (t.type == TransactionType.movement || t.type == TransactionType.auditAdjustment) {
+        final isMove = t.type == TransactionType.movement;
+        final typeCode = isMove ? 'MOVEMENT' : 'AUDIT';
+        final typeName = isMove ? 'ĐIỀU CHUYỂN' : 'ĐIỀU CHỈNH';
+        final route = t.toLocation != null
+            ? '${t.fromLocation ?? "--"} → ${t.toLocation}'
+            : (t.palletCode != null ? 'Pallet: ${t.palletCode}' : 'Điều chỉnh kho');
+
+        historyRecords.add({
+          'recordType': typeCode,
+          'isOutbound': false,
+          'orderNo': t.documentNo.isNotEmpty ? t.documentNo : t.transactionId,
+          'orderId': t.transactionId,
+          'partner': route,
+          'createdAt': t.timestamp,
+          'status': InboundOrderStatus.completed,
+          'statusLabel': typeName,
+          'totalQty': t.quantity,
+          'doneQty': t.quantity,
+          'pallets': t.palletCode != null && t.palletCode!.isNotEmpty ? [t.palletCode!] : <String>[],
+          'details': <dynamic>[],
+          'items': <Item>[],
+          'transaction': t,
+        });
+      } else if (t.type == TransactionType.outbound) {
+        final doc = t.documentNo.trim();
+        final alreadyRepresented = historyRecords.any((h) =>
+            h['recordType'] == 'OUTBOUND' &&
+            (h['orderNo'] == doc || h['orderId'] == doc || h['orderId'] == t.transactionId));
+        if (!alreadyRepresented) {
+          historyRecords.add({
+            'recordType': 'OUTBOUND',
+            'isOutbound': true,
+            'orderNo': t.documentNo.isNotEmpty ? t.documentNo : t.transactionId,
+            'orderId': t.transactionId,
+            'partner': t.toLocation ?? 'Khách mua xuất kho',
+            'createdAt': t.timestamp,
+            'status': OutboundOrderStatus.shipped,
+            'statusLabel': 'ĐÃ XUẤT KHO',
+            'totalQty': t.quantity,
+            'doneQty': t.quantity,
+            'pallets': t.palletCode != null && t.palletCode!.isNotEmpty ? [t.palletCode!] : <String>[],
+            'details': <dynamic>[],
+            'items': <Item>[],
+            'transaction': t,
+          });
+        }
+      } else if (t.type == TransactionType.inbound) {
+        final doc = t.documentNo.trim();
+        final alreadyRepresented = historyRecords.any((h) =>
+            h['recordType'] == 'INBOUND' &&
+            (h['orderNo'] == doc || h['orderId'] == doc || h['orderId'] == t.transactionId));
+        if (!alreadyRepresented) {
+          historyRecords.add({
+            'recordType': 'INBOUND',
+            'isOutbound': false,
+            'orderNo': t.documentNo.isNotEmpty ? t.documentNo : t.transactionId,
+            'orderId': t.transactionId,
+            'partner': t.fromLocation ?? 'Nhà cung cấp',
+            'createdAt': t.timestamp,
+            'status': InboundOrderStatus.completed,
+            'statusLabel': 'ĐÃ NHẬP KHO',
+            'totalQty': t.quantity,
+            'doneQty': t.quantity,
+            'pallets': t.palletCode != null && t.palletCode!.isNotEmpty ? [t.palletCode!] : <String>[],
+            'details': <dynamic>[],
+            'items': <Item>[],
+            'transaction': t,
+          });
+        }
+      }
+    }
+
+    // Sắp xếp thời gian mới nhất lên đầu
+    historyRecords.sort((a, b) => (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime));
+
+    // Thống kê số lượng theo 5 mục nghiệp vụ
+    final totalInbound = historyRecords.where((h) => h['recordType'] == 'INBOUND').length;
+    final totalOutbound = historyRecords.where((h) => h['recordType'] == 'OUTBOUND').length;
+    final totalMovement = historyRecords.where((h) => h['recordType'] == 'MOVEMENT').length;
+    final totalAudit = historyRecords.where((h) => h['recordType'] == 'AUDIT').length;
+    final totalAll = historyRecords.length;
+
+    // Lọc theo mục, trạng thái và từ khóa tìm kiếm
+    final q = _historyQuery.trim().toLowerCase();
+    final filteredHistory = historyRecords.where((h) {
+      final recType = h['recordType'] as String? ?? '';
+      if (_historyCategoryFilter == 'INBOUND' && recType != 'INBOUND') return false;
+      if (_historyCategoryFilter == 'OUTBOUND' && recType != 'OUTBOUND') return false;
+      if (_historyCategoryFilter == 'MOVEMENT' && recType != 'MOVEMENT') return false;
+      if (_historyCategoryFilter == 'AUDIT' && recType != 'AUDIT') return false;
+
+      final statusLabel = (h['statusLabel'] as String).toUpperCase();
+      if (_historyStatusFilter == 'COMPLETED' &&
+          (!statusLabel.contains('ĐÃ') && !statusLabel.contains('HOÀN THÀNH') && statusLabel != 'ĐIỀU CHUYỂN')) {
+        return false;
+      }
+      if (_historyStatusFilter == 'IN_PROGRESS' &&
+          (statusLabel.contains('ĐÃ') || statusLabel.contains('HOÀN THÀNH') || statusLabel == 'ĐIỀU CHUYỂN')) {
+        return false;
+      }
+
+      if (q.isEmpty) return true;
+
+      final ordNo = (h['orderNo'] as String).toLowerCase();
+      final partner = (h['partner'] as String).toLowerCase();
+      final pallets = (h['pallets'] as List).join(' ').toLowerCase();
+
+      return ordNo.contains(q) || partner.contains(q) || pallets.contains(q);
+    }).toList();
+
     return Column(
       children: [
-        // Sub-tabs switcher
+        // 1. Thanh danh mục 5 mục nghiệp vụ cuộn ngang (Tất cả, Nhập kho, Xuất kho, Điều chuyển, Kiểm kê)
         Container(
-          padding: const EdgeInsets.all(8),
+          height: 48,
           color: c.bgCardElevated,
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildSubTabButton(
-                  title: 'Giao Dịch Kho',
-                  icon: Icons.sync_alt,
-                  isSelected: _historySubTabIndex == 0,
-                  onTap: () => setState(() => _historySubTabIndex = 0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              children: [
+                _buildHistoryCategoryChip(
+                  label: 'TẤT CẢ ($totalAll)',
+                  icon: Icons.list_alt_rounded,
+                  categoryCode: 'ALL',
+                  color: c.rfidCyan,
                   c: c,
+                ),
+                const SizedBox(width: 6),
+                _buildHistoryCategoryChip(
+                  label: 'NHẬP KHO ($totalInbound)',
+                  icon: Icons.input_rounded,
+                  categoryCode: 'INBOUND',
+                  color: const Color(0xFF10B981),
+                  c: c,
+                ),
+                const SizedBox(width: 6),
+                _buildHistoryCategoryChip(
+                  label: 'XUẤT KHO ($totalOutbound)',
+                  icon: Icons.output_rounded,
+                  categoryCode: 'OUTBOUND',
+                  color: const Color(0xFF3B82F6),
+                  c: c,
+                ),
+                const SizedBox(width: 6),
+                _buildHistoryCategoryChip(
+                  label: 'ĐIỀU CHUYỂN ($totalMovement)',
+                  icon: Icons.sync_alt_rounded,
+                  categoryCode: 'MOVEMENT',
+                  color: const Color(0xFFF59E0B),
+                  c: c,
+                ),
+                const SizedBox(width: 6),
+                _buildHistoryCategoryChip(
+                  label: 'KIỂM KÊ ($totalAudit)',
+                  icon: Icons.fact_check_rounded,
+                  categoryCode: 'AUDIT',
+                  color: const Color(0xFF8B5CF6),
+                  c: c,
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // 2. Ô tìm kiếm đa năng + Bộ lọc trạng thái & Nút Làm Mới
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+          color: c.bgCard,
+          child: Column(
+            children: [
+              // Search input
+              TextField(
+                controller: _historySearchCtrl,
+                onChanged: (val) => setState(() => _historyQuery = val),
+                style: TextStyle(color: c.textPrimary, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Tìm theo Mã Đơn, SKU, Pallet, Vị trí, Đối tác...',
+                  hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
+                  prefixIcon: Icon(Icons.search_rounded, color: c.rfidCyan, size: 18),
+                  suffixIcon: _historyQuery.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear_rounded, color: c.textMuted, size: 16),
+                          onPressed: () {
+                            _historySearchCtrl.clear();
+                            setState(() => _historyQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: c.bgDeep,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.rfidCyan)),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildSubTabButton(
-                  title: 'Nhật Ký (Audit)',
-                  icon: Icons.receipt_long,
-                  isSelected: _historySubTabIndex == 1,
-                  onTap: () => setState(() => _historySubTabIndex = 1),
-                  c: c,
-                ),
+              const SizedBox(height: 6),
+              // Filter status buttons & Refresh
+              Row(
+                children: [
+                  _buildHistoryStatusChip('Tất cả', 'ALL', c),
+                  const SizedBox(width: 4),
+                  _buildHistoryStatusChip('Đã hoàn tất', 'COMPLETED', c),
+                  const SizedBox(width: 4),
+                  _buildHistoryStatusChip('Đang xử lý', 'IN_PROGRESS', c),
+                  const Spacer(),
+                  InkWell(
+                    onTap: _isHistoryRefreshing ? null : _refreshHistory,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _isHistoryRefreshing
+                              ? SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: c.rfidCyan),
+                                )
+                              : Icon(Icons.refresh_rounded, size: 13, color: c.textPrimary),
+                          const SizedBox(width: 4),
+                          Text('LÀM MỚI', style: TextStyle(color: c.textPrimary, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
+
+        // 3. Danh sách lịch sử giao dịch & nghiệp vụ
         Expanded(
-          child: _historySubTabIndex == 0 ? _buildTransactionsList(c) : _buildAuditLogList(c),
+          child: filteredHistory.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.history_rounded, size: 48, color: c.textMuted.withValues(alpha: 0.5)),
+                      const SizedBox(height: 8),
+                      Text('Không tìm thấy lịch sử phù hợp bộ lọc', style: TextStyle(color: c.textMuted, fontSize: 13)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
+                  itemCount: filteredHistory.length,
+                  itemBuilder: (context, idx) {
+                    final rec = filteredHistory[idx];
+                    return _buildHistoryItemCard(rec, c);
+                  },
+                ),
         ),
       ],
     );
   }
 
-  Widget _buildSubTabButton({
-    required String title,
+  Widget _buildHistoryCategoryChip({
+    required String label,
     required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
+    required String categoryCode,
+    required Color color,
     required EyeCareColors c,
   }) {
+    final isSelected = _historyCategoryFilter == categoryCode;
     return InkWell(
-      onTap: onTap,
+      onTap: () => setState(() => _historyCategoryFilter = categoryCode),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? c.rfidCyan : c.bgCard,
+          color: isSelected ? color.withValues(alpha: 0.18) : c.bgCard,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSelected ? c.rfidCyan : c.border),
+          border: Border.all(color: isSelected ? color : c.border, width: isSelected ? 1.5 : 1.0),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: isSelected ? const Color(0xFF2C251E) : c.textSecondary),
-            const SizedBox(width: 6),
+            Icon(icon, size: 14, color: isSelected ? color : c.textSecondary),
+            const SizedBox(width: 5),
             Text(
-              title,
+              label,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 12,
+                color: isSelected ? color : c.textSecondary,
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],
@@ -1013,152 +1370,470 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     );
   }
 
-  Widget _buildTransactionsList(EyeCareColors c) {
-    final txs = _repo.transactions;
-    if (txs.isEmpty) {
-      return Center(child: Text('Chưa có lịch sử giao dịch nào', style: TextStyle(color: c.textMuted)));
+  Widget _buildHistoryStatusChip(String label, String code, EyeCareColors c) {
+    final isSelected = _historyStatusFilter == code;
+    return InkWell(
+      onTap: () => setState(() => _historyStatusFilter = code),
+      borderRadius: BorderRadius.circular(5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? c.rfidCyan.withValues(alpha: 0.2) : c.bgDeep,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: isSelected ? c.rfidCyan : c.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? c.rfidCyan : c.textMuted,
+            fontSize: 10.5,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryItemCard(Map<String, dynamic> rec, EyeCareColors c) {
+    final recType = rec['recordType'] as String? ?? 'INBOUND';
+    Color typeColor = const Color(0xFF10B981);
+    IconData typeIcon = Icons.input_rounded;
+    String typeLabel = 'NHẬP KHO';
+
+    if (recType == 'OUTBOUND') {
+      typeColor = const Color(0xFF3B82F6);
+      typeIcon = Icons.output_rounded;
+      typeLabel = 'XUẤT KHO';
+    } else if (recType == 'MOVEMENT') {
+      typeColor = const Color(0xFFF59E0B);
+      typeIcon = Icons.sync_alt_rounded;
+      typeLabel = 'ĐIỀU CHUYỂN';
+    } else if (recType == 'AUDIT') {
+      typeColor = const Color(0xFF8B5CF6);
+      typeIcon = Icons.fact_check_rounded;
+      typeLabel = 'KIỂM KÊ';
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(10),
-      itemCount: txs.length,
-      itemBuilder: (context, idx) {
-        final tx = txs[idx];
-        Color typeColor = c.rfidCyan;
-        String typeLabel = 'GIAO DỊCH';
-        if (tx.type == TransactionType.inbound) {
-          typeColor = const Color(0xFF10B981);
-          typeLabel = 'NHẬP KHO';
-        } else if (tx.type == TransactionType.outbound) {
-          typeColor = const Color(0xFF3B82F6);
-          typeLabel = 'XUẤT KHO';
-        } else if (tx.type == TransactionType.movement) {
-          typeColor = const Color(0xFFF59E0B);
-          typeLabel = 'CHUYỂN KỆ';
-        }
 
-        final timeStr = '${tx.timestamp.day.toString().padLeft(2, '0')}/${tx.timestamp.month.toString().padLeft(2, '0')} ${tx.timestamp.hour.toString().padLeft(2, '0')}:${tx.timestamp.minute.toString().padLeft(2, '0')}';
+    final orderNo = rec['orderNo']?.toString() ?? '--';
+    final partner = rec['partner']?.toString() ?? '--';
+    final statusLabel = rec['statusLabel']?.toString() ?? '--';
+    final totalQty = (rec['totalQty'] as num?)?.toInt() ?? 0;
+    final doneQty = (rec['doneQty'] as num?)?.toInt() ?? 0;
+    final pallets = (rec['pallets'] as List?)?.cast<String>() ?? [];
+    final dt = rec['createdAt'] as DateTime? ?? DateTime.now();
+    final timeStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          color: c.bgCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: c.border)),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      color: c.bgCard,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: c.border),
+      ),
+      child: InkWell(
+        onTap: () => _showHistoryDetailDialog(context, rec, c),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Hàng 1: Icon box + Mã chứng từ + Type badge + Thời gian
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: typeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(typeIcon, color: typeColor, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            orderNo,
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              fontFamily: 'monospace',
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: typeColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            typeLabel,
+                            style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 9.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(timeStr, style: TextStyle(color: c.textMuted, fontSize: 10.5)),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Hàng 2: Đối tác / Lộ trình điều chuyển / Kệ kiểm kê
+              Row(
+                children: [
+                  Icon(
+                    recType == 'MOVEMENT'
+                        ? Icons.route_rounded
+                        : (recType == 'AUDIT' ? Icons.location_on_outlined : Icons.business_outlined),
+                    size: 13,
+                    color: c.textSecondary,
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      partner,
+                      style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w500),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Hàng 3: Chip Số lượng + Pallet + Chip trạng thái
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: c.bgCardElevated,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Text(
+                      recType == 'MOVEMENT'
+                          ? 'SL: $totalQty SP'
+                          : (recType == 'AUDIT' ? 'Khớp: $doneQty / $totalQty' : 'SL: $doneQty / $totalQty'),
+                      style: TextStyle(color: c.textPrimary, fontSize: 10.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (pallets.isNotEmpty) ...[
+                    const SizedBox(width: 5),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: typeColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-                      child: Text(typeLabel, style: TextStyle(color: typeColor, fontWeight: FontWeight.bold, fontSize: 10)),
+                      decoration: BoxDecoration(
+                        color: c.rfidCyan.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        pallets.length == 1 ? pallets.first : '${pallets.length} Pallets',
+                        style: TextStyle(color: c.rfidCyan, fontSize: 10, fontWeight: FontWeight.w600),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(tx.documentNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'monospace')),
-                    ),
-                    Text(timeStr, style: TextStyle(color: c.textMuted, fontSize: 11)),
                   ],
-                ),
-                const SizedBox(height: 6),
-                Text(tx.productName, style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600)),
-                Text('SKU: ${tx.sku} • SL: ${tx.quantity}', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                const SizedBox(height: 4),
-                Text('Lộ trình: ${tx.fromLocation ?? "N/A"} ➔ ${tx.toLocation ?? "N/A"}', style: TextStyle(color: c.textMuted, fontSize: 11)),
-                Text('Người thực hiện: ${tx.performedBy}', style: TextStyle(color: c.textMuted, fontSize: 11)),
-              ],
-            ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: typeColor.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      statusLabel,
+                      style: TextStyle(color: typeColor, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showHistoryDetailDialog(BuildContext context, Map<String, dynamic> record, EyeCareColors c) {
+    final recType = record['recordType'] as String? ?? '';
+    final trans = record['transaction'] as InventoryTransaction?;
+    final session = record['session'] as InventorySession?;
+    final inOrd = record['inboundOrder'] as InboundOrder?;
+    final outOrd = record['outboundOrder'] as OutboundOrder?;
+    final dt = record['createdAt'] as DateTime? ?? DateTime.now();
+    final timeStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: c.bgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (_, scrollCtrl) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: ListView(
+                controller: scrollCtrl,
+                children: [
+                  // Handle bar
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: c.textMuted.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Tiêu đề
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CHI TIẾT ${recType == "MOVEMENT" ? "ĐIỀU CHUYỂN" : (recType == "AUDIT" ? "KIỂM KÊ" : (recType == "OUTBOUND" ? "XUẤT KHO" : "NHẬP KHO"))}',
+                              style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              record['orderNo']?.toString() ?? '--',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: c.bgCardElevated,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Text(
+                          record['statusLabel']?.toString() ?? '',
+                          style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Divider(color: c.border, height: 1),
+                  const SizedBox(height: 12),
+
+                  // Thông tin cơ bản
+                  _buildDetailRow('Thời gian', timeStr, c),
+                  _buildDetailRow('Đối tác / Vị trí', record['partner']?.toString() ?? '--', c),
+                  if (trans != null && trans.performedBy.isNotEmpty)
+                    _buildDetailRow('Người thực hiện', trans.performedBy, c),
+                  if (trans != null && (trans.notes?.isNotEmpty ?? false))
+                    _buildDetailRow('Ghi chú', trans.notes!, c),
+
+                  const SizedBox(height: 14),
+
+                  // Chi tiết theo từng loại nghiệp vụ
+                  if (recType == 'AUDIT' && session != null) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildMetricMiniCard('ĐÃ QUÉT', '${session.actualScannedCount}', c.textPrimary, c),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildMetricMiniCard('KHỚP', '${session.matchCount}', const Color(0xFF10B981), c),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _buildMetricMiniCard(
+                            'LỆCH',
+                            '${(session.actualScannedCount - session.matchCount).abs()}',
+                            const Color(0xFFEF4444),
+                            c,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else if (recType == 'MOVEMENT' && trans != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('LỘ TRÌNH ĐIỀU CHUYỂN', style: TextStyle(color: c.textMuted, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text('Từ: ${trans.fromLocation ?? "--"}', style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)),
+                              ),
+                              Icon(Icons.arrow_forward_rounded, color: c.rfidCyan, size: 16),
+                              Expanded(
+                                child: Text('Đến: ${trans.toLocation ?? "--"}', style: TextStyle(color: c.rfidCyan, fontSize: 13, fontWeight: FontWeight.bold), textAlign: TextAlign.right),
+                              ),
+                            ],
+                          ),
+                          if (trans.palletCode != null && trans.palletCode!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text('Mã Pallet: ${trans.palletCode}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                          ],
+                          const SizedBox(height: 4),
+                          Text('Mặt hàng: ${trans.productName} (SKU: ${trans.sku}) • SL: ${trans.quantity}', style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ] else if (inOrd != null && inOrd.details.isNotEmpty) ...[
+                    Text('DANH SÁCH MẶT HÀNG NHẬP KHO', style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...inOrd.details.map((d) => Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(d.productName, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600, fontSize: 12)),
+                                Text('SKU: ${d.sku}', style: TextStyle(color: c.textMuted, fontSize: 10.5)),
+                              ],
+                            ),
+                          ),
+                          Text('SL: ${d.receivedQty} / ${d.requiredQty}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ],
+                      ),
+                    )),
+                  ] else if (outOrd != null && outOrd.details.isNotEmpty) ...[
+                    Text('DANH SÁCH MẶT HÀNG XUẤT KHO', style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...outOrd.details.map((d) => Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(d.productName, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w600, fontSize: 12)),
+                                Text('SKU: ${d.sku}', style: TextStyle(color: c.textMuted, fontSize: 10.5)),
+                              ],
+                            ),
+                          ),
+                          Text('SL: ${d.pickedQty} / ${d.requiredQty}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ],
+                      ),
+                    )),
+                  ],
+
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: c.bgCardElevated,
+                        foregroundColor: c.textPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: c.border)),
+                      ),
+                      child: const Text('ĐÓNG', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildAuditLogList(EyeCareColors c) {
-    final inOrders = _repo.inboundOrders;
-    final outOrders = _repo.outboundOrders;
-
-    if (inOrders.isEmpty && outOrders.isEmpty) {
-      return Center(child: Text('Chưa có chứng từ đơn hàng nào', style: TextStyle(color: c.textMuted)));
-    }
-
-    final allOrders = <Map<String, dynamic>>[];
-    for (final o in inOrders) {
-      allOrders.add({
-        'type': 'INBOUND',
-        'code': o.orderNo,
-        'partner': o.sourceSupplier,
-        'status': o.status.label,
-        'time': o.createdAt,
-        'items': o.details.fold<int>(0, (sum, d) => sum + d.requiredQty),
-      });
-    }
-    for (final o in outOrders) {
-      allOrders.add({
-        'type': 'OUTBOUND',
-        'code': o.poNo,
-        'partner': o.customer,
-        'status': o.status.label,
-        'time': o.createdAt,
-        'items': o.details.fold<int>(0, (sum, d) => sum + d.requiredQty),
-      });
-    }
-
-    allOrders.sort((a, b) => (b['time'] as DateTime).compareTo(a['time'] as DateTime));
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(10),
-      itemCount: allOrders.length,
-      itemBuilder: (context, idx) {
-        final ord = allOrders[idx];
-        final isIn = ord['type'] == 'INBOUND';
-        final color = isIn ? const Color(0xFF10B981) : const Color(0xFF3B82F6);
-        final dt = ord['time'] as DateTime;
-        final timeStr = '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          color: c.bgCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: c.border)),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                  child: Icon(isIn ? Icons.input_rounded : Icons.output_rounded, color: color, size: 20),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(ord['code'] as String, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'monospace')),
-                      const SizedBox(height: 2),
-                      Text('${ord['partner']} • ${ord['items']} SP', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                    ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-                      child: Text(ord['status'] as String, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(timeStr, style: TextStyle(color: c.textMuted, fontSize: 10.5)),
-                  ],
-                ),
-              ],
-            ),
+  Widget _buildDetailRow(String label, String value, EyeCareColors c) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label, style: TextStyle(color: c.textMuted, fontSize: 12)),
           ),
-        );
-      },
+          Expanded(
+            child: Text(value, style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
     );
+  }
+
+  Widget _buildMetricMiniCard(String label, String value, Color color, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      decoration: BoxDecoration(
+        color: c.bgCardElevated,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(color: c.textMuted, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text(value, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _refreshHistory() async {
+    setState(() => _isHistoryRefreshing = true);
+    try {
+      await SupabaseSyncService().syncNow();
+    } catch (_) {
+      await _repo.reloadFromSqlite();
+    } finally {
+      if (mounted) {
+        setState(() => _isHistoryRefreshing = false);
+      }
+    }
   }
 
   // ===========================================================================

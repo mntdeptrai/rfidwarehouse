@@ -1,0 +1,814 @@
+<?xml version='1.0' encoding='utf-8'?>
+<VisioDocument xmlns='http://schemas.microsoft.com/visio/2003/core' xml:space='preserve'>
+  <DocumentProperties><Title>Sơ Đồ Luồng Kho RFID</Title></DocumentProperties>
+  <Pages>
+
+    <Page ID='0' Name='1. 1. SƠ ĐỒ TỔNG THỂ VÒNG ĐỜ'>
+      <PageSheet><PageProps><PageWidth>28.333333333333332</PageWidth><PageHeight>15.0</PageHeight></PageProps></PageSheet>
+      <Shapes>
+
+        <Shape ID='1' Type='Shape'>
+          <XForm><PinX>14.166666666666666</PinX><PinY>14.0</PinY><Width>27.22222222222222</Width><Height>0.8333333333333334</Height></XForm>
+          <Fill><FillFore>#0F172A</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#38BDF8</LineColor><LineWeight>0.03</LineWeight><Rounding>0.15</Rounding></Line>
+          <Text><cp IX='0'/>1. SƠ ĐỒ TỔNG THỂ VÒNG ĐỜI VÀ KIẾN TRÚC PHÂN TẦNG (END-TO-END FLOW)</Text>
+        </Shape>
+        <Shape ID='2' Type='Shape'>
+          <XForm><PinX>14.166666666666666</PinX><PinY>12.63888888888889</PinY><Width>27.22222222222222</Width><Height>1.9444444444444444</Height></XForm>
+          <Fill><FillFore>#F1F5F9</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#94A3B8</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>LÀN 1: ĐỐI TÁC &amp; VẬN CHUYỂN (Suppliers / Customers / Logistics)</Text>
+        </Shape>
+        <Shape ID='3' Type='Shape'>
+          <XForm><PinX>14.166666666666666</PinX><PinY>10.277777777777779</PinY><Width>27.22222222222222</Width><Height>2.2222222222222223</Height></XForm>
+          <Fill><FillFore>#F0F9FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7DD3FC</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>LÀN 2: ĐIỀU PHỐI &amp; CỔNG DESKTOP (Desktop Admin / WMS Dispatcher)</Text>
+        </Shape>
+        <Shape ID='4' Type='Shape'>
+          <XForm><PinX>14.166666666666666</PinX><PinY>7.638888888888889</PinY><Width>27.22222222222222</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#ECFDF5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#6EE7B7</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>LÀN 3: THIẾT BỊ RFID TỰ ĐỘNG (Hopeland CL7206C2 TCP 9090 &amp; Modbus Tower Light)</Text>
+        </Shape>
+        <Shape ID='5' Type='Shape'>
+          <XForm><PinX>14.166666666666666</PinX><PinY>4.791666666666666</PinY><Width>27.22222222222222</Width><Height>2.638888888888889</Height></XForm>
+          <Fill><FillFore>#FFFBEB</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#FCD34D</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>LÀN 4: THỦ KHO HIỆN TRƯỜNG &amp; TAY CẦM PDA (SEUIC Utouch 2 Android Handheld)</Text>
+        </Shape>
+        <Shape ID='6' Type='Shape'>
+          <XForm><PinX>14.166666666666666</PinX><PinY>1.9444444444444446</PinY><Width>27.22222222222222</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#FAF5FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D8B4FE</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>LÀN 5: TẦNG DỮ LIỆU &amp; ĐỒNG BỘ (WarehouseRepository / SQLite Cache / Supabase Cloud)</Text>
+        </Shape>
+        <Shape ID='7' Type='Shape'>
+          <XForm><PinX>2.5</PinX><PinY>12.569444444444445</PinY><Width>2.7777777777777777</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>NCC Giao Hàng
++ Packing List / PO</Text>
+        </Shape>
+        <Shape ID='8' Type='Shape'>
+          <XForm><PinX>2.5</PinX><PinY>10.3125</PinY><Width>2.9166666666666665</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Nạp File Excel / Lấy PO
+Khởi tạo Đơn Nhập</Text>
+        </Shape>
+        <Shape ID='9' Type='Shape'>
+          <XForm><PinX>2.5</PinX><PinY>2.0138888888888893</PinY><Width>3.1944444444444446</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Tạo inbound_orders: NEW
+Items: PENDING_INBOUND
+(SQLite + Supabase Sync)</Text>
+        </Shape>
+        <Shape ID='10' Type='Shape'>
+          <XForm><PinX>6.458333333333333</PinX><PinY>7.708333333333333</PinY><Width>2.9166666666666665</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Xe Hàng Qua Cổng RFID
+Hopeland Quét Chùm EPC
+Đèn Tháp Bật Vàng (GPO 3)</Text>
+        </Shape>
+        <Shape ID='11' Type='Shape'>
+          <XForm><PinX>9.444444444444445</PinX><PinY>7.708333333333333</PinY><Width>2.2222222222222223</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0</Rounding></Line>
+          <Text><cp IX='0'/>Đối Soát
+Khớp 100%?</Text>
+        </Shape>
+        <Shape ID='12' Type='Shape'>
+          <XForm><PinX>9.444444444444445</PinX><PinY>10.3125</PinY><Width>2.7777777777777777</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#EF4444</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#DC2626</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Cảnh Báo Đèn Đỏ + Còi (GPO 1)
+Phát hiện thẻ lạ / thiếu
+Thủ kho kiểm tra</Text>
+        </Shape>
+        <Shape ID='13' Type='Shape'>
+          <XForm><PinX>12.36111111111111</PinX><PinY>7.708333333333333</PinY><Width>2.7777777777777777</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Cổng Đạt (Đèn Xanh GPO 2)
+isGatePassed = true
+Không phụ thuộc chip pallet</Text>
+        </Shape>
+        <Shape ID='14' Type='Shape'>
+          <XForm><PinX>8.194444444444445</PinX><PinY>2.0138888888888893</PinY><Width>3.0555555555555554</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Chuyển Đơn &amp; Items sang
+WAITING_PUTAWAY
+(Đồng bộ CSDL Realtime)</Text>
+        </Shape>
+        <Shape ID='15' Type='Shape'>
+          <XForm><PinX>13.125</PinX><PinY>4.791666666666666</PinY><Width>2.9166666666666665</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>PDA: Thông báo [CẦN CẤT KỆ]
+Quét Barcode Pallet/Thùng
+Gợi ý Kệ &amp; Sơ đồ 2D</Text>
+        </Shape>
+        <Shape ID='16' Type='Shape'>
+          <XForm><PinX>16.38888888888889</PinX><PinY>4.791666666666666</PinY><Width>2.7777777777777777</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Đến kệ đích thực tế
+Quét Barcode Kệ Kho
+Xác nhận Cất Kệ</Text>
+        </Shape>
+        <Shape ID='17' Type='Shape'>
+          <XForm><PinX>14.930555555555555</PinX><PinY>2.0138888888888893</PinY><Width>3.1944444444444446</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Cập nhật items: IN_STOCK
+Cập nhật kệ: ĐẦY/CÒN CHỖ
+Transaction: IN (Putaway)</Text>
+        </Shape>
+        <Shape ID='18' Type='Shape'>
+          <XForm><PinX>19.583333333333332</PinX><PinY>4.791666666666666</PinY><Width>2.7777777777777777</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>PDA Quản Lý Kho:
+- Điều chuyển (Transfer)
+- Dồn Pallet (Merge)
+- Kiểm kê RFID 4 nhóm</Text>
+        </Shape>
+        <Shape ID='19' Type='Shape'>
+          <XForm><PinX>19.583333333333332</PinX><PinY>2.0138888888888893</PinY><Width>2.7777777777777777</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Cập nhật vị trí kệ mới
+Ghi log Transaction: MOVE
+Lưu kết quả Kiểm kê</Text>
+        </Shape>
+        <Shape ID='20' Type='Shape'>
+          <XForm><PinX>22.84722222222222</PinX><PinY>10.3125</PinY><Width>2.9166666666666665</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Tiếp nhận Đơn Xuất PO
+Thuật toán FIFO Picking
+Wizard dẫn đường lấy hàng</Text>
+        </Shape>
+        <Shape ID='21' Type='Shape'>
+          <XForm><PinX>22.84722222222222</PinX><PinY>4.791666666666666</PinY><Width>2.9166666666666665</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>PDA: Nhặt đúng kiện FIFO
+Quét mã Pallet/Thùng xác nhận
+Đưa ra tập kết cổng xuất</Text>
+        </Shape>
+        <Shape ID='22' Type='Shape'>
+          <XForm><PinX>26.11111111111111</PinX><PinY>7.708333333333333</PinY><Width>2.7777777777777777</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Cổng RFID Gate Xuất
+Đối soát 2 pha Pallet+Item
+Kiểm tra vi phạm FIFO</Text>
+        </Shape>
+        <Shape ID='23' Type='Shape'>
+          <XForm><PinX>26.041666666666668</PinX><PinY>2.0138888888888893</PinY><Width>2.9166666666666665</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Cập nhật items: DELIVERED
+GIẢI PHÓNG VỊ TRÍ KỆ!
+Transaction: OUT</Text>
+        </Shape>
+        <Shape ID='24' Type='Shape'>
+          <XForm><PinX>26.11111111111111</PinX><PinY>12.569444444444445</PinY><Width>2.7777777777777777</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>Xuất Phiếu Giao Hàng
+Delivery Note -&gt; Khách Hàng</Text>
+        </Shape>
+      </Shapes>
+    </Page>
+    <Page ID='1' Name='2. 2. QUY TRÌNH NHẬP KHO &amp; Đ'>
+      <PageSheet><PageProps><PageWidth>25.0</PageWidth><PageHeight>13.61111111111111</PageHeight></PageProps></PageSheet>
+      <Shapes>
+
+        <Shape ID='1' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>12.61111111111111</PinY><Width>23.88888888888889</Width><Height>0.8333333333333334</Height></XForm>
+          <Fill><FillFore>#0F172A</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#38BDF8</LineColor><LineWeight>0.03</LineWeight><Rounding>0.15</Rounding></Line>
+          <Text><cp IX='0'/>2. QUY TRÌNH NHẬP KHO &amp; ĐỐI SOÁT CỔNG RFID GATE (INBOUND VERIFICATION FLOW)</Text>
+        </Shape>
+        <Shape ID='2' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>10.972222222222221</PinY><Width>23.88888888888889</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#F0F9FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7DD3FC</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>GIAI ĐOẠN 1: KHỞI TẠO ĐƠN &amp; DANH MỤC ĐỐI SOÁT (Order Initialization)</Text>
+        </Shape>
+        <Shape ID='3' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>8.125</PinY><Width>23.88888888888889</Width><Height>2.638888888888889</Height></XForm>
+          <Fill><FillFore>#ECFDF5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#6EE7B7</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>GIAI ĐOẠN 2: THU THẬP TÍN HIỆU RFID (Cổng Gate CL7206C2 / Súng PDA)</Text>
+        </Shape>
+        <Shape ID='4' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>5.0</PinY><Width>23.88888888888889</Width><Height>3.0555555555555554</Height></XForm>
+          <Fill><FillFore>#FFFBEB</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#FCD34D</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>GIAI ĐOẠN 3: BỘ MÁY ĐỐI SOÁT REALTIME &amp; ĐÈN THÁP (Verification Engine)</Text>
+        </Shape>
+        <Shape ID='5' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>1.9444444444444446</PinY><Width>23.88888888888889</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#FAF5FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D8B4FE</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>GIAI ĐOẠN 4: CHỐT CỔNG &amp; ĐỒNG BỘ CHỜ CẤT KỆ (Gate Pass &amp; State Commit)</Text>
+        </Shape>
+        <Shape ID='6' Type='Shape'>
+          <XForm><PinX>2.361111111111111</PinX><PinY>11.041666666666666</PinY><Width>2.5</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>Bắt đầu Nhập Kho</Text>
+        </Shape>
+        <Shape ID='7' Type='Shape'>
+          <XForm><PinX>5.416666666666667</PinX><PinY>11.041666666666666</PinY><Width>2.5</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0</Rounding></Line>
+          <Text><cp IX='0'/>Nguồn Dữ Liệu
+Đơn Hàng?</Text>
+        </Shape>
+        <Shape ID='8' Type='Shape'>
+          <XForm><PinX>9.166666666666666</PinX><PinY>11.458333333333332</PinY><Width>3.3333333333333335</Width><Height>0.8333333333333334</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Nạp file Excel Packing List
+(Template-Goods-Receive-v3)</Text>
+        </Shape>
+        <Shape ID='9' Type='Shape'>
+          <XForm><PinX>9.166666666666666</PinX><PinY>10.416666666666666</PinY><Width>3.3333333333333335</Width><Height>0.8333333333333334</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Chọn Đơn PO từ Supabase
+(Danh sách đơn hàng chờ)</Text>
+        </Shape>
+        <Shape ID='10' Type='Shape'>
+          <XForm><PinX>13.61111111111111</PinX><PinY>11.041666666666666</PinY><Width>3.611111111111111</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>LƯU TRỮ TỨC THÌ CSDL:
+- inbound_orders: newOrder
+- items: pendingInbound</Text>
+        </Shape>
+        <Shape ID='11' Type='Shape'>
+          <XForm><PinX>5.416666666666667</PinX><PinY>8.125</PinY><Width>2.5</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0</Rounding></Line>
+          <Text><cp IX='0'/>Phương Thức
+Quét RFID?</Text>
+        </Shape>
+        <Shape ID='12' Type='Shape'>
+          <XForm><PinX>9.444444444444445</PinX><PinY>8.645833333333332</PinY><Width>3.611111111111111</Width><Height>0.9027777777777778</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>CỔNG RFID CỐ ĐỊNH (Desktop)
+Hopeland CL7206C2 (TCP 9090)
+Đèn tháp bật VÀNG (GPO 3 ON)</Text>
+        </Shape>
+        <Shape ID='13' Type='Shape'>
+          <XForm><PinX>9.444444444444445</PinX><PinY>7.534722222222221</PinY><Width>3.611111111111111</Width><Height>0.9027777777777778</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>SÚNG CẦM TAY (PDA)
+SEUIC Utouch 2 Android
+Bóp cò quét chùm sóng</Text>
+        </Shape>
+        <Shape ID='14' Type='Shape'>
+          <XForm><PinX>13.61111111111111</PinX><PinY>5.104166666666666</PinY><Width>3.611111111111111</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>BỘ MÁY ĐỐI SOÁT REALTIME
+So khớp Tag Read Stream với
+Expected EPC Hash Set O(1)</Text>
+        </Shape>
+        <Shape ID='15' Type='Shape'>
+          <XForm><PinX>17.916666666666668</PinX><PinY>5.104166666666666</PinY><Width>3.3333333333333335</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#1E293B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0F172A</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>HIỂN THỊ 3 Ô CHỈ SỐ:
+[ĐÃ QUÉT] Khớp trong đơn
+[THIẾU] Chưa thấy
+[LẠ] Thẻ ngoài đơn</Text>
+        </Shape>
+        <Shape ID='16' Type='Shape'>
+          <XForm><PinX>21.59722222222222</PinX><PinY>5.104166666666666</PinY><Width>2.361111111111111</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0</Rounding></Line>
+          <Text><cp IX='0'/>Có Thẻ Lạ hoặc
+Thiếu Hàng?</Text>
+        </Shape>
+        <Shape ID='17' Type='Shape'>
+          <XForm><PinX>21.59722222222222</PinX><PinY>7.291666666666666</PinY><Width>2.638888888888889</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#EF4444</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#DC2626</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>BẬT ĐÈN ĐỎ + CÒI BÁO
+Khóa cổng, kiểm tra thẻ lạ
+hoặc quét bù kiện thiếu</Text>
+        </Shape>
+        <Shape ID='18' Type='Shape'>
+          <XForm><PinX>13.61111111111111</PinX><PinY>1.9444444444444446</PinY><Width>3.611111111111111</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>ĐỦ 100% SẢN PHẨM!
+Bật Đèn Xanh (GPO 2 ON)
+isGatePassed = true</Text>
+        </Shape>
+        <Shape ID='19' Type='Shape'>
+          <XForm><PinX>17.98611111111111</PinX><PinY>1.9444444444444446</PinY><Width>3.4722222222222223</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>ĐỒNG BỘ TRẠNG THÁI CSDL:
+- inbound_orders -&gt; WAITING_PUTAWAY
+- items -&gt; WAITING_PUTAWAY</Text>
+        </Shape>
+        <Shape ID='20' Type='Shape'>
+          <XForm><PinX>21.875</PinX><PinY>1.9444444444444446</PinY><Width>2.9166666666666665</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>SẴN SÀNG CẤT KỆ
+Đẩy thông báo [CẦN CẤT KỆ]
+đến tất cả máy PDA</Text>
+        </Shape>
+      </Shapes>
+    </Page>
+    <Page ID='2' Name='3. 3. QUY TRÌNH CẤT KỆ &amp; LƯU'>
+      <PageSheet><PageProps><PageWidth>25.0</PageWidth><PageHeight>13.61111111111111</PageHeight></PageProps></PageSheet>
+      <Shapes>
+
+        <Shape ID='1' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>12.61111111111111</PinY><Width>23.88888888888889</Width><Height>0.8333333333333334</Height></XForm>
+          <Fill><FillFore>#0F172A</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#38BDF8</LineColor><LineWeight>0.03</LineWeight><Rounding>0.15</Rounding></Line>
+          <Text><cp IX='0'/>3. QUY TRÌNH CẤT KỆ &amp; LƯU TRỮ VỊ TRÍ KHO (PDA PUTAWAY &amp; STORAGE FLOW)</Text>
+        </Shape>
+        <Shape ID='2' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>10.972222222222221</PinY><Width>23.88888888888889</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#FFFBEB</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#FCD34D</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 1: TIẾP NHẬN TÁC VỤ &amp; NHẬN DIỆN KIỆN HÀNG (PDA Task Pickup)</Text>
+        </Shape>
+        <Shape ID='3' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>8.055555555555555</PinY><Width>23.88888888888889</Width><Height>2.7777777777777777</Height></XForm>
+          <Fill><FillFore>#F0F9FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7DD3FC</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 2: ĐỐI SOÁT THÔNG TIN &amp; GỢI Ý VỊ TRÍ KỆ (Location Recommendation &amp; 2D Map)</Text>
+        </Shape>
+        <Shape ID='4' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>5.0</PinY><Width>23.88888888888889</Width><Height>2.7777777777777777</Height></XForm>
+          <Fill><FillFore>#ECFDF5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#6EE7B7</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 3: DI CHUYỂN &amp; QUÉT XÁC NHẬN VỊ TRÍ KỆ ĐÍCH (Physical Location Scan)</Text>
+        </Shape>
+        <Shape ID='5' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>2.0138888888888893</PinY><Width>23.88888888888889</Width><Height>2.638888888888889</Height></XForm>
+          <Fill><FillFore>#FAF5FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D8B4FE</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 4: XÁC NHẬN LƯU KHO &amp; ĐỒNG BỘ TOÀN HỆ THỐNG (Inventory Commit &amp; Sync)</Text>
+        </Shape>
+        <Shape ID='6' Type='Shape'>
+          <XForm><PinX>2.4305555555555554</PinX><PinY>11.041666666666666</PinY><Width>2.638888888888889</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>Thủ kho mở PDA
+(pda_home_screen)</Text>
+        </Shape>
+        <Shape ID='7' Type='Shape'>
+          <XForm><PinX>6.041666666666667</PinX><PinY>11.006944444444445</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Thẻ [CẦN CẤT KỆ]
+Hiển thị danh sách Pallet/Đơn
+ở trạng thái WAITING_PUTAWAY</Text>
+        </Shape>
+        <Shape ID='8' Type='Shape'>
+          <XForm><PinX>9.930555555555555</PinX><PinY>11.006944444444445</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Chạm thẻ hoặc quét Barcode
+Pallet / Thùng hàng
+(initialCartonOrPalletBarcode)</Text>
+        </Shape>
+        <Shape ID='9' Type='Shape'>
+          <XForm><PinX>13.819444444444445</PinX><PinY>11.006944444444445</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Điều hướng trực tiếp vào
+PdaPutawayScreen
+(Kích hoạt luồng 2-hộp)</Text>
+        </Shape>
+        <Shape ID='10' Type='Shape'>
+          <XForm><PinX>5.902777777777778</PinX><PinY>8.020833333333332</PinY><Width>3.4722222222222223</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>HỘP 1: THÔNG TIN HÀNG HÓA
+- Mã Pallet / Thùng
+- Mã SKU &amp; Tên Sản Phẩm
+- Số lượng &amp; Đơn hàng nguồn</Text>
+        </Shape>
+        <Shape ID='11' Type='Shape'>
+          <XForm><PinX>10.277777777777779</PinX><PinY>8.020833333333332</PinY><Width>3.611111111111111</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>HỘP 2: GỢI Ý VỊ TRÍ KỆ
+Thuật toán quét vị trí còn chỗ:
+Zone -&gt; Dãy Kệ -&gt; Tầng
+(Ưu tiên kệ cùng SKU)</Text>
+        </Shape>
+        <Shape ID='12' Type='Shape'>
+          <XForm><PinX>14.583333333333334</PinX><PinY>8.020833333333332</PinY><Width>3.3333333333333335</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>SƠ ĐỒ BẢN ĐỒ KHO 2D
+warehouse_floor_plan_widget
+Hiển thị đường đi ngắn nhất
+tới vị trí kệ đích</Text>
+        </Shape>
+        <Shape ID='13' Type='Shape'>
+          <XForm><PinX>6.041666666666667</PinX><PinY>5.0</PinY><Width>3.1944444444444446</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Thủ kho di chuyển tới vị trí
+kệ theo hướng dẫn chỉ đường</Text>
+        </Shape>
+        <Shape ID='14' Type='Shape'>
+          <XForm><PinX>10.208333333333334</PinX><PinY>5.0</PinY><Width>3.4722222222222223</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Bóp cò súng PDA quét mã Barcode
+tem vị trí dán trên kệ kho
+(Ví dụ: A1-01-01 / B2-03-02)</Text>
+        </Shape>
+        <Shape ID='15' Type='Shape'>
+          <XForm><PinX>14.166666666666666</PinX><PinY>5.0</PinY><Width>2.5</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0</Rounding></Line>
+          <Text><cp IX='0'/>Mã Kệ Hợp Lệ
+&amp; Còn Chỗ?</Text>
+        </Shape>
+        <Shape ID='16' Type='Shape'>
+          <XForm><PinX>17.63888888888889</PinX><PinY>5.0</PinY><Width>2.5</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#EF4444</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#DC2626</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Cảnh báo sai vị trí
+hoặc kệ đã đầy!</Text>
+        </Shape>
+        <Shape ID='17' Type='Shape'>
+          <XForm><PinX>10.13888888888889</PinX><PinY>2.0486111111111107</PinY><Width>3.3333333333333335</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>BẤM &apos;XÁC NHẬN CẤT KỆ&apos;
+Khóa thao tác, cam kết dữ liệu</Text>
+        </Shape>
+        <Shape ID='18' Type='Shape'>
+          <XForm><PinX>14.722222222222221</PinX><PinY>1.979166666666666</PinY><Width>3.888888888888889</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>CẬP NHẬT CSDL TOÀN DIỆN:
+- items: IN_STOCK
+- item.locationId = targetLocation.id
+- pallet.locationId = targetLocation.id
+- locations: FULL / AVAILABLE
+- Transaction: IN (Putaway)</Text>
+        </Shape>
+        <Shape ID='19' Type='Shape'>
+          <XForm><PinX>19.166666666666668</PinX><PinY>1.979166666666666</PinY><Width>3.0555555555555554</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>HOÀN TẤT LƯU KHO
+Đồng bộ Supabase Cloud
+&amp; Cập nhật Sơ đồ 2D</Text>
+        </Shape>
+      </Shapes>
+    </Page>
+    <Page ID='3' Name='4. 4. QUẢN LÝ KHO NỘI BỘ, ĐI'>
+      <PageSheet><PageProps><PageWidth>25.0</PageWidth><PageHeight>13.61111111111111</PageHeight></PageProps></PageSheet>
+      <Shapes>
+
+        <Shape ID='1' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>12.61111111111111</PinY><Width>23.88888888888889</Width><Height>0.8333333333333334</Height></XForm>
+          <Fill><FillFore>#0F172A</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#38BDF8</LineColor><LineWeight>0.03</LineWeight><Rounding>0.15</Rounding></Line>
+          <Text><cp IX='0'/>4. QUẢN LÝ KHO NỘI BỘ, ĐIỀU CHUYỂN, DỒN PALLET &amp; KIỂM KÊ (INTERNAL &amp; AUDIT)</Text>
+        </Shape>
+        <Shape ID='2' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>10.972222222222221</PinY><Width>23.88888888888889</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#F0FDF4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#86EFAC</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>PHÂN HỆ A: ĐIỀU CHUYỂN VỊ TRÍ KỆ (Internal Location Transfer - pda_transfer_screen)</Text>
+        </Shape>
+        <Shape ID='3' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>8.194444444444443</PinY><Width>23.88888888888889</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#F0F9FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7DD3FC</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>PHÂN HỆ B: DỒN GỘP PALLET (Pallet Consolidation / Merge - pda_merge_pallets_screen)</Text>
+        </Shape>
+        <Shape ID='4' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>5.208333333333332</PinY><Width>23.88888888888889</Width><Height>2.9166666666666665</Height></XForm>
+          <Fill><FillFore>#FAF5FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D8B4FE</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>PHÂN HỆ C: KIỂM KÊ RFID ĐỊNH KỲ (RFID Handheld Inventory Audit - 4 Variance Groups)</Text>
+        </Shape>
+        <Shape ID='5' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>2.083333333333332</PinY><Width>23.88888888888889</Width><Height>2.7777777777777777</Height></XForm>
+          <Fill><FillFore>#FFFBEB</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#FCD34D</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>PHÂN HỆ D: QUẢN LÝ KHO 4-TAB &amp; BẢN ĐỒ 2D (Warehouse Management &amp; Floor Plan)</Text>
+        </Shape>
+        <Shape ID='6' Type='Shape'>
+          <XForm><PinX>2.986111111111111</PinX><PinY>11.006944444444445</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>1. Quét mã Kệ Nguồn
+(Hiển thị danh sách hàng tại kệ)</Text>
+        </Shape>
+        <Shape ID='7' Type='Shape'>
+          <XForm><PinX>7.708333333333333</PinX><PinY>11.006944444444445</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>2. Quét / Chọn Kiện Hàng
+hoặc Pallet cần di chuyển</Text>
+        </Shape>
+        <Shape ID='8' Type='Shape'>
+          <XForm><PinX>12.430555555555555</PinX><PinY>11.006944444444445</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>3. Quét mã Kệ Đích
+(Kiểm tra sức chứa kệ mới)</Text>
+        </Shape>
+        <Shape ID='9' Type='Shape'>
+          <XForm><PinX>17.291666666666668</PinX><PinY>11.006944444444445</PinY><Width>3.4722222222222223</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>4. Cập nhật locationId mới
+Ghi log Transaction: MOVE
+Đồng bộ Supabase &amp; SQLite</Text>
+        </Shape>
+        <Shape ID='10' Type='Shape'>
+          <XForm><PinX>2.986111111111111</PinX><PinY>8.229166666666666</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>1. Quét Pallet Nguồn
+(Hiển thị danh sách thùng hàng)</Text>
+        </Shape>
+        <Shape ID='11' Type='Shape'>
+          <XForm><PinX>7.708333333333333</PinX><PinY>8.229166666666666</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>2. Chọn các thùng cần gom
+(Đánh dấu checklist dồn)</Text>
+        </Shape>
+        <Shape ID='12' Type='Shape'>
+          <XForm><PinX>12.430555555555555</PinX><PinY>8.229166666666666</PinY><Width>3.1944444444444446</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>3. Quét mã Pallet Đích
+(Kiểm tra tải trọng/sức chứa)</Text>
+        </Shape>
+        <Shape ID='13' Type='Shape'>
+          <XForm><PinX>17.291666666666668</PinX><PinY>8.229166666666666</PinY><Width>3.4722222222222223</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>4. Chuyển palletId thùng sang đích
+Giải phóng pallet cũ nếu trống
+Ghi nhận giao dịch dồn</Text>
+        </Shape>
+        <Shape ID='14' Type='Shape'>
+          <XForm><PinX>2.986111111111111</PinX><PinY>5.277777777777777</PinY><Width>3.1944444444444446</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>1. Tạo Phiên Kiểm Kê
+Chọn Zone hoặc Kệ cụ thể
+(inventory_sessions: created)</Text>
+        </Shape>
+        <Shape ID='15' Type='Shape'>
+          <XForm><PinX>7.708333333333333</PinX><PinY>5.277777777777777</PinY><Width>3.1944444444444446</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>2. Bóp cò súng PDA quét
+Quét chùm sóng RFID xung quanh
+Bắt toàn bộ EPC thực tế</Text>
+        </Shape>
+        <Shape ID='16' Type='Shape'>
+          <XForm><PinX>12.708333333333334</PinX><PinY>5.277777777777777</PinY><Width>3.75</Width><Height>1.25</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>3. PHÂN LOẠI 4 NHÓM SAI LỆCH:
+- [MATCH] Khớp đúng kệ (Xanh)
+- [MISSING] Thiếu thực tế (Đỏ)
+- [WRONG_LOC] Lạc vị trí (Cam)
+- [UNKNOWN_EPC] Thẻ lạ (Tím)</Text>
+        </Shape>
+        <Shape ID='17' Type='Shape'>
+          <XForm><PinX>17.63888888888889</PinX><PinY>5.277777777777777</PinY><Width>3.3333333333333335</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>4. Đóng phiên &amp; Báo Cáo
+Ghi inventory_session_details
+Điều chỉnh chênh lệch (ADJUST)
+Xuất báo cáo Excel kiểm kê</Text>
+        </Shape>
+        <Shape ID='18' Type='Shape'>
+          <XForm><PinX>3.0555555555555554</PinX><PinY>2.1180555555555554</PinY><Width>3.3333333333333335</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#1E293B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0F172A</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>TAB 1: PALLET
+Danh sách Pallet đang lưu,
+vị trí kệ và số thùng gán</Text>
+        </Shape>
+        <Shape ID='19' Type='Shape'>
+          <XForm><PinX>7.847222222222222</PinX><PinY>2.1180555555555554</PinY><Width>3.4722222222222223</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#1E293B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0F172A</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>TAB 2: VỊ TRÍ KHO
+3 nút thao tác 1-chạm:
+ĐẦY / SẮP HẾT / CÒN CHỖ
+Xem chi tiết hàng IN_STOCK</Text>
+        </Shape>
+        <Shape ID='20' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>2.1180555555555554</PinY><Width>3.3333333333333335</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#1E293B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0F172A</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>TAB 3: LỊCH SỬ GIAO DỊCH
+Toàn bộ biến động kho
+(IN, OUT, MOVE, ADJUST)
+Theo dõi theo người thực hiện</Text>
+        </Shape>
+        <Shape ID='21' Type='Shape'>
+          <XForm><PinX>17.22222222222222</PinX><PinY>2.1180555555555554</PinY><Width>3.3333333333333335</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#1E293B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0F172A</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>TAB 4: SẢN PHẨM &amp; 2D MAP
+Tra cứu Barcode/RFID
+Sơ đồ 2D mặt bằng trực quan
+Hiển thị vị trí kệ &amp; cổng Gate</Text>
+        </Shape>
+      </Shapes>
+    </Page>
+    <Page ID='4' Name='5. 5. QUY TRÌNH XUẤT KHO &amp; Đ'>
+      <PageSheet><PageProps><PageWidth>25.0</PageWidth><PageHeight>13.61111111111111</PageHeight></PageProps></PageSheet>
+      <Shapes>
+
+        <Shape ID='1' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>12.61111111111111</PinY><Width>23.88888888888889</Width><Height>0.8333333333333334</Height></XForm>
+          <Fill><FillFore>#0F172A</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#38BDF8</LineColor><LineWeight>0.03</LineWeight><Rounding>0.15</Rounding></Line>
+          <Text><cp IX='0'/>5. QUY TRÌNH XUẤT KHO &amp; ĐỐI SOÁT FIFO CỔNG RFID (OUTBOUND FIFO PICKING &amp; GATE)</Text>
+        </Shape>
+        <Shape ID='2' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>10.972222222222221</PinY><Width>23.88888888888889</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#F0F9FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7DD3FC</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 1: TIẾP NHẬN ĐƠN XUẤT &amp; ĐỀ XUẤT FIFO (Outbound Order &amp; FIFO Algorithm)</Text>
+        </Shape>
+        <Shape ID='3' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>8.125</PinY><Width>23.88888888888889</Width><Height>2.638888888888889</Height></XForm>
+          <Fill><FillFore>#FFFBEB</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#FCD34D</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 2: WIZARD CHỈ ĐƯỜNG LẤY HÀNG QUA CÁC KỆ (Picking Route Optimization)</Text>
+        </Shape>
+        <Shape ID='4' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>5.0</PinY><Width>23.88888888888889</Width><Height>3.0555555555555554</Height></XForm>
+          <Fill><FillFore>#ECFDF5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#6EE7B7</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 3: ĐỐI SOÁT 2 PHA TẠI CỔNG RFID XUẤT / PDA (2-Phase Gate Verification)</Text>
+        </Shape>
+        <Shape ID='5' Type='Shape'>
+          <XForm><PinX>12.5</PinX><PinY>1.9444444444444446</PinY><Width>23.88888888888889</Width><Height>2.5</Height></XForm>
+          <Fill><FillFore>#FAF5FF</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D8B4FE</LineColor><LineWeight>0.02</LineWeight><Rounding>0.12</Rounding></Line>
+          <Text><cp IX='0'/>BƯỚC 4: GIẢI PHÓNG VỊ TRÍ KỆ &amp; GIAO HÀNG (Location Release &amp; Delivery Note)</Text>
+        </Shape>
+        <Shape ID='6' Type='Shape'>
+          <XForm><PinX>2.5</PinX><PinY>11.041666666666666</PinY><Width>2.7777777777777777</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>Tiếp nhận Yêu Cầu Xuất
+(Đơn PO Khách Hàng)</Text>
+        </Shape>
+        <Shape ID='7' Type='Shape'>
+          <XForm><PinX>6.388888888888889</PinX><PinY>11.006944444444445</PinY><Width>3.0555555555555554</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Khởi tạo Đơn Xuất Kho
+outbound_orders (status: NEW)
+outbound_order_details
+(SKU, Số lượng yêu cầu)</Text>
+        </Shape>
+        <Shape ID='8' Type='Shape'>
+          <XForm><PinX>10.694444444444445</PinX><PinY>11.006944444444445</PinY><Width>3.611111111111111</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>THUẬT TOÁN ĐỐI SOÁT FIFO:
+Truy vấn danh mục items IN_STOCK
+Sắp xếp theo ngày nhập (created_at)
+Ưu tiên tuyệt đối lô hàng nhập trước!</Text>
+        </Shape>
+        <Shape ID='9' Type='Shape'>
+          <XForm><PinX>14.652777777777779</PinX><PinY>11.006944444444445</PinY><Width>2.361111111111111</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0</Rounding></Line>
+          <Text><cp IX='0'/>Kiện chọn có
+đúng chuẩn FIFO?</Text>
+        </Shape>
+        <Shape ID='10' Type='Shape'>
+          <XForm><PinX>18.055555555555557</PinX><PinY>11.041666666666666</PinY><Width>2.7777777777777777</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#EF4444</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#DC2626</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>CẢNH BÁO VI PHẠM FIFO!
+Có lô hàng cũ hơn chưa xuất
+Yêu cầu lấy đúng lô đề xuất</Text>
+        </Shape>
+        <Shape ID='11' Type='Shape'>
+          <XForm><PinX>6.527777777777778</PinX><PinY>8.125</PinY><Width>3.3333333333333335</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#0284C7</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0369A1</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>WIZARD CHỈ ĐƯỜNG LẤY HÀNG:
+Tính toán thứ tự di chuyển qua 10 kệ
+để gom đủ danh mục hàng cần xuất</Text>
+        </Shape>
+        <Shape ID='12' Type='Shape'>
+          <XForm><PinX>10.833333333333334</PinX><PinY>8.125</PinY><Width>3.3333333333333335</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Thủ kho đến từng vị trí kệ
+Bóp cò PDA quét mã Pallet/Thùng
+để xác nhận nhặt đúng kiện hàng</Text>
+        </Shape>
+        <Shape ID='13' Type='Shape'>
+          <XForm><PinX>15.13888888888889</PinX><PinY>8.125</PinY><Width>3.3333333333333335</Width><Height>1.1111111111111112</Height></XForm>
+          <Fill><FillFore>#06B6D4</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#0891B2</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>Đưa hàng ra khu vực tập kết xuất
+Chuẩn bị cho xe nâng vận chuyển
+qua Cổng RFID Gate Xuất</Text>
+        </Shape>
+        <Shape ID='14' Type='Shape'>
+          <XForm><PinX>6.597222222222222</PinX><PinY>5.034722222222221</PinY><Width>3.4722222222222223</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#4F46E5</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#4338CA</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>XE HÀNG QUA CỔNG RFID XUẤT
+(Hopeland CL7206C2 hoặc PDA)
+Đèn tháp bật VÀNG (GPO 3 ON)
+Bắt đầu chu trình quét đối soát</Text>
+        </Shape>
+        <Shape ID='15' Type='Shape'>
+          <XForm><PinX>11.11111111111111</PinX><PinY>5.034722222222221</PinY><Width>3.611111111111111</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>QUY TRÌNH ĐỐI SOÁT 2 PHA:
+- Pha 1: Nhận diện mã RFID Pallet
+- Pha 2: Quét toàn bộ chip EPC sản phẩm
+Đối soát với danh mục đơn xuất</Text>
+        </Shape>
+        <Shape ID='16' Type='Shape'>
+          <XForm><PinX>15.069444444444445</PinX><PinY>5.034722222222221</PinY><Width>2.361111111111111</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#F59E0B</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#D97706</LineColor><LineWeight>0.025</LineWeight><Rounding>0</Rounding></Line>
+          <Text><cp IX='0'/>Đủ Hàng &amp; Đúng
+Chuẩn Đơn PO?</Text>
+        </Shape>
+        <Shape ID='17' Type='Shape'>
+          <XForm><PinX>15.208333333333334</PinX><PinY>7.048611111111111</PinY><Width>2.638888888888889</Width><Height>0.9027777777777778</Height></XForm>
+          <Fill><FillFore>#EF4444</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#DC2626</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>BÁO ĐỘNG ĐỎ + CÒI HÚ
+Thiếu / sai hàng / chip lạ
+Chặn xe không cho qua cổng</Text>
+        </Shape>
+        <Shape ID='18' Type='Shape'>
+          <XForm><PinX>6.597222222222222</PinX><PinY>1.979166666666666</PinY><Width>3.4722222222222223</Width><Height>1.0416666666666667</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>CỔNG XUẤT THÔNG QUA!
+Bật Đèn Xanh (GPO 2 ON)
+Đánh dấu đơn PO: SHIPPED
+isGatePassed = true</Text>
+        </Shape>
+        <Shape ID='19' Type='Shape'>
+          <XForm><PinX>11.25</PinX><PinY>1.979166666666666</PinY><Width>3.888888888888889</Width><Height>1.1805555555555556</Height></XForm>
+          <Fill><FillFore>#8B5CF6</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#7C3AED</LineColor><LineWeight>0.025</LineWeight><Rounding>0.1</Rounding></Line>
+          <Text><cp IX='0'/>GIẢI PHÓNG LƯU TRỮ CSDL:
+- item.status = DELIVERED / OUT
+- item.locationId = null (Xóa vị trí kệ)
+- pallet.locationId = null (Giải phóng)
+- Vị trí kệ -&gt; CÒN CHỖ / TRỐNG</Text>
+        </Shape>
+        <Shape ID='20' Type='Shape'>
+          <XForm><PinX>15.694444444444445</PinX><PinY>1.9444444444444446</PinY><Width>3.0555555555555554</Width><Height>0.9722222222222222</Height></XForm>
+          <Fill><FillFore>#10B981</FillFore><FillPattern>1</FillPattern></Fill>
+          <Line><LineColor>#059669</LineColor><LineWeight>0.025</LineWeight><Rounding>0.3</Rounding></Line>
+          <Text><cp IX='0'/>XUẤT PHIẾU GIAO HÀNG
+Tạo delivery_notes &amp; details
+Giao hàng cho khách hàng
+Đồng bộ Supabase Cloud</Text>
+        </Shape>
+      </Shapes>
+    </Page>
+  </Pages>
+</VisioDocument>
