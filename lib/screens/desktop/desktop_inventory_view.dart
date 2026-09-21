@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../models/wms_models.dart';
@@ -50,13 +49,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     super.initState();
     _eyeCare.addListener(_onStateUpdate);
     _repo.addListener(_onStateUpdate);
-    _desktopUhf.addListener(_onStateUpdate);
-    _uhf.addListener(_onStateUpdate);
-
-    // Tự động kết nối đầu đọc RFID UHF nếu được bật cấu hình autoConnectOnStartup
-    if (!_desktopUhf.isConnected && _desktopUhf.config.autoConnectOnStartup) {
-      _desktopUhf.connectWithSavedConfig();
-    }
 
     // Lắng nghe tín hiệu quét từ đầu đọc UHF Fixed/Desktop qua TCP
     _desktopUhfSub = _desktopUhf.onTagRead.listen((tag) {
@@ -75,16 +67,10 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
   @override
   void dispose() {
-    if (_isScanning) {
-      _desktopUhf.stopInventory();
-      _uhf.stopInventory();
-      _uhf.disableScanning();
-    }
+    _uhf.disableScanning();
     _desktopUhfSub?.cancel();
     _uhfSub?.cancel();
     _searchCtrl.dispose();
-    _desktopUhf.removeListener(_onStateUpdate);
-    _uhf.removeListener(_onStateUpdate);
     _repo.removeListener(_onStateUpdate);
     _eyeCare.removeListener(_onStateUpdate);
     super.dispose();
@@ -147,86 +133,19 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
       await _desktopUhf.stopInventory();
       await _uhf.stopInventory();
       _uhf.disableScanning();
-      if (mounted) setState(() => _isScanning = false);
+      setState(() => _isScanning = false);
     } else {
       // Bắt đầu quét
-      final isTest = Platform.environment.containsKey('FLUTTER_TEST');
-
-      // 1. Kiểm tra kết nối đầu đọc RFID Desktop (Fixed Hopeland Reader / COM / TCP)
-      if (!isTest && !_desktopUhf.isConnected) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFF0284C7),
-              content: Row(
-                children: [
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  Text('Đang kết nối đầu đọc RFID (${_desktopUhf.config.connectionSummary})...'),
-                ],
-              ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-
-        final connected = await _desktopUhf.connectWithSavedConfig();
-        if (!connected && !_desktopUhf.isConnected) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                backgroundColor: const Color(0xFFDC2626),
-                duration: const Duration(seconds: 5),
-                content: Row(
-                  children: [
-                    const Icon(Icons.link_off_rounded, color: Colors.white, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Chưa kết nối được đầu đọc RFID (${_desktopUhf.config.connectionSummary})! Vui lòng kiểm tra nguồn/cáp mạng hoặc cấu hình trong menu "Đầu Đọc UHF (Studio)".',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-        }
-      }
-
-      // 2. Kích hoạt quét trên cả Desktop UHF TCP và UHF Service (cho phép kiểm kho)
       _uhf.enableScanning('kiem_kho');
-      await _uhf.startInventory();
-
-      if (!isTest && _desktopUhf.isConnected) {
+      setState(() => _isScanning = true);
+      if (_desktopUhf.isConnected) {
         await _desktopUhf.startInventory();
-      }
-
-      if (mounted) {
-        setState(() => _isScanning = true);
-        if (_desktopUhf.isConnected) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFF10B981),
-              duration: const Duration(seconds: 2),
-              content: Row(
-                children: [
-                  const Icon(Icons.sensors, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Text('✓ Đầu đọc RFID đã bắt đầu phát sóng quét thẻ (${_desktopUhf.config.connectionSummary})!'),
-                ],
-              ),
-            ),
-          );
-        }
+      } else {
+        _desktopUhf.connectWithSavedConfig().then((ok) {
+          if (ok && _isScanning) {
+            _desktopUhf.startInventory();
+          }
+        });
       }
     }
   }
@@ -934,177 +853,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     );
   }
 
-  Widget _buildReaderStatusPill(EyeCareColors c) {
-    if (_desktopUhf.isConnecting) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFFF59E0B)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFD97706)),
-            ),
-            SizedBox(width: 6),
-            Text('ĐANG KẾT NỐI ĐẦU ĐỌC...', style: TextStyle(color: Color(0xFFD97706), fontSize: 10.5, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      );
-    }
-
-    if (_desktopUhf.isConnected) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFF10B981).withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF10B981)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.wifi_tethering, size: 13, color: Color(0xFF10B981)),
-            const SizedBox(width: 5),
-            Text(
-              'ĐẦU ĐỌC: ${_desktopUhf.config.connectionSummary}',
-              style: const TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: () async {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Đang thử kết nối tới ${_desktopUhf.config.connectionSummary}...'), duration: const Duration(seconds: 2)),
-        );
-        await _desktopUhf.connectWithSavedConfig();
-      },
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEF4444).withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFFEF4444)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.link_off_rounded, size: 13, color: Color(0xFFEF4444)),
-            const SizedBox(width: 5),
-            Text(
-              'ĐẦU ĐỌC OFFLINE (${_desktopUhf.config.connectionSummary}) - BẤM KẾT NỐI',
-              style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showManualTagInputDialog() {
-    if (_activeSession == null) return;
-    final textCtrl = TextEditingController();
-    final c = _eyeCare.colors;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: c.bgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: c.rfidCyan.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.keyboard_alt_rounded, color: c.rfidCyan, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Text('Nhập Mã Thẻ RFID / Barcode', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SizedBox(
-          width: 480,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Nhập mã EPC của tem RFID hoặc quét bằng súng quét barcode để đối soát khi chưa có đầu đọc cố định:',
-                style: TextStyle(color: c.textSecondary, fontSize: 12.5),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: textCtrl,
-                autofocus: true,
-                style: TextStyle(color: c.textPrimary, fontFamily: 'Courier', fontSize: 14, fontWeight: FontWeight.bold),
-                decoration: InputDecoration(
-                  labelText: 'Mã Chip EPC / Barcode',
-                  hintText: 'Ví dụ: 202604010000000000000001',
-                  prefixIcon: Icon(Icons.sensors, color: c.rfidCyan),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onSubmitted: (val) {
-                  final epc = val.trim().toUpperCase();
-                  if (epc.isNotEmpty) {
-                    _handleTagScanned(epc);
-                    Navigator.pop(ctx);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              if (_activeSession != null) ...[
-                const Text('Hoặc bấm nhanh vào các mã đang thiếu bên dưới để đối soát thử:', style: TextStyle(fontSize: 11.5, color: Color(0xFF6B5D4D))),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: _activeSession!.results
-                      .where((r) => r.resultType == InventoryVarianceType.missing)
-                      .take(6)
-                      .map((r) => ActionChip(
-                            label: Text(r.productName ?? r.epc, style: const TextStyle(fontSize: 11)),
-                            avatar: const Icon(Icons.touch_app, size: 14),
-                            onPressed: () {
-                              textCtrl.text = r.epc;
-                            },
-                          ))
-                      .toList(),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('HỦY')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
-            onPressed: () {
-              final epc = textCtrl.text.trim().toUpperCase();
-              if (epc.isNotEmpty) {
-                _handleTagScanned(epc);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('XÁC NHẬN QUÉT', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ===========================================================================
   // GIAO DIỆN 2: ACTIVE SESSION (ĐANG QUÉT ĐỐI SOÁT THỜI GIAN THỰC)
   // ===========================================================================
@@ -1184,8 +932,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            _buildReaderStatusPill(c),
                           ],
                         ),
                         const SizedBox(height: 2),
@@ -1215,20 +961,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
                       ),
                       onPressed: _toggleScanning,
-                    ),
-                    const SizedBox(width: 10),
-
-                    // Nút Nhập EPC thủ công
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: c.rfidCyan,
-                        side: BorderSide(color: c.rfidCyan.withValues(alpha: 0.6)),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      icon: const Icon(Icons.keyboard_outlined, size: 18),
-                      label: const Text('NHẬP EPC THỦ CÔNG', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
-                      onPressed: _showManualTagInputDialog,
                     ),
                     const SizedBox(width: 10),
 

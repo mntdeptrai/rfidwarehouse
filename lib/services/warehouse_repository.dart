@@ -4709,107 +4709,154 @@ class WarehouseRepository extends ChangeNotifier {
   void processAuditScan({
     required String sessionId,
     required List<String> scannedEpcs,
-    bool notify = true,
+    bool notify = false,
   }) {
+    _ensureIndexes();
     final session = _inventorySessions.where((s) => s.sessionId == sessionId).firstOrNull;
-    if (session == null) return;
+    if (session == null || session.isCompleted) return;
 
-    final targetLocationCode = session.locationCode?.trim();
-    final isLocationAudit = targetLocationCode != null && targetLocationCode.isNotEmpty;
+    final uniqueScannedEpcs = scannedEpcs.map((e) => e.trim().toUpperCase()).where((e) => e.isNotEmpty).toSet();
 
-    final allItems = _items;
-    final List<Item> expectedItems = [];
-
-    if (isLocationAudit) {
-      final loc = resolveLocationByCodeOrId(targetLocationCode);
-      final locId = loc?.locationId ?? targetLocationCode;
-      expectedItems.addAll(allItems.where((i) {
-        if (i.status == ItemStatus.out) return false;
-        final iLoc = resolveItemLocation(i);
-        return iLoc?.locationId == locId || iLoc?.locationCode == targetLocationCode;
-      }));
-    } else {
-      expectedItems.addAll(allItems.where((i) {
-        if (i.status == ItemStatus.out) return false;
-        final iLoc = resolveItemLocation(i);
-        return iLoc?.zone.toUpperCase() == session.zone.toUpperCase();
-      }));
-    }
-
-    final Set<String> uniqueScannedEpcs = scannedEpcs.map((e) => e.trim().toUpperCase()).toSet();
-    session.results.clear();
-
-    final currentAuditLoc = isLocationAudit ? resolveLocationByCodeOrId(targetLocationCode) : null;
-    final currentAuditLocDisplay = currentAuditLoc != null ? '${currentAuditLoc.locationCode} • ${currentAuditLoc.displayName}' : (targetLocationCode ?? 'Khu vực ${session.zone}');
-
-    for (var epc in uniqueScannedEpcs) {
-      final item = allItems.where((i) => i.epc.trim().toUpperCase() == epc).firstOrNull;
-
-      if (item == null) {
-        session.results.add(
-          InventoryItemResult(
-            epc: epc,
-            sku: null,
-            productName: null,
-            expectedLocation: 'Chưa đăng ký trên hệ thống',
-            actualLocation: currentAuditLocDisplay,
-            resultType: InventoryVarianceType.unknownEpc,
-            readAt: DateTime.now(),
-          ),
-        );
-      } else {
-        final actualLoc = resolveItemLocation(item);
-        final bool isMatch;
-
-        if (isLocationAudit) {
-          final targetLoc = resolveLocationByCodeOrId(targetLocationCode);
-          final targetLocId = targetLoc?.locationId ?? targetLocationCode;
-          isMatch = actualLoc != null && (actualLoc.locationId == targetLocId || actualLoc.locationCode == targetLocationCode);
-        } else {
-          isMatch = actualLoc != null && actualLoc.zone.toUpperCase() == session.zone.toUpperCase();
-        }
-
-        final actualLocDisplay = actualLoc != null ? '${actualLoc.locationCode} • ${actualLoc.displayName}' : (item.locationId ?? 'Chưa gán kệ');
-
-        if (isMatch) {
-          session.results.add(
-            InventoryItemResult(
-              epc: item.epc,
-              sku: item.sku,
-              productName: item.productName,
-              expectedLocation: currentAuditLocDisplay,
-              actualLocation: currentAuditLocDisplay,
-              resultType: InventoryVarianceType.match,
-              readAt: DateTime.now(),
-            ),
+    if (session.zone.startsWith('File:')) {
+      for (int i = 0; i < session.results.length; i++) {
+        final r = session.results[i];
+        if (uniqueScannedEpcs.contains(r.epc.toUpperCase())) {
+          session.results[i] = InventoryItemResult(
+            epc: r.epc,
+            sku: r.sku,
+            productName: r.productName,
+            expectedLocation: r.expectedLocation,
+            actualLocation: 'Đã quét RFID',
+            resultType: InventoryVarianceType.match,
+            readAt: r.readAt,
           );
         } else {
+          session.results[i] = InventoryItemResult(
+            epc: r.epc,
+            sku: r.sku,
+            productName: r.productName,
+            expectedLocation: r.expectedLocation,
+            actualLocation: null,
+            resultType: InventoryVarianceType.missing,
+            readAt: r.readAt,
+          );
+        }
+      }
+      for (final epc in uniqueScannedEpcs) {
+        if (!session.results.any((r) => r.epc.toUpperCase() == epc)) {
+          final known = _itemsByEpcIndex[epc] ?? _items.where((i) => i.epc.toUpperCase() == epc).firstOrNull;
           session.results.add(
             InventoryItemResult(
-              epc: item.epc,
-              sku: item.sku,
-              productName: item.productName,
-              expectedLocation: actualLocDisplay,
-              actualLocation: currentAuditLocDisplay,
-              resultType: InventoryVarianceType.wrongLocation,
+              epc: epc,
+              sku: known?.sku,
+              productName: known?.productName ?? 'Thẻ lạ ngoài file Excel',
+              actualLocation: 'Đã quét RFID',
+              resultType: InventoryVarianceType.unknownEpc,
               readAt: DateTime.now(),
             ),
           );
         }
       }
+      _dbService.insertInventorySession(session);
+      if (notify) notifyListeners();
+      return;
     }
 
-    for (var expItem in expectedItems) {
-      if (!uniqueScannedEpcs.contains(expItem.epc.trim().toUpperCase())) {
-        final loc = resolveItemLocation(expItem);
-        final locDisplay = loc != null ? '${loc.locationCode} • ${loc.displayName}' : (expItem.locationId ?? currentAuditLocDisplay);
+    session.results.clear();
+
+    final isAllWarehouse = session.zone.trim().toLowerCase().contains('toàn bộ') ||
+        session.zone.trim().toUpperCase() == 'ALL' ||
+        (session.locationCode == null && session.zone.isEmpty);
+
+    final expectedItems = _items.where((it) {
+      if (it.status != ItemStatus.inStock) return false;
+      if (isAllWarehouse) return true;
+      final loc = resolveItemLocation(it);
+      if (loc == null) return false;
+
+      if (session.locationCode != null && session.locationCode!.trim().isNotEmpty) {
+        final target = session.locationCode!.trim().toUpperCase();
+        return loc.locationCode.trim().toUpperCase() == target ||
+               loc.locationId.trim().toUpperCase() == target ||
+               loc.locationId.trim().toUpperCase().replaceAll('LOC-', '') == target.replaceAll('LOC-', '');
+      }
+      if (session.zone.isNotEmpty) {
+        final targetZone = session.zone.trim().toUpperCase();
+        return loc.zone.trim().toUpperCase() == targetZone ||
+               loc.locationCode.trim().toUpperCase().startsWith(targetZone);
+      }
+      return false;
+    }).toList();
+
+    final expectedEpcs = expectedItems.map((e) => e.epc.toUpperCase()).toSet();
+
+    final currentAuditLoc = session.locationCode != null && session.locationCode!.trim().isNotEmpty
+        ? _locations.where((l) => l.locationCode == session.locationCode || l.locationId == session.locationCode).firstOrNull
+        : null;
+    final currentAuditLocDisplay = currentAuditLoc != null
+        ? '${currentAuditLoc.locationCode} • ${currentAuditLoc.displayName}'
+        : (session.locationCode != null && session.locationCode!.trim().isNotEmpty
+            ? session.locationCode!
+            : (session.zone.isNotEmpty ? session.zone : 'Toàn bộ kho'));
+
+    for (var epc in uniqueScannedEpcs) {
+      final item = _itemsByEpcIndex[epc] ?? _items.where((it) => it.epc.toUpperCase() == epc).firstOrNull;
+
+      if (item == null || item.sku == 'UNKNOWN' || item.itemId.isEmpty) {
         session.results.add(
           InventoryItemResult(
-            epc: expItem.epc,
-            sku: expItem.sku,
-            productName: expItem.productName,
+            epc: epc,
+            resultType: InventoryVarianceType.unknownEpc,
+            readAt: DateTime.now(),
+          ),
+        );
+      } else if (isAllWarehouse || expectedEpcs.contains(item.epc.toUpperCase())) {
+        final actualLoc = resolveItemLocation(item);
+        final locDisplay = actualLoc?.displayName ?? (actualLoc?.locationCode ?? item.locationId ?? currentAuditLocDisplay);
+        session.results.add(
+          InventoryItemResult(
+            epc: item.epc,
+            sku: item.sku,
+            productName: item.productName,
             expectedLocation: locDisplay,
-            actualLocation: 'Chưa quét thấy',
+            actualLocation: currentAuditLocDisplay,
+            resultType: InventoryVarianceType.match,
+            readAt: DateTime.now(),
+          ),
+        );
+      } else {
+        // Thuộc KỆ KHÁC / KHO KHÁC trong database (Sai vị trí)
+        final actualLoc = resolveItemLocation(item);
+        final originLocDisplay = actualLoc != null
+            ? '${actualLoc.locationCode} • ${actualLoc.displayName} (${actualLoc.zone})'
+            : (item.locationId ?? 'Kệ khác / Chưa gán');
+
+        session.results.add(
+          InventoryItemResult(
+            epc: item.epc,
+            sku: item.sku,
+            productName: item.productName,
+            expectedLocation: originLocDisplay, // Vị trí gốc trong CSDL
+            actualLocation: currentAuditLocDisplay, // Vị trí đang quét thực tế
+            resultType: InventoryVarianceType.wrongLocation,
+            readAt: DateTime.now(),
+          ),
+        );
+      }
+    }
+
+    // Những món trong kỳ vọng nhưng CHƯA quét thấy -> Missing
+    for (var expected in expectedItems) {
+      if (!uniqueScannedEpcs.contains(expected.epc.toUpperCase())) {
+        final actualLoc = resolveItemLocation(expected);
+        final locDisplay = actualLoc?.displayName ?? (actualLoc?.locationCode ?? expected.locationId ?? currentAuditLocDisplay);
+        session.results.add(
+          InventoryItemResult(
+            epc: expected.epc,
+            sku: expected.sku,
+            productName: expected.productName,
+            expectedLocation: locDisplay,
+            actualLocation: null,
             resultType: InventoryVarianceType.missing,
             readAt: DateTime.now(),
           ),

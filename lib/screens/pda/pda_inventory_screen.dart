@@ -1178,61 +1178,6 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     );
   }
 
-  void _confirmDeleteFromSubScreen() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFFBF8F3),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(
-          children: const [
-            Icon(Icons.delete_forever, color: Color(0xFFDC2626), size: 22),
-            SizedBox(width: 8),
-            Text(
-              'Xóa Phiếu Kiểm Kê',
-              style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ],
-        ),
-        content: Text(
-          'Bạn có chắc chắn muốn xóa vĩnh viễn phiếu kiểm kê "${widget.session.sessionCode}" (${widget.session.zone}) không? Thao tác này không thể hoàn tác.',
-          style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 13.5, height: 1.3),
-        ),
-        actions: [
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFC7BDAF))),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
-            onPressed: () async {
-              _uiRefreshTimer?.cancel();
-              _tagSub?.cancel();
-              _triggerSub?.cancel();
-              await _uhf.stopInventory();
-              _uhf.clearTags();
-              if (ctx.mounted) Navigator.pop(ctx);
-              widget.onBack();
-              await _repo.deleteInventorySession(widget.session.sessionId);
-              if (mounted) {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    duration: const Duration(seconds: 2),
-                    backgroundColor: const Color(0xFFDC2626),
-                    content: Text('✓ Đã xóa phiếu kiểm kê ${widget.session.sessionCode}!'),
-                  ),
-                );
-              }
-            },
-            child: const Text('XÓA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final s = widget.session;
@@ -1293,63 +1238,52 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    s.sessionCode,
-                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 15),
+            Row(
+              children: [
+                Text(
+                  s.sessionCode,
+                  style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF0284C7), width: 0.8),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.sensors, size: 10, color: Color(0xFF0284C7)),
+                      SizedBox(width: 3),
+                      Text('RFID UHF', style: TextStyle(color: Color(0xFF0284C7), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+                if (isDone) ...[
                   const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF0284C7), width: 0.8),
+                      border: Border.all(color: const Color(0xFF10B981), width: 0.8),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.sensors, size: 10, color: Color(0xFF0284C7)),
-                        SizedBox(width: 3),
-                        Text('RFID UHF', style: TextStyle(color: Color(0xFF0284C7), fontSize: 9.5, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+                    child: const Text('ĐÃ CHỐT SỐ LIỆU', style: TextStyle(color: Color(0xFF059669), fontSize: 9.5, fontWeight: FontWeight.bold)),
                   ),
-                  if (isDone) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFF10B981), width: 0.8),
-                      ),
-                      child: const Text('ĐÃ CHỐT SỐ LIỆU', style: TextStyle(color: Color(0xFF059669), fontSize: 9.5, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
             Text(
               locDisplayTitle,
-              style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: Color(0xFF0369A1), fontSize: 11, fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626), size: 21),
-            tooltip: 'Xóa phiếu kiểm kê này',
-            onPressed: _confirmDeleteFromSubScreen,
-          ),
           IconButton(
             icon: Icon(_showManualInput ? Icons.keyboard_hide : Icons.keyboard, color: const Color(0xFF6B5D4D)),
             tooltip: 'Nhập EPC thủ công',
@@ -1717,7 +1651,6 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     height: 48,
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0xFFECFDF5),
                         foregroundColor: const Color(0xFF059669),
                         side: const BorderSide(color: Color(0xFF059669), width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1782,31 +1715,24 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     required Color color,
   }) {
     final isSelected = _selectedFilter == id;
-    final isAll = id == 'all';
     return InkWell(
       onTap: () => setState(() => _selectedFilter = id),
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
-          color: isSelected
-              ? (isAll ? const Color(0xFF2C251E) : color)
-              : Colors.white,
+          color: isSelected ? color : Colors.white,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected
-                ? (isAll ? const Color(0xFF2C251E) : color)
-                : const Color(0xFFD1D5DB),
+            color: isSelected ? color : const Color(0xFFD1C7BA),
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected
-                ? Colors.white
-                : (isAll ? const Color(0xFF2C251E) : color),
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            color: isSelected ? Colors.white : const Color(0xFF6B5D4D),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             fontSize: 11,
           ),
         ),
@@ -1820,14 +1746,14 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         // Cảnh báo chip từ kho/kệ khác lạc vào
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: const Color(0xFFFEF2F2),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+            border: Border.all(color: const Color(0xFFDC2626), width: 1.5),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFDC2626).withValues(alpha: 0.06),
+                color: const Color(0xFFDC2626).withValues(alpha: 0.08),
                 blurRadius: 4,
                 offset: const Offset(0, 1),
               ),
@@ -1840,21 +1766,14 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFEE2E2),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDC2626).withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFDC2626),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.wrong_location_rounded, color: Colors.white, size: 12),
-                    ),
+                    child: const Icon(Icons.wrong_location_rounded, color: Color(0xFFDC2626), size: 18),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1864,35 +1783,29 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEE2E2),
+                                color: const Color(0xFFDC2626),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
                                 '⛔ TỪ KHO/KỆ KHÁC VÀO ĐÂY',
-                                style: TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.bold, fontSize: 9.5),
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5),
                               ),
                             ),
                             const Spacer(),
                             Text(
-                              r.sku?.isNotEmpty == true ? r.sku! : r.epc,
-                              style: const TextStyle(
-                                color: Color(0xFF991B1B),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                                fontFamily: 'Courier',
-                              ),
+                              r.sku ?? '',
+                              style: const TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 11),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 4),
                         Text(
                           r.productName ?? 'Sản phẩm chưa đặt tên',
-                          style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 13.5),
+                          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
                         ),
-                        const SizedBox(height: 2),
                         Text(
                           'EPC: ${r.epc}',
-                          style: const TextStyle(color: Color(0xFF64748B), fontFamily: 'Courier', fontSize: 11),
+                          style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 11),
                         ),
                       ],
                     ),
@@ -1900,6 +1813,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 ],
               ),
               const SizedBox(height: 8),
+              // DÒNG THÔNG BÁO VÀ ĐỐI CHIẾU RÕ RÀNG
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
@@ -1969,39 +1883,25 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       case InventoryVarianceType.missing:
         // Hàng trên CSDL nhưng chưa quét thấy
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 3,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            color: const Color(0xFFFFFBEB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFEF3C7),
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFD97706),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.search_off, color: Colors.white, size: 12),
-                ),
+                child: const Icon(Icons.search_off_rounded, color: Color(0xFFD97706), size: 16),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2009,42 +1909,30 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFEF3C7),
+                            color: const Color(0xFFD97706),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
-                            '⚠️ CHƯA QUÉT THẤY',
-                            style: TextStyle(color: Color(0xFFD97706), fontSize: 9.5, fontWeight: FontWeight.bold),
-                          ),
+                          child: const Text('⚠️ CHƯA QUÉT THẤY', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                         ),
                         const Spacer(),
-                        Text(
-                          r.sku?.isNotEmpty == true ? r.sku! : r.epc,
-                          style: const TextStyle(
-                            color: Color(0xFFB45309),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Courier',
-                          ),
-                        ),
+                        Text(r.sku ?? '', style: const TextStyle(color: Color(0xFFB45309), fontSize: 10.5, fontWeight: FontWeight.bold)),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
                       r.productName ?? 'Sản phẩm',
-                      style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 13.5),
+                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
                     ),
-                    const SizedBox(height: 2),
                     Text(
                       'EPC: ${r.epc}',
-                      style: const TextStyle(color: Color(0xFF64748B), fontFamily: 'Courier', fontSize: 11),
+                      style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 10.5),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Tồn CSDL tại: ${r.expectedLocation ?? "Kệ này"} (Thủ kho cần kiểm tra tìm lại)',
-                      style: const TextStyle(color: Color(0xFF92400E), fontSize: 10.5, fontStyle: FontStyle.italic),
+                      style: const TextStyle(color: Color(0xFF92400E), fontSize: 10, fontStyle: FontStyle.italic),
                     ),
                   ],
                 ),
@@ -2054,41 +1942,27 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         );
 
       case InventoryVarianceType.match:
-        // Khớp hoàn toàn (Khớp đúng vị trí)
+        // Khớp hoàn toàn
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF6EE7B7), width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 3,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.5)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFD1FAE5),
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF059669),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check, color: Colors.white, size: 12),
-                ),
+                child: const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 16),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2096,37 +1970,25 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFD1FAE5),
+                            color: const Color(0xFF10B981).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
-                            '✓ ĐÚNG VỊ TRÍ',
-                            style: TextStyle(color: Color(0xFF059669), fontSize: 9.5, fontWeight: FontWeight.bold),
-                          ),
+                          child: const Text('✓ ĐÚNG VỊ TRÍ', style: TextStyle(color: Color(0xFF059669), fontSize: 9, fontWeight: FontWeight.bold)),
                         ),
                         const Spacer(),
-                        Text(
-                          r.sku?.isNotEmpty == true ? r.sku! : r.epc,
-                          style: const TextStyle(
-                            color: Color(0xFF0D9488),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Courier',
-                          ),
-                        ),
+                        Text(r.sku ?? '', style: const TextStyle(color: Color(0xFF059669), fontSize: 10.5, fontWeight: FontWeight.bold)),
                       ],
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
                       r.productName ?? 'Sản phẩm',
-                      style: const TextStyle(color: Color(0xFF1E293B), fontWeight: FontWeight.bold, fontSize: 13.5),
+                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
                     ),
-                    const SizedBox(height: 2),
                     Text(
                       'EPC: ${r.epc}',
-                      style: const TextStyle(color: Color(0xFF64748B), fontFamily: 'Courier', fontSize: 11),
+                      style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 10.5),
                     ),
                   ],
                 ),
@@ -2138,72 +2000,45 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       case InventoryVarianceType.unknownEpc:
         // Thẻ lạ chưa khai báo trong CSDL
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFDDD6FE), width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 3,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            color: const Color(0xFFFAF5FF),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.5)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEDE9FE),
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF7C3AED),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.help_outline, color: Colors.white, size: 12),
-                ),
+                child: const Icon(Icons.help_outline_rounded, color: Color(0xFF7C3AED), size: 16),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEDE9FE),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            '❓ THẺ LẠ CHƯA KHAI BÁO',
-                            style: TextStyle(color: Color(0xFF7C3AED), fontSize: 9.5, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          r.epc,
-                          style: const TextStyle(
-                            color: Color(0xFF7C3AED),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Courier',
-                          ),
-                        ),
-                      ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7C3AED),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text('❓ THẺ LẠ CHƯA KHAI BÁO', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
+                    Text(
+                      'EPC: ${r.epc}',
+                      style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11.5),
+                    ),
                     const Text(
                       'Thẻ RFID quét được nhưng chưa được đăng ký mã sản phẩm trên CSDL.',
-                      style: TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10),
                     ),
                   ],
                 ),
