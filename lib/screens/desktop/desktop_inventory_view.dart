@@ -67,7 +67,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
   @override
   void dispose() {
-    _uhf.disableScanning();
     _desktopUhfSub?.cancel();
     _uhfSub?.cancel();
     _searchCtrl.dispose();
@@ -131,21 +130,12 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     if (_isScanning) {
       // Dừng quét
       await _desktopUhf.stopInventory();
-      await _uhf.stopInventory();
-      _uhf.disableScanning();
       setState(() => _isScanning = false);
     } else {
       // Bắt đầu quét
-      _uhf.enableScanning('kiem_kho');
       setState(() => _isScanning = true);
       if (_desktopUhf.isConnected) {
         await _desktopUhf.startInventory();
-      } else {
-        _desktopUhf.connectWithSavedConfig().then((ok) {
-          if (ok && _isScanning) {
-            _desktopUhf.startInventory();
-          }
-        });
       }
     }
   }
@@ -682,11 +672,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       TextButton.icon(
                         icon: const Icon(Icons.refresh, size: 16),
                         label: const Text('Làm mới'),
-                        onPressed: () async {
-                          await _repo.reloadFromSupabase();
-                          await _repo.reloadFromSqlite();
-                          if (mounted) setState(() {});
-                        },
+                        onPressed: () => setState(() {}),
                       ),
                     ],
                   ),

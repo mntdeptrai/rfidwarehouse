@@ -603,4 +603,8 @@ class DatabaseService {
   Future<void> insertTransaction(InventoryTransaction tx) async {
     _transactions[tx.transactionId] = tx;
   }
+
+  Future<void> deleteTransaction(String transactionId) async {
+    _transactions.remove(transactionId);
+  }
 }

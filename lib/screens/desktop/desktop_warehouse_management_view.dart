@@ -908,7 +908,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final contentWidth = math.max(constraints.maxWidth, 1150.0);
+        final contentWidth = math.max(constraints.maxWidth, 1200.0);
 
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -1059,7 +1059,6 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                             icon: const Icon(Icons.refresh, size: 16),
                             label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                             onPressed: () async {
-                              await _repo.reloadFromSupabase();
                               await _repo.reloadFromSqlite();
                               await _supabaseSync.syncNow();
                               if (mounted) setState(() {});
@@ -1099,7 +1098,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                                 Expanded(flex: 3, child: Text('ĐỐI TÁC / VỊ TRÍ / KHU VỰC', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                 Expanded(flex: 2, child: Text('SỐ LƯỢNG HÀNG', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                                 SizedBox(width: 130, child: Text('TRẠNG THÁI', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                                SizedBox(width: 100, child: Text('THAO TÁC', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
+                                SizedBox(width: 230, child: Text('THAO TÁC', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
                               ],
                             ),
                           ),
@@ -1277,20 +1276,50 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
 
                                     // Thao tác
                                     SizedBox(
-                                      width: 100,
-                                      child: Center(
-                                        child: OutlinedButton(
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                            side: BorderSide(color: c.border),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                      width: 230,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          OutlinedButton(
+                                            style: OutlinedButton.styleFrom(
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                              side: BorderSide(color: c.border),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                              visualDensity: VisualDensity.compact,
+                                            ),
+                                            onPressed: () => _showHistoryDetailDialog(context, h, c),
+                                            child: Text(
+                                              'Chi Tiết',
+                                              style: TextStyle(color: c.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
+                                            ),
                                           ),
-                                          onPressed: () => _showHistoryDetailDialog(context, h, c),
-                                          child: Text(
-                                            'Chi Tiết',
-                                            style: TextStyle(color: c.textPrimary, fontSize: 11, fontWeight: FontWeight.bold),
+                                          const SizedBox(width: 6),
+                                          OutlinedButton(
+                                            style: OutlinedButton.styleFrom(
+                                              minimumSize: Size.zero,
+                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                              side: const BorderSide(color: Color(0xFFEF4444)),
+                                              foregroundColor: const Color(0xFFEF4444),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                              visualDensity: VisualDensity.compact,
+                                            ),
+                                            onPressed: () => _confirmDeleteHistoryRecord(context, h, c),
+                                            child: const Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.delete_outline, size: 13, color: Color(0xFFEF4444)),
+                                                SizedBox(width: 3),
+                                                Text(
+                                                  'Xóa đơn',
+                                                  style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -2044,6 +2073,137 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
     );
   }
 
+  // --- XÁC NHẬN VÀ XÓA ĐƠN HÀNG / GIAO DỊCH LỊCH SỬ KHO ---
+  Future<void> _confirmDeleteHistoryRecord(BuildContext context, Map<String, dynamic> h, EyeCareColors c) async {
+    final orderNo = h['orderNo'] as String? ?? '';
+    final orderId = h['orderId'] as String? ?? '';
+    final recType = h['recordType'] as String? ?? 'INBOUND';
+    final totalQty = h['totalQty'] as int? ?? 0;
+
+    final typeLabel = switch (recType) {
+      'OUTBOUND' => 'đơn xuất kho',
+      'MOVEMENT' => 'giao dịch điều chuyển',
+      'AUDIT' => 'phiên kiểm kê',
+      _ => 'đơn nhập kho',
+    };
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.bgCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: c.border),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Xác nhận xóa $typeLabel?',
+                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bạn có chắc chắn muốn xóa $typeLabel: $orderNo?',
+              style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              totalQty > 0
+                  ? 'Toàn bộ dữ liệu ($totalQty sản phẩm/chip) liên quan sẽ được xóa sạch khỏi bộ nhớ và đồng bộ với Supabase Cloud.'
+                  : 'Toàn bộ dữ liệu của chứng từ này sẽ được xóa sạch khỏi bộ nhớ và đồng bộ với Supabase Cloud.',
+              style: TextStyle(color: c.textSecondary, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('HỦY', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.delete_forever, size: 16),
+            label: const Text('XÓA ĐƠN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      if (recType == 'INBOUND') {
+        await _repo.deleteInboundOrder(orderId.isNotEmpty ? orderId : orderNo);
+        if (h['transaction'] != null && h['transaction'] is InventoryTransaction) {
+          await _repo.deleteTransaction((h['transaction'] as InventoryTransaction).transactionId);
+        }
+      } else if (recType == 'OUTBOUND') {
+        await _repo.deleteOutboundOrder(orderId.isNotEmpty ? orderId : orderNo);
+        if (h['transaction'] != null && h['transaction'] is InventoryTransaction) {
+          await _repo.deleteTransaction((h['transaction'] as InventoryTransaction).transactionId);
+        }
+      } else if (recType == 'MOVEMENT') {
+        if (h['transaction'] != null && h['transaction'] is InventoryTransaction) {
+          await _repo.deleteTransaction((h['transaction'] as InventoryTransaction).transactionId);
+        } else {
+          await _repo.deleteTransaction(orderId.isNotEmpty ? orderId : orderNo);
+        }
+      } else if (recType == 'AUDIT') {
+        if (h['session'] != null && h['session'] is InventorySession) {
+          await _repo.deleteInventorySession((h['session'] as InventorySession).sessionId);
+        } else {
+          await _repo.deleteInventorySession(orderId.isNotEmpty ? orderId : orderNo);
+        }
+        if (h['transaction'] != null && h['transaction'] is InventoryTransaction) {
+          await _repo.deleteTransaction((h['transaction'] as InventoryTransaction).transactionId);
+        }
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã xóa thành công $typeLabel: $orderNo'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      setState(() {});
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi xóa: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
   // --- DIALOG: XEM CHI TIẾT ĐƠN HÀNG NHẬP / XUẤT / ĐIỀU CHUYỂN / KIỂM KÊ ---
   void _showHistoryDetailDialog(BuildContext context, Map<String, dynamic> record, EyeCareColors c) {
     final recType = record['recordType'] as String? ?? '';
@@ -2220,6 +2380,18 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
             ),
           ),
           actions: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFEF4444)),
+                foregroundColor: const Color(0xFFEF4444),
+              ),
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('XÓA PHIÊN NÀY', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _confirmDeleteHistoryRecord(context, record, c);
+              },
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
               onPressed: () => Navigator.pop(ctx),
@@ -2293,6 +2465,18 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
             ),
           ),
           actions: [
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFEF4444)),
+                foregroundColor: const Color(0xFFEF4444),
+              ),
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('XÓA GIAO DỊCH NÀY', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _confirmDeleteHistoryRecord(context, record, c);
+              },
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
               onPressed: () => Navigator.pop(ctx),
@@ -2475,6 +2659,18 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
           ),
         ),
         actions: [
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFFEF4444)),
+              foregroundColor: const Color(0xFFEF4444),
+            ),
+            icon: const Icon(Icons.delete_outline, size: 16),
+            label: const Text('XÓA ĐƠN NÀY', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _confirmDeleteHistoryRecord(context, record, c);
+            },
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
             onPressed: () => Navigator.pop(ctx),

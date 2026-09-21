@@ -54,9 +54,11 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
           onPressed: () => Navigator.pop(context),
         ),
+        titleSpacing: 0,
         title: const Text(
           'Kiểm Kê Kho Hàng (RFID)',
           style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           Container(
@@ -90,11 +92,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF6B5D4D)),
             tooltip: 'Làm mới',
-            onPressed: () async {
-              await _repo.reloadFromSupabase();
-              await _repo.reloadFromSqlite();
-              if (mounted) setState(() {});
-            },
+            onPressed: () => _repo.reloadFromSqlite(),
           ),
         ],
       ),
@@ -222,21 +220,16 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626), size: 20),
-                              tooltip: 'Xóa phiếu kiểm kê',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                              onPressed: () => _confirmDeleteSession(s),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 10),
                         const Divider(height: 1, color: Color(0xFFE9E2D5)),
                         const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 2,
                           children: [
                             Text(
                               'Bắt đầu: ${_formatDate(s.startedAt)}',
@@ -320,55 +313,6 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
               ),
             )
           : null,
-    );
-  }
-
-  void _confirmDeleteSession(InventorySession s) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFFFBF8F3),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Row(
-          children: const [
-            Icon(Icons.delete_forever, color: Color(0xFFDC2626), size: 22),
-            SizedBox(width: 8),
-            Text(
-              'Xóa Phiếu Kiểm Kê',
-              style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ],
-        ),
-        content: Text(
-          'Bạn có chắc chắn muốn xóa vĩnh viễn phiếu kiểm kê "${s.sessionCode}" (${s.zone}) không? Thao tác này không thể hoàn tác.',
-          style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 13.5, height: 1.3),
-        ),
-        actions: [
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFC7BDAF))),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _repo.deleteInventorySession(s.sessionId);
-              if (mounted) {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    duration: const Duration(seconds: 2),
-                    backgroundColor: const Color(0xFFDC2626),
-                    content: Text('✓ Đã xóa phiếu kiểm kê ${s.sessionCode}!'),
-                  ),
-                );
-              }
-            },
-            child: const Text('XÓA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1225,6 +1169,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       appBar: AppBar(
         backgroundColor: const Color(0xFFE9E2D5),
         elevation: 0,
+        titleSpacing: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
           onPressed: () async {
@@ -1238,48 +1183,53 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Text(
-                  s.sessionCode,
-                  style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0284C7).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFF0284C7), width: 0.8),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    s.sessionCode,
+                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13.5),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.sensors, size: 10, color: Color(0xFF0284C7)),
-                      SizedBox(width: 3),
-                      Text('RFID UHF', style: TextStyle(color: Color(0xFF0284C7), fontSize: 9.5, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-                if (isDone) ...[
                   const SizedBox(width: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF10B981), width: 0.8),
+                  if (isDone)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF10B981), width: 0.8),
+                      ),
+                      child: const Text('ĐÃ CHỐT SỐ LIỆU', style: TextStyle(color: Color(0xFF059669), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF0284C7), width: 0.8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.sensors, size: 10, color: Color(0xFF0284C7)),
+                          SizedBox(width: 3),
+                          Text('RFID UHF', style: TextStyle(color: Color(0xFF0284C7), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
                     ),
-                    child: const Text('ĐÃ CHỐT SỐ LIỆU', style: TextStyle(color: Color(0xFF059669), fontSize: 9.5, fontWeight: FontWeight.bold)),
-                  ),
                 ],
-              ],
+              ),
             ),
             Text(
               locDisplayTitle,
               style: const TextStyle(color: Color(0xFF0369A1), fontSize: 11, fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ],
         ),
@@ -1443,7 +1393,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 Row(
                   children: [
                     _buildKpiCard(
-                      title: '⚠️ Chưa quét (Thiếu)',
+                      title: '⚠️ Chưa quét',
                       value: '$missingCount',
                       unit: 'SP',
                       color: const Color(0xFFD97706),
@@ -1791,10 +1741,14 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5),
                               ),
                             ),
-                            const Spacer(),
-                            Text(
-                              r.sku ?? '',
-                              style: const TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 11),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                r.sku ?? '',
+                                style: const TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 11),
+                                textAlign: TextAlign.right,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),
@@ -1916,8 +1870,15 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                           ),
                           child: const Text('⚠️ CHƯA QUÉT THẤY', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                         ),
-                        const Spacer(),
-                        Text(r.sku ?? '', style: const TextStyle(color: Color(0xFFB45309), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            r.sku ?? '',
+                            style: const TextStyle(color: Color(0xFFB45309), fontSize: 10.5, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.right,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 3),
@@ -1977,8 +1938,15 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                           ),
                           child: const Text('✓ ĐÚNG VỊ TRÍ', style: TextStyle(color: Color(0xFF059669), fontSize: 9, fontWeight: FontWeight.bold)),
                         ),
-                        const Spacer(),
-                        Text(r.sku ?? '', style: const TextStyle(color: Color(0xFF059669), fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            r.sku ?? '',
+                            style: const TextStyle(color: Color(0xFF059669), fontSize: 10.5, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.right,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 3),

@@ -319,9 +319,30 @@ void main() {
       expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
     });
 
-    testWidgets('7. Nút xóa đơn kiểm kê trên danh sách PDA hoạt động chính xác', (WidgetTester tester) async {
-      final session = repo.startInventorySession(zone: 'KHU_TEST', locationCode: 'R99-TEST');
-      await repo.saveInventorySession(session);
+    testWidgets('7. Màn hình Chi tiết Kiểm kê đã chốt không bị RenderFlex overflow trên màn hình hẹp', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final loc = Location(
+        locationId: 'LOC-OVERFLOW-TEST',
+        locationCode: 'R09-OF-01',
+        zone: 'KHU-HA-TANG',
+        shelf: 'KỆ THIẾT BỊ HẠ TẦNG',
+        level: 'Tầng 1',
+      );
+      await repo.addLocation(loc);
+
+      final session = repo.startInventorySession(
+        zone: loc.zone,
+        locationCode: loc.locationCode,
+      );
+      // Chốt phiếu kiểm kê
+      session.isCompleted = true;
+      session.completedAt = DateTime.now();
 
       await tester.pumpWidget(
         MaterialApp(
@@ -331,34 +352,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Nút xóa phiếu kiểm kê trên card
-      final deleteBtn = find.byTooltip('Xóa phiếu kiểm kê');
-      expect(deleteBtn, findsWidgets);
-
-      await tester.tap(deleteBtn.first);
+      // Bấm mở phiên kiểm kê đã chốt
+      final sessionCard = find.text(session.sessionCode);
+      expect(sessionCard, findsOneWidget);
+      await tester.tap(sessionCard);
       await tester.pumpAndSettle();
 
-      // Hiện dialog xác nhận
-      expect(find.text('Xóa Phiếu Kiểm Kê'), findsOneWidget);
-      expect(find.text('XÓA'), findsOneWidget);
-
-      await tester.tap(find.text('XÓA'));
-      await tester.pumpAndSettle();
-
-      // Phiếu đã được xóa khỏi repo
-      expect(repo.inventorySessions.any((s) => s.sessionId == session.sessionId), isFalse);
-    });
-
-    test('8. Chốt kiểm kê đồng bộ giao dịch AUDIT vào transactions', () async {
-      final session = repo.startInventorySession(zone: 'KHU_A', locationCode: 'A-01');
-      await repo.completeInventorySession(session.sessionId, 'Thủ kho A');
-
-      expect(session.isCompleted, isTrue);
-      // Đảm bảo có giao dịch AUDIT tương ứng trong transactions
-      final auditTx = repo.transactions.where((t) => t.type == TransactionType.auditAdjustment && t.documentNo == session.sessionCode).firstOrNull;
-      expect(auditTx, isNotNull);
-      expect(auditTx?.performedBy, equals('Thủ kho A'));
+      // Kiểm tra các thành phần giao diện hiển thị đúng mà không có ngoại lệ overflow
+      expect(find.text('ĐÃ CHỐT SỐ LIỆU'), findsOneWidget);
+      expect(find.text('⚠️ Chưa quét'), findsOneWidget);
+      expect(find.textContaining('QUAY LẠI DANH SÁCH'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }
-
