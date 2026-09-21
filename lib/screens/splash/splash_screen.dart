@@ -28,13 +28,10 @@ class _SplashScreenState extends State<SplashScreen> {
   Timer? _timer;
   bool _hasNavigated = false;
 
-  Duration get _effectiveDuration => widget.duration ?? const Duration(milliseconds: 1500);
-
   @override
   void initState() {
     super.initState();
-    // Nạp dữ liệu hệ thống ngầm và tự động chuyển sang Đăng Nhập sau 1.5 giây
-    _loadAppDataAndProceed();
+    _startPreloadAndScheduleNavigation();
   }
 
   @override
@@ -43,31 +40,29 @@ class _SplashScreenState extends State<SplashScreen> {
     precacheImage(const AssetImage('assets/images/nhat_minh_logo.png'), context);
   }
 
-  Future<void> _loadAppDataAndProceed() async {
-    final startTime = DateTime.now();
+  void _startPreloadAndScheduleNavigation() {
+    // 1. Kích hoạt nạp CSDL hệ thống và đồng bộ hoàn toàn ngầm trong RAM (Non-blocking)
+    unawaited(_preloadSystemDataInBackground());
 
-    try {
-      await Future.wait([
-        AuthService().init(),
-        WarehouseRepository().ensureInitialized(),
-      ]);
+    // 2. Chuyển tiếp ngay lập tức sang Màn hình Đăng Nhập:
+    // - Nếu widget.duration được truyền (từ test suite): tuân thủ chính xác duration đó.
+    // - Nếu mở app thực tế (duration == null): cho logo xuất hiện ngắn gọn 100ms
+    //   để người dùng cảm nhận mượt mà, sau đó chuyển cảnh ngay sang màn hình Đăng Nhập.
+    final targetDuration = widget.duration ?? const Duration(milliseconds: 100);
 
-      // Đảm bảo mở app luôn vào Màn hình Đăng Nhập theo yêu cầu
-      await AuthService().logout();
-    } catch (e) {
-      debugPrint('SplashScreen data load error: $e');
-    }
-
-    // Đúng 1.5 giây hiển thị logo rồi chuyển sang đăng nhập
-    final elapsed = DateTime.now().difference(startTime);
-    final remaining = _effectiveDuration - elapsed;
-
-    if (remaining > Duration.zero) {
-      _timer = Timer(remaining, () {
-        if (mounted) _navigateToLogin();
-      });
-    } else {
+    _timer = Timer(targetDuration, () {
       if (mounted) _navigateToLogin();
+    });
+  }
+
+  Future<void> _preloadSystemDataInBackground() async {
+    try {
+      // Đảm bảo mở app luôn vào Màn hình Đăng Nhập
+      await AuthService().logout();
+      await AuthService().init();
+      await WarehouseRepository().ensureInitialized();
+    } catch (e) {
+      debugPrint('SplashScreen background load error: $e');
     }
   }
 
@@ -80,7 +75,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 300),
+        transitionDuration: const Duration(milliseconds: 150),
         pageBuilder: (context, animation, secondaryAnimation) => target,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);

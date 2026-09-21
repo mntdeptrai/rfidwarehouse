@@ -118,6 +118,9 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (!_isInitialized) {
+        await init();
+      }
       Map<String, dynamic>? userMap = await _dbService.getUserAuth(cleanUsername);
 
       // Nếu trong SQLite cục bộ chưa có user, nhưng máy đang online kết nối Supabase, tìm trực tiếp trên Cloud

@@ -58,12 +58,13 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
   final List<PalletMergeRecord> _recentMerges = [];
 
   StreamSubscription<String>? _barcodeSub;
+  Timer? _repoThrottleTimer;
 
   @override
   void initState() {
     super.initState();
     _eyeCare.addListener(_onStateChange);
-    _repo.addListener(_onStateChange);
+    _repo.addListener(_onRepoChange);
 
     if (widget.initialSourcePallet != null) {
       _sourcePallet = widget.initialSourcePallet;
@@ -83,12 +84,20 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
     if (mounted) setState(() {});
   }
 
+  void _onRepoChange() {
+    if (_repoThrottleTimer?.isActive ?? false) return;
+    _repoThrottleTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
+    _repoThrottleTimer?.cancel();
     _resetTimer?.cancel();
     _uhf.popScanMode();
     _eyeCare.removeListener(_onStateChange);
-    _repo.removeListener(_onStateChange);
+    _repo.removeListener(_onRepoChange);
     _barcodeSub?.cancel();
     super.dispose();
   }

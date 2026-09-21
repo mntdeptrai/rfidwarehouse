@@ -4,6 +4,8 @@ import 'screens/splash/splash_screen.dart';
 import 'services/uhf_service.dart';
 import 'services/supabase_sync_service.dart';
 import 'services/api_service.dart';
+import 'services/warehouse_repository.dart';
+import 'services/auth_service.dart';
 import 'theme/eye_care_theme.dart';
 
 void main() {
@@ -23,8 +25,11 @@ void main() {
   SupabaseSyncService();
   ApiService().init();
 
-  // Khởi chạy UI ngay lập tức: Màn hình chờ (SplashScreen) xuất hiện tức thì trên frame đầu tiên,
-  // CSDL và phiên làm việc sẽ được nạp ngầm song song trong lúc người dùng xem logo.
+  // Nạp trước CSDL SQLite và cấu hình vào RAM ngay lập tức (non-blocking pre-warm)
+  WarehouseRepository().ensureInitialized();
+  AuthService().init();
+
+  // Khởi chạy UI ngay lập tức: Màn hình chờ (SplashScreen) xuất hiện tức thì trên frame đầu tiên
   runApp(const RfidWmsApp());
 }
 

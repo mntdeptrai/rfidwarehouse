@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -30,9 +31,6 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> _loadFromSqlite() async {
     try {
-      final dbProducts = await _dbService.getProducts();
-      final dbLocations = await _dbService.getLocations();
-      final dbItems = await _dbService.getItems();
       const bogusCommandNames = {
         'ACTION_SCAN',
         'ACTION_STOP_SCAN',
@@ -63,26 +61,9 @@ class WarehouseRepository extends ChangeNotifier {
             bogusCommandNames.contains(orderNo);
       }
 
-      for (final p in dbProducts) {
-        if (isBogusCommandProduct(p)) {
-          await _dbService.deleteProduct(p.productId);
-        }
-      }
-      for (final i in dbItems) {
-        if (isBogusCommandItem(i)) {
-          await _dbService.deleteItem(i.epc);
-        }
-      }
-
-      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-        final supaLoaded = await _tryLoadFromSupabaseDirect();
-        if (supaLoaded) {
-          notifyListeners();
-          return;
-        }
-      }
-
+      // 1. Nạp siêu tốc toàn bộ dữ liệu SQLite cục bộ vào RAM (~30ms)
       final cleanProducts = await _dbService.getProducts();
+      final cleanLocations = List<Location>.from(await _dbService.getLocations());
       final cleanItems = await _dbService.getItems();
       final cleanPallets = await _dbService.getPallets();
       final cleanInboundOrders = await _dbService.getInboundOrders();
@@ -94,9 +75,8 @@ class WarehouseRepository extends ChangeNotifier {
       final dbTransactions = await _dbService.getTransactions();
 
       _products.clear();
-      _products.addAll(cleanProducts);
+      _products.addAll(cleanProducts.where((p) => !isBogusCommandProduct(p)));
 
-      final cleanLocations = List<Location>.from(dbLocations);
       cleanLocations.sort((a, b) {
         final z = a.zone.compareTo(b.zone);
         if (z != 0) return z;
@@ -189,7 +169,34 @@ class WarehouseRepository extends ChangeNotifier {
         }
       }
 
+      // Đánh thức UI và các listener ngay lập tức bằng dữ liệu SQLite cục bộ
       notifyListeners();
+
+      // 2. Dọn dẹp lệnh rác scanner ngầm trong SQLite (không chặn UI startup)
+      unawaited(Future(() async {
+        for (final p in cleanProducts) {
+          if (isBogusCommandProduct(p)) {
+            await _dbService.deleteProduct(p.productId);
+          }
+        }
+        for (final i in cleanItems) {
+          if (isBogusCommandItem(i)) {
+            await _dbService.deleteItem(i.epc);
+          }
+        }
+      }));
+
+      // 3. Đồng bộ hóa Supabase Cloud ngầm ở chế độ Non-blocking (Không làm chậm quá trình mở app)
+      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+        unawaited(_tryLoadFromSupabaseDirect().then((supaLoaded) {
+          if (supaLoaded) {
+            notifyListeners();
+          }
+        }).catchError((e) {
+          debugPrint('WarehouseRepository: Background Supabase load error: $e');
+          return false;
+        }));
+      }
     } catch (e) {
       debugPrint('WarehouseRepository: SQLite load error: $e');
     }
@@ -1787,11 +1794,28 @@ class WarehouseRepository extends ChangeNotifier {
   final Map<String, Pallet> _palletsByRfidIndex = {};
   final Map<String, Pallet> _palletsByHexIndex = {};
   final Map<String, Item> _itemsByEpcIndex = {};
+  bool _indexesDirty = true;
+
+  // PDA high-performance lookup indexes
+  final Map<String, List<Item>> _inStockItemsByPalletIndex = {};
+  final Map<String, List<Item>> _inStockItemsByLocationIndex = {};
+  final Map<String, Location> _locationsByIdOrCodeIndex = {};
+  final Map<String, Item> _itemsByIdIndex = {};
+  final Map<String, List<Pallet>> _palletsByLocationIndex = {};
+  final Map<String, InboundOrder> _inboundOrdersByNoIndex = {};
 
   void _rebuildIndexes() {
+    _inboundOrdersByNoIndex.clear();
+    for (final o in _inboundOrders) {
+      final oNo = o.orderNo.trim().toUpperCase();
+      final oId = o.inboundOrderId.trim().toUpperCase();
+      if (oNo.isNotEmpty) _inboundOrdersByNoIndex[oNo] = o;
+      if (oId.isNotEmpty) _inboundOrdersByNoIndex[oId] = o;
+    }
     _palletsByCodeIndex.clear();
     _palletsByRfidIndex.clear();
     _palletsByHexIndex.clear();
+    _palletsByLocationIndex.clear();
     for (final p in _pallets) {
       final pCode = p.palletCode.trim().toUpperCase();
       final pId = p.palletId.trim().toUpperCase();
@@ -1801,13 +1825,153 @@ class WarehouseRepository extends ChangeNotifier {
       if (rfid.isNotEmpty) _palletsByRfidIndex[rfid] = p;
       final hexCode = p.palletCode.codeUnits.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join('');
       if (hexCode.isNotEmpty) _palletsByHexIndex[hexCode] = p;
+      final pLoc = p.locationId?.trim().toUpperCase();
+      if (pLoc != null && pLoc.isNotEmpty) {
+        _palletsByLocationIndex.putIfAbsent(pLoc, () => []).add(p);
+      }
+    }
+
+    _locationsByIdOrCodeIndex.clear();
+    for (final loc in _locations) {
+      final code = loc.locationCode.trim().toUpperCase();
+      final id = loc.locationId.trim().toUpperCase();
+      if (code.isNotEmpty) _locationsByIdOrCodeIndex[code] = loc;
+      if (id.isNotEmpty) _locationsByIdOrCodeIndex[id] = loc;
     }
 
     _itemsByEpcIndex.clear();
+    _itemsByIdIndex.clear();
+    _inStockItemsByPalletIndex.clear();
+    _inStockItemsByLocationIndex.clear();
+
     for (final it in _items) {
       final cleanEpc = it.epc.trim().toUpperCase();
       if (cleanEpc.isNotEmpty) _itemsByEpcIndex[cleanEpc] = it;
+      if (it.itemId.isNotEmpty) _itemsByIdIndex[it.itemId] = it;
+
+      if (it.status == ItemStatus.inStock) {
+        if (it.palletId != null && it.palletId!.trim().isNotEmpty) {
+          final pKey = it.palletId!.trim().toUpperCase();
+          _inStockItemsByPalletIndex.putIfAbsent(pKey, () => []).add(it);
+        }
+        if (it.locationId != null && it.locationId!.trim().isNotEmpty) {
+          final locKey = it.locationId!.trim().toUpperCase();
+          _inStockItemsByLocationIndex.putIfAbsent(locKey, () => []).add(it);
+        }
+      }
     }
+    _indexesDirty = false;
+  }
+
+  /// Lazy rebuild: chỉ xây lại indexes khi thực sự cần tra cứu VÀ dữ liệu đã thay đổi
+  void _ensureIndexes() {
+    if (_indexesDirty) _rebuildIndexes();
+  }
+
+  @override
+  void notifyListeners() {
+    _indexesDirty = true;
+    super.notifyListeners();
+  }
+
+  /// Tra cứu danh sách mặt hàng đang lưu kho (ItemStatus.inStock) của Pallet - O(1)
+  List<Item> getInStockItemsForPallet(String palletId, {String? palletCode, List<String>? itemIds}) {
+    _ensureIndexes();
+    final List<Item> results = [];
+    final seen = <String>{};
+
+    void addFromKey(String key) {
+      final list = _inStockItemsByPalletIndex[key.trim().toUpperCase()];
+      if (list != null) {
+        for (final it in list) {
+          if (seen.add(it.itemId)) results.add(it);
+        }
+      }
+    }
+
+    if (palletId.isNotEmpty) addFromKey(palletId);
+    if (palletCode != null && palletCode.isNotEmpty) addFromKey(palletCode);
+
+    if (itemIds != null && itemIds.isNotEmpty) {
+      for (final id in itemIds) {
+        if (!seen.contains(id)) {
+          final it = _itemsByIdIndex[id];
+          if (it != null && it.status == ItemStatus.inStock) {
+            seen.add(it.itemId);
+            results.add(it);
+          }
+        }
+      }
+    }
+    return results;
+  }
+
+  /// Kiểm tra nhanh xem Pallet có chứa hàng tồn kho hay không - O(1)
+  bool hasInStockItemsOnPallet(Pallet p) {
+    _ensureIndexes();
+    final pId = p.palletId.trim().toUpperCase();
+    final pCode = p.palletCode.trim().toUpperCase();
+    if (_inStockItemsByPalletIndex[pId]?.isNotEmpty ?? false) return true;
+    if (_inStockItemsByPalletIndex[pCode]?.isNotEmpty ?? false) return true;
+    for (final itId in p.itemIds) {
+      final it = _itemsByIdIndex[itId];
+      if (it != null && it.status == ItemStatus.inStock) return true;
+    }
+    return false;
+  }
+
+  /// Tra cứu danh sách mặt hàng đang lưu kho (ItemStatus.inStock) tại Kệ/Vị trí - O(1)
+  List<Item> getInStockItemsAtLocation(String locCode, {String? locId}) {
+    _ensureIndexes();
+    final List<Item> results = [];
+    final seen = <String>{};
+
+    void addFromKey(String key) {
+      final list = _inStockItemsByLocationIndex[key.trim().toUpperCase()];
+      if (list != null) {
+        for (final it in list) {
+          if (seen.add(it.itemId)) results.add(it);
+        }
+      }
+    }
+
+    if (locCode.isNotEmpty) addFromKey(locCode);
+    if (locId != null && locId.isNotEmpty && locId != locCode) addFromKey(locId);
+
+    return results;
+  }
+
+  /// Tra cứu danh sách Pallet đang đặt tại Vị trí/Kệ - O(1)
+  List<Pallet> getPalletsAtLocation(String locCode, {String? locId}) {
+    _ensureIndexes();
+    final c = locCode.trim().toUpperCase();
+    final fromCode = _palletsByLocationIndex[c] ?? const <Pallet>[];
+    if (locId != null && locId.isNotEmpty && locId.trim().toUpperCase() != c) {
+      final fromId = _palletsByLocationIndex[locId.trim().toUpperCase()] ?? const <Pallet>[];
+      if (fromId.isNotEmpty) {
+        final set = {...fromCode, ...fromId};
+        return set.toList();
+      }
+    }
+    return fromCode;
+  }
+
+  /// Tra cứu nhanh Pallet theo ID hoặc Mã - O(1)
+  Pallet? findPalletFast(String? idOrCode) {
+    if (idOrCode == null) return null;
+    final clean = idOrCode.trim().toUpperCase();
+    if (clean.isEmpty) return null;
+    _ensureIndexes();
+    return _palletsByCodeIndex[clean];
+  }
+
+  /// Tra cứu nhanh Kệ theo ID hoặc Mã - O(1)
+  Location? findLocationFast(String? idOrCode) {
+    if (idOrCode == null) return null;
+    final clean = idOrCode.trim().toUpperCase();
+    if (clean.isEmpty) return null;
+    _ensureIndexes();
+    return _locationsByIdOrCodeIndex[clean];
   }
 
   WarehouseFloorPlanConfig _floorPlanConfig = WarehouseFloorPlanConfig.defaultConfig();
@@ -2114,6 +2278,9 @@ class WarehouseRepository extends ChangeNotifier {
   Pallet? findPalletByRfid(String epc) {
     final clean = epc.trim().toUpperCase();
     if (clean.isEmpty) return null;
+    _ensureIndexes();
+    final indexed = _palletsByRfidIndex[clean] ?? _palletsByCodeIndex[clean] ?? _palletsByHexIndex[clean];
+    if (indexed != null) return indexed;
     for (final p in _pallets) {
       if (p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == clean) {
         return p;
@@ -2133,6 +2300,7 @@ class WarehouseRepository extends ChangeNotifier {
   /// Tra cứu nhanh Item theo mã thẻ RFID (EPC) - O(1)
   Item? findItemByEpc(String epc) {
     final clean = epc.trim().toUpperCase();
+    _ensureIndexes();
     return clean.isEmpty ? null : _itemsByEpcIndex[clean];
   }
 
@@ -2183,10 +2351,8 @@ class WarehouseRepository extends ChangeNotifier {
       return item.supplier!.trim();
     }
     if (item.orderNo != null && item.orderNo!.trim().isNotEmpty) {
-      final ord = _inboundOrders.where((o) =>
-        o.orderNo.trim().toUpperCase() == item.orderNo!.trim().toUpperCase() ||
-        o.inboundOrderId.trim().toUpperCase() == item.orderNo!.trim().toUpperCase()
-      ).firstOrNull;
+      _ensureIndexes();
+      final ord = _inboundOrdersByNoIndex[item.orderNo!.trim().toUpperCase()];
       if (ord != null && ord.sourceSupplier.trim().isNotEmpty) {
         return ord.sourceSupplier.trim();
       }
@@ -4470,11 +4636,12 @@ class WarehouseRepository extends ChangeNotifier {
     required List<String> scannedEpcs,
     bool notify = false,
   }) {
+    _ensureIndexes();
     final session = _inventorySessions.where((s) => s.sessionId == sessionId).firstOrNull;
     if (session == null || session.isCompleted) return;
     session.results.clear();
 
-    final uniqueScannedEpcs = scannedEpcs.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+    final uniqueScannedEpcs = scannedEpcs.map((e) => e.trim().toUpperCase()).where((e) => e.isNotEmpty).toSet();
 
     final isAllWarehouse = session.zone.trim().toLowerCase().contains('toàn bộ') ||
         session.zone.trim().toUpperCase() == 'ALL' ||
@@ -4511,9 +4678,8 @@ class WarehouseRepository extends ChangeNotifier {
             ? session.locationCode!
             : (session.zone.isNotEmpty ? session.zone : 'Toàn bộ kho'));
 
-    for (var rawEpc in uniqueScannedEpcs) {
-      final epc = rawEpc.trim();
-      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+    for (var epc in uniqueScannedEpcs) {
+      final item = _itemsByEpcIndex[epc] ?? _items.where((it) => it.epc.toUpperCase() == epc).firstOrNull;
 
       if (item == null || item.sku == 'UNKNOWN' || item.itemId.isEmpty) {
         session.results.add(
@@ -4559,7 +4725,7 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     for (var expItem in expectedItems) {
-      if (!uniqueScannedEpcs.any((e) => e.trim().toUpperCase() == expItem.epc.trim().toUpperCase())) {
+      if (!uniqueScannedEpcs.contains(expItem.epc.trim().toUpperCase())) {
         final loc = resolveItemLocation(expItem);
         final locDisplay = loc != null ? '${loc.locationCode} • ${loc.displayName}' : (expItem.locationId ?? currentAuditLocDisplay);
         session.results.add(

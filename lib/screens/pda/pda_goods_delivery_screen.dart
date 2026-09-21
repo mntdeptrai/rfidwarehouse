@@ -1348,6 +1348,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
               borderRadius: BorderRadius.circular(8),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
                 child: SizedBox(
                   width: 1080,
                   child: Column(
@@ -1387,6 +1388,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
                       // Danh sách dòng sản phẩm
                       Expanded(
                         child: ListView.separated(
+                          physics: const ClampingScrollPhysics(),
+                          cacheExtent: 600,
                           itemCount: order.items.length + unexpList.length,
                           separatorBuilder: (_, _) => Divider(height: 1, color: c.border.withValues(alpha: 0.4)),
                           itemBuilder: (context, index) {

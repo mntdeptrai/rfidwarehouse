@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../services/auth_service.dart';
@@ -24,6 +25,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
   final _eyeCare = EyeCareThemeService();
   final _authService = AuthService();
   final _repo = WarehouseRepository();
+  Timer? _repoThrottleTimer;
 
   @override
   void initState() {
@@ -31,19 +33,27 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     _syncService.addListener(_onStateChange);
     _eyeCare.addListener(_onStateChange);
     _authService.addListener(_onStateChange);
-    _repo.addListener(_onStateChange);
+    _repo.addListener(_onRepoChange);
   }
 
   void _onStateChange() {
     if (mounted) setState(() {});
   }
 
+  void _onRepoChange() {
+    if (_repoThrottleTimer?.isActive ?? false) return;
+    _repoThrottleTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() {});
+    });
+  }
+
   @override
   void dispose() {
+    _repoThrottleTimer?.cancel();
     _syncService.removeListener(_onStateChange);
     _eyeCare.removeListener(_onStateChange);
     _authService.removeListener(_onStateChange);
-    _repo.removeListener(_onStateChange);
+    _repo.removeListener(_onRepoChange);
     super.dispose();
   }
 
@@ -190,7 +200,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           child: Column(
             children: [
               // Ô thông tin khi nhận lệnh nhập hoặc xuất từ app desktop (WMS Dispatch Notification)
-              _buildDesktopOrderNotificationCard(c, role),
+              RepaintBoundary(child: _buildDesktopOrderNotificationCard(c, role)),
 
               Expanded(
                 child: LayoutBuilder(
@@ -448,24 +458,25 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
   Widget _buildDesktopOrderNotificationCard(EyeCareColors c, BaseRolePermission role) {
     if (!role.canInbound) return const SizedBox.shrink();
 
-    // 1. Hàng đang chờ xếp vào Pallet (nhánh không có mã pallet trong file import)
-    final waitingPalletizeItems = _repo.items.where((it) =>
-        it.status == ItemStatus.waitingPalletize
-    ).toList();
+    // 1 & 2: Phân loại hàng chờ pallet và hàng chờ cất kệ qua một lượt duyệt duy nhất (Single pass)
+    final waitingPalletizeItems = <Item>[];
+    final waitingPutawayItems = <Item>[];
+    for (final it in _repo.items) {
+      if (it.status == ItemStatus.waitingPalletize) {
+        waitingPalletizeItems.add(it);
+      } else if ((it.status == ItemStatus.waitingPutaway ||
+                  (it.status == ItemStatus.inStock &&
+                   (it.locationId == null || it.locationId!.isEmpty || it.locationId == 'LOC-GATE-IN'))) &&
+                 it.status != ItemStatus.pendingInbound &&
+                 (it.palletId != null && it.palletId!.trim().isNotEmpty)) {
+        waitingPutawayItems.add(it);
+      }
+    }
+
     final waitingPalletizeOrders = _repo.inboundOrders.where((o) =>
         o.status == InboundOrderStatus.waitingPalletize
     ).toList();
     final hasWaitingPalletize = waitingPalletizeItems.isNotEmpty || waitingPalletizeOrders.isNotEmpty;
-
-    // 2. Hàng đã có Pallet và đang chờ cất vào kệ
-    final waitingPutawayItems = _repo.items.where((it) =>
-        (it.status == ItemStatus.waitingPutaway ||
-         (it.status == ItemStatus.inStock &&
-          (it.locationId == null || it.locationId!.isEmpty || it.locationId == 'LOC-GATE-IN'))) &&
-        it.status != ItemStatus.pendingInbound &&
-        it.status != ItemStatus.waitingPalletize &&
-        (it.palletId != null && it.palletId!.trim().isNotEmpty)
-    ).toList();
 
     final waitingInboundOrders = _repo.inboundOrders.where((o) =>
         o.status == InboundOrderStatus.waitingPutaway

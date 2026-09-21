@@ -286,7 +286,7 @@ class UhfService extends ChangeNotifier {
   Timer? _notifyThrottleTimer;
   void _throttledNotify() {
     if (_notifyThrottleTimer?.isActive ?? false) return;
-    _notifyThrottleTimer = Timer(const Duration(milliseconds: 25), () {
+    _notifyThrottleTimer = Timer(const Duration(milliseconds: 75), () {
       notifyListeners();
     });
   }

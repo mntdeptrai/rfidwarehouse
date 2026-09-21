@@ -22,12 +22,13 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   Location? _selectedLocation;
   String _selectedZoneFilter = 'ALL';
+  Timer? _repoThrottleTimer;
 
   @override
   void initState() {
     super.initState();
     _eyeCare.addListener(_onThemeUpdate);
-    _repo.addListener(_onThemeUpdate);
+    _repo.addListener(_onRepoChange);
 
     // Bật chế độ quét mã vạch Barcode trên máy PDA
     _uhf.setScanMode(PdaScanMode.barcode);
@@ -41,9 +42,10 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
 
   @override
   void dispose() {
+    _repoThrottleTimer?.cancel();
     _barcodeSub?.cancel();
     _searchCtrl.dispose();
-    _repo.removeListener(_onThemeUpdate);
+    _repo.removeListener(_onRepoChange);
     _eyeCare.removeListener(_onThemeUpdate);
     _uhf.setScanMode(PdaScanMode.rfid);
     super.dispose();
@@ -51,6 +53,13 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
 
   void _onThemeUpdate() {
     if (mounted) setState(() {});
+  }
+
+  void _onRepoChange() {
+    if (_repoThrottleTimer?.isActive ?? false) return;
+    _repoThrottleTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() {});
+    });
   }
 
   void _handleScannedBarcode(String rawBarcode) {

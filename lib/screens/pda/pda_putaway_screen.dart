@@ -41,12 +41,13 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   bool _isProcessing = false;
   final TextEditingController _barcodeInputController = TextEditingController();
   final FocusNode _barcodeFocusNode = FocusNode();
+  Timer? _repoThrottleTimer;
 
   @override
   void initState() {
     super.initState();
-    _eyeCare.addListener(_onStateChange);
-    _repo.addListener(_onStateChange);
+    _eyeCare.addListener(_onThemeChange);
+    _repo.addListener(_onRepoChange);
 
     if (widget.initialLocationId != null && widget.initialLocationId!.trim().isNotEmpty) {
       final input = widget.initialLocationId!.trim();
@@ -113,13 +114,20 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     _cachedGroups = null;
   }
 
-  void _onStateChange() {
-    _invalidateGroupsCache();
-    final pending = _pendingGroups();
-    if (_activePalletGroup != null && !pending.containsKey(_activePalletGroup)) {
-      _activePalletGroup = null;
-    }
+  void _onThemeChange() {
     if (mounted) setState(() {});
+  }
+
+  void _onRepoChange() {
+    if (_repoThrottleTimer?.isActive ?? false) return;
+    _repoThrottleTimer = Timer(const Duration(milliseconds: 300), () {
+      _invalidateGroupsCache();
+      final pending = _pendingGroups();
+      if (_activePalletGroup != null && !pending.containsKey(_activePalletGroup)) {
+        _activePalletGroup = null;
+      }
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -139,6 +147,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
 
   @override
   void dispose() {
+    _repoThrottleTimer?.cancel();
     _uhf.disableScanning();
     _uhf.stopInventory();
     _barcodeSub?.cancel();
@@ -147,8 +156,8 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     _barcodeInputController.dispose();
     _barcodeFocusNode.dispose();
     _uhf.setScanMode(PdaScanMode.rfid);
-    _eyeCare.removeListener(_onStateChange);
-    _repo.removeListener(_onStateChange);
+    _eyeCare.removeListener(_onThemeChange);
+    _repo.removeListener(_onRepoChange);
     super.dispose();
   }
 

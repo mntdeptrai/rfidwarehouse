@@ -267,138 +267,145 @@ class PdaDrawer extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (ctx) {
-        int tempPower = currentPower;
-        return StatefulBuilder(
-          builder: (dialogCtx, setDialogState) {
-            String getRangeText(int p) {
-              if (p <= 12) return 'Cự ly gần (< 1m) • Soát thẻ tại chỗ';
-              if (p <= 22) return 'Cự ly trung bình (1 - 3m) • Kệ hàng tầm thấp';
-              if (p <= 29) return 'Cự ly xa (3 - 5m) • Quét bao quát pallet';
-              return 'Cực đại (5 - 8m) • Quét kệ cao';
-            }
+      builder: (ctx) => _RfPowerDialog(
+        colors: c,
+        initialPower: currentPower,
+        uhf: uhf,
+        messenger: messenger,
+      ),
+    );
+  }
+}
 
-            Color getPowerColor(int p) {
-              if (p <= 15) return c.rfidCyan;
-              if (p <= 25) return c.successEmerald;
-              if (p <= 30) return c.warningAmber;
-              return c.errorCoral;
-            }
+class _RfPowerDialog extends StatefulWidget {
+  final EyeCareColors colors;
+  final int initialPower;
+  final UhfService uhf;
+  final ScaffoldMessengerState? messenger;
 
-            return AlertDialog(
-              backgroundColor: c.bgCard,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              title: Row(
-                children: [
-                  Icon(Icons.tune_rounded, color: c.rfidCyan, size: 22),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Công Suất Ăng-ten (UHF)',
-                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Điều chỉnh độ nhạy & khoảng cách đọc của đầu đọc RFID cầm tay (1 - 33 dBm):',
-                      style: TextStyle(color: c.textSecondary, fontSize: 12)),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Mức phát RF:',
-                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: getPowerColor(tempPower).withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: getPowerColor(tempPower)),
-                        ),
-                        child: Text(
-                          '$tempPower dBm',
-                          style: TextStyle(color: getPowerColor(tempPower), fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Slider(
-                    value: tempPower.toDouble(),
-                    min: 1,
-                    max: 33,
-                    divisions: 32,
-                    activeColor: getPowerColor(tempPower),
-                    label: '$tempPower dBm',
-                    onChanged: (v) => setDialogState(() => tempPower = v.round()),
-                  ),
-                  Center(
-                    child: Text(
-                      getRangeText(tempPower),
-                      style: TextStyle(color: getPowerColor(tempPower), fontSize: 11.5, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [10, 18, 26, 30, 33].map((preset) {
-                      final isCurrent = tempPower == preset;
-                      return ActionChip(
-                        label: Text('$preset dBm'),
-                        backgroundColor: isCurrent ? c.rfidCyan.withValues(alpha: 0.25) : c.bgCardElevated,
-                        side: BorderSide(color: isCurrent ? c.rfidCyan : c.border),
-                        labelStyle: TextStyle(
-                          color: isCurrent ? c.rfidCyan : c.textPrimary,
-                          fontSize: 11,
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                        ),
-                        onPressed: () => setDialogState(() => tempPower = preset),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text('HỦY', style: TextStyle(color: c.textMuted)),
+  const _RfPowerDialog({
+    required this.colors,
+    required this.initialPower,
+    required this.uhf,
+    this.messenger,
+  });
+
+  @override
+  State<_RfPowerDialog> createState() => _RfPowerDialogState();
+}
+
+class _RfPowerDialogState extends State<_RfPowerDialog> {
+  late double _currentPowerDouble;
+  late int _currentPowerInt;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentPowerInt = widget.initialPower.clamp(1, 33);
+    _currentPowerDouble = _currentPowerInt.toDouble();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.colors;
+
+    return AlertDialog(
+      backgroundColor: c.bgCard,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: Row(
+        children: [
+          Icon(Icons.tune_rounded, color: c.rfidCyan, size: 22),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Công Suất Ăng-ten (UHF)',
+              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Mức phát RF:',
+                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    final ok = await uhf.setRfPower(tempPower);
-                    messenger?.showSnackBar(
-                      SnackBar(
-          duration: const Duration(seconds: 2),
-                        backgroundColor: ok ? c.successEmerald : c.errorCoral,
-                        content: Text(ok
-                            ? '✓ Đã cài đặt công suất phát ăng-ten: $tempPower dBm'
-                            : 'Không thể thay đổi công suất phát (cần quyền chỉnh ăng-ten)'),
-                      ),
-                    );
-                  },
-                  child: const Text('LƯU & ÁP DỤNG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: c.rfidCyan),
                 ),
-              ],
+                child: Text(
+                  '$_currentPowerInt dBm',
+                  style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 6,
+              activeTrackColor: c.rfidCyan,
+              inactiveTrackColor: c.rfidCyan.withValues(alpha: 0.24),
+              thumbColor: c.rfidCyan,
+              overlayColor: c.rfidCyan.withValues(alpha: 0.15),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+            ),
+            child: Slider(
+              value: _currentPowerDouble,
+              min: 1,
+              max: 33,
+              divisions: 32,
+              onChanged: (v) {
+                final rounded = v.round().clamp(1, 33);
+                setState(() {
+                  _currentPowerDouble = v;
+                  _currentPowerInt = rounded;
+                });
+              },
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('HỦY', style: TextStyle(color: c.textMuted)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
+          onPressed: () async {
+            Navigator.pop(context);
+            final ok = await widget.uhf.setRfPower(_currentPowerInt);
+            widget.messenger?.showSnackBar(
+              SnackBar(
+                duration: const Duration(seconds: 2),
+                backgroundColor: ok ? c.successEmerald : c.errorCoral,
+                content: Text(ok
+                    ? '✓ Đã cài đặt công suất phát ăng-ten: $_currentPowerInt dBm'
+                    : 'Không thể thay đổi công suất phát (cần quyền chỉnh ăng-ten)'),
+              ),
             );
           },
-        );
-      },
+          child: const Text('LƯU & ÁP DỤNG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      ],
     );
   }
 }

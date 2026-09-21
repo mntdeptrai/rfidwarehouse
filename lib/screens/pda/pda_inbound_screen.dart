@@ -1843,7 +1843,7 @@ class _InboundScreenState extends State<InboundScreen> {
                   clipBehavior: Clip.antiAlias,
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
+                    physics: const ClampingScrollPhysics(),
                     child: SizedBox(
                       width: 885, // 8 cột cho PDA (đồng bộ xuất kho)
                       child: Column(
@@ -1879,7 +1879,8 @@ class _InboundScreenState extends State<InboundScreen> {
                           // Table Rows (bao gồm hàng dự kiến và chip lạ)
                           Expanded(
                             child: ListView.builder(
-                              physics: const BouncingScrollPhysics(),
+                              physics: const ClampingScrollPhysics(),
+                              cacheExtent: 600,
                               itemCount: allDetailedItems.length + unexpList.length,
                               itemBuilder: (context, index) {
                                 if (index < allDetailedItems.length) {

@@ -136,6 +136,8 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
               ),
             )
           : ListView.builder(
+              physics: const ClampingScrollPhysics(),
+              cacheExtent: 400,
               padding: const EdgeInsets.all(14),
               itemCount: sessions.length,
               itemBuilder: (context, index) {
@@ -1564,6 +1566,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     ),
                   )
                 : ListView.builder(
+                    physics: const ClampingScrollPhysics(),
+                    cacheExtent: 400,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     itemCount: filteredResults.length,
                     itemBuilder: (context, index) {

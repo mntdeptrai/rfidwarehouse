@@ -53,6 +53,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   bool _isProcessing = false;
   bool _isSuccess = false;
   int _lastTransferCount = 0;
+  Timer? _repoThrottleTimer;
 
   @override
   void initState() {
@@ -67,7 +68,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     _uhf.setScanMode(PdaScanMode.barcode);
     _currentScanMode = PdaScanMode.barcode;
     _eyeCare.addListener(_onStateChange);
-    _repo.addListener(_onStateChange);
+    _repo.addListener(_onRepoChange);
 
     // Kích hoạt quét phần cứng và bóp cò trên PDA cho màn hình Chuyển Kho
     _uhf.enableScanning('chuyen_kho');
@@ -85,6 +86,13 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
 
   void _onStateChange() {
     if (mounted) setState(() {});
+  }
+
+  void _onRepoChange() {
+    if (_repoThrottleTimer?.isActive ?? false) return;
+    _repoThrottleTimer = Timer(const Duration(milliseconds: 200), () {
+      if (mounted) setState(() {});
+    });
   }
 
   void _subscribeHardwareScanner() {
@@ -151,13 +159,14 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     _stopHardwareScan();
     _uhf.stopInventory();
     _uhf.disableScanning();
+    _repoThrottleTimer?.cancel();
     _manualInputCtrl.dispose();
     _palletInputCtrl.dispose();
     _rfidSub?.cancel();
     _barcodeSub?.cancel();
     _triggerSub?.cancel();
     _eyeCare.removeListener(_onStateChange);
-    _repo.removeListener(_onStateChange);
+    _repo.removeListener(_onRepoChange);
     _uhf.setScanMode(PdaScanMode.rfid);
     super.dispose();
   }

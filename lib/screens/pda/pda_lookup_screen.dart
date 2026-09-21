@@ -39,6 +39,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
 
   bool _isScanning = false;
   PdaScanMode _currentScanMode = PdaScanMode.rfid;
+  Timer? _repoThrottleTimer;
 
   @override
   void initState() {
@@ -46,11 +47,18 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
     _currentScanMode = _uhf.scanMode;
     _subscribeHardwareScanner();
     _eyeCare.addListener(_onStateChange);
-    _repo.addListener(_onStateChange);
+    _repo.addListener(_onRepoChange);
   }
 
   void _onStateChange() {
     if (mounted) setState(() {});
+  }
+
+  void _onRepoChange() {
+    if (_repoThrottleTimer?.isActive ?? false) return;
+    _repoThrottleTimer = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() {});
+    });
   }
 
   void _subscribeHardwareScanner() {
@@ -118,12 +126,13 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
 
   @override
   void dispose() {
+    _repoThrottleTimer?.cancel();
     _uhf.stopInventory();
     _tagSub?.cancel();
     _barcodeSub?.cancel();
     _triggerSub?.cancel();
     _eyeCare.removeListener(_onStateChange);
-    _repo.removeListener(_onStateChange);
+    _repo.removeListener(_onRepoChange);
     _serialController.dispose();
     _uhf.setScanMode(PdaScanMode.rfid);
     super.dispose();
@@ -592,7 +601,8 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
     }
 
     return ListView(
-      physics: const BouncingScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
+      cacheExtent: 400,
       children: [
         // 1. Kết quả Pallet (nếu khớp)
         if (_matchedPallet != null) ...[

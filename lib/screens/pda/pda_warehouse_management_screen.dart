@@ -28,46 +28,16 @@ class PdaWarehouseManagementScreen extends StatefulWidget {
 class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final WarehouseRepository _repo = WarehouseRepository();
   final UhfService _uhf = UhfService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
-  final AuthService _auth = AuthService();
 
-  // Tab 0: Pallet
-  final TextEditingController _palletSearchCtrl = TextEditingController();
-  String _palletQuery = '';
-
-  // Tab 1: Vị Trí Kho
-  final TextEditingController _locationSearchCtrl = TextEditingController();
-  String _locationQuery = '';
-  String _selectedZoneFilter = 'ALL';
-
-  // Tab 2: Lịch Sử (Đồng bộ 5 mục đầy đủ với Desktop: Tất cả, Nhập kho, Xuất kho, Điều chuyển, Kiểm kê)
-  final TextEditingController _historySearchCtrl = TextEditingController();
-  String _historyQuery = '';
-  String _historyCategoryFilter = 'ALL'; // ALL, INBOUND, OUTBOUND, MOVEMENT, AUDIT
-  String _historyStatusFilter = 'ALL'; // ALL, COMPLETED, IN_PROGRESS
-  bool _isHistoryRefreshing = false;
-
-  // Tab 3: Sản Phẩm (Tra Cứu)
-  final TextEditingController _productSearchCtrl = TextEditingController();
-  String _productQuery = '';
-  ItemStatus? _selectedProductStatusFilter;
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTabIndex);
-    _tabController.addListener(_handleTabChange);
-
     _eyeCare.addListener(_onStateUpdate);
-    _repo.addListener(_onStateUpdate);
-
     // Màn hình Quản Lý Kho KHÔNG cho phép quét: khóa và dừng đầu đọc ngay lập tức
     _uhf.disableScanning();
-  }
-
-  void _handleTabChange() {
-    if (mounted) setState(() {});
   }
 
   void _onStateUpdate() {
@@ -77,12 +47,7 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   @override
   void dispose() {
     _uhf.disableScanning();
-    _palletSearchCtrl.dispose();
-    _locationSearchCtrl.dispose();
-    _historySearchCtrl.dispose();
-    _productSearchCtrl.dispose();
     _tabController.dispose();
-    _repo.removeListener(_onStateUpdate);
     _eyeCare.removeListener(_onStateUpdate);
     super.dispose();
   }
@@ -118,25 +83,26 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
                 unselectedLabelColor: c.textMuted,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11.5),
-                tabs: [
-                  const Tab(icon: Icon(Icons.pallet, size: 20), text: 'Pallet'),
-                  const Tab(icon: Icon(Icons.grid_view_rounded, size: 20), text: 'Vị Trí Kho'),
-                  const Tab(icon: Icon(Icons.history_rounded, size: 20), text: 'Lịch Sử'),
-                  const Tab(icon: Icon(Icons.inventory_2_rounded, size: 20), text: 'Sản Phẩm'),
+                tabs: const [
+                  Tab(icon: Icon(Icons.pallet, size: 20), text: 'Pallet'),
+                  Tab(icon: Icon(Icons.grid_view_rounded, size: 20), text: 'Vị Trí Kho'),
+                  Tab(icon: Icon(Icons.history_rounded, size: 20), text: 'Lịch Sử'),
+                  Tab(icon: Icon(Icons.inventory_2_rounded, size: 20), text: 'Sản Phẩm'),
                 ],
               ),
             ),
             const Divider(height: 1, thickness: 1),
 
-            // Nội dung từng Tab
+            // Nội dung từng Tab độc lập với KeepAlive tối ưu 60 FPS
             Expanded(
               child: TabBarView(
                 controller: _tabController,
+                physics: const ClampingScrollPhysics(),
                 children: [
-                  _buildPalletManagementTab(c),
-                  _buildLocationManagementTab(c),
-                  _buildHistoryTab(c),
-                  _buildProductLookupTab(c),
+                  _PalletManagementTab(colors: c),
+                  _LocationManagementTab(colors: c),
+                  _HistoryManagementTab(colors: c),
+                  _ProductLookupTab(colors: c),
                 ],
               ),
             ),
@@ -145,20 +111,52 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
       ),
     );
   }
+}
 
-  // ===========================================================================
   // TAB 0: QUẢN LÝ PALLET
   // ===========================================================================
-  Widget _buildPalletManagementTab(EyeCareColors c) {
+  class _PalletManagementTab extends StatefulWidget {
+  final EyeCareColors colors;
+  const _PalletManagementTab({required this.colors});
+
+  @override
+  State<_PalletManagementTab> createState() => _PalletManagementTabState();
+}
+
+class _PalletManagementTabState extends State<_PalletManagementTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final WarehouseRepository _repo = WarehouseRepository();
+  final AuthService _auth = AuthService();
+  final TextEditingController _palletSearchCtrl = TextEditingController();
+  String _palletQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _repo.addListener(_onStateUpdate);
+  }
+
+  void _onStateUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_onStateUpdate);
+    _palletSearchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final c = widget.colors;
     final allPallets = _repo.pallets;
     final totalPallets = allPallets.length;
-    final activePallets = allPallets.where((p) {
-      final inStockItems = _repo.items.where((i) =>
-        i.status == ItemStatus.inStock &&
-        (p.itemIds.contains(i.itemId) || i.palletId == p.palletId || i.palletId == p.palletCode)
-      ).length;
-      return inStockItems > 0;
-    }).length;
+    final activePallets = allPallets.where((p) => _repo.hasInStockItemsOnPallet(p)).length;
     final emptyPallets = totalPallets - activePallets;
 
     final query = _palletQuery.trim().toUpperCase();
@@ -241,6 +239,8 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
                   child: Text('Không tìm thấy pallet phù hợp', style: TextStyle(color: c.textMuted, fontSize: 13)),
                 )
               : ListView.builder(
+                  physics: const ClampingScrollPhysics(),
+                  cacheExtent: 500,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   itemCount: filteredPallets.length,
                   itemBuilder: (context, idx) {
@@ -254,15 +254,13 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   }
 
   Widget _buildPdaPalletCard(Pallet p, EyeCareColors c) {
-    final inStockItems = _repo.items.where((i) =>
-      i.status == ItemStatus.inStock &&
-      (p.itemIds.contains(i.itemId) || i.palletId == p.palletId || i.palletId == p.palletCode)
-    ).toList();
+    final inStockItems = _repo.getInStockItemsForPallet(p.palletId, palletCode: p.palletCode, itemIds: p.itemIds);
     final itemCount = inStockItems.length;
     final locText = p.locationId != null && p.locationId!.isNotEmpty ? p.locationId! : 'Chưa xếp kệ';
     final hasLocation = p.locationId != null && p.locationId!.isNotEmpty;
 
     return Card(
+      elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       color: c.bgCard,
       shape: RoundedRectangleBorder(
@@ -569,9 +567,62 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   }
 
   // ===========================================================================
+
+  Widget _buildMiniKpiBadge(String text, Color color, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
+    );
+  }
+}
+
   // TAB 1: QUẢN LÝ VỊ TRÍ KHO (SƠ ĐỒ / DANH SÁCH KỆ)
   // ===========================================================================
-  Widget _buildLocationManagementTab(EyeCareColors c) {
+  class _LocationManagementTab extends StatefulWidget {
+  final EyeCareColors colors;
+  const _LocationManagementTab({required this.colors});
+
+  @override
+  State<_LocationManagementTab> createState() => _LocationManagementTabState();
+}
+
+class _LocationManagementTabState extends State<_LocationManagementTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final WarehouseRepository _repo = WarehouseRepository();
+  final AuthService _auth = AuthService();
+  final TextEditingController _locationSearchCtrl = TextEditingController();
+  String _locationQuery = '';
+  String _selectedZoneFilter = 'ALL';
+
+  @override
+  void initState() {
+    super.initState();
+    _repo.addListener(_onStateUpdate);
+  }
+
+  void _onStateUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_onStateUpdate);
+    _locationSearchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final c = widget.colors;
     final allLocations = _repo.locations;
     final fullCount = allLocations.where((l) => l.status.toUpperCase() == 'FULL').length;
     final nearFullCount = allLocations.where((l) => l.status.toUpperCase() == 'NEAR_FULL').length;
@@ -667,6 +718,8 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
           child: filteredLocations.isEmpty
               ? Center(child: Text('Không có kệ nào', style: TextStyle(color: c.textMuted)))
               : ListView.builder(
+                  physics: const ClampingScrollPhysics(),
+                  cacheExtent: 500,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   itemCount: filteredLocations.length,
                   itemBuilder: (context, idx) {
@@ -710,21 +763,14 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     final locCode = loc.locationCode.trim().toUpperCase();
     final locId = loc.locationId.trim().toUpperCase();
 
-    // CHỈ ĐẾM CÁC SẢN PHẨM CÒN TỒN KHO (ItemStatus.inStock)
-    final itemsOnShelf = _repo.items.where((i) {
-      if (i.status != ItemStatus.inStock) return false;
-      final itemLoc = i.locationId?.trim().toUpperCase();
-      if (itemLoc == null || itemLoc.isEmpty) return false;
-      return itemLoc == locCode || itemLoc == locId;
-    }).toList();
+    // CHỈ ĐẾM CÁC SẢN PHẨM CÒN TỒN KHO (ItemStatus.inStock) - O(1)
+    final itemsOnShelf = _repo.getInStockItemsAtLocation(locCode, locId: locId);
 
-    final palletsOnShelf = _repo.pallets.where((p) {
-      final pLoc = p.locationId?.trim().toUpperCase();
-      if (pLoc == null || pLoc.isEmpty) return false;
-      return pLoc == locCode || pLoc == locId;
-    }).toList();
+    // DANH SÁCH PALLET ĐẶT TẠI KỆ - O(1)
+    final palletsOnShelf = _repo.getPalletsAtLocation(locCode, locId: locId);
 
     return Card(
+      elevation: 0,
       margin: const EdgeInsets.only(bottom: 10),
       color: c.bgCard,
       shape: RoundedRectangleBorder(
@@ -943,9 +989,53 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   }
 
   // ===========================================================================
+
+}
+
   // TAB 2: QUẢN LÝ LỊCH SỬ (ĐỒNG BỘ ĐẦY ĐỦ 5 MỤC NHƯ DESKTOP)
   // ===========================================================================
-  Widget _buildHistoryTab(EyeCareColors c) {
+  class _HistoryManagementTab extends StatefulWidget {
+  final EyeCareColors colors;
+  const _HistoryManagementTab({required this.colors});
+
+  @override
+  State<_HistoryManagementTab> createState() => _HistoryManagementTabState();
+}
+
+class _HistoryManagementTabState extends State<_HistoryManagementTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final WarehouseRepository _repo = WarehouseRepository();
+  final AuthService _auth = AuthService();
+  final TextEditingController _historySearchCtrl = TextEditingController();
+  String _historyQuery = '';
+  String _historyCategoryFilter = 'ALL';
+  String _historyStatusFilter = 'ALL';
+  bool _isHistoryRefreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _repo.addListener(_onStateUpdate);
+  }
+
+  void _onStateUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_onStateUpdate);
+    _historySearchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final c = widget.colors;
     final historyRecords = <Map<String, dynamic>>[];
     final allInboundOrders = _repo.inboundOrders;
     final allOutboundOrders = _repo.outboundOrders;
@@ -953,10 +1043,33 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     final allTransactions = _repo.transactions;
     final allItems = _repo.items;
 
-    // 1. Đơn nhập kho
+    // Xây dựng bản đồ tra cứu O(1) siêu tốc trước khi duyệt đơn
+    final Map<String, List<Item>> itemsByOrderNo = {};
+    for (final i in allItems) {
+      final oNo = i.orderNo?.trim().toUpperCase();
+      if (oNo != null && oNo.isNotEmpty) {
+        itemsByOrderNo.putIfAbsent(oNo, () => []).add(i);
+      }
+    }
+
+    final Map<String, List<InventoryTransaction>> outboundTxsByDoc = {};
+    for (final t in allTransactions) {
+      if (t.type == TransactionType.outbound) {
+        final doc = t.documentNo.trim().toUpperCase();
+        if (doc.isNotEmpty) {
+          outboundTxsByDoc.putIfAbsent(doc, () => []).add(t);
+        }
+        if (t.transactionId.isNotEmpty) {
+          outboundTxsByDoc.putIfAbsent(t.transactionId.trim().toUpperCase(), () => []).add(t);
+        }
+      }
+    }
+
+    // 1. Đơn nhập kho (Tra cứu O(1))
     for (var o in allInboundOrders) {
-      final ordItems = allItems.where((i) =>
-          i.orderNo != null && i.orderNo!.trim().toUpperCase() == o.orderNo.trim().toUpperCase()).toList();
+      final ordItems = itemsByOrderNo[o.orderNo.trim().toUpperCase()] ??
+          itemsByOrderNo[o.inboundOrderId.trim().toUpperCase()] ??
+          const <Item>[];
       var totalQty = o.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
       var receivedQty = o.details.fold<int>(0, (sum, d) => sum + d.receivedQty);
       if (totalQty == 0 && ordItems.isNotEmpty) {
@@ -983,20 +1096,14 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
       });
     }
 
-    // 2. Đơn xuất kho
+    // 2. Đơn xuất kho (Tra cứu O(1))
     for (var o in allOutboundOrders) {
-      final relatedTxs = allTransactions.where((t) =>
-          t.type == TransactionType.outbound &&
-          (t.documentNo.trim().toUpperCase() == o.poNo.trim().toUpperCase() ||
-           t.documentNo.trim().toUpperCase() == o.outboundOrderId.trim().toUpperCase() ||
-           (o.poNo.isNotEmpty && t.transactionId.contains(o.poNo)) ||
-           (o.outboundOrderId.isNotEmpty && t.transactionId.contains(o.outboundOrderId)))).toList();
+      final poKey = o.poNo.trim().toUpperCase();
+      final idKey = o.outboundOrderId.trim().toUpperCase();
+      final relatedTxs = outboundTxsByDoc[poKey] ?? outboundTxsByDoc[idKey] ?? const <InventoryTransaction>[];
       final txQty = relatedTxs.fold<int>(0, (sum, t) => sum + t.quantity);
 
-      final ordItems = allItems.where((i) =>
-          i.orderNo != null &&
-          (i.orderNo!.trim().toUpperCase() == o.poNo.trim().toUpperCase() ||
-           i.orderNo!.trim().toUpperCase() == o.outboundOrderId.trim().toUpperCase())).toList();
+      final ordItems = itemsByOrderNo[poKey] ?? itemsByOrderNo[idKey] ?? const <Item>[];
 
       var totalQty = o.details.fold<int>(0, (sum, d) => sum + d.requiredQty);
       var pickedQty = o.details.fold<int>(0, (sum, d) => sum + d.pickedQty);
@@ -1321,6 +1428,8 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
                   ),
                 )
               : ListView.builder(
+                  physics: const ClampingScrollPhysics(),
+                  cacheExtent: 500,
                   padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
                   itemCount: filteredHistory.length,
                   itemBuilder: (context, idx) {
@@ -1837,9 +1946,51 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   }
 
   // ===========================================================================
+
+}
+
   // TAB 3: QUẢN LÝ THÔNG TIN SẢN PHẨM (TRA CỨU TỪ KHÓA & BẮT CÒ SÚNG)
   // ===========================================================================
-  Widget _buildProductLookupTab(EyeCareColors c) {
+  class _ProductLookupTab extends StatefulWidget {
+  final EyeCareColors colors;
+  const _ProductLookupTab({required this.colors});
+
+  @override
+  State<_ProductLookupTab> createState() => _ProductLookupTabState();
+}
+
+class _ProductLookupTabState extends State<_ProductLookupTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  final WarehouseRepository _repo = WarehouseRepository();
+  final AuthService _auth = AuthService();
+  final TextEditingController _productSearchCtrl = TextEditingController();
+  String _productQuery = '';
+  ItemStatus? _selectedProductStatusFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _repo.addListener(_onStateUpdate);
+  }
+
+  void _onStateUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _repo.removeListener(_onStateUpdate);
+    _productSearchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final c = widget.colors;
     final allItems = _repo.items;
     final rawQ = _productQuery.trim().toLowerCase();
 
@@ -1944,6 +2095,8 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
                   ),
                 )
               : ListView.builder(
+                  physics: const ClampingScrollPhysics(),
+                  cacheExtent: 500,
                   padding: const EdgeInsets.all(10),
                   itemCount: filteredItems.length,
                   itemBuilder: (context, idx) {
@@ -1981,10 +2134,10 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
   }
 
   Widget _buildPdaProductCard(Item it, EyeCareColors c) {
-    final pallet = _repo.pallets.where((p) => p.palletId == it.palletId || p.palletCode == it.palletId).firstOrNull;
+    final pallet = _repo.findPalletFast(it.palletId);
     final loc = it.locationId != null
-        ? _repo.locations.where((l) => l.locationId == it.locationId || l.locationCode == it.locationId).firstOrNull
-        : (pallet != null ? _repo.locations.where((l) => l.locationId == pallet.locationId || l.locationCode == pallet.locationId).firstOrNull : null);
+        ? _repo.findLocationFast(it.locationId)
+        : (pallet != null ? _repo.findLocationFast(pallet.locationId) : null);
 
     // XỬ LÝ CHUẨN XÁC VỊ TRÍ KHI ĐÃ XUẤT KHO:
     final bool isOut = it.status == ItemStatus.out;
@@ -2109,15 +2262,5 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
     );
   }
 
-  Widget _buildMiniKpiBadge(String text, Color color, EyeCareColors c) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
-    );
-  }
+
 }
