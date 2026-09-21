@@ -57,6 +57,7 @@ graph TD
         D_Receive -->|Điều khiển đèn| Tower["TowerLightService (Modbus TCP / HTTP)"]
         D_Receive -->|Nhận thẻ từ cổng| DesktopUHF["DesktopUhfTcpService (Port 9090 TCP)"]
         D_Delivery -->|Nhận thẻ xuất| DesktopUHF
+        D_Inventory -->|Nhận thẻ kiểm kê & Auto-connect| DesktopUHF
         D_Studio -->|Cấu hình anten, dBm| DesktopUHF
         
         PDA_Screens -->|Bóp cò tay súng| MobileUHF["UhfService (Native Android Plugin)"]
