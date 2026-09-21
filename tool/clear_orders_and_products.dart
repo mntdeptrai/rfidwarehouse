@@ -19,16 +19,16 @@ void main() async {
   // 7. Danh mục mặt hàng / sản phẩm (products)
 
   final steps = [
-    {'table': 'delivery_note_details', 'pk': 'detail_id', 'label': 'Chi tiết phiếu xuất kho'},
+    {'table': 'delivery_note_details', 'pk': 'id', 'label': 'Chi tiết phiếu xuất kho'},
     {'table': 'delivery_notes', 'pk': 'delivery_id', 'label': 'Phiếu xuất kho'},
-    {'table': 'outbound_order_details', 'pk': 'detail_id', 'label': 'Chi tiết đơn hàng xuất (PO)'},
+    {'table': 'outbound_order_details', 'pk': 'id', 'label': 'Chi tiết đơn hàng xuất (PO)'},
     {'table': 'outbound_orders', 'pk': 'outbound_order_id', 'label': 'Đơn hàng xuất kho'},
-    {'table': 'inbound_order_details', 'pk': 'detail_id', 'label': 'Chi tiết đơn hàng nhập'},
+    {'table': 'inbound_order_details', 'pk': 'id', 'label': 'Chi tiết đơn hàng nhập'},
     {'table': 'inbound_orders', 'pk': 'inbound_order_id', 'label': 'Đơn hàng nhập kho'},
-    {'table': 'inventory_session_details', 'pk': 'detail_id', 'label': 'Chi tiết phiên kiểm kê'},
+    {'table': 'inventory_session_details', 'pk': 'id', 'label': 'Chi tiết phiên kiểm kê'},
     {'table': 'inventory_sessions', 'pk': 'session_id', 'label': 'Phiên kiểm kê'},
     {'table': 'inventory_transactions', 'pk': 'transaction_id', 'label': 'Lịch sử giao dịch kho'},
-    {'table': 'sync_logs', 'pk': 'log_id', 'label': 'Nhật ký đồng bộ'},
+    {'table': 'sync_logs', 'pk': 'id', 'label': 'Nhật ký đồng bộ'},
     {'table': 'items', 'pk': 'item_id', 'label': 'Danh sách hàng hóa & thẻ RFID (items)'},
     {'table': 'products', 'pk': 'product_id', 'label': 'Danh mục sản phẩm (products)'},
   ];

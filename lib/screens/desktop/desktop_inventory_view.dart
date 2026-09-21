@@ -672,7 +672,11 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       TextButton.icon(
                         icon: const Icon(Icons.refresh, size: 16),
                         label: const Text('Làm mới'),
-                        onPressed: () => setState(() {}),
+                        onPressed: () async {
+                          await _repo.reloadFromSupabase();
+                          await _repo.reloadFromSqlite();
+                          if (mounted) setState(() {});
+                        },
                       ),
                     ],
                   ),

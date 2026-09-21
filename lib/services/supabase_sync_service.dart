@@ -400,6 +400,10 @@ class SupabaseSyncService extends ChangeNotifier {
     if (tableName == 'outbound_orders' && result.containsKey('outbound_order_id')) {
       result.remove('details');
     }
+    if (result.containsKey('is_completed')) {
+      final v = result['is_completed'];
+      result['is_completed'] = (v == true || v == 1 || v == '1' || v == 'true');
+    }
     return result;
   }
 

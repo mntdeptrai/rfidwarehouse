@@ -1059,6 +1059,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                             icon: const Icon(Icons.refresh, size: 16),
                             label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                             onPressed: () async {
+                              await _repo.reloadFromSupabase();
                               await _repo.reloadFromSqlite();
                               await _supabaseSync.syncNow();
                               if (mounted) setState(() {});

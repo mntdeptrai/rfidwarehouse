@@ -318,5 +318,47 @@ void main() {
       // Kiểm tra mục 3 đã được tick chọn
       expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
     });
+
+    testWidgets('7. Nút xóa đơn kiểm kê trên danh sách PDA hoạt động chính xác', (WidgetTester tester) async {
+      final session = repo.startInventorySession(zone: 'KHU_TEST', locationCode: 'R99-TEST');
+      await repo.saveInventorySession(session);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false),
+          home: const PdaInventoryScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Nút xóa phiếu kiểm kê trên card
+      final deleteBtn = find.byTooltip('Xóa phiếu kiểm kê');
+      expect(deleteBtn, findsWidgets);
+
+      await tester.tap(deleteBtn.first);
+      await tester.pumpAndSettle();
+
+      // Hiện dialog xác nhận
+      expect(find.text('Xóa Phiếu Kiểm Kê'), findsOneWidget);
+      expect(find.text('XÓA'), findsOneWidget);
+
+      await tester.tap(find.text('XÓA'));
+      await tester.pumpAndSettle();
+
+      // Phiếu đã được xóa khỏi repo
+      expect(repo.inventorySessions.any((s) => s.sessionId == session.sessionId), isFalse);
+    });
+
+    test('8. Chốt kiểm kê đồng bộ giao dịch AUDIT vào transactions', () async {
+      final session = repo.startInventorySession(zone: 'KHU_A', locationCode: 'A-01');
+      await repo.completeInventorySession(session.sessionId, 'Thủ kho A');
+
+      expect(session.isCompleted, isTrue);
+      // Đảm bảo có giao dịch AUDIT tương ứng trong transactions
+      final auditTx = repo.transactions.where((t) => t.type == TransactionType.auditAdjustment && t.documentNo == session.sessionCode).firstOrNull;
+      expect(auditTx, isNotNull);
+      expect(auditTx?.performedBy, equals('Thủ kho A'));
+    });
   });
 }
+
