@@ -174,14 +174,14 @@ class PdaDrawer extends StatelessWidget {
                   onTap: () async {
                     Navigator.pop(context);
                     await DatabaseService.wipePhysicalSqliteDatabases();
-                    await WarehouseRepository().reloadFromSqlite();
+                    await WarehouseRepository().reloadFromDatabase();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
           duration: const Duration(seconds: 2),
                           backgroundColor: c.successEmerald,
-                          content: const Text('✓ Đã dọn sạch cache cục bộ! Đang dùng 100% Supabase Cloud.'),
+                          content: const Text('✓ Đã làm mới dữ liệu hệ thống thành công.'),
                         ),
                       );
                     }

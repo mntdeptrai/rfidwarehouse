@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
@@ -167,11 +169,7 @@ class ReportExportService {
         excel.delete('Sheet1');
       }
 
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Không thể tạo file Excel.');
-      final file = File(filePath);
-      await file.writeAsBytes(bytes);
-      return file;
+      return _saveProtectedExcelFile(excel, filePath);
     }
   }
 
@@ -416,11 +414,7 @@ class ReportExportService {
         excel.delete('Sheet1');
       }
 
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Không thể tạo file Excel.');
-      final file = File(filePath);
-      await file.writeAsBytes(bytes);
-      return file;
+      return _saveProtectedExcelFile(excel, filePath);
     }
   }
 
@@ -644,11 +638,7 @@ class ReportExportService {
         excel.delete('Sheet1');
       }
 
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Không thể tạo file Excel.');
-      final file = File(filePath);
-      await file.writeAsBytes(bytes);
-      return file;
+      return _saveProtectedExcelFile(excel, filePath);
     }
   }
 
@@ -662,8 +652,8 @@ class ReportExportService {
     _setCell(sheet, col: 3, row: 4, value: 'Khu Vực:', style: _metaLabelStyle);
     _setCell(sheet, col: 4, row: 4, value: s.zone, style: _metaValueStyle);
 
-    _setCell(sheet, col: 0, row: 5, value: 'Vị Trí Kệ:', style: _metaLabelStyle);
-    _setCell(sheet, col: 1, row: 5, value: s.locationCode ?? '--', style: _metaValueStyle);
+    _setCell(sheet, col: 0, row: 5, value: s.isSkuSpecific ? 'Mặt Hàng (SKU):' : 'Vị Trí Kệ:', style: _metaLabelStyle);
+    _setCell(sheet, col: 1, row: 5, value: s.isSkuSpecific ? s.targetSkus.join(', ') : (s.locationCode ?? '--'), style: _metaValueStyle);
     _setCell(sheet, col: 3, row: 5, value: 'Trạng Thái:', style: _metaLabelStyle);
     _setCell(sheet, col: 4, row: 5, value: s.isCompleted ? 'ĐÃ HOÀN TẤT' : 'ĐANG THỰC HIỆN', style: _metaValueStyle);
 
@@ -753,6 +743,434 @@ class ReportExportService {
     _autoFitColumns(sheet, headers.length, row + 2);
   }
 
+  /// Xuất Báo Cáo Đối Soát Tồn Kho Chuẩn Doanh Nghiệp (3 Sheet: Tổng Hợp, Thiếu & Đủ, Thừa & EPC Thừa)
+  Future<File> exportStockReconciliationReport(
+    ReportFormat format, {
+    required List<SkuStockReconciliationRow> rows,
+    required String scopeTitle,
+    String? sessionCode,
+  }) async {
+    final dir = await _getReportDir();
+    final timestamp = _fileFmt.format(DateTime.now());
+    final fileName = 'doi_soat_ton_kho_${sessionCode ?? "tong_hop"}_$timestamp.${format.name}';
+    final filePath = '${dir.path}${Platform.pathSeparator}$fileName';
+
+    final totalExp = rows.fold<int>(0, (s, r) => s + r.expectedQty);
+    final totalAct = rows.fold<int>(0, (s, r) => s + r.actualQty);
+    final totalMatched = rows.fold<int>(0, (s, r) => s + r.matchedCount);
+    final totalMissing = rows.fold<int>(0, (s, r) => s + r.missingCount);
+    final totalWrongLoc = rows.fold<int>(0, (s, r) => s + r.wrongLocationCount);
+    final totalUnknown = rows.fold<int>(0, (s, r) => s + r.unknownCount);
+    final totalSurplus = rows.fold<int>(0, (s, r) => s + (r.difference > 0 ? r.difference : (r.unknownCount > 0 ? r.unknownCount : 0)));
+    final acc = totalExp > 0 ? (totalMatched / totalExp * 100).toStringAsFixed(1) : '100.0';
+
+    // Dữ liệu Sheet 2: Danh mục đối chiếu thiếu và đủ
+    final sheet2SkuRows = rows.where((r) => r.expectedQty > 0 || r.matchedCount > 0 || r.missingCount > 0).toList();
+    final List<Map<String, String>> sheet2DetailItems = [];
+    for (final r in rows) {
+      for (final it in r.itemResults) {
+        if (it.resultType == InventoryVarianceType.match ||
+            it.resultType == InventoryVarianceType.wrongLocation ||
+            it.resultType == InventoryVarianceType.missing) {
+          final resLabel = it.resultType == InventoryVarianceType.match
+              ? 'Khớp đủ'
+              : (it.resultType == InventoryVarianceType.wrongLocation ? 'Đủ (Sai vị trí kệ)' : 'THIẾU HỤT (Chưa quét)');
+          sheet2DetailItems.add({
+            'epc': it.epc,
+            'sku': (it.sku != null && it.sku!.isNotEmpty) ? it.sku! : r.sku,
+            'name': (it.productName != null && it.productName!.isNotEmpty) ? it.productName! : r.productName,
+            'expectedLoc': it.expectedLocation ?? r.zoneOrLocation,
+            'actualLoc': it.actualLocation ?? (it.resultType == InventoryVarianceType.missing ? 'Chưa quét thấy' : r.zoneOrLocation),
+            'status': resLabel,
+            'time': it.readAt.year > 2000 ? _dtFmt.format(it.readAt) : '--',
+          });
+        }
+      }
+    }
+
+    // Dữ liệu Sheet 3: Danh mục đối chiếu thừa và danh sách mã EPC thừa
+    final sheet3SkuRows = rows.where((r) => r.difference > 0 || r.unknownCount > 0).toList();
+    final List<Map<String, String>> surplusEpcList = [];
+    for (final r in rows) {
+      if (r.difference > 0 || r.unknownCount > 0) {
+        // 1. Toàn bộ chip lạ ngoài danh mục
+        final unknowns = r.itemResults.where((it) => it.resultType == InventoryVarianceType.unknownEpc).toList();
+        for (final u in unknowns) {
+          surplusEpcList.add({
+            'epc': u.epc,
+            'sku': (u.sku != null && u.sku!.isNotEmpty) ? u.sku! : r.sku,
+            'name': (u.productName != null && u.productName!.isNotEmpty) ? u.productName! : r.productName,
+            'location': u.actualLocation ?? r.zoneOrLocation,
+            'time': u.readAt.year > 2000 ? _dtFmt.format(u.readAt) : '--',
+            'type': 'Thẻ RFID lạ ngoài danh mục',
+            'note': 'Cần kiểm tra nguồn gốc, chưa có trong CSDL kho',
+          });
+        }
+        // 2. Các chip thừa số lượng của SKU đã định danh
+        if (r.difference > 0 && r.sku != 'THẺ_LẠ') {
+          final scannedForSku = r.itemResults.where((it) =>
+            it.resultType == InventoryVarianceType.match ||
+            it.resultType == InventoryVarianceType.wrongLocation
+          ).toList();
+          if (scannedForSku.length > r.expectedQty) {
+            final excessItems = scannedForSku.sublist(r.expectedQty);
+            for (final ex in excessItems) {
+              surplusEpcList.add({
+                'epc': ex.epc,
+                'sku': r.sku,
+                'name': r.productName,
+                'location': ex.actualLocation ?? ex.expectedLocation ?? r.zoneOrLocation,
+                'time': ex.readAt.year > 2000 ? _dtFmt.format(ex.readAt) : '--',
+                'type': 'Thừa số lượng theo SKU',
+                'note': 'Mã thẻ hợp lệ nhưng số lượng quét thực tế vượt số dư sổ sách',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (format == ReportFormat.csv) {
+      final buffer = StringBuffer();
+      buffer.writeln('\uFEFFHỆ THỐNG QUẢN LÝ KHO THÔNG MINH RFID (RFID WMS)');
+      buffer.writeln('BÁO CÁO ĐỐI SOÁT KIỂM KHO (DỰ KIẾN VS THỰC TẾ)');
+      buffer.writeln('Phạm vi: $scopeTitle;Phiếu kiểm kê: ${sessionCode ?? "Toàn bộ kho"};Ngày xuất: ${_dtFmt.format(DateTime.now())}');
+      buffer.writeln('Tổng dự kiến: $totalExp;Tổng thực tế: $totalAct;Khớp đủ: $totalMatched;Thiếu hụt: $totalMissing;Thừa/Lạ: $totalSurplus;Độ chính xác: $acc%');
+      buffer.writeln();
+      buffer.writeln('=== PHẦN 1: BẢNG TỔNG HỢP ĐỐI CHIẾU (THỪA - THIẾU - ĐỦ) ===');
+      buffer.writeln('STT,Mã SKU,Tên Sản Phẩm,ĐVT,Vị Trí Lưu Kho,Tồn Sổ Sách,Thực Tế Quét,Khớp Đủ,Thiếu Hụt,Thừa/Lạ,Chênh Lệch,Tỷ Lệ Đạt (%),Trạng Thái');
+      for (int i = 0; i < rows.length; i++) {
+        final r = rows[i];
+        final diffStr = r.difference == 0 ? '0' : (r.difference > 0 ? '+${r.difference}' : '${r.difference}');
+        final surplusCount = r.difference > 0 ? r.difference : (r.unknownCount > 0 ? r.unknownCount : 0);
+        buffer.writeln('${i + 1},${r.sku},"${r.productName}",${r.unit},"${r.zoneOrLocation}",${r.expectedQty},${r.actualQty},${r.matchedCount},${r.missingCount},$surplusCount,$diffStr,${r.accuracyPercent.toStringAsFixed(1)}%,${r.statusLabel}');
+      }
+      buffer.writeln();
+      buffer.writeln('=== PHẦN 2: BẢNG ĐỐI CHIẾU THIẾU VÀ ĐỦ ===');
+      buffer.writeln('STT,Mã SKU,Tên Sản Phẩm,ĐVT,Vị Trí Sổ Sách,Dự Kiến,Khớp Đủ,Thiếu Hụt,Sai Vị Trí,Tỷ Lệ Đủ (%),Kết Luận');
+      for (int i = 0; i < sheet2SkuRows.length; i++) {
+        final r = sheet2SkuRows[i];
+        final conclusion = r.missingCount == 0 ? (r.wrongLocationCount > 0 ? 'Đủ (Sai vị trí kệ)' : 'Khớp đủ 100%') : 'Thiếu ${r.missingCount} SP';
+        buffer.writeln('${i + 1},${r.sku},"${r.productName}",${r.unit},"${r.zoneOrLocation}",${r.expectedQty},${r.matchedCount},${r.missingCount},${r.wrongLocationCount},${r.accuracyPercent.toStringAsFixed(1)}%,$conclusion');
+      }
+      buffer.writeln();
+      buffer.writeln('=== PHẦN 3: BẢNG ĐỐI CHIẾU THỪA VÀ LIỆT KÊ MÃ CHIP RFID (EPC) THỪA ===');
+      buffer.writeln('STT,Mã Chip RFID (EPC),Mã SKU,Tên Sản Phẩm,Vị Trí Quét Thấy,Thời Điểm Quét,Phân Loại Thừa,Ghi Chú Đề Xuất');
+      if (surplusEpcList.isEmpty) {
+        buffer.writeln('1,KHONG_CO_EPC_THUA,--,Không phát sinh mã chip RFID thừa,--,--,Khớp đúng,--');
+      } else {
+        for (int i = 0; i < surplusEpcList.length; i++) {
+          final s = surplusEpcList[i];
+          buffer.writeln('${i + 1},${s['epc']},${s['sku']},"${s['name']}","${s['location']}","${s['time']}","${s['type']}","${s['note']}"');
+        }
+      }
+      buffer.writeln();
+      buffer.writeln('TRƯỞNG BAN KIỂM KÊ,THỦ KHO,ĐẠI DIỆN KẾ TOÁN');
+      buffer.writeln('(Ký ghi rõ họ tên),(Ký ghi rõ họ tên),(Ký ghi rõ họ tên)');
+      final file = File(filePath);
+      await file.writeAsString(buffer.toString());
+      return file;
+    } else {
+      final excel = Excel.createExcel();
+
+      // =======================================================================
+      // SHEET 1: TỔNG HỢP ĐỐI SOÁT (TỔNG HỢP THỪA - THIẾU - ĐỦ)
+      // =======================================================================
+      final sheet1 = excel['Tong_Hop_Doi_Soat'];
+
+      _setCell(sheet1, col: 0, row: 0, value: 'HỆ THỐNG QUẢN LÝ KHO THÔNG MINH RFID (RFID WMS)', style: _companyHeaderStyle);
+      _setCell(sheet1, col: 0, row: 1, value: 'BẢNG TỔNG HỢP ĐỐI CHIẾU KIỂM KHO (DỰ KIẾN VS THỰC TẾ)', style: _titleStyle);
+      _setCell(sheet1, col: 0, row: 2, value: '(Bảng tổng hợp đối chiếu số lượng Khớp đủ - Thiếu hụt - Thừa từ Sheet 2 và Sheet 3)', style: _subTitleStyle);
+
+      _setCell(sheet1, col: 0, row: 4, value: 'Phạm Vi Kiểm Kê:', style: _metaLabelStyle);
+      _setCell(sheet1, col: 1, row: 4, value: scopeTitle, style: _metaValueStyle);
+      _setCell(sheet1, col: 5, row: 4, value: 'Ngày Xuất Báo Cáo:', style: _metaLabelStyle);
+      _setCell(sheet1, col: 6, row: 4, value: _dtFmt.format(DateTime.now()), style: _metaValueStyle);
+
+      _setCell(sheet1, col: 0, row: 5, value: 'Mã Phiếu Kiểm Kê:', style: _metaLabelStyle);
+      _setCell(sheet1, col: 1, row: 5, value: sessionCode ?? 'Toàn bộ kho', style: _metaValueStyle);
+      _setCell(sheet1, col: 5, row: 5, value: 'Độ Chính Xác Kho:', style: _metaLabelStyle);
+      _setCell(sheet1, col: 6, row: 5, value: '$acc%', style: _metaValueStyle);
+
+      _setCell(sheet1, col: 0, row: 7, value: 'Tồn Dự Kiến (Sổ Sách):', style: _metaLabelStyle);
+      _setCell(sheet1, col: 1, row: 7, value: '$totalExp SP', style: _metaValueStyle);
+      _setCell(sheet1, col: 3, row: 7, value: 'Thực Tế Quét (RFID):', style: _metaLabelStyle);
+      _setCell(sheet1, col: 4, row: 7, value: '$totalAct Chip', style: _metaValueStyle);
+      _setCell(sheet1, col: 6, row: 7, value: 'Khớp Đủ (Sheet 2):', style: _metaLabelStyle);
+      _setCell(sheet1, col: 7, row: 7, value: '$totalMatched SP', style: _metaValueStyle);
+      _setCell(sheet1, col: 9, row: 7, value: 'Thiếu Hụt (Sheet 2):', style: _metaLabelStyle);
+      _setCell(sheet1, col: 10, row: 7, value: '-$totalMissing SP', style: _metaValueStyle);
+      _setCell(sheet1, col: 11, row: 7, value: 'Thừa / Lạ (Sheet 3):', style: _metaLabelStyle);
+      _setCell(sheet1, col: 12, row: 7, value: '+$totalSurplus Chip', style: _metaValueStyle);
+
+      final headers1 = [
+        'STT', 'Mã SKU', 'Tên Sản Phẩm / Quy Cách', 'ĐVT', 'Vị Trí Lưu Kho',
+        'Tồn Sổ Sách (Dự Kiến)', 'Thực Tế Quét (RFID)', 'Khớp Đủ (Sheet 2)',
+        'Thiếu Hụt (Sheet 2)', 'Thừa / Lạ (Sheet 3)', 'Chênh Lệch (±)',
+        'Tỷ Lệ Đạt (%)', 'Trạng Thái Đối Soát',
+      ];
+      const startRow1 = 9;
+      for (int c = 0; c < headers1.length; c++) {
+        _setCell(sheet1, col: c, row: startRow1, value: headers1[c], style: _tableHeaderStyle('#0891B2'));
+      }
+
+      int r1 = startRow1 + 1;
+      for (int i = 0; i < rows.length; i++) {
+        final r = rows[i];
+        final diffStr = r.difference == 0 ? '0' : (r.difference > 0 ? '+${r.difference}' : '${r.difference}');
+        final surplusCount = r.difference > 0 ? r.difference : (r.unknownCount > 0 ? r.unknownCount : 0);
+        final surplusStr = surplusCount > 0 ? '+$surplusCount' : '0';
+
+        _setCell(sheet1, col: 0, row: r1, value: '${i + 1}', style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 1, row: r1, value: r.sku);
+        _setCell(sheet1, col: 2, row: r1, value: r.productName);
+        _setCell(sheet1, col: 3, row: r1, value: r.unit, style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 4, row: r1, value: r.zoneOrLocation);
+        _setCell(sheet1, col: 5, row: r1, value: '${r.expectedQty}', style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 6, row: r1, value: '${r.actualQty}', style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 7, row: r1, value: '${r.matchedCount}', style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 8, row: r1, value: r.missingCount > 0 ? '-${r.missingCount}' : '0', style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 9, row: r1, value: surplusStr, style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 10, row: r1, value: diffStr, style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 11, row: r1, value: '${r.accuracyPercent.toStringAsFixed(1)}%', style: _dataCellCenterStyle);
+        _setCell(sheet1, col: 12, row: r1, value: r.statusLabel, style: _dataCellCenterStyle);
+        r1++;
+      }
+
+      // Dòng TỔNG CỘNG Sheet 1
+      _setCell(sheet1, col: 0, row: r1, value: 'TỔNG CỘNG', style: _totalRowStyle);
+      _setCell(sheet1, col: 1, row: r1, value: '${rows.length} SKU', style: _totalRowStyle);
+      _setCell(sheet1, col: 2, row: r1, value: '', style: _totalRowStyle);
+      _setCell(sheet1, col: 3, row: r1, value: '', style: _totalRowStyle);
+      _setCell(sheet1, col: 4, row: r1, value: '', style: _totalRowStyle);
+      _setCell(sheet1, col: 5, row: r1, value: '$totalExp SP', style: _totalRowStyle);
+      _setCell(sheet1, col: 6, row: r1, value: '$totalAct Chip', style: _totalRowStyle);
+      _setCell(sheet1, col: 7, row: r1, value: '$totalMatched SP', style: _totalRowStyle);
+      _setCell(sheet1, col: 8, row: r1, value: '-$totalMissing SP', style: _totalRowStyle);
+      _setCell(sheet1, col: 9, row: r1, value: '+$totalSurplus Chip', style: _totalRowStyle);
+      final netDiff = totalAct - totalExp;
+      _setCell(sheet1, col: 10, row: r1, value: '${netDiff >= 0 ? "+" : ""}$netDiff SP', style: _totalRowStyle);
+      _setCell(sheet1, col: 11, row: r1, value: '$acc%', style: _totalRowStyle);
+      _setCell(sheet1, col: 12, row: r1, value: totalMissing == 0 && totalSurplus == 0 ? 'Khớp 100%' : 'Chênh lệch', style: _totalRowStyle);
+
+      final signRow1 = r1 + 3;
+      _setCell(sheet1, col: 1, row: signRow1, value: 'TRƯỞNG BAN KIỂM KÊ', style: _signTitleStyle);
+      _setCell(sheet1, col: 6, row: signRow1, value: 'THỦ KHO', style: _signTitleStyle);
+      _setCell(sheet1, col: 10, row: signRow1, value: 'ĐẠI DIỆN KẾ TOÁN', style: _signTitleStyle);
+
+      _setCell(sheet1, col: 1, row: signRow1 + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
+      _setCell(sheet1, col: 6, row: signRow1 + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
+      _setCell(sheet1, col: 10, row: signRow1 + 1, value: '(Ký, ghi rõ họ tên)', style: _signNoteStyle);
+
+      _autoFitColumns(sheet1, headers1.length, signRow1 + 3);
+
+      // =======================================================================
+      // SHEET 2: ĐỐI CHIẾU THIẾU VÀ ĐỦ
+      // =======================================================================
+      final sheet2 = excel['Doi_Chieu_Thieu_Va_Du'];
+
+      _setCell(sheet2, col: 0, row: 0, value: 'HỆ THỐNG QUẢN LÝ KHO THÔNG MINH RFID (RFID WMS)', style: _companyHeaderStyle);
+      _setCell(sheet2, col: 0, row: 1, value: 'BẢNG ĐỐI CHIẾU THIẾU VÀ ĐỦ (DANH MỤC SỔ SÁCH & THỰC TẾ)', style: _titleStyle);
+      _setCell(sheet2, col: 0, row: 2, value: '(Chi tiết đối chiếu số lượng và danh sách mã chip RFID Khớp Đủ và Thiếu Hụt)', style: _subTitleStyle);
+
+      _setCell(sheet2, col: 0, row: 4, value: 'Phạm Vi:', style: _metaLabelStyle);
+      _setCell(sheet2, col: 1, row: 4, value: scopeTitle, style: _metaValueStyle);
+      _setCell(sheet2, col: 4, row: 4, value: 'Phiếu Kiểm Kê:', style: _metaLabelStyle);
+      _setCell(sheet2, col: 5, row: 4, value: sessionCode ?? 'Toàn bộ kho', style: _metaValueStyle);
+
+      _setCell(sheet2, col: 0, row: 5, value: 'Tổng Sổ Sách:', style: _metaLabelStyle);
+      _setCell(sheet2, col: 1, row: 5, value: '$totalExp SP', style: _metaValueStyle);
+      _setCell(sheet2, col: 3, row: 5, value: 'Khớp Đủ:', style: _metaLabelStyle);
+      _setCell(sheet2, col: 4, row: 5, value: '$totalMatched SP', style: _metaValueStyle);
+      _setCell(sheet2, col: 6, row: 5, value: 'Thiếu Hụt:', style: _metaLabelStyle);
+      _setCell(sheet2, col: 7, row: 5, value: '-$totalMissing SP', style: _metaValueStyle);
+
+      _setCell(sheet2, col: 0, row: 7, value: '1. BẢNG ĐỐI CHIẾU THIẾU VÀ ĐỦ THEO MẶT HÀNG (SKU)', style: _titleStyle);
+
+      final headers2Sku = [
+        'STT', 'Mã SKU', 'Tên Sản Phẩm', 'ĐVT', 'Vị Trí Sổ Sách',
+        'Tồn Sổ Sách (Dự Kiến)', 'Số Lượng Đủ (Khớp)', 'Số Lượng Thiếu',
+        'Sai Vị Trí Kệ', 'Tỷ Lệ Đủ (%)', 'Kết Luận Đối Chiếu',
+      ];
+      const startRow2Sku = 8;
+      for (int c = 0; c < headers2Sku.length; c++) {
+        _setCell(sheet2, col: c, row: startRow2Sku, value: headers2Sku[c], style: _tableHeaderStyle('#059669'));
+      }
+
+      int r2 = startRow2Sku + 1;
+      for (int i = 0; i < sheet2SkuRows.length; i++) {
+        final r = sheet2SkuRows[i];
+        final conclusion = r.missingCount == 0
+            ? (r.wrongLocationCount > 0 ? 'Đủ (Sai vị trí kệ)' : 'Khớp đủ 100%')
+            : 'Thiếu ${r.missingCount} SP';
+
+        _setCell(sheet2, col: 0, row: r2, value: '${i + 1}', style: _dataCellCenterStyle);
+        _setCell(sheet2, col: 1, row: r2, value: r.sku);
+        _setCell(sheet2, col: 2, row: r2, value: r.productName);
+        _setCell(sheet2, col: 3, row: r2, value: r.unit, style: _dataCellCenterStyle);
+        _setCell(sheet2, col: 4, row: r2, value: r.zoneOrLocation);
+        _setCell(sheet2, col: 5, row: r2, value: '${r.expectedQty}', style: _dataCellCenterStyle);
+        _setCell(sheet2, col: 6, row: r2, value: '${r.matchedCount}', style: _dataCellCenterStyle);
+        _setCell(sheet2, col: 7, row: r2, value: r.missingCount > 0 ? '-${r.missingCount}' : '0', style: _dataCellCenterStyle);
+        _setCell(sheet2, col: 8, row: r2, value: '${r.wrongLocationCount}', style: _dataCellCenterStyle);
+        _setCell(sheet2, col: 9, row: r2, value: '${r.accuracyPercent.toStringAsFixed(1)}%', style: _dataCellCenterStyle);
+        _setCell(sheet2, col: 10, row: r2, value: conclusion, style: _dataCellCenterStyle);
+        r2++;
+      }
+
+      // Dòng Tổng Cộng Bảng SKU
+      _setCell(sheet2, col: 0, row: r2, value: 'TỔNG CỘNG', style: _totalRowStyle);
+      _setCell(sheet2, col: 1, row: r2, value: '${sheet2SkuRows.length} SKU', style: _totalRowStyle);
+      _setCell(sheet2, col: 2, row: r2, value: '', style: _totalRowStyle);
+      _setCell(sheet2, col: 3, row: r2, value: '', style: _totalRowStyle);
+      _setCell(sheet2, col: 4, row: r2, value: '', style: _totalRowStyle);
+      _setCell(sheet2, col: 5, row: r2, value: '$totalExp SP', style: _totalRowStyle);
+      _setCell(sheet2, col: 6, row: r2, value: '$totalMatched SP', style: _totalRowStyle);
+      _setCell(sheet2, col: 7, row: r2, value: '-$totalMissing SP', style: _totalRowStyle);
+      _setCell(sheet2, col: 8, row: r2, value: '$totalWrongLoc SP', style: _totalRowStyle);
+      _setCell(sheet2, col: 9, row: r2, value: '$acc%', style: _totalRowStyle);
+      _setCell(sheet2, col: 10, row: r2, value: totalMissing == 0 ? 'Đủ 100%' : 'Thiếu $totalMissing SP', style: _totalRowStyle);
+      r2 += 3;
+
+      // Phần 2 Sheet 2: Danh sách chi tiết mã chip RFID (EPC) đối chiếu Thiếu và Đủ
+      _setCell(sheet2, col: 0, row: r2, value: '2. DANH SÁCH CHI TIẾT MÃ CHIP RFID (EPC) ĐỐI CHIẾU THIẾU VÀ ĐỦ', style: _titleStyle);
+      r2++;
+
+      final headers2Epc = [
+        'STT', 'Mã Chip RFID (EPC)', 'Mã SKU', 'Tên Sản Phẩm',
+        'Vị Trí Sổ Sách (Dự Kiến)', 'Vị Trí Quét Thấy (Thực Tế)',
+        'Trạng Thái Đối Chiếu', 'Thời Điểm Quét / Ghi Nhận',
+      ];
+      for (int c = 0; c < headers2Epc.length; c++) {
+        _setCell(sheet2, col: c, row: r2, value: headers2Epc[c], style: _tableHeaderStyle('#334155'));
+      }
+      r2++;
+
+      if (sheet2DetailItems.isEmpty) {
+        _setCell(sheet2, col: 0, row: r2, value: 'Không có dữ liệu thẻ RFID chi tiết cho danh mục này.', style: _signNoteStyle);
+        r2++;
+      } else {
+        for (int i = 0; i < sheet2DetailItems.length; i++) {
+          final it = sheet2DetailItems[i];
+          _setCell(sheet2, col: 0, row: r2, value: '${i + 1}', style: _dataCellCenterStyle);
+          _setCell(sheet2, col: 1, row: r2, value: it['epc'] ?? '--');
+          _setCell(sheet2, col: 2, row: r2, value: it['sku'] ?? '--');
+          _setCell(sheet2, col: 3, row: r2, value: it['name'] ?? '--');
+          _setCell(sheet2, col: 4, row: r2, value: it['expectedLoc'] ?? '--');
+          _setCell(sheet2, col: 5, row: r2, value: it['actualLoc'] ?? '--');
+          _setCell(sheet2, col: 6, row: r2, value: it['status'] ?? '--', style: _dataCellCenterStyle);
+          _setCell(sheet2, col: 7, row: r2, value: it['time'] ?? '--', style: _dataCellCenterStyle);
+          r2++;
+        }
+      }
+
+      _autoFitColumns(sheet2, headers2Sku.length, r2 + 2);
+
+      // =======================================================================
+      // SHEET 3: ĐỐI CHIẾU THỪA VÀ LIỆT KÊ MÃ CHIP RFID (EPC) THỪA
+      // =======================================================================
+      final sheet3 = excel['Doi_Chieu_Thua_EPC'];
+
+      _setCell(sheet3, col: 0, row: 0, value: 'HỆ THỐNG QUẢN LÝ KHO THÔNG MINH RFID (RFID WMS)', style: _companyHeaderStyle);
+      _setCell(sheet3, col: 0, row: 1, value: 'BẢNG ĐỐI CHIẾU THỪA & LIỆT KÊ MÃ CHIP RFID (EPC) THỪA', style: _titleStyle);
+      _setCell(sheet3, col: 0, row: 2, value: '(Liệt kê chi tiết toàn bộ các mặt hàng phát sinh thừa và mã chip RFID thừa / lạ ngoài sổ sách)', style: _subTitleStyle);
+
+      _setCell(sheet3, col: 0, row: 4, value: 'Phạm Vi:', style: _metaLabelStyle);
+      _setCell(sheet3, col: 1, row: 4, value: scopeTitle, style: _metaValueStyle);
+      _setCell(sheet3, col: 4, row: 4, value: 'Phiếu Kiểm Kê:', style: _metaLabelStyle);
+      _setCell(sheet3, col: 5, row: 4, value: sessionCode ?? 'Toàn bộ kho', style: _metaValueStyle);
+
+      _setCell(sheet3, col: 0, row: 5, value: 'Tổng Hàng Thừa / Lạ:', style: _metaLabelStyle);
+      _setCell(sheet3, col: 1, row: 5, value: '+$totalSurplus Chip', style: _metaValueStyle);
+      _setCell(sheet3, col: 3, row: 5, value: 'Thẻ Lạ Ngoài Sổ Sách:', style: _metaLabelStyle);
+      _setCell(sheet3, col: 4, row: 5, value: '$totalUnknown Chip', style: _metaValueStyle);
+      _setCell(sheet3, col: 6, row: 5, value: 'Hướng Xử Lý:', style: _metaLabelStyle);
+      _setCell(sheet3, col: 7, row: 5, value: totalSurplus > 0 ? 'Cách ly chip thừa, rà soát nguồn gốc lô hàng' : 'Kho chuẩn, không phát sinh thừa', style: _metaValueStyle);
+
+      _setCell(sheet3, col: 0, row: 7, value: '1. BẢNG TỔNG HỢP CÁC MẶT HÀNG PHÁT SINH THỪA (SKU)', style: _titleStyle);
+
+      final headers3Sku = [
+        'STT', 'Mã SKU', 'Tên Sản Phẩm / Phân Loại', 'ĐVT', 'Vị Trí Quét Thấy',
+        'Tồn Sổ Sách', 'Thực Tế Quét', 'Số Lượng Thừa (+)', 'Phân Loại Thừa', 'Đề Xuất Xử Lý',
+      ];
+      const startRow3Sku = 8;
+      for (int c = 0; c < headers3Sku.length; c++) {
+        _setCell(sheet3, col: c, row: startRow3Sku, value: headers3Sku[c], style: _tableHeaderStyle('#D97706'));
+      }
+
+      int r3 = startRow3Sku + 1;
+      if (sheet3SkuRows.isEmpty) {
+        _setCell(sheet3, col: 0, row: r3, value: '✓ Không có mặt hàng nào phát sinh thừa trong đợt kiểm kê này.', style: _signNoteStyle);
+        r3++;
+      } else {
+        for (int i = 0; i < sheet3SkuRows.length; i++) {
+          final r = sheet3SkuRows[i];
+          final surplusQty = r.difference > 0 ? r.difference : (r.unknownCount > 0 ? r.unknownCount : 0);
+          final typeDesc = r.sku == 'THẺ_LẠ'
+              ? 'Thẻ RFID lạ chưa khai báo trong hệ thống'
+              : 'Thừa số lượng so với định mức sổ sách';
+          final actionDesc = r.sku == 'THẺ_LẠ'
+              ? 'Cách ly kiểm tra mã thẻ, lập biên bản thẻ lạ'
+              : 'Kiểm tra phiếu nhập hoặc hàng chưa cất kệ';
+
+          _setCell(sheet3, col: 0, row: r3, value: '${i + 1}', style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 1, row: r3, value: r.sku);
+          _setCell(sheet3, col: 2, row: r3, value: r.productName);
+          _setCell(sheet3, col: 3, row: r3, value: r.unit, style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 4, row: r3, value: r.zoneOrLocation);
+          _setCell(sheet3, col: 5, row: r3, value: '${r.expectedQty}', style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 6, row: r3, value: '${r.actualQty}', style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 7, row: r3, value: '+$surplusQty', style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 8, row: r3, value: typeDesc);
+          _setCell(sheet3, col: 9, row: r3, value: actionDesc);
+          r3++;
+        }
+      }
+
+      r3 += 2;
+      // Phần 2 Sheet 3: Danh sách liệt kê tường minh các mã chip RFID (EPC) thừa
+      _setCell(sheet3, col: 0, row: r3, value: '2. BẢNG LIỆT KÊ TƯỜNG MINH CÁC MÃ CHIP RFID (EPC) THỪA', style: _titleStyle);
+      r3++;
+
+      final headers3Epc = [
+        'STT', 'Mã Chip RFID (EPC)', 'Mã SKU Nhận Diện', 'Tên Sản Phẩm',
+        'Vị Trí Quét Thấy (Thực Tế)', 'Thời Điểm Quét', 'Phân Loại Thừa',
+        'Ghi Chú Đề Xuất Xử Lý',
+      ];
+      for (int c = 0; c < headers3Epc.length; c++) {
+        _setCell(sheet3, col: c, row: r3, value: headers3Epc[c], style: _tableHeaderStyle('#DC2626'));
+      }
+      r3++;
+
+      if (surplusEpcList.isEmpty) {
+        _setCell(sheet3, col: 0, row: r3, value: '✓ Không phát hiện mã chip RFID (EPC) thừa nào trong đợt kiểm kê này. Toàn bộ chip quét thấy đều nằm trong danh mục sổ sách dự kiến.', style: _signNoteStyle);
+        r3++;
+      } else {
+        for (int i = 0; i < surplusEpcList.length; i++) {
+          final s = surplusEpcList[i];
+          _setCell(sheet3, col: 0, row: r3, value: '${i + 1}', style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 1, row: r3, value: s['epc'] ?? '--', style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 2, row: r3, value: s['sku'] ?? '--');
+          _setCell(sheet3, col: 3, row: r3, value: s['name'] ?? '--');
+          _setCell(sheet3, col: 4, row: r3, value: s['location'] ?? '--');
+          _setCell(sheet3, col: 5, row: r3, value: s['time'] ?? '--', style: _dataCellCenterStyle);
+          _setCell(sheet3, col: 6, row: r3, value: s['type'] ?? '--');
+          _setCell(sheet3, col: 7, row: r3, value: s['note'] ?? '--');
+          r3++;
+        }
+      }
+
+      _autoFitColumns(sheet3, headers3Sku.length, r3 + 2);
+
+      // Xóa sheet mặc định 'Sheet1' của thư viện excel nếu có
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+
+      return _saveProtectedExcelFile(excel, filePath);
+    }
+  }
+
   // =========================================================================
   // 4. FORM MẪU: BÁO CÁO TỒN KHO CHI TIẾT THEO SỐ SERI (SN), VỊ TRÍ & RFID
   // =========================================================================
@@ -798,7 +1216,7 @@ class ReportExportService {
         it.epc,
         it.locationId ?? '--',
         palletDisplay,
-        it.supplierDisplay,
+        _repo.getItemSupplier(it),
         it.inboundTime != null ? _dtFmt.format(it.inboundTime!) : '--',
         it.status.label,
       ]);
@@ -864,11 +1282,7 @@ class ReportExportService {
 
       _autoFitColumns(sheet, headers.length, signRow + 3);
 
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Không thể tạo file Excel.');
-      final file = File(filePath);
-      await file.writeAsBytes(bytes);
-      return file;
+      return _saveProtectedExcelFile(excel, filePath);
     }
   }
 
@@ -906,7 +1320,7 @@ class ReportExportService {
       final items = skuMap[sku] ?? [];
       totalQty += items.length;
       final productName = items.isNotEmpty ? items.first.productName : sku;
-      final supplier = items.isNotEmpty ? items.first.supplierDisplay : '--';
+      final supplier = items.isNotEmpty ? _repo.getItemSupplier(items.first) : '--';
 
       final locations = items
           .map((it) => it.locationId ?? '')
@@ -997,11 +1411,7 @@ class ReportExportService {
 
       _autoFitColumns(sheet, headers.length, signRow + 3);
 
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Không thể tạo file Excel.');
-      final file = File(filePath);
-      await file.writeAsBytes(bytes);
-      return file;
+      return _saveProtectedExcelFile(excel, filePath);
     }
   }
 
@@ -1110,11 +1520,7 @@ class ReportExportService {
 
       _autoFitColumns(sheet, headers.length, signRow + 3);
 
-      final bytes = excel.encode();
-      if (bytes == null) throw Exception('Không thể tạo file Excel.');
-      final file = File(filePath);
-      await file.writeAsBytes(bytes);
-      return file;
+      return _saveProtectedExcelFile(excel, filePath);
     }
   }
 
@@ -1227,4 +1633,91 @@ class ReportExportService {
         horizontalAlign: HorizontalAlign.Center,
         verticalAlign: VerticalAlign.Center,
       );
+
+  // =========================================================================
+  // BẢO VỆ TẬP TIN EXCEL CHỐNG CHỈNH SỬA (EXCEL ANTI-TAMPER & SHEET PROTECTION)
+  // =========================================================================
+
+  /// Lưu file Excel có áp dụng cơ chế khóa bảo vệ chống chỉnh sửa (Read-Only / Sheet Protection)
+  Future<File> _saveProtectedExcelFile(Excel excel, String filePath) async {
+    final rawBytes = excel.encode();
+    if (rawBytes == null) throw Exception('Không thể tạo file Excel.');
+
+    final protectedBytes = _protectExcelBytes(rawBytes);
+    final file = File(filePath);
+    await file.writeAsBytes(protectedBytes);
+    return file;
+  }
+
+  /// Áp dụng bảo vệ chống chỉnh sửa cho file Excel chuẩn OpenXML (ECMA-376)
+  /// - Khóa toàn bộ các sheet: không cho sửa ô, không chèn/xóa dòng/cột, không đổi định dạng
+  /// - Khóa cấu trúc workbook: không thêm/xóa/đổi tên/ẩn sheet
+  /// - Bật cờ readOnlyRecommended để Excel tự động khuyến nghị mở chế độ Chỉ Đọc
+  /// - Mật khẩu mở khóa (nếu cần quản trị unprotect): WMS2026 (hash: DFEE)
+  List<int> _protectExcelBytes(List<int> bytes) {
+    try {
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final newArchive = Archive();
+
+      for (final file in archive) {
+        if (!file.isFile) continue;
+
+        if (file.name.startsWith('xl/worksheets/sheet') && file.name.endsWith('.xml')) {
+          var content = utf8.decode(file.content as List<int>);
+          if (!content.contains('<sheetProtection')) {
+            // Theo chuẩn OpenXML ECMA-376 Part 4:
+            // sheetProtection phải nằm ngay sau sheetData (và sheetCalcPr)
+            // trước mergeCells, dataValidations, pageMargins...
+            const protectionXml = '<sheetProtection sheet="true" objects="true" scenarios="true" '
+                'password="DFEE" selectLockedCells="true" selectUnlockedCells="true" '
+                'formatCells="false" formatColumns="false" formatRows="false" '
+                'insertColumns="false" insertRows="false" insertHyperlinks="false" '
+                'deleteColumns="false" deleteRows="false" sort="false" autoFilter="false" pivotTables="false"/>';
+            if (content.contains('</sheetData>')) {
+              content = content.replaceFirst('</sheetData>', '</sheetData>$protectionXml');
+            } else if (content.contains('<sheetData/>')) {
+              content = content.replaceFirst('<sheetData/>', '<sheetData/>$protectionXml');
+            } else if (content.contains('</worksheet>')) {
+              content = content.replaceFirst('</worksheet>', '$protectionXml</worksheet>');
+            }
+          }
+          final newBytes = utf8.encode(content);
+          newArchive.addFile(ArchiveFile(file.name, newBytes.length, newBytes));
+        } else if (file.name == 'xl/workbook.xml') {
+          var content = utf8.decode(file.content as List<int>);
+          // Thêm fileSharing (khuyến nghị chỉ đọc)
+          if (!content.contains('<fileSharing')) {
+            const fileSharingXml = '<fileSharing readOnlyRecommended="1"/>';
+            if (content.contains('<workbookPr')) {
+              content = content.replaceFirst('<workbookPr', '$fileSharingXml<workbookPr');
+            } else if (content.contains('</workbook>')) {
+              content = content.replaceFirst('</workbook>', '$fileSharingXml</workbook>');
+            }
+          }
+          // Thêm workbookProtection (khóa cấu trúc bảng tính)
+          if (!content.contains('<workbookProtection')) {
+            const wbProtectionXml = '<workbookProtection lockStructure="true" lockWindows="true" workbookPassword="DFEE"/>';
+            if (content.contains('<workbookPr/>')) {
+              content = content.replaceFirst('<workbookPr/>', '<workbookPr/>$wbProtectionXml');
+            } else if (content.contains('</workbookPr>')) {
+              content = content.replaceFirst('</workbookPr>', '</workbookPr>$wbProtectionXml');
+            } else if (content.contains('<sheets>')) {
+              content = content.replaceFirst('<sheets>', '$wbProtectionXml<sheets>');
+            } else if (content.contains('</workbook>')) {
+              content = content.replaceFirst('</workbook>', '$wbProtectionXml</workbook>');
+            }
+          }
+          final newBytes = utf8.encode(content);
+          newArchive.addFile(ArchiveFile(file.name, newBytes.length, newBytes));
+        } else {
+          newArchive.addFile(file);
+        }
+      }
+
+      return ZipEncoder().encode(newArchive) ?? bytes;
+    } catch (_) {
+      // Fallback an toàn nếu có lỗi
+      return bytes;
+    }
+  }
 }

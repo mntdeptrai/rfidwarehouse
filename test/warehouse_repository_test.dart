@@ -50,7 +50,7 @@ void main() {
       );
     });
 
-    test('SQLite Dynamic Data is loaded properly', () {
+    test('Dynamic Data is loaded properly into memory', () {
       expect(repo.products.length >= 2, isTrue);
       expect(repo.locations.length >= 4, isTrue);
       expect(repo.inboundOrders.any((o) => o.orderNo == 'INB-2026-001'), isTrue);
@@ -306,7 +306,7 @@ void main() {
       uhf.filterDuplicates = true;
     });
 
-    test('PDA Offline-First SQLite Queue: operations are saved locally and synced to Supabase Cloud', () async {
+    test('PDA Offline-First Queue: operations are saved locally and synced to Supabase Cloud', () async {
       final dbService = DatabaseService();
       final syncService = SupabaseSyncService();
 
@@ -323,7 +323,7 @@ void main() {
         performedBy: 'Thủ kho Offline',
       );
 
-      // Verify SQLite recorded pending sync items
+      // Verify DatabaseService recorded pending sync items
       final pendingCount = await dbService.getPendingSyncCount();
       expect(pendingCount, greaterThanOrEqualTo(1));
 
@@ -804,7 +804,7 @@ void main() {
       expect(repo.items.firstWhere((i) => i.itemId == 'IT-PROD-100').locationId, isNull);
     });
 
-    test('Pallet Deletion updates both SQLite and permanent backup so deleted pallets do not resurrect', () async {
+    test('Pallet Deletion updates both DatabaseService and permanent backup so deleted pallets do not resurrect', () async {
       final dbService = DatabaseService();
       repo.createOrAssignPallet(
         palletCode: 'PAL-TO-DELETE',
@@ -892,7 +892,7 @@ void main() {
 
     test('getItemInboundBy resolves user name who operated gate receive', () async {
       final repo = WarehouseRepository();
-      await repo.reloadFromSqlite();
+      await repo.reloadFromDatabase();
 
       final activeStaff = WmsUser(
         userId: 'USER-STAFF-INBOUND-01',

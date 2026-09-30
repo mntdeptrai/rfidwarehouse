@@ -630,6 +630,7 @@ class _InboundScreenState extends State<InboundScreen> {
   void _checkAndAutoConfirm() {
     if (_autoConfirmedThisSession) return;
     if (_isSaving) return;
+    if (!_isScanning) return;
     if (_unexpectedTags.isNotEmpty) return;
 
     // Kiểm tra toàn bộ file (sản phẩm + chip pallet)
@@ -826,7 +827,7 @@ class _InboundScreenState extends State<InboundScreen> {
           const SnackBar(
             backgroundColor: Color(0xFF10B981),
             duration: Duration(seconds: 2),
-            content: Text('✓ Đã đồng bộ dữ liệu mới nhất từ CSDL & Cloud'),
+            content: Text('✓ Đã đồng bộ dữ liệu mới nhất thành công'),
           ),
         );
       }
@@ -2401,7 +2402,7 @@ class _InboundScreenState extends State<InboundScreen> {
                           size: 18),
                   label: Text(
                     _isSaving
-                        ? 'ĐANG LƯU CSDL...'
+                        ? 'ĐANG LƯU ĐƠN...'
                         : (_isBatchCompleted || allPalletsConfirmed
                             ? '📦 CẤT HÀNG VÀO KỆ'
                             : (isComplete
@@ -2987,6 +2988,7 @@ class _InboundScreenState extends State<InboundScreen> {
         _lastNextPallet = null;
         _autoConfirmedThisSession = true;
         _isBatchCompleted = true;
+        _isScanning = false;
         // Đảm bảo toàn bộ thẻ dự kiến đều có trong danh sách đã quét để luôn hiển thị 100% (Đủ và Tích Xanh)
         for (final epc in _selectedEpcs) {
           final cleanEpc = epc.trim().toUpperCase();
@@ -3155,7 +3157,7 @@ class _InboundScreenState extends State<InboundScreen> {
                   child: const Icon(Icons.cloud_download_outlined, color: Color(0xFF10B981), size: 20),
                 ),
                 title: Text('Chọn Đơn PO Trên Hệ Thống', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                subtitle: Text('Danh sách đơn nhập kho đang chờ trên Supabase Cloud', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                subtitle: Text('Danh sách đơn nhập kho đang chờ xử lý', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showSelectInboundOrderDialog();
@@ -3266,7 +3268,7 @@ class _InboundScreenState extends State<InboundScreen> {
               ? Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(
-                    'Không có đơn nhập kho nào đang chờ trên Supabase Cloud.',
+                    'Không có đơn nhập kho nào đang chờ xử lý.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: c.textSecondary, fontSize: 12),
                   ),
@@ -3361,7 +3363,7 @@ class _InboundScreenState extends State<InboundScreen> {
           ],
         ),
         content: Text(
-          'Bạn có chắc chắn muốn xóa đơn ${ord.orderNo} khỏi CSDL SQLite & Supabase Cloud?',
+          'Bạn có chắc chắn muốn xóa đơn ${ord.orderNo} khỏi hệ thống?',
           style: const TextStyle(fontSize: 13),
         ),
         actions: [
@@ -3411,7 +3413,7 @@ class _InboundScreenState extends State<InboundScreen> {
           SnackBar(
             backgroundColor: const Color(0xFFEF4444),
             duration: const Duration(seconds: 2),
-            content: Text('✓ Đã xóa đơn ${ord.orderNo} khỏi CSDL & Cloud'),
+            content: Text('✓ Đã xóa đơn ${ord.orderNo} thành công!'),
           ),
         );
       }
@@ -3441,7 +3443,7 @@ class _InboundScreenState extends State<InboundScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Không có đơn nhập kho nào đang chờ trên Supabase Cloud.\nVui lòng bấm [LÀM MỚI] để đồng bộ hoặc bấm [NHẬP HÀNG ▾] để tạo đơn.',
+                'Không có đơn nhập kho nào đang chờ xử lý.\nVui lòng bấm [LÀM MỚI] để đồng bộ hoặc bấm [NHẬP HÀNG ▾] để tạo đơn.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: c.textSecondary, fontSize: 12),
               ),

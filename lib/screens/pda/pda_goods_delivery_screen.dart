@@ -1092,7 +1092,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
             // Nút Làm Mới
             Tooltip(
-              message: 'Làm mới & đồng bộ CSDL',
+              message: 'Làm mới dữ liệu',
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: c.textPrimary,
@@ -1107,7 +1107,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11),
                 ),
                 onPressed: _isImporting ? null : () async {
-                  await _repo.reloadFromSqlite();
+                  await _repo.reloadFromDatabase();
                   await _supabaseSync.syncNow();
                   if (mounted) setState(() {});
                 },

@@ -374,7 +374,7 @@ class SupabaseSyncService extends ChangeNotifier {
   void _scheduleReloadFromCloud() {
     _reloadDebounceTimer?.cancel();
     _reloadDebounceTimer = Timer(const Duration(milliseconds: 300), () async {
-      await WarehouseRepository().reloadFromSqlite();
+      await WarehouseRepository().reloadFromDatabase();
     });
   }
 
@@ -392,7 +392,6 @@ class SupabaseSyncService extends ChangeNotifier {
       result.remove('inbound_by');
       result.remove('putaway_by');
       result.remove('carton_code');
-      result.remove('supplier');
     }
     if (tableName == 'inbound_orders' && result.containsKey('inbound_order_id')) {
       result.remove('details');
@@ -489,8 +488,9 @@ class SupabaseSyncService extends ChangeNotifier {
                     'is_success': true,
                     'message': jsonEncode(normalized),
                   });
-                } catch (_) {}
-                rethrow;
+                } catch (_) {
+                  rethrow;
+                }
               } else {
                 rethrow;
               }
@@ -617,8 +617,9 @@ class SupabaseSyncService extends ChangeNotifier {
                       'is_success': true,
                       'message': jsonEncode(payload),
                     });
-                  } catch (_) {}
-                  rethrow;
+                  } catch (_) {
+                    rethrow;
+                  }
                 } else {
                   rethrow;
                 }
@@ -659,8 +660,30 @@ class SupabaseSyncService extends ChangeNotifier {
         }
       }
 
+      // 1.5. Đẩy các thao tác tồn đọng từ hàng đợi DatabaseService nếu có
+      final dbPending = await _dbService.getPendingSyncItems(limit: 200);
+      for (final item in dbPending) {
+        try {
+          final tName = item['table_name'] as String;
+          final act = item['action'] as String;
+          final pLoad = item['payload'] is String
+              ? jsonDecode(item['payload'] as String) as Map<String, dynamic>
+              : item['payload'] as Map<String, dynamic>;
+          final pk = _getPrimaryKeyColumn(tName);
+          final rId = (item['record_id'] ?? '').toString();
+          if (act == 'INSERT' || act.contains('CONFIRM')) {
+            await supa.from(tName).upsert(pLoad);
+          } else if (act == 'UPDATE') {
+            await supa.from(tName).update(pLoad).eq(pk, rId);
+          } else if (act == 'DELETE') {
+            await supa.from(tName).delete().eq(pk, rId);
+          }
+          await _dbService.markSyncItemSynced(item['queue_id'] as int);
+        } catch (_) {}
+      }
+
       // 2. Làm mới toàn bộ dữ liệu ứng dụng trực tiếp từ Supabase Cloud
-      await WarehouseRepository().reloadFromSqlite();
+      await WarehouseRepository().reloadFromDatabase();
 
       _lastSyncTime = DateTime.now();
       _addLog(

@@ -9,6 +9,7 @@ import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import 'desktop_location_management_view.dart';
 import 'desktop_lookup_view.dart';
+import 'desktop_audit_ticket_detail_view.dart';
 import '../../widgets/app_notification_bar.dart';
 
 class _PalletGroupSummary {
@@ -1048,7 +1049,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
 
                         // Nút Làm Mới Dữ Liệu
                         Tooltip(
-                          message: 'Đồng bộ & làm mới dữ liệu từ CSDL',
+                          message: 'Làm mới dữ liệu',
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: c.textPrimary,
@@ -1059,7 +1060,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                             icon: const Icon(Icons.refresh, size: 16),
                             label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                             onPressed: () async {
-                              await _repo.reloadFromSqlite();
+                              await _repo.reloadFromDatabase();
                               await _supabaseSync.syncNow();
                               if (mounted) setState(() {});
                             },
@@ -1697,7 +1698,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
           ],
         ),
         content: Text(
-          'Bạn có chắc chắn muốn xóa vĩnh viễn Pallet "${p.palletCode}" khỏi hệ thống CSDL không?\n\nHành động này không thể hoàn tác.',
+          'Bạn có chắc chắn muốn xóa vĩnh viễn Pallet "${p.palletCode}" khỏi hệ thống không?\n\nHành động này không thể hoàn tác.',
           style: TextStyle(color: c.textSecondary, fontSize: 13),
         ),
         actions: [
@@ -2125,8 +2126,8 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
             const SizedBox(height: 8),
             Text(
               totalQty > 0
-                  ? 'Toàn bộ dữ liệu ($totalQty sản phẩm/chip) liên quan sẽ được xóa sạch khỏi bộ nhớ và đồng bộ với Supabase Cloud.'
-                  : 'Toàn bộ dữ liệu của chứng từ này sẽ được xóa sạch khỏi bộ nhớ và đồng bộ với Supabase Cloud.',
+                  ? 'Toàn bộ dữ liệu ($totalQty sản phẩm/chip) liên quan sẽ được xóa hoàn toàn khỏi hệ thống.'
+                  : 'Toàn bộ dữ liệu của chứng từ này sẽ được xóa hoàn toàn khỏi hệ thống.',
               style: TextStyle(color: c.textSecondary, fontSize: 12),
             ),
           ],
@@ -2214,190 +2215,22 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
     if (recType == 'AUDIT' && session != null) {
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: c.bgCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: c.border)),
-          title: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.fact_check_outlined, color: Color(0xFF8B5CF6), size: 22),
+        builder: (ctx) => Dialog(
+          backgroundColor: c.bgDeep,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: SizedBox(
+              width: 1200,
+              height: 750,
+              child: DesktopAuditTicketDetailView(
+                session: session,
+                isDialogMode: true,
+                onBack: () => Navigator.pop(ctx),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'CHI TIẾT ĐỢT KIỂM KÊ: ${session.sessionCode.isNotEmpty ? session.sessionCode : session.sessionId}',
-                      style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Khu vực: ${session.zone} ${session.locationCode != null ? "• Kệ: ${session.locationCode}" : ""} • Thời gian: ${_formatDateTime(session.completedAt ?? session.startedAt)} • Trạng thái: ${session.isCompleted ? "ĐÃ HOÀN TẤT" : "ĐANG KIỂM KÊ"}',
-                      style: TextStyle(color: c.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 780,
-            height: 480,
-            child: Column(
-              children: [
-                // 4 Thẻ chỉ số kiểm kê
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                        decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-                        child: Column(
-                          children: [
-                            Text('ĐÃ QUÉT THỰC TẾ', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text('${session.actualScannedCount}', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                        decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF10B981))),
-                        child: Column(
-                          children: [
-                            const Text('KHỚP HỆ THỐNG', style: TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text('${session.matchCount}', style: const TextStyle(color: Color(0xFF10B981), fontSize: 16, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                        decoration: BoxDecoration(color: const Color(0xFFEF4444).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFEF4444))),
-                        child: Column(
-                          children: [
-                            const Text('THIẾU THỰC TẾ', style: TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text('${session.missingCount}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 16, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                        decoration: BoxDecoration(color: const Color(0xFF8B5CF6).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFF8B5CF6))),
-                        child: Column(
-                          children: [
-                            const Text('THẺ LẠ / NGOÀI DS', style: TextStyle(color: Color(0xFF8B5CF6), fontSize: 10.5, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 2),
-                            Text('${session.unknownEpcCount}', style: const TextStyle(color: Color(0xFF8B5CF6), fontSize: 16, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // Danh sách chip RFID đã kiểm kê
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: const BorderRadius.vertical(top: Radius.circular(8))),
-                  child: Row(
-                    children: [
-                      SizedBox(width: 40, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 3, child: Text('MÃ EPC / RFID', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 2, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      Expanded(flex: 3, child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                      SizedBox(width: 120, child: Text('KẾT QUẢ ĐỐI SOÁT', textAlign: TextAlign.center, style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold))),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: session.results.isEmpty
-                      ? Center(child: Text('Chưa có chi tiết thẻ nào được ghi nhận trong đợt kiểm kê này.', style: TextStyle(color: c.textSecondary, fontSize: 12)))
-                      : ListView.builder(
-                          itemCount: session.results.length,
-                          itemBuilder: (context, idx) {
-                            final r = session.results[idx];
-                            final color = Color(r.resultType.colorValue);
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border.withValues(alpha: 0.4)))),
-                              child: Row(
-                                children: [
-                                  SizedBox(width: 40, child: Text('${idx + 1}', style: TextStyle(color: c.textSecondary, fontSize: 11.5))),
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(r.epc, style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 11.5, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(r.sku ?? '--', style: TextStyle(color: c.textPrimary, fontSize: 12)),
-                                  ),
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(r.productName ?? 'Chưa xác định', style: TextStyle(color: c.textSecondary, fontSize: 12), overflow: TextOverflow.ellipsis),
-                                  ),
-                                  SizedBox(
-                                    width: 120,
-                                    child: Center(
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                                        decoration: BoxDecoration(
-                                          color: color.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: color),
-                                        ),
-                                        child: Text(
-                                          r.resultType.label,
-                                          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
             ),
           ),
-          actions: [
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFEF4444)),
-                foregroundColor: const Color(0xFFEF4444),
-              ),
-              icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('XÓA PHIÊN NÀY', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await _confirmDeleteHistoryRecord(context, record, c);
-              },
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('ĐÓNG', style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
         ),
       );
       return;

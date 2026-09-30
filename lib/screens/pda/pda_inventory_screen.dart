@@ -92,7 +92,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF6B5D4D)),
             tooltip: 'Làm mới',
-            onPressed: () => _repo.reloadFromSqlite(),
+            onPressed: () => _repo.reloadFromDatabase(),
           ),
         ],
       ),
@@ -196,6 +196,24 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                     'Khu vực: ${s.zone}',
                                     style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
                                   ),
+                                  if (s.isSkuSpecific)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFF8B5CF6), width: 0.8),
+                                        ),
+                                        child: Text(
+                                          '🏷️ Mặt hàng: ${s.targetSkus.join(", ")}',
+                                          style: const TextStyle(color: Color(0xFF7C3AED), fontSize: 10.5, fontWeight: FontWeight.bold),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 1,
+                                        ),
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -374,6 +392,14 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   ),
                   const SizedBox(height: 10),
                   _buildInventoryTypeCard(
+                    title: 'Theo Từng Mặt Hàng (SKU)',
+                    subtitle: 'Chỉ quét lọc các mặt hàng được chọn',
+                    icon: Icons.category_outlined,
+                    isSelected: selectedType == 'by_sku',
+                    onTap: () => setDialogState(() => selectedType = 'by_sku'),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildInventoryTypeCard(
                     title: 'Toàn Bộ Kho Hàng',
                     subtitle: 'Kiểm kê toàn bộ hàng hóa trong kho',
                     icon: Icons.storefront_outlined,
@@ -406,13 +432,217 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                 ),
                 onPressed: () {
                   Navigator.pop(ctx);
-                  if (selectedType == 'by_location') {
+                  if (selectedType == 'by_sku') {
+                    _showSelectSkuDialog();
+                  } else if (selectedType == 'by_location') {
                     _showSelectLocationDialog();
                   } else if (selectedType == 'by_zone') {
                     _showSelectZoneDialog();
                   } else {
                     _createNewSession(warehouse: 'Toàn bộ kho', locationCode: null);
                   }
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showSelectSkuDialog() {
+    final searchCtrl = TextEditingController();
+    final selectedSkus = <String>{};
+
+    final Map<String, ({String name, int inStockCount})> skuMap = {};
+    for (final it in _repo.items) {
+      if (it.sku.isNotEmpty && it.sku != 'UNKNOWN' && it.status == ItemStatus.inStock) {
+        final existing = skuMap[it.sku];
+        skuMap[it.sku] = (
+          name: it.productName.isNotEmpty ? it.productName : (existing?.name ?? it.sku),
+          inStockCount: (existing?.inStockCount ?? 0) + 1,
+        );
+      }
+    }
+    final allSkuList = skuMap.keys.toList()..sort();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final query = searchCtrl.text.trim().toLowerCase();
+          final filtered = allSkuList.where((sku) {
+            if (query.isEmpty) return true;
+            final name = skuMap[sku]?.name.toLowerCase() ?? '';
+            return sku.toLowerCase().contains(query) || name.contains(query);
+          }).toList();
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFFFBF8F3),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            actionsPadding: const EdgeInsets.all(16),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.category_outlined, color: Color(0xFF8B5CF6), size: 20),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Chọn Mặt Hàng Kiểm Kê',
+                    style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 380,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    controller: searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Tìm SKU hoặc tên mặt hàng...',
+                      prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF6B5D4D)),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Đã chọn: ${selectedSkus.length} SKU',
+                          style: TextStyle(
+                            color: selectedSkus.isNotEmpty ? const Color(0xFF8B5CF6) : const Color(0xFF6B5D4D),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (filtered.isNotEmpty)
+                          GestureDetector(
+                            onTap: () {
+                              setDialogState(() {
+                                if (selectedSkus.length == filtered.length) {
+                                  selectedSkus.clear();
+                                } else {
+                                  selectedSkus.addAll(filtered);
+                                }
+                              });
+                            },
+                            child: Text(
+                              selectedSkus.length == filtered.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả',
+                              style: const TextStyle(color: Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(
+                            child: Text('Không tìm thấy mặt hàng phù hợp', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13)),
+                          )
+                        : ListView.builder(
+                            itemCount: filtered.length,
+                            itemBuilder: (context, idx) {
+                              final sku = filtered[idx];
+                              final info = skuMap[sku];
+                              final isSelected = selectedSkus.contains(sku);
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Material(
+                                  color: isSelected ? const Color(0xFF8B5CF6).withValues(alpha: 0.1) : Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    side: BorderSide(
+                                      color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFFD1C7BA),
+                                      width: isSelected ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: CheckboxListTile(
+                                    dense: true,
+                                    activeColor: const Color(0xFF8B5CF6),
+                                    value: isSelected,
+                                    onChanged: (val) {
+                                      setDialogState(() {
+                                        if (val == true) {
+                                          selectedSkus.add(sku);
+                                        } else {
+                                          selectedSkus.remove(sku);
+                                        }
+                                      });
+                                    },
+                                    title: Text(
+                                      sku,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF2C251E)),
+                                    ),
+                                    subtitle: Text(
+                                      '${info?.name ?? ""} • Tồn: ${info?.inStockCount ?? 0} SP',
+                                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF6B5D4D)),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFC7BDAF)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D), fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                ),
+                icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                label: const Text(
+                  'BẮT ĐẦU KIỂM KÊ',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                onPressed: () {
+                  if (selectedSkus.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Vui lòng chọn ít nhất 1 mặt hàng (SKU) để kiểm kê!'),
+                        backgroundColor: Color(0xFFEF4444),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  _createNewSession(
+                    warehouse: 'Toàn bộ kho',
+                    locationCode: null,
+                    targetSkus: selectedSkus.toList(),
+                  );
                 },
               ),
             ],
@@ -636,7 +866,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
               ? const Padding(
                   padding: EdgeInsets.all(20),
                   child: Center(
-                    child: Text('Chưa có phân khu nào được cấu hình trong CSDL.', style: TextStyle(color: Color(0xFF8C7E6D), fontSize: 13)),
+                    child: Text('Chưa có phân khu nào được cấu hình trong hệ thống.', style: TextStyle(color: Color(0xFF8C7E6D), fontSize: 13)),
                   ),
                 )
               : SingleChildScrollView(
@@ -793,11 +1023,16 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
     );
   }
 
-  void _createNewSession({required String warehouse, String? locationCode}) {
+  void _createNewSession({
+    required String warehouse,
+    String? locationCode,
+    List<String>? targetSkus,
+  }) {
     _uhf.setScanMode(PdaScanMode.rfid);
     final session = _repo.startInventorySession(
       zone: warehouse,
       locationCode: locationCode,
+      targetSkus: targetSkus,
     );
     setState(() => _activeSession = session);
   }
@@ -1101,9 +1336,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               );
 
               if (ctx.mounted) Navigator.pop(ctx);
-              widget.onBack();
-
               await _repo.completeInventorySession(widget.session.sessionId, _repo.resolveUserFullName(null, defaultRole: 'handheld'));
+              widget.onBack();
               if (mounted) {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1141,9 +1375,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
             l.locationCode == widget.session.locationCode ||
             l.locationId == widget.session.locationCode).firstOrNull
         : null;
-    final locDisplayTitle = loc != null
-        ? 'Kệ: ${loc.locationCode} • ${loc.displayName}'
-        : (s.locationCode != null ? 'Kệ: ${s.locationCode}' : 'Phân khu: ${s.zone}');
+    final locDisplayTitle = widget.session.isSkuSpecific
+        ? 'Mặt hàng: ${widget.session.targetSkus.join(", ")}'
+        : (loc != null
+            ? 'Kệ: ${loc.locationCode} • ${loc.displayName}'
+            : (s.locationCode != null ? 'Kệ: ${s.locationCode}' : 'Phân khu: ${s.zone}'));
 
     // Lọc danh sách kết quả theo tab và tìm kiếm
     final searchQ = _searchCtrl.text.trim().toLowerCase();
@@ -1306,7 +1542,9 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'CẢNH BÁO: CÓ $wrongLocCount CHIP TỪ KHO/KỆ KHÁC VÀO ĐÂY!',
+                          widget.session.isSkuSpecific
+                              ? 'CẢNH BÁO: CÓ $wrongLocCount CHIP NGOÀI PHIẾU HOẶC SAI VỊ TRÍ!'
+                              : 'CẢNH BÁO: CÓ $wrongLocCount CHIP TỪ KHO/KỆ KHÁC VÀO ĐÂY!',
                           style: const TextStyle(
                             color: Color(0xFF991B1B),
                             fontWeight: FontWeight.w900,
@@ -1314,9 +1552,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                           ),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
-                          'Sản phẩm thuộc vị trí khác trên CSDL nhưng quét thấy tại đây.',
-                          style: TextStyle(color: Color(0xFF7F1D1D), fontSize: 10.5),
+                        Text(
+                          widget.session.isSkuSpecific
+                              ? 'Phát hiện sản phẩm không thuộc danh sách mặt hàng cần kiểm kê.'
+                              : 'Sản phẩm thuộc vị trí khác trên CSDL nhưng quét thấy tại đây.',
+                          style: const TextStyle(color: Color(0xFF7F1D1D), fontSize: 10.5),
                         ),
                       ],
                     ),
@@ -1493,7 +1733,9 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                   const SizedBox(width: 6),
                   _buildFilterTabChip(
                     id: 'wrong',
-                    label: '⛔ Từ kho khác ($wrongLocCount)',
+                    label: widget.session.isSkuSpecific
+                        ? '⛔ Ngoài phiếu ($wrongLocCount)'
+                        : '⛔ Từ kho khác ($wrongLocCount)',
                     color: const Color(0xFFDC2626),
                   ),
                   const SizedBox(width: 6),
@@ -1736,9 +1978,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                                 color: const Color(0xFFDC2626),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
-                                '⛔ TỪ KHO/KỆ KHÁC VÀO ĐÂY',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5),
+                              child: Text(
+                                (widget.session.isSkuSpecific && r.sku != null && !widget.session.targetSkus.contains(r.sku))
+                                    ? '⛔ NGOÀI PHIẾU KIỂM KÊ'
+                                    : '⛔ TỪ KHO/KỆ KHÁC VÀO ĐÂY',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -1783,7 +2027,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                       children: [
                         const Icon(Icons.storage, size: 14, color: Color(0xFFDC2626)),
                         const SizedBox(width: 4),
-                        const Text('Tồn trên CSDL: ', style: TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 11)),
+                        const Text('Tồn trên hệ thống: ', style: TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 11)),
                         Expanded(
                           child: Text(
                             r.expectedLocation ?? 'Kho khác / Chưa gán',
@@ -1811,7 +2055,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                   ],
                 ),
               ),
-              if (!isDone && widget.session.locationCode != null) ...[
+              if (!isDone && widget.session.locationCode != null && (!widget.session.isSkuSpecific || (r.sku != null && widget.session.targetSkus.contains(r.sku)))) ...[
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
@@ -1892,7 +2136,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Tồn CSDL tại: ${r.expectedLocation ?? "Kệ này"} (Thủ kho cần kiểm tra tìm lại)',
+                      'Vị trí dự kiến: ${r.expectedLocation ?? "Kệ này"} (Thủ kho cần kiểm tra tìm lại)',
                       style: const TextStyle(color: Color(0xFF92400E), fontSize: 10, fontStyle: FontStyle.italic),
                     ),
                   ],
@@ -2005,7 +2249,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                       style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11.5),
                     ),
                     const Text(
-                      'Thẻ RFID quét được nhưng chưa được đăng ký mã sản phẩm trên CSDL.',
+                      'Thẻ RFID quét được nhưng chưa được đăng ký trong hệ thống.',
                       style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10),
                     ),
                   ],

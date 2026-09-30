@@ -438,7 +438,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
             icon: Icon(Icons.refresh, color: c.textSecondary),
             tooltip: 'Làm mới từ Database',
             onPressed: () async {
-              await _repo.reloadFromSqlite();
+              await _repo.reloadFromDatabase();
               if (mounted) _performLookup(_serialController.text);
             },
           ),

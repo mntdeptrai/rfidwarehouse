@@ -20,13 +20,15 @@ graph TD
             Desktop --> D_Receive["desktop_goods_receive_view.dart (Nhập Cổng RFID)"]
             Desktop --> D_Delivery["desktop_goods_delivery_view.dart (Xuất Kho FIFO)"]
             Desktop --> D_Inventory["desktop_inventory_view.dart (Kiểm Kê Kho: Tạo Đơn & Nạp File Quét Đủ)"]
+            Desktop --> D_Reconciliation["desktop_stock_reconciliation_view.dart (Đối Soát Tồn Kho: Dự Kiến vs Thực Tế)"]
+            Desktop --> D_TicketDetail["desktop_audit_ticket_detail_view.dart (Chi Tiết Phiếu Kiểm Kê Kho)"]
             Desktop --> D_Warehouse["desktop_warehouse_management_view.dart (Quản Lý Kho: Pallet, Vị Trí, Lịch Sử, Sản Phẩm)"]
             Desktop --> D_Location["desktop_location_management_view.dart (Sơ Đồ Kệ Kho & Vị Trí Lưu Trữ)"]
             Desktop --> D_Lookup["desktop_lookup_view.dart (Tra Cứu Chi Tiết & Thẻ Kho)"]
             Desktop --> D_Studio["desktop_uhf_studio_view.dart (Hopeland Studio)"]
             Desktop --> D_Config["desktop_connection_config_view.dart (Cấu Hình Kết Nối)"]
             Desktop --> D_Users["desktop_user_management_view.dart (Phân Quyền)"]
-            Desktop --> D_Report["desktop_report_view.dart (Báo Cáo Tồn Kho RFID)"]
+            Desktop --> D_Report["desktop_report_view.dart (Báo Cáo Tồn Kho RFID & Đối Soát Dự Kiến vs Thực Tế)"]
         end
 
         subgraph PDA_Screens["PDA Mobile Views"]
@@ -37,6 +39,7 @@ graph TD
             PDA --> P_Merge["pda_merge_pallets_screen.dart (Dồn Gộp Pallet)"]
             PDA --> P_Audit["pda_inventory_screen.dart (Kiểm Kê Di Động)"]
             PDA --> P_Warehouse["pda_warehouse_management_screen.dart (Quản Lý Kho Di Động: Pallet, Vị Trí, Lịch Sử, Sản Phẩm)"]
+            PDA --> P_Locate["radar_locate_screen.dart (Tìm Kiếm Mã & Định Vị Sonar Radar AirTag)"]
         end
     end
 
@@ -66,7 +69,7 @@ graph TD
     end
 
     subgraph Persistence_Layer["TẦNG LƯU TRỮ DỮ LIỆU (DATABASE & CLOUD)"]
-        Repo <--> LocalDB["DatabaseService (SQLite)"]
+        Repo <--> LocalDB["DatabaseService (In-Memory RAM)"]
         Repo <--> CloudSync["SupabaseSyncService (Realtime WebSocket)"]
         CloudSync <--> Postgres[("Supabase Cloud / PostgreSQL 17")]
     end
@@ -81,29 +84,31 @@ graph TD
 | [`lib/main.dart`](file:///c:/Users/MNT/Documents/uhf/lib/main.dart) | Điểm khởi chạy ứng dụng, nạp CSDL vào RAM, khởi tạo UHF/Auth/Sync, áp dụng theme EyeCare. |
 | [`lib/screens/desktop_pda_wrapper.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop_pda_wrapper.dart) | Bộ điều hướng thích ứng tự động (Desktop Layout trên PC, PDA Layout trên tay cầm Android). |
 | **`lib/services/`** | **Tầng Dịch Vụ & Nghiệp Vụ Cốt Lõi** |
-| ├── [`warehouse_repository.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/warehouse_repository.dart) | Quản lý toàn bộ dữ liệu trong RAM: danh mục hàng, pallet, vị trí kệ, đơn nhập/xuất, logic FIFO, cổng RFID, cơ chế giải phóng vị trí kệ/pallet khi xuất kho. Tích hợp cơ chế tái tạo chỉ mục lười (Lazy Rebuild Index via `_indexesDirty` flag) kết hợp hệ thống chỉ mục bảng băm O(1) tự động (`_inStockItemsByPalletIndex`, `_inStockItemsByLocationIndex`, `_locationsByIdOrCodeIndex`, `_itemsByIdIndex`, `_palletsByLocationIndex`) và điều tiết sự kiện (event throttling 200-500ms) giúp các màn hình PDA cuộn mượt mà, triệt tiêu giật lag (frame drop) trên thiết bị cầm tay phần cứng yếu (SEUIC UTouch 2). Tự động đồng bộ hai chiều toàn bộ giao dịch kho lên Supabase `inventory_transactions`. |
+| ├── [`warehouse_repository.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/warehouse_repository.dart) | Quản lý toàn bộ dữ liệu trong RAM: danh mục hàng, pallet, vị trí kệ, đơn nhập/xuất, logic FIFO, cổng RFID, cơ chế giải phóng vị trí kệ/pallet khi xuất kho. Tích hợp cơ chế đối soát tồn kho `getStockReconciliation({sessionId, zone})` và phân rã SKU `buildSessionSkuBreakdown(session, {zoneFilter})` tính toán tồn dự kiến (sổ sách/CSDL) vs tồn thực tế (UHF RFID) không dùng mock data. Tái tạo chỉ mục lười (Lazy Rebuild Index via `_indexesDirty` flag) kết hợp hệ thống chỉ mục bảng băm O(1) tự động (`_inStockItemsByPalletIndex`, `_inStockItemsByLocationIndex`, `_locationsByIdOrCodeIndex`, `_itemsByIdIndex`, `_palletsByLocationIndex`) và điều tiết sự kiện (event throttling 200-500ms) giúp các màn hình PDA cuộn mượt mà, triệt tiêu giật lag (frame drop) trên thiết bị cầm tay phần cứng yếu (SEUIC UTouch 2). Tự động đồng bộ hai chiều toàn bộ giao dịch kho lên Supabase `inventory_transactions`. |
 | ├── [`desktop_uhf_tcp_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/desktop_uhf_tcp_service.dart) | Kết nối TCP/Serial COM/RS485 với Cổng RFID Gate cố định (Hopeland CL7206C/Speedata qua C# Bridge), tự động lưu và ghi nhớ cấu hình phần cứng vào `uhf_hardware_config.json`, tự động kết nối khi khởi động ứng dụng và tự phục hồi kết nối. |
 | ├── [`uhf_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/uhf_service.dart) | Driver UHF trên tay cầm PDA Android (Chainway C72e / Cruise2 / SEUIC UTouch 2), tích hợp Cổng Ủy Quyền Quét (Scan Authorization Gate) chặn quét tự động, chỉ cho phép bóp cò/quét khi ở màn hình Nhập, Xuất hoặc Kiểm kho. |
 | ├── [`tower_light_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/tower_light_service.dart) | Điều khiển đèn tháp tín hiệu giao thông tại cổng (Xanh = Đạt, Vàng = Chờ, Đỏ = Chip lạ/Lỗi + Còi). |
 | ├── [`excel_import_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/excel_import_service.dart) | Phân tích file Excel phiếu nhập mẫu (`Template-Goods-Receive-v3.xlsx`), trích xuất SKU, Thùng, NCC. |
-| ├── [`database_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/database_service.dart) | Quản lý CSDL SQLite cục bộ trên máy trạm và PDA khi offline: lưu trữ bảng hàng hóa, pallet, vị trí, đơn xuất nhập, và bảng lịch sử giao dịch kho `inventory_transactions`. |
-| ├── [`supabase_sync_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/supabase_sync_service.dart) | Đồng bộ dữ liệu 2 chiều thời gian thực lên Supabase PostgreSQL 17 Cloud. |
+| ├── [`database_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/database_service.dart) | Quản lý dữ liệu In-Memory cục bộ trong RAM trên máy trạm và PDA: lưu trữ bảng hàng hóa, pallet, vị trí, đơn xuất nhập, và bảng lịch sử giao dịch kho `inventory_transactions`. |
+| ├── [`supabase_sync_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/supabase_sync_service.dart) | Đồng bộ dữ liệu 2 chiều thời gian thực lên Supabase PostgreSQL 17 Cloud. Khử trùng lặp log ngoại tuyến (anti-duplicate offline queue retry) và chuẩn hóa thông báo nghiệp vụ người dùng (loại bỏ lộ thông tin kỹ thuật hạ tầng). |
 | ├── [`auth_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/auth_service.dart) | Quản lý tài khoản người dùng, phiên làm việc (Session) và phân quyền chức năng (RBAC). |
-| ├── [`report_export_service.dart`](file:///d:/rfidwarehouse/lib/services/report_export_service.dart) | Xuất báo cáo kho & Form Mẫu Biểu Phiếu chuẩn doanh nghiệp (5 loại: Phiếu Nhập Kho, Phiếu Xuất Kho Kiêm Bàn Giao, Biên Bản Kiểm Kê, Báo Cáo Tồn Kho, Sổ Biến Động Kho) ra file Excel (.xlsx) hoặc CSV (.csv). Tự động điền dữ liệu thực tế từ hệ thống vào biểu mẫu có tiêu đề, thông tin đơn, bảng chi tiết hàng hóa/chip RFID, dòng tổng cộng và chữ ký xác nhận (không cần nạp file mẫu). |
+| ├── [`report_export_service.dart`](file:///c:/Users/MNT/Documents/uhf/lib/services/report_export_service.dart) | Xuất báo cáo kho & Form Mẫu Biểu Phiếu chuẩn doanh nghiệp (6 loại: Phiếu Nhập Kho, Phiếu Xuất Kho Kiêm Bàn Giao, Biên Bản Kiểm Kê, Báo Cáo Tồn Kho hiển thị chuẩn Nhà Cung Cấp, Sổ Biến Động Kho, Bảng Đối Soát Tồn Kho gồm 3 Sheet chuyên biệt: Sheet 1 Tổng Hợp Thừa Thiếu Đủ, Sheet 2 Đối Chiếu Thiếu và Đủ, Sheet 3 Đối Chiếu Thừa & Liệt Kê Mã EPC Thừa) ra file Excel (.xlsx) hoặc CSV (.csv). Bảo toàn trường Nhà Cung Cấp xuyên suốt từ file mẫu nhập hàng (`Template-Goods-Receive-v3.xlsx`), lưu trữ CSDL đến kết xuất báo cáo tồn kho. |
 | **`lib/screens/splash/`** | **Màn Hình Khởi Động (Splash Screen)** |
-| ├── [`splash_screen.dart`](file:///d:/rfidwarehouse/lib/screens/splash/splash_screen.dart) | Màn hình mở đầu ứng dụng: Khớp chuẩn 100% Logo Nhật Minh với Android Native (`@mipmap/launch_logo` 200x80 dp), khởi động non-blocking tải ngầm CSDL vào RAM và chuyển tiếp siêu tốc (~100ms) sang Màn hình Đăng Nhập (LoginScreen) bằng hiệu ứng `FadeTransition` mượt mà, triệt tiêu hoàn toàn độ trễ chờ logo 5-7s trên thiết bị cầm tay PDA. Hỗ trợ chạm màn hình để bỏ qua tức thì (0ms). |
+| ├── [`splash_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/splash/splash_screen.dart) | Màn hình mở đầu ứng dụng: Khớp chuẩn 100% Logo Nhật Minh với Android Native (`@mipmap/launch_logo` 200x80 dp), khởi động non-blocking tải ngầm CSDL vào RAM và chuyển tiếp siêu tốc (~100ms) sang Màn hình Đăng Nhập (LoginScreen) bằng hiệu ứng `FadeTransition` mượt mà, triệt tiêu hoàn toàn độ trễ chờ logo 5-7s trên thiết bị cầm tay PDA. Hỗ trợ chạm màn hình để bỏ qua tức thì (0ms). |
 | **`lib/screens/desktop/`** | **Giao Diện Máy Bàn Quản Trị (Desktop WMS)** |
 | ├── [`desktop_main_layout.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_main_layout.dart) | Khung giao diện chính Desktop (Thanh điều hướng Sidebar, tìm kiếm toàn cục, huy hiệu kết nối). |
 | ├── [`desktop_goods_receive_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_goods_receive_view.dart) | Cổng Nhập kho RFID Gate: Tự động đối soát đơn hàng theo RFID, không phụ thuộc chip pallet nếu đã quét đủ 100% chip sản phẩm. Khi đối soát thành công, đánh dấu `isGatePassed = true` và chuyển sang trạng thái sẵn sàng đón đợt hàng tiếp theo. |
 | ├── [`desktop_goods_delivery_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_goods_delivery_view.dart) | Cổng Xuất kho RFID Gate Desktop tập trung 100% vào giám sát và đối soát xuất kho qua cổng RFID (đã loại bỏ hoàn toàn nút và view Lịch Sử Xuất Kho dư thừa để quy về một mối tại Trung Tâm Lịch Sử Kho), hỗ trợ nạp file Excel/PO, cột NGÀY NHẬP theo date xa nhất (FIFO), đối soát 2 pha theo chip EPC, wizard chỉ đường lấy hàng qua 10 kệ; xử lý chống tràn pixel (pixel stripe) với `LayoutBuilder` cuộn ngang mềm dẻo khi nạp file PO/Excel có tên khách hàng dài hoặc kích thước màn hình thu nhỏ. |
-| ├── [`desktop_inventory_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_inventory_view.dart) | Quản lý kiểm kê kho, đối soát tồn thực tế với hệ thống, lập phiếu kiểm kê. |
+| ├── [`desktop_inventory_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_inventory_view.dart) | Quản lý kiểm kê kho: 2 thẻ hành động chính '+ TẠO ĐƠN KIỂM KÊ' và '📥 XUẤT FILE KIỂM KÊ (.xlsx)' (xuất biên bản kiểm kê, bảng đối soát tồn kho, bảng kê đi kiểm đếm dạng Excel/CSV), hỗ trợ 2 chế độ 'Đợt Quét & Phiếu Kiểm Kê' và 'Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)', tích hợp xem chi tiết phiếu kiểm kê chuyên sâu qua `DesktopAuditTicketDetailView`. |
+| ├── [`desktop_stock_reconciliation_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_stock_reconciliation_view.dart) | Bảng đối soát tồn kho dự kiến (sổ sách/CSDL) vs thực tế kiểm kê (UHF RFID): 6 thẻ KPI đối chiếu, bộ lọc theo đợt kiểm kê hoặc toàn kho, bộ lọc theo khu vực (Zone), tìm kiếm SKU/sản phẩm, 5 chip lọc trạng thái chênh lệch (Tất cả, ⚠️ Có chênh lệch, ✓ Khớp đủ, 🔻 Lệch thiếu, 🔺 Lệch thừa), hộp thoại xem chi tiết chip RFID theo từng SKU, xuất báo cáo đối soát ra Excel (.xlsx). |
+| ├── [`desktop_audit_ticket_detail_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_audit_ticket_detail_view.dart) | Màn hình xem chi tiết phiếu kiểm kê kho chuyên sâu: Thẻ thông tin phiếu (mã phiếu, phạm vi, thời gian, người kiểm, thiết bị), 6 thẻ KPI đối chiếu thực tế vs dự kiến (Tồn dự kiến, Thực tế quét, Khớp chuẩn, Lệch thiếu, Sai vị trí, Thẻ lạ ngoài DS, Độ chính xác), 2 Tab chuyển đổi (Bảng tổng hợp theo mặt hàng/SKU vs Chi tiết từng chip RFID EPC), xuất biên bản Excel (`exportReportSelected(ReportType.audit)`), xem trước in ấn / in biên bản (Print Preview), tiếp tục quét RFID nếu chưa chốt. |
 | ├── [`desktop_lookup_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_lookup_view.dart) | Tra cứu chi tiết hàng hóa & mã RFID (dạng cột chuẩn theo Mặt hàng SKU và dạng Bảng phẳng toàn bộ). Đã xuất kho hiển thị rõ "ĐÃ XUẤT KHO". |
-| ├── [`desktop_warehouse_management_view.dart`](file:///d:/rfidwarehouse/lib/screens/desktop/desktop_warehouse_management_view.dart) | Sơ đồ mặt bằng kho 2D tương tác, dựng vị trí các dãy kệ, cổng Gate, vị trí Pallet. Tab Quản lý Pallet hiển thị tối giản 3 chỉ số cốt lõi. Tab Quản Lý Lịch Sử hợp nhất toàn diện 4 nghiệp vụ kho (Nhập kho, Xuất kho, Điều chuyển, Kiểm kê) với 4 thẻ chỉ số trực quan, thanh chuyển danh mục 5 tab (Tất cả, Nhập kho, Xuất kho, Điều chuyển, Kiểm kê), bộ lọc trạng thái, tìm kiếm đa năng. Cung cấp nút "Xóa đơn" màu đỏ cảnh báo trên từng dòng bảng dữ liệu của cả 4 nghiệp vụ và bên trong hộp thoại chi tiết, đồng bộ xóa triệt để cascade trên RAM cache, SQLite cục bộ và Supabase Cloud mà không để lại dữ liệu rác. |
-| ├── [`desktop_location_management_view.dart`](file:///d:/rfidwarehouse/lib/screens/desktop/desktop_location_management_view.dart) | Sơ đồ lưới trạng thái kệ kho (Rack Grid) & Chi tiết kệ kho: Chuẩn hóa toàn bộ thẻ KPI và biểu tượng theo phong cách Lịch Sử (nền icon phủ màu 12% alpha dịu mắt, độ tương phản cao, nút "Chi tiết →" màu Cyan). Giao diện Chi tiết kệ được tinh gọn triệt để: loại bỏ hoàn toàn các trường thừa (Sức chứa tối đa, Dãy, Thứ tự lối đi), chỉ hiển thị đúng 3 ô chỉ số cốt lõi (Số Pallet, Số Hàng, Số SKU) và bảng chi tiết hàng hóa phân nhóm 4 cột (Mã SP, Tên SP, Số lượng, Ngày nhập). |
+| ├── [`desktop_warehouse_management_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_warehouse_management_view.dart) | Sơ đồ mặt bằng kho 2D tương tác, dựng vị trí các dãy kệ, cổng Gate, vị trí Pallet. Tab Quản lý Pallet hiển thị tối giản 3 chỉ số cốt lõi. Tab Quản Lý Lịch Sử hợp nhất toàn diện 4 nghiệp vụ kho (Nhập kho, Xuất kho, Điều chuyển, Kiểm kê) với 4 thẻ chỉ số trực quan, thanh chuyển danh mục 5 tab (Tất cả, Nhập kho, Xuất kho, Điều chuyển, Kiểm kê), bộ lọc trạng thái, tìm kiếm đa năng. Cung cấp nút "Xóa đơn" màu đỏ cảnh báo trên từng dòng bảng dữ liệu của cả 4 nghiệp vụ và bên trong hộp thoại chi tiết. Khi bấm xem chi tiết kiểm kê (AUDIT), mở hộp thoại toàn màn hình với `DesktopAuditTicketDetailView`. |
+| ├── [`desktop_location_management_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_location_management_view.dart) | Sơ đồ lưới trạng thái kệ kho (Rack Grid) & Chi tiết kệ kho: Chuẩn hóa toàn bộ thẻ KPI và biểu tượng theo phong cách Lịch Sử (nền icon phủ màu 12% alpha dịu mắt, độ tương phản cao, nút "Chi tiết →" màu Cyan). Giao diện Chi tiết kệ được tinh gọn triệt để: loại bỏ hoàn toàn các trường thừa (Sức chứa tối đa, Dãy, Thứ tự lối đi), chỉ hiển thị đúng 3 ô chỉ số cốt lõi (Số Pallet, Số Hàng, Số SKU) và bảng chi tiết hàng hóa phân nhóm 4 cột (Mã SP, Tên SP, Số lượng, Ngày nhập). |
 | ├── [`desktop_uhf_studio_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_uhf_studio_view.dart) | Hopeland Studio cấu hình thông số kỹ thuật đầu đọc (RS232, TCP, RS485, USB, dBm công suất, dải tần, buzzer, antenna). Tự động nạp và ghi nhớ cấu hình đã kết nối thành công. |
 | ├── [`desktop_connection_config_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_connection_config_view.dart) | Cấu hình IP LAN, cổng Port, COM port và chế độ tự động kết nối lại. |
 | ├── [`desktop_user_management_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_user_management_view.dart) | Quản lý danh sách nhân viên, tài khoản, phân quyền thao tác. |
-| ├── [`desktop_report_view.dart`](file:///d:/rfidwarehouse/lib/screens/desktop/desktop_report_view.dart) | Báo Cáo Tồn Kho chuẩn EyeCare: Thiết kế tinh giản tối đa, không cuộn ngang toàn trang, loại bỏ 3 khối chỉ số, banner barcode hero, dropdown lọc vị trí kệ và badge đếm. Toolbar tinh gọn với ô tìm kiếm Số Seri (SN)/SKU/Vị trí kệ trực tiếp cùng cụm xuất báo cáo Excel (.xlsx)/CSV (.csv). Bảng dữ liệu chi tiết hiển thị trọn vẹn chiều cao và hỗ trợ cuộn ngang cột dữ liệu cục bộ. |
+| ├── [`desktop_report_view.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/desktop/desktop_report_view.dart) | Báo Cáo Tồn Kho chuẩn EyeCare: Tích hợp thanh tab chuyển đổi giữa 'Danh Sách Hàng Tồn' và 'Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)', xem chi tiết phiếu kiểm kê qua `DesktopAuditTicketDetailView`. Xuất báo cáo Excel (.xlsx)/CSV (.csv) đầy đủ. |
 | **`lib/screens/pda/`** | **Giao Diện Tay Cầm Di Động (PDA WMS)** |
 | ├── [`pda_inbound_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_inbound_screen.dart) | Nhập kho RFID trên PDA: Hiển thị danh sách đơn chờ kèm nút xóa đơn nhanh và chọn đơn, đối soát chùm RFID 3 ô (ĐÃ QUÉT, THIẾU, LẠ), nút ĐỔI ĐƠN chỉ hiện khi có từ 2 đơn trở lên và chuyển tiếp sang Cất kệ (Putaway). Chuẩn hóa thông báo nhập kho và thông báo cất kệ độc lập, chính xác tuyệt đối theo từng giai đoạn nghiệp vụ. |
 | ├── [`pda_home_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_home_screen.dart) | Bàn làm việc di động với lưới các phím tắt tác vụ nhanh (đã thay thế Trạng thái kệ & Tra cứu mã bằng Quản lý kho). |
@@ -114,12 +119,13 @@ graph TD
 | ├── [`pda_inventory_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/pda/pda_inventory_screen.dart) | Bóp cò kiểm kê theo từng ô kệ, cảnh báo chip lạ lạc vị trí (Được cấp quyền quét `kiem_kho`). |
 | ├── [`pda_drawer.dart`](file:///d:/rfidwarehouse/lib/screens/pda/pda_drawer.dart) | Menu ngăn kéo trượt (Navigation Drawer) trên PDA: Đã cấp quyền chỉnh công suất phát sóng ăng-ten UHF (1 - 33 dBm) trực tiếp cho nhân viên cầm tay PDA (Handheld/Thủ kho/Admin), hiển thị slider cự ly quét và áp dụng ngay lập tức mà không bị chặn quyền. |
 | ├── [`pda_warehouse_management_screen.dart`](file:///d:/rfidwarehouse/lib/screens/pda/pda_warehouse_management_screen.dart) | Quản lý kho di động chuyên dụng cho tay cầm PDA gồm 4 tabs (Pallet, Vị Trí Kho, Lịch Sử, Sản Phẩm). Tab 2 (Lịch Sử) đồng bộ 100% tính năng với Desktop: hiển thị đầy đủ 5 danh mục nghiệp vụ (Tất cả, Nhập kho, Xuất kho, Điều chuyển, Kiểm kê), thanh tìm kiếm đa năng, bộ lọc trạng thái (Hoàn tất / Đang xử lý), nút Làm Mới đồng bộ dữ liệu đám mây tức thời và xem chi tiết phiếu/giao dịch. |
+| ├── [`radar_locate_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/radar_locate_screen.dart) | Tìm kiếm hàng hóa & Định vị Sonar Radar chuẩn phong cách Apple AirTag / Find My: Tìm nhanh theo SKU/Serial/EPC/Barcode, lọc theo mã EPC duy nhất để định vị độc quyền (Precision Finding), tích hợp cơ chế bóp cò vật lý, phản hồi nhịp rung & âm thanh Geiger Counter dồn dập (120ms - 260ms - 650ms). |
 | **`lib/widgets/`** | **Thư Viện Widget Dùng Chung** |
 | ├── [`warehouse_floor_plan_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/warehouse_floor_plan_widget.dart) | Canvas vẽ sơ đồ 2D mặt bằng kho, cổng RFID, vị trí pallet và đường đi dẫn hướng. |
 | ├── [`warehouse_location_grid_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/warehouse_location_grid_widget.dart) | Ma trận trực quan hóa các ô kệ kho kèm màu sắc trạng thái đầy/trống. |
 | ├── [`tower_light_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/tower_light_widget.dart) | Widget hiển thị trạng thái đèn tháp 3 màu (Xanh/Vàng/Đỏ) trên UI. |
 | ├── [`gate_pass_fail_banner.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/gate_pass_fail_banner.dart) | Banner thông báo kết quả qua cổng (Đạt / Báo động sai sót). |
-| ├── [`sonar_radar_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/sonar_radar_widget.dart) | Radar mô phỏng mức sóng RSSI để định vị thẻ RFID bị thất lạc. |
+| ├── [`sonar_radar_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/sonar_radar_widget.dart) | Sonar Radar định vị thẻ RFID: Áp dụng mô hình truyền sóng suy hao không gian tự do Log-Distance Path Loss $d = 10^{\frac{-48 - RSSI}{20}}$, tự động đo và cập nhật khoảng cách liên tục theo từng Centimet (cm) khi tiếp cận cự ly gần dưới 1 mét (< 1m: ví dụ 85 cm, 42 cm, 18 cm, < 10 cm); tích hợp Mũi Tên Chỉ Hướng Động (Dynamic Directional Pointer) phát hiện xu hướng Gradient tín hiệu khi lia súng theo hình nan quạt (Beam Sweeping), hiển thị biểu tượng ⬆️ xanh lá khi chĩa đúng hướng và 🔄 cam khi lệch hướng. |
 | ├── [`app_notification_bar.dart`](file:///d:/rfidwarehouse/lib/widgets/app_notification_bar.dart) | Bộ tiện ích `AppSnackBar` chuẩn cho Desktop & PDA: Thông báo trạng thái Xanh lá (thành công), Đỏ (lỗi), Vàng (cảnh báo). Tự động trượt xuống sau 2 giây (`duration: 2s`), cho phép dùng tay vuốt trượt xuống trên PDA (`dismissDirection: DismissDirection.down`), tự xóa thông báo cũ trước khi hiện mới tránh kẹt lì ở đáy màn hình; đồng bộ hóa chính xác nội dung thông báo theo từng luồng nghiệp vụ kho thực tế. |
 | **`database/`** | **Cơ Sở Dữ Liệu & Ràng Buộc Toàn Vẹn (PostgreSQL 17 / Supabase)** |
 | ├── [`supabase_schema.sql`](file:///c:/Users/MNT/Documents/uhf/supabase_schema.sql) | Toàn bộ schema khởi tạo 17 bảng (bao gồm `inventory_transactions`), RLS, Realtime và tự động đồng bộ đầy đủ PK, UK, FK an toàn. |
@@ -313,7 +319,7 @@ stateDiagram-v2
    - **Cách ly TabBarView PDA với `AutomaticKeepAliveClientMixin`**: Mỗi tab trong màn hình Quản Lý Kho (`PdaWarehouseManagementScreen`) là một widget độc lập giữ trạng thái (`wantKeepAlive => true`). Khi người dùng vuốt chuyển tab, GPU chỉ dịch chuyển compositor coordinates mà không re-run bất kỳ hàm tính toán hay query dữ liệu nào.
    - **Thanh trượt công suất phát sóng (dBm Slider)**: Sử dụng continuous double tracking (`RoundSliderThumbShape(enabledThumbRadius: 12)` kết hợp huy hiệu nhảy số `X dBm` tức thì), không snap cưỡng bức số nguyên thô làm đơ ngón tay người dùng.
    - **Tra cứu $O(1)$ & Bộ nhớ đệm (Memoized Caching)**: Danh sách items, EPCs mong đợi và pallet được cache dưới dạng Hash Set / Hash Map trong State; chỉ tính toán lại khi có đơn hàng mới hoặc khi CSDL thay đổi.
-   - **Giải phóng I/O và UI Thread**: Loại bỏ việc gọi `reloadFromSqlite()` hoặc re-fetch toàn bộ 11 bảng Supabase khi ghi dữ liệu; đồng bộ ngầm chỉ đẩy hàng đợi offline mà không làm giật lag giao diện.
+   - **Giải phóng I/O và UI Thread**: Loại bỏ việc gọi `reloadFromDatabase()` hoặc re-fetch toàn bộ 11 bảng Supabase khi ghi dữ liệu; đồng bộ ngầm chỉ đẩy hàng đợi offline mà không làm giật lag giao diện.
 
 ---
 
@@ -325,7 +331,7 @@ Hệ thống tích hợp sẵn cấu trúc Agentic Workspace để tối ưu ho�
 | :--- | :--- | :--- |
 | **Team Orchestrator** | `AGENTS.md` | Bộ chỉ huy quy tắc & điều phối tác vụ |
 | **RFID Hardware Engineer** | `.agents/skills/rfid-hardware-engineer/SKILL.md` | Chuyên trách Hopeland CL7206C2, SEUIC UTouch 2 AAR, Tower Light Modbus |
-| **Supabase DB Architect** | `.agents/skills/supabase-db-architect/SKILL.md` | Chuyên trách PostgreSQL 17, schema, FKs, index, SQLite sync |
+| **Supabase DB Architect** | `.agents/skills/supabase-db-architect/SKILL.md` | Chuyên trách PostgreSQL 17, schema, FKs, index, Cloud sync |
 | **Flutter UI/UX Specialist** | `.agents/skills/flutter-ui-taste/SKILL.md` | Chuyên trách UI Desktop/PDA, theme, micro-animation, 2D floor plan |
 | **QA Test Engineer** | `.agents/skills/qa-test-engineer/SKILL.md` | Chuyên trách chạy & bảo vệ 178/178 test tự động không bị hồi quy (100% pass) |
 | **MCP Integration** | `.agents/mcp_config.json` | Cấu hình công cụ ngoại vi và dịch vụ tích hợp cho IDE |
@@ -347,27 +353,37 @@ Hệ thống tích hợp sẵn cấu trúc Agentic Workspace để tối ưu ho�
   - Hệ thống lập tức ghi Đơn hàng (`inbound_orders` với trạng thái `newOrder`), chi tiết đơn (`inbound_order_details`), danh sách chip (`items` với trạng thái `pendingInbound`), sản phẩm và pallet vào CSDL cục bộ và đồng bộ tức thời lên Supabase Cloud.
   - Nhờ vậy, máy PDA của thủ kho ở bất kỳ đâu đều lập tức nhìn thấy đơn hàng vừa tạo để nhận hàng.
   - Khi xe qua cổng hoặc PDA quét đủ số lượng, trạng thái chuyển tiếp thành `waitingPutaway` (CHỜ XẾP KỆ) một cách mượt mà và an toàn, không lo mất dữ liệu khi đóng/mở lại app.
+  - **Cơ chế chống treo/kẹt chế độ quét sau khi tự động nhập**:
+    - Khi đối soát đủ 100% chip khớp đơn, `_completeGoodsReceiveAtGate` ngay lập tức dừng quét phần cứng (`await _stopWizardScan()`), dọn sạch buffer chip trên đầu đọc (`_desktopUhf.clearTags()`).
+    - Guard `if (!_wizardIsScanning && !_desktopUhf.isScanning) return;` trong `_onDesktopUhfUpdate` và `_checkAndTriggerAutoComplete` ngăn triệt để việc duyệt lại chip cũ trong buffer và triệt tiêu vòng lặp vô hạn (Infinite Auto-Complete Loop).
+    - Bộ đệm `_activeExpectedItems` và `_wizardScannedTags` được giữ trong 3 giây hiển thị banner kết quả thành công với nút khóa an toàn `ĐÃ ĐỐI SOÁT ĐỦ (KHOÁ QUÉT)`, sau đó tự động giải phóng sạch sẽ để sẵn sàng đón xe tiếp theo.
 
 
 ---
 
-## 9. Báo Cáo Tồn Kho RFID (RFID Inventory Report Center)
-- **Màn hình**: `desktop_report_view.dart` — tab "Báo Cáo Tồn Kho" trên sidebar (index 4), tất cả role đều truy cập được.
-- **Service**: `report_export_service.dart` — singleton service tạo file báo cáo tồn kho chi tiết và tổng hợp từ dữ liệu thực tế trong `WarehouseRepository`.
-- **Thiết kế tinh gọn**:
-  1. **Không trượt ngang toàn trang**: Header Bar và Action Toolbar luôn vừa vặn 100% chiều rộng màn hình, không bị đẩy trôi nút "XUẤT BÁO CÁO".
-  2. **Tìm kiếm trực tiếp trên thanh tác vụ**: Đã loại bỏ 3 khối chỉ số và banner quét barcode lớn. Tích hợp ô `TextField` tìm kiếm (Số Seri SN, Mã SKU, Vị trí kệ,...) trực tiếp vào Toolbar.
-  3. **Bộ lọc & Thông tin số lượng**: Hỗ trợ lọc theo từng kệ hoặc tất cả kệ, hiển thị số lượng tức thì `Hiển thị: X / Y sản phẩm`.
-  4. **Bảng dữ liệu trọn vẹn**: Tận dụng tối đa chiều cao màn hình, các cột chi tiết (STT, Số Seri SN nổi bật, SKU, Tên SP, EPC, Vị trí kệ, Pallet, Ngày nhập, Nhà cung cấp, Trạng thái) tự động cuộn ngang cục bộ nếu màn hình thu nhỏ dưới 1168px.
-- **Định dạng kết xuất**: Excel (.xlsx) chuẩn biểu mẫu doanh nghiệp (có cột Số Seri SN, tiêu đề, kẻ bảng màu, dòng tổng cộng, khối ký duyệt thủ kho & kế toán) hoặc CSV (.csv) có UTF-8 BOM.
-- **Thư mục lưu**: `Documents/WMS_Reports/` — sau khi xuất có nút mở Windows Explorer highlight file.
+## 9. Báo Cáo Tồn Kho RFID & Đối Soát Tồn Kho Chuyên Biệt (Single-Location Report & Auto Reconciliation)
+- **Tập trung duy nhất tại Báo Cáo**:
+  - Đã loại bỏ hoàn toàn tab trùng lặp "Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)" khỏi màn hình "Kiểm Kê Kho" (`DesktopInventoryView`). Màn hình Kiểm kê chỉ tập trung vào nghiệp vụ thực tế: tạo đơn kiểm kê, quét chip thời gian thực, quản lý phiên đang quét và lịch sử đợt kiểm kê.
+  - Bảng "Đối Soát Tồn Kho: Dự Kiến (Sổ Sách) vs Thực Tế Kiểm Kê" (`DesktopStockReconciliationView`) được đặt duy nhất tại màn hình "Báo Cáo Tồn Kho" (`DesktopReportView`) qua thanh chuyển đổi tab.
+- **Tự động đối soát ngay khi kiểm kê xong**:
+  - Khi một đợt kiểm kê hoàn thành (trên máy PDA hay máy Desktop), hệ thống tự động ghi nhận trạng thái hoàn tất và lưu bảng chi tiết (`inventory_sessions` và `inventory_session_details`).
+  - Toàn bộ chip RFID thực tế đã quét (gồm cả chip khớp CSDL và các chip thừa/lạ chưa khai báo `THẺ_LẠ`) đều được đồng bộ đầy đủ lên bảng `inventory_session_details` trên Supabase Cloud theo từng đợt batch.
+  - Tại màn hình Báo Cáo / Đối Soát: `DesktopStockReconciliationView` tự động chọn phiên kiểm kê mới nhất đã hoàn thành (`_repo.inventorySessions.where((s) => s.isCompleted).firstOrNull`), tự động tính toán đối soát giữa số liệu sổ sách trong CSDL và kết quả quét chip RFID thực tế (Khớp chuẩn xác, Tổng lệch thiếu, Lệch thừa/lạ, Độ chính xác kho) mà không bị rơi vào trạng thái mặc định "Chưa có đợt kiểm kê".
+  - Hiển thị đầy đủ cả sản phẩm khớp và dòng `THẺ_LẠ` (thẻ RFID lạ chưa khai báo) với số lượng chênh lệch thực tế, bấm vào biểu tượng chip xem chi tiết toàn bộ mã EPC đã đọc.
+  - Tuyệt đối tuân thủ quy tắc Không dữ liệu giả (No Mock Data): loại bỏ logic tự sinh kết quả khớp giả (fake match) khi phiên đã hoàn tất; dữ liệu báo cáo trên Desktop phản ánh 100% trung thực số liệu quét từ PDA.
+  - Hỗ trợ xem hợp nhất toàn kho (`ALL`): Hợp nhất toàn bộ kết quả quét của các đợt kiểm kê đã chốt để đối soát với toàn bộ danh mục sản phẩm đang lưu kho.
+- **Đồng bộ hóa tức thì từ Supabase Cloud**:
+  - Cả `DesktopReportView` và `DesktopStockReconciliationView` chủ động đồng bộ từ Supabase Cloud trong `initState()`.
+  - `WarehouseRepository.reloadFromDatabase()` trực tiếp chờ hoàn tất nạp từ Cloud (`await _tryLoadFromSupabaseDirect()`), giúp nút "LÀM MỚI DỮ LIỆU" luôn trả về dữ liệu mới nhất từ PDA.
+- **Service xuất file**: `report_export_service.dart` — hỗ trợ xuất cả Báo cáo tồn kho chi tiết theo Serial Number (SN) và Bảng đối soát tồn kho kiểm kê dự kiến vs thực tế ra file Excel (.xlsx).
+- **Thư mục lưu**: `Documents/WMS_Reports/` — có thông báo và nút mở Windows Explorer trực tiếp tới file đã xuất.
 
 ---
 
 ## 10. Luồng Đồng Bộ Hóa Cất Kệ (PDA Putaway State Synchronization)
 - **Đồng bộ trạng thái**:
   - Khi đơn hàng nhập kho chuyển sang `waitingPutaway` (CHỜ XẾP KỆ) trên Desktop hoặc PDA, toàn bộ các mặt hàng (`items`) thuộc đơn được tự động đồng bộ sang trạng thái `waitingPutaway`.
-  - Hàm `_loadFromSqlite()` và `_tryLoadFromSupabaseDirect()` trong `WarehouseRepository` đảm bảo đối soát trạng thái tức thì giữa đơn hàng và mặt hàng khi khởi động hoặc tải lại.
+  - Hàm `_loadLocalCache()` và `_tryLoadFromSupabaseDirect()` trong `WarehouseRepository` đảm bảo đối soát trạng thái tức thì giữa đơn hàng và mặt hàng khi khởi động hoặc tải lại.
   - Khi gán kiện hàng/sản phẩm lên Pallet (`assignEpcsToPallet`, `assignCartonsToPallet`), mặt hàng lập tức chuyển sang `waitingPutaway` và cập nhật trực tiếp lên Supabase Cloud.
 - **Điều hướng mượt mà từ PDA Home**:
   - Thẻ thông báo `[CẦN CẤT KỆ]` trên `PdaHomeScreen` liên kết trực tiếp vào `PdaPutawayScreen(initialCartonOrPalletBarcode: targetPallet)`.
@@ -434,5 +450,100 @@ Hệ thống tích hợp sẵn cấu trúc Agentic Workspace để tối ưu ho�
 - **Vấn đề**: Các đơn xuất kho đã xuất thành công (`ĐÃ XUẤT KHO`) hiển thị `0 / 0 chip` trên bảng Lịch Sử Quản Lý Kho (Desktop & PDA) do bảng `outbound_orders` khi tải về không có bảng chi tiết `outbound_order_details` đi kèm, và vòng lặp giao dịch bỏ qua các đơn đã có trong danh sách.
 - **Giải pháp xử lý triệt để**:
   1. **Đồng bộ hóa 2 chiều với biến động kho (`inventory_transactions`)**: Cả `DesktopWarehouseManagementView` và `PdaWarehouseManagementScreen` tự động phân giải số lượng thực xuất từ `inventory_transactions` (theo mã đơn `poNo`, `outboundOrderId` hoặc `transactionId`) và các mặt hàng `Item` mang mã đơn xuất tương ứng nếu danh sách chi tiết ban đầu rỗng.
-  2. **Tự động khôi phục cấu trúc chi tiết hàng hóa (`OutboundOrderDetail`)**: Khi khởi động hoặc đồng bộ dữ liệu từ Supabase / SQLite (`_tryLoadFromSupabaseDirect` và `_loadFromSqlite`), hệ thống tự động tái tạo chi tiết số lượng sản phẩm xuất kho từ giao dịch kho thực tế, đảm bảo các chức năng xem "Chi Tiết" và xuất báo cáo Excel/CSV luôn đủ số liệu.
+  2. **Tự động khôi phục cấu trúc chi tiết hàng hóa (`OutboundOrderDetail`)**: Khi khởi động hoặc đồng bộ dữ liệu từ Supabase Cloud (`_tryLoadFromSupabaseDirect` và `_loadLocalCache`), hệ thống tự động tái tạo chi tiết số lượng sản phẩm xuất kho từ giao dịch kho thực tế, đảm bảo các chức năng xem "Chi Tiết" và xuất báo cáo Excel/CSV luôn đủ số liệu.
   3. **Lưu trữ & Phân rã theo SKU khi xuất kho qua cổng RFID Gate**: Khi xác nhận xuất kho (`confirmGateOutbound`, `confirmDirectOutbound`), hệ thống tự động phân loại chip đã quét theo SKU/mặt hàng thực tế, cập nhật `pickedQty`, gán `item.orderNo` cho các chip đã xuất và đẩy dữ liệu đồng bộ an toàn lên Supabase Cloud.
+
+---
+
+## 17. Đối Soát Tồn Kho & Xem Chi Tiết Phiếu Kiểm Kê (Stock Reconciliation & Audit Inspection Suite)
+- **Màn hình**:
+  1. `desktop_audit_ticket_detail_view.dart`: Màn hình xem chi tiết phiếu kiểm kê kho chuyên sâu, nạp danh sách sản phẩm lý thuyết vs thực tế, nút hoàn tất kiểm kê trực tiếp, hỗ trợ chuyển đổi linh hoạt.
+  2. `desktop_stock_reconciliation_view.dart` & `desktop_report_view.dart` (Tab "Đối Soát Tồn Kho"): Bảng đối soát số lượng tồn kho dự kiến (lý thuyết hệ thống) vs tồn kho kiểm kê thực tế theo từng mặt hàng SKU, tên sản phẩm và vị trí kệ.
+- **Xác thực tự động**: Toàn bộ 23 test suites (183/183 tests) đạt 100% Pass rate, bao gồm kiểm tra render không tràn giao diện trong cửa sổ cực hẹp, phân quyền 5 Roles (Admin, Kỹ thuật, Thủ kho, Máy cầm tay, Seller), và luồng đối soát tồn kho.
+
+---
+
+## 18. Cơ Chế Khóa Bảo Vệ Báo Cáo Excel Chống Chỉnh Sửa (Excel Anti-Tamper & Sheet Protection Engine)
+- **Nhu cầu nghiệp vụ**: Toàn bộ báo cáo xuất từ hệ thống RFID WMS (Phiếu nhập kho, Phiếu xuất kho & bàn giao, Báo cáo tồn kho theo SN/RFID, Bảng đối soát tồn kho, Sổ biến động kho) là các chứng từ kiểm toán chính thức. Không được cho phép người dùng tự ý chỉnh sửa, xóa sửa ô hay can thiệp số liệu trên file Excel.
+- **Cơ chế kỹ thuật đa tầng (OpenXML ECMA-376 Standard)**:
+  1. **Khóa Trang Tính (`<sheetProtection .../>`)**: Tự động chèn thẻ `sheetProtection` vào từng sheet trong tệp zip `.xlsx`. Khóa triệt để các quyền: sửa ô, format định dạng, chèn/xóa hàng cột, chỉnh sửa công thức, lọc dữ liệu. Người dùng vẫn được phép nhấp chọn ô để đọc, xem và sao chép (copy) nội dung.
+  2. **Khóa Cấu Trúc Bảng Tính (`<workbookProtection lockStructure="true" lockWindows="true"/>`)**: Ngăn chặn người dùng thêm mới, đổi tên, xóa bỏ hoặc ẩn/hiện các sheet báo cáo.
+  3. **Khuyến Nghị Mở Chỉ Đọc (`<fileSharing readOnlyRecommended="1"/>`)**: Kích hoạt hộp thoại cảnh báo của Microsoft Excel khuyến nghị mở file ở chế độ Chỉ Đọc (Read-Only) khi người dùng mở tệp.
+  4. **Mật Khẩu Quản Trị Hệ Thống (`password="DFEE"`)**: Khóa bảo vệ với mã hash tương ứng mật khẩu `WMS2026`. Nếu bộ phận quản trị/kiểm toán cần mở khóa chỉnh sửa đặc biệt, có thể nhập mật khẩu này vào mục "Review > Unprotect Sheet" trong Excel.
+
+---
+
+## 19. Đồng Bộ Hóa Đợt & Phiếu Kiểm Kê 2 Chiều Cloud (Bidirectional Inventory Audit Cloud Sync)
+- **Vấn đề thực tế**: Thủ kho tạo phiếu và kiểm kê hoàn thành trên thiết bị PDA, dữ liệu phiên kiểm kê đã đẩy lên bảng `inventory_sessions` trên Supabase Cloud nhưng giao diện Desktop "Kiểm Kê Kho" (`DesktopInventoryView`) hiển thị danh sách rỗng (0 đợt kiểm kê). Nguyên nhân do:
+  1. `_tryLoadFromSupabaseDirect()` trong `WarehouseRepository` nạp song song các bảng danh mục nhưng chưa truy vấn bảng `inventory_sessions` và `inventory_session_details`.
+  2. Khi hoàn tất trên PDA (`completeInventorySession`), các dòng chi tiết `results` chỉ ghi vào hàng đợi bộ nhớ nội bộ thay vì gửi thẳng lên bảng `inventory_session_details` trên Supabase Cloud.
+  3. Nút "Làm mới" trên Desktop chỉ gọi `setState()` mà không nạp lại dữ liệu từ Supabase Cloud.
+- **Giải pháp hoàn thiện kiến trúc**:
+  1. **Tải dữ liệu kiểm kê từ Cloud**: Bổ sung `inventory_sessions` và `inventory_session_details` vào danh sách nạp song song trong `_tryLoadFromSupabaseDirect()`. Tự động ánh xạ và nạp toàn bộ kết quả kiểm kê từng chip RFID (`InventoryItemResult`).
+  2. **Đồng bộ trực tiếp chi tiết kiểm kê**: Khi hoàn tất phiên kiểm kê (`completeInventorySession`) hoặc lưu phiên (`saveInventorySession`), hệ thống trực tiếp ghi nhận header và danh sách `detailRows` lên Supabase Cloud, xóa bỏ bản ghi chi tiết cũ của phiên để chống trùng lặp, đồng thời ghi nhận giao dịch `TX-AUDIT` vào bảng `inventory_transactions`.
+  3. **Tự động làm mới & phản hồi UI**: Màn hình `DesktopInventoryView` tự động kéo dữ liệu Cloud khi mở màn hình, nút "Làm mới" được nâng cấp thành hàm bất đồng bộ gọi `_repo.reloadFromDatabase()` kèm thông báo trạng thái tức thì.
+  4. **Đối Soát Tồn Kho Tức Thì**: Màn hình `DesktopStockReconciliationView` tự động chọn phiên kiểm kê mới nhất vừa đồng bộ từ Cloud để hiển thị bảng đối soát chi tiết (Dự kiến vs Thực tế).
+
+---
+
+## 20. Tạo Phiếu Kiểm Kê Theo Từng Mặt Hàng (SKU) & Quét Lọc Trên PDA (SKU-Targeted Audit & PDA Filtering)
+- **Nghiệp vụ yêu cầu**: Thủ kho có thể tạo phiếu kiểm kê chỉ định cho một hoặc nhiều mặt hàng (SKU) cụ thể thay vì luôn phải kiểm kê toàn bộ kho hoặc toàn bộ khu vực. Thiết bị cầm tay PDA và màn hình Desktop khi thực hiện đợt kiểm kê sẽ tự động quét lọc đối soát dựa trên phiếu kiểm kê đó.
+- **Cơ chế kỹ thuật cốt lõi**:
+  1. **Mô hình Dữ Liệu (`InventorySession`)**:
+     - Bổ sung trường `final List<String> targetSkus;` vào `InventorySession`.
+     - Getter tiện ích `isSkuSpecific`: trả về `true` khi danh sách `targetSkus` không rỗng.
+     - Getter `targetSkusDisplay`: định dạng hiển thị danh sách SKU ngắn gọn (ví dụ: `SKU-A, SKU-B`).
+     - Đồng bộ lưu trữ: Lưu mảng `target_skus` dưới dạng JSONB/TEXT lên Supabase Cloud và bộ nhớ In-Memory cục bộ.
+  2. **Thuật toán quét lọc đối soát (`WarehouseRepository.processAuditScan`)**:
+     - **Danh sách mong đợi (`expectedItems`)**: Khi `session.isSkuSpecific == true`, danh sách hàng dự kiến kiểm kê chỉ lấy những sản phẩm có `session.targetSkus.contains(item.sku)`.
+     - **Xử lý chip ngoài phiếu kiểm kê (`uniqueScannedEpcs`)**: Nếu quét được chip RFID của một sản phẩm có trong kho nhưng SKU của nó không thuộc `targetSkus` của phiếu kiểm kê, hệ thống lập tức xếp loại `InventoryVarianceType.wrongLocation` và ghi nhận vị trí dự kiến: `"Ngoài phiếu kiểm kê (SKU: ${item.sku})"`.
+     - Ngăn ngừa cập nhật nhầm vị trí kệ cho các sản phẩm không thuộc phạm vi phiếu kiểm kê.
+  3. **Giao diện Tạo Phiếu & Quản trị Desktop (`DesktopInventoryView`)**:
+     - Hộp thoại "+ TẠO ĐƠN KIỂM KÊ" bổ sung tùy chọn phạm vi: `Theo Từng Mặt Hàng Cụ Thể (SKU)`.
+     - Cung cấp ô tìm kiếm nhanh SKU/tên sản phẩm, danh sách chọn đa nhiệm (multi-checkbox) kèm số lượng tồn kho thực tế của từng mặt hàng (100% No Mock Data).
+     - Hiển thị huy hiệu `🏷️ SKU: ...` trên danh sách lịch sử kiểm kê và banner phiên đang quét trực tiếp.
+  4. **Giao diện Thiết bị Cầm tay PDA (`PdaInventoryScreen`)**:
+     - Hộp thoại tạo đợt kiểm kê trên PDA bổ sung lựa chọn `Theo Từng Mặt Hàng (SKU)`.
+     - Hộp thoại `_showSelectSkuDialog`: Tìm kiếm, đếm số lượng SKU đã chọn, chọn nhanh tất cả hoặc xóa chọn, hiển thị tên sản phẩm và tồn kho.
+     - Thẻ đợt kiểm kê hiển thị huy hiệu `🏷️ Mặt hàng: ...` giúp thủ kho nhận diện nhanh phiếu.
+     - Màn hình quét PDA (`_InventoryScanningSubScreen`): Hiển thị danh sách SKU mục tiêu, đếm số chip quét ngoài phiếu, tab lọc `⛔ Ngoài phiếu (X)`, và cảnh báo rõ ràng khi quét trúng chip không thuộc phiếu.
+  5. **Báo cáo Xuất Excel (`ReportExportService`)**:
+     - Biên bản kiểm kê và bảng đối soát tồn kho tự động in thông tin `Mặt Hàng (SKU): ...` trong phần thông tin phiếu khi xuất ra file Excel (.xlsx).
+  6. **Kiểm thử tự động (`test/sku_inventory_audit_test.dart`)**:
+     - 3 bài test chuyên biệt (Unit test logic quét lọc SKU, Widget test PDA tạo phiếu theo SKU, Widget test Desktop tạo đơn theo SKU) đạt 100% Pass rate. Toàn bộ test suite dự án đạt 196/196 tests pass.
+
+---
+
+## 21. Tìm Kiếm Theo Mã & Định Vị RFID Chuẩn Apple AirTag / Find My iPhone (Precision Finding & Code Search)
+- **Nghiệp vụ yêu cầu**: 
+  - Cho phép thủ kho tìm kiếm nhanh mặt hàng theo SKU, Mã chip EPC, Số Serial (S/N), Tên sản phẩm, hoặc quét mã vạch Barcode/QR bằng máy ảnh/mắt đọc laser PDA.
+  - Khi chọn được mục tiêu cần tìm, hệ thống chuyển sang chế độ **Định Vị Tinh Vi (Precision Finding)** tương tự tính năng AirTag / Find My iPhone của Apple: hiển thị khoảng cách thời gian thực, nhịp sóng sonar lan tỏa, chỉ báo nóng/lạnh, rung Haptic và âm thanh dồn dập khi tiếp cận chip RFID trong kho.
+- **Cơ chế kỹ thuật cốt lõi**:
+  1. **Khóa mục tiêu (Target EPC Locking)**:
+     - Khi kích hoạt định vị, hệ thống lưu `_targetItem` và khóa chặt mã EPC (`targetEpc`).
+     - Tầng lọc sóng UHF loại bỏ hoàn toàn nhiễu từ hàng trăm thẻ RFID xung quanh, chỉ trích xuất cường độ sóng `rssi` của duy nhất chip mục tiêu.
+  2. **Thuật toán quy đổi RSSI sang Cự ly & Xu hướng Nóng/Lạnh**:
+     - `RSSI >= -45 dBm`: Cự ly `< 0.8m` (Ngay trước mặt - Đã tìm thấy). Đạt trạng thái `🎯 NGAY TRƯỚC MẶT · ĐÃ TÌM THẤY!`, vòng trung tâm phát sáng xanh ngọc Emerald, kích hoạt nhịp rung nhẹ liên tục.
+     - `-60 dBm <= RSSI < -45 dBm`: Cự ly `1 - 2 m` (Rất gần), trạng thái `⚡ RẤT GẦN (1 - 2M)`.
+     - `-75 dBm <= RSSI < -60 dBm`: Cự ly `2 - 4 m` (Đang tới gần), trạng thái `📍 ĐANG TỚI GẦN (2 - 4M)`.
+     - `RSSI < -75 dBm`: Cự ly `> 4 m` (Tín hiệu xa), trạng thái `📡 TÍN HIỆU XA (> 4M)`.
+     - Theo dõi biến thiên 5 mẫu RSSI gần nhất để xác định xu hướng: `🔥 NÓNG DẦN (TIẾN LẠI GẦN)` khi tín hiệu tăng, `❄️ NGUỘI ĐI (ĐI XA DẦN)` khi tín hiệu suy giảm.
+  3. **Giao diện Sonar Radar Widget (`lib/widgets/sonar_radar_widget.dart`)**:
+     - Thiết kế theo phong cách Apple Precision Finding: Vòng tròn radar đồng tâm, tia quét xoay 360 độ (`_RadarSweepPainter`), nhịp sóng xung lan tỏa (`_pulseController`) với tốc độ tăng dần theo cường độ sóng.
+     - Typography cự ly số lớn (AirTag style), badge trạng thái màu sắc động, thanh đo cường độ sóng (Hot/Cold Gauge), và thông số `dBm`.
+     - Tối ưu hóa GPU & Pin trên PDA: Chỉ kích hoạt animation lặp (`repeat()`) khi `isTracking == true`, dừng hẳn khi tắt quét để tiết kiệm pin.
+  4. **Màn hình Tìm Kiếm & Định Vị (`lib/screens/radar_locate_screen.dart`)**:
+     - **Thanh tìm kiếm tức thì**: Tìm kiếm theo SKU, S/N, EPC, tên hàng, vị trí kệ hoặc nút quét Barcode 2D Laser trên PDA.
+     - **Bộ lọc trạng thái**: Tất cả, Đang lưu kho, Chờ cất kệ, Đã xuất.
+     - **Thẻ mục tiêu đang khóa**: Hiển thị tên hàng, SKU, S/N, EPC, vị trí kệ hiện tại, nút `[ĐỔI MÃ]`, nút `[BẬT QUÉT ĐỊNH VỊ (BÓP CÒ SÚNG)]`.
+     - **Hỗ trợ cò vật lý**: Tự động lắng nghe sự kiện bóp/nhả cò súng PDA SEUIC UTouch 2 (`keycode 139/293`) qua `_uhfService.onTriggerStateChanged`.
+     - **Cảnh báo âm thanh & xúc giác (Haptic & Sound)**: Gọi `HapticFeedback.mediumImpact()` và `SystemSound.play(SystemSoundType.click)` với tần suất tăng dần khi chip ở cự ly gần.
+  5. **Tích hợp toàn diện trên các màn hình**:
+     - **PDA Home Screen (`pda_home_screen.dart`)**: Bổ sung phím tắt `🎯 Tìm & Định vị` trên lưới ứng dụng chính.
+     - **PDA Quản Lý Kho (`pda_warehouse_management_screen.dart`)**: Tab Sản Phẩm bổ sung nút `[Định vị (AirTag)]` trên từng thẻ sản phẩm.
+     - **Desktop Tra Cứu (`desktop_lookup_view.dart`)**: Thanh công cụ bổ sung nút `[🎯 ĐỊNH VỊ RFID (RADAR)]`, mở hộp thoại radar định vị trực quan trên máy tính.
+  6. **Kiểm thử tự động (`test/radar_locate_airtag_test.dart`)**:
+     - 4 bài test chuyên biệt kiểm tra logic quy đổi RSSI, tìm kiếm mã SKU/SN/EPC, phím tắt màn hình chính PDA, và nút định vị trong tab sản phẩm. Đạt 100% Pass rate (200/200 tests toàn dự án).
+
+
+

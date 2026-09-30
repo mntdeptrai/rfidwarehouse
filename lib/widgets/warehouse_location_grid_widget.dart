@@ -265,7 +265,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onPressed: () async {
-                            await _repo.reloadFromSqlite();
+                            await _repo.reloadFromDatabase();
                             setState(() {});
                             widget.onLocationDataChanged?.call();
                           },

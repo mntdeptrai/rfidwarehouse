@@ -61,7 +61,8 @@ void main() {
 
     testWidgets('PdaTransferScreen enables scanning and shows confirmation dialog upon pallet scan', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
           home: PdaTransferScreen(),
         ),
       );
@@ -112,7 +113,8 @@ void main() {
 
     testWidgets('PdaTransferScreen Step 3 has both HỦY / QUÉT LẠI and XÁC NHẬN CHUYỂN buttons', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
           home: PdaTransferScreen(),
         ),
       );

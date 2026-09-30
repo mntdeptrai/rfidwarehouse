@@ -185,8 +185,8 @@ void main() {
       expect(repo.findPalletByRfid('E280DEL00000000000000099'), isNull);
       expect(repo.pallets.where((p) => p.palletCode == 'PL-TO-DELETE'), isEmpty);
 
-      // Reload from SQLite to simulate app restart
-      await repo.reloadFromSqlite();
+      // Reload to simulate app restart
+      await repo.reloadFromDatabase();
 
       expect(repo.findPalletByRfid('E280DEL00000000000000099'), isNull);
       expect(repo.pallets.where((p) => p.palletCode == 'PL-TO-DELETE'), isEmpty);
@@ -262,7 +262,7 @@ void main() {
       expect(pAfter.displayName, equals('Xe Pallet So 1'));
 
       // Simulate reload
-      await repo.reloadFromSqlite();
+      await repo.reloadFromDatabase();
       final pReloaded = repo.pallets.firstWhere((p) => p.palletCode == '945321582');
       expect(pReloaded.palletName, equals('Xe Pallet So 1'));
       expect(pReloaded.displayName, equals('Xe Pallet So 1'));

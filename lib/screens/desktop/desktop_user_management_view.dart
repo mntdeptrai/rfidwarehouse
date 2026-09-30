@@ -27,7 +27,7 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
     _repo.addListener(_onStateChange);
     _auth.addListener(_onStateChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _repo.reloadFromSqlite();
+      _repo.reloadFromDatabase();
     });
   }
 
@@ -759,7 +759,7 @@ class _DesktopUserManagementViewState extends State<DesktopUserManagementView> {
                   icon: const Icon(Icons.refresh_rounded, size: 18),
                   label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   onPressed: () async {
-                    await _repo.reloadFromSqlite();
+                    await _repo.reloadFromDatabase();
                     if (context.mounted) setState(() {});
                   },
                 ),

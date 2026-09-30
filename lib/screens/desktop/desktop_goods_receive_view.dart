@@ -306,6 +306,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         }
       });
     }
+    // Nếu không trong trạng thái quét, tuyệt đối không duyệt lại chip cũ và không gọi auto complete
+    if (!_wizardIsScanning && !_desktopUhf.isScanning) {
+      return;
+    }
     for (final tag in _desktopUhf.tags) {
       _handleWizardGateTag(tag);
     }
@@ -553,14 +557,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _autoCompleteTimer?.cancel();
     _autoCompleteTimer = null;
     _wizardCountdownTimer?.cancel();
-    _uhf.disableScanning();
-    await _desktopUhf.stopInventory();
+    _wizardCountdownTimer = null;
+    _tagBatchUiTimer?.cancel();
+    _tagBatchUiTimer = null;
+
     if (mounted) {
       setState(() {
         _wizardIsScanning = false;
         _wizardScanCountdown = _wizardScanDuration;
       });
     }
+
+    _uhf.disableScanning();
+    _uhf.stopInventory();
+    await _desktopUhf.stopInventory();
   }
 
   List<TagInfo> _getFilteredUnexpectedTags() {
@@ -924,6 +934,17 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   /// Tự động hoàn tất nhập kho và đẩy sang PDA khi đã quét đủ 100% khớp file (không cần bấm tay)
   void _checkAndTriggerAutoComplete() {
     if (_isCompletingGoodsReceive) return;
+    // BẮT BUỘC: Nếu không quét hoặc đã qua cổng hết thì không kích hoạt
+    if (!_wizardIsScanning && !_desktopUhf.isScanning) {
+      _autoCompleteTimer?.cancel();
+      _autoCompleteTimer = null;
+      return;
+    }
+    if (_pendingGateOrders.isNotEmpty && _pendingGateOrders.every((p) => p.isGatePassed)) {
+      _autoCompleteTimer?.cancel();
+      _autoCompleteTimer = null;
+      return;
+    }
     final unexp = _getFilteredUnexpectedTags();
     if (unexp.isNotEmpty) {
       _autoCompleteTimer?.cancel();
@@ -948,14 +969,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
     }
 
-    // Hoặc nếu quét trực tiếp theo _activeExpectedItems hoặc CSDL
-    if (!hasReadyOrder) {
+    // Hoặc nếu quét trực tiếp theo _activeExpectedItems hoặc CSDL (CHỈ KHI CHƯA NẠP FILE)
+    if (!hasReadyOrder && _pendingGateOrders.isEmpty) {
+      if (_lastSuccessOrderNo != null) {
+        // Đang hiển thị kết quả thành công cho xe vừa qua cổng, không kích hoạt tự động nhập lại
+        return;
+      }
       final dbPending = _activeExpectedItems.isNotEmpty
           ? _activeExpectedItems
           : _repo.items.where((i) => i.status == ItemStatus.pendingInbound).toList();
-      if (dbPending.isNotEmpty) {
-        final scannedCount = dbPending.where((i) => _wizardScannedTags.containsKey(i.epc.trim().toUpperCase())).length;
-        if (scannedCount >= dbPending.length) {
+      final unpassedPending = dbPending.where((i) => !_passedGateEpcs.contains(i.epc.trim().toUpperCase())).toList();
+      if (unpassedPending.isNotEmpty) {
+        final scannedCount = unpassedPending.where((i) => _wizardScannedTags.containsKey(i.epc.trim().toUpperCase())).length;
+        if (scannedCount >= unpassedPending.length) {
           hasReadyOrder = true;
           if (_activeExpectedItems.isEmpty) {
             _activeExpectedItems = dbPending;
@@ -970,6 +996,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _autoCompleteTimer = Timer(const Duration(milliseconds: 350), () {
           _autoCompleteTimer = null;
           if (!mounted || _isCompletingGoodsReceive) return;
+          if (!_wizardIsScanning && !_desktopUhf.isScanning) return;
           final currentUnexp = _getFilteredUnexpectedTags();
           if (currentUnexp.isEmpty) {
             _completeGoodsReceiveAtGate();
@@ -1105,15 +1132,13 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               'isSuccess': true,
             });
             _towerLight.triggerPass(reason: 'Đã hoàn tất nhập kho và chuyển sang PDA cho đơn $ordNo!');
-            _stopWizardScan();
-            _uhf.stopInventory();
-            _desktopUhf.stopInventory();
+            await _stopWizardScan();
+            _desktopUhf.clearTags();
             if (mounted) {
               setState(() {
                 _lastSuccessOrderNo = ordNo;
                 _lastSuccessPalletCode = pCode ?? '--';
                 _lastSuccessCount = scannedEpcs.length;
-                _invalidateCartonCaches();
               });
 
               _successBannerTimer?.cancel();
@@ -1232,17 +1257,15 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       final totalSaved = completedOrders.fold<int>(0, (sum, p) => sum + p.items.length);
       _towerLight.triggerPass(reason: 'Đã hoàn tất nhập kho và chuyển sang PDA cho ${completedOrders.length} xe Pallet ($totalSaved chip)!');
 
-      // Tự động dừng quét vì đã hoàn tất đối soát qua cổng
-      _stopWizardScan();
-      _uhf.stopInventory();
-      _desktopUhf.stopInventory();
+      // Tự động dừng quét và dọn sạch buffer ngay lập tức để không lặp vô hạn
+      await _stopWizardScan();
+      _desktopUhf.clearTags();
 
       if (mounted) {
         setState(() {
           _lastSuccessOrderNo = completedOrders.map((p) => p.order.orderNo).join(', ');
           _lastSuccessPalletCode = completedOrders.map((p) => p.pallets.keys.firstOrNull ?? '--').join(', ');
           _lastSuccessCount = totalSaved;
-          _invalidateCartonCaches();
         });
 
         _successBannerTimer?.cancel();
@@ -1394,7 +1417,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         const SnackBar(
           backgroundColor: Color(0xFFEF4444),
           duration: Duration(seconds: 2),
-          content: Text('✓ Đã xóa sạch đơn vừa nạp nhầm khỏi CSDL & Supabase Cloud!'),
+          content: Text('✓ Đã xóa sạch các đơn vừa nạp thành công!'),
         ),
       );
     }
@@ -1448,8 +1471,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             const SizedBox(height: 8),
             Text(
               chipCount > 0
-                  ? 'Toàn bộ $chipCount chip RFID và dữ liệu của đơn này sẽ bị xóa sạch khỏi CSDL SQLite và Supabase Cloud.'
-                  : 'Toàn bộ dữ liệu của đơn này sẽ bị xóa sạch khỏi CSDL SQLite và Supabase Cloud.',
+                  ? 'Toàn bộ $chipCount chip RFID và dữ liệu của đơn này sẽ bị xóa hoàn toàn khỏi hệ thống.'
+                  : 'Toàn bộ dữ liệu của đơn này sẽ bị xóa hoàn toàn khỏi hệ thống.',
               style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 12),
             ),
           ],
@@ -1500,12 +1523,12 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         SnackBar(
           backgroundColor: const Color(0xFFEF4444),
           duration: const Duration(seconds: 2),
-          content: Text('✓ Đã xóa đơn hàng $orderNo khỏi CSDL & Supabase Cloud!'),
+          content: Text('✓ Đã xóa đơn hàng $orderNo thành công!'),
         ),
       );
     }
 
-    // 2. Xóa SQLite và Supabase Cloud
+    // 2. Xóa bộ nhớ cục bộ và Supabase Cloud
     try {
       await _repo.deleteInboundOrder(orderNo);
       await _supabaseSync.syncNow();
@@ -1539,7 +1562,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       };
     }
 
-    // 2. Lấy từ CSDL SQLite / Supabase (_repo.inboundOrders)
+    // 2. Lấy từ CSDL Supabase Cloud (_repo.inboundOrders)
     final dbPendingOrders = _repo.inboundOrders
         .where((o) => o.status == InboundOrderStatus.newOrder)
         .toList();
@@ -2125,7 +2148,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           SnackBar(
           duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
-            content: Text('✓ Đã nạp ${explicitItems.length} chip và đồng bộ đơn $inboundOrderNo lên Supabase Cloud!'),
+            content: Text('✓ Đã nạp ${explicitItems.length} chip cho đơn $inboundOrderNo thành công!'),
           ),
         );
       }
@@ -2305,7 +2328,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           SnackBar(
           duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
-            content: Text('✓ Đã nạp đơn PO và đồng bộ ${explicitItems.length} chip lên Supabase Cloud!'),
+            content: Text('✓ Đã nạp đơn PO và lưu ${explicitItems.length} chip thành công!'),
           ),
         );
       }
@@ -2497,7 +2520,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             const Text(
-                                              'Xóa Sạch Đơn Vừa Nạp Nhầm Khỏi CSDL',
+                                              'Xóa Sạch Đơn Vừa Nạp Nhầm',
                                               style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 13),
                                             ),
                                             const SizedBox(height: 2),
@@ -2558,7 +2581,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
 
                       Tooltip(
-                        message: 'Đồng bộ & làm mới dữ liệu từ CSDL và Cloud',
+                        message: 'Làm mới dữ liệu hệ thống',
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: c.textPrimary,

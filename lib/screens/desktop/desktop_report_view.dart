@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -5,6 +6,8 @@ import '../../models/wms_models.dart';
 import '../../services/report_export_service.dart';
 import '../../services/warehouse_repository.dart';
 import '../../theme/eye_care_theme.dart';
+import 'desktop_stock_reconciliation_view.dart';
+import 'desktop_audit_ticket_detail_view.dart';
 
 /// Màn hình Báo Cáo Tồn Kho RFID — Tra cứu và trích xuất danh sách tồn kho theo Số Seri (SN)
 class DesktopReportView extends StatefulWidget {
@@ -19,6 +22,10 @@ class _DesktopReportViewState extends State<DesktopReportView> {
   final ReportExportService _exportService = ReportExportService();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
+  // Tab chuyển đổi: 0 = Danh Sách Hàng Tồn (IN_STOCK), 1 = Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)
+  int _selectedReportTab = 0;
+  InventorySession? _selectedSessionDetail;
+
   ReportFormat _selectedFormat = ReportFormat.xlsx;
   bool _isExporting = false;
   String? _lastExportPath;
@@ -31,6 +38,10 @@ class _DesktopReportViewState extends State<DesktopReportView> {
     super.initState();
     _repo.addListener(_onDataChanged);
     _eyeCare.addListener(_onDataChanged);
+
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      unawaited(_repo.reloadFromDatabase());
+    }
   }
 
   void _onDataChanged() {
@@ -154,6 +165,39 @@ class _DesktopReportViewState extends State<DesktopReportView> {
       }).toList();
     }
 
+    if (_selectedSessionDetail != null) {
+      return Container(
+        color: c.bgDeep,
+        child: DesktopAuditTicketDetailView(
+          session: _selectedSessionDetail!,
+          onBack: () => setState(() => _selectedSessionDetail = null),
+        ),
+      );
+    }
+
+    if (_selectedReportTab == 1) {
+      return Container(
+        color: c.bgDeep,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeaderBar(c),
+              const SizedBox(height: 12),
+              Expanded(
+                child: DesktopStockReconciliationView(
+                  onOpenSessionDetail: (session) {
+                    setState(() => _selectedSessionDetail = session);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       color: c.bgDeep,
       child: Padding(
@@ -207,7 +251,7 @@ class _DesktopReportViewState extends State<DesktopReportView> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 800;
+          final isNarrow = constraints.maxWidth < 1100;
 
           Widget content = Row(
             children: [
@@ -269,18 +313,43 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                 ),
               ),
               const SizedBox(width: 12),
+              // Segmented switch tabs
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: c.bgCardElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildReportTabButton(0, Icons.inventory_2_outlined, 'Danh Sách Hàng Tồn', c),
+                    const SizedBox(width: 4),
+                    _buildReportTabButton(1, Icons.balance_rounded, 'Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)', c),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: () async {
-                  await _repo.reloadFromSqlite();
+                  await _repo.reloadFromDatabase();
                   if (!mounted) return;
+                  ScaffoldMessenger.of(this.context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: c.bgCard,
-                      content: Text(
-                        'Đã làm mới dữ liệu tồn kho thực tế!',
-                        style: TextStyle(color: c.textPrimary),
+                    const SnackBar(
+                      backgroundColor: Color(0xFF10B981),
+                      content: Row(
+                        children: [
+                          Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            '✓ Đã đồng bộ và làm mới dữ liệu từ Supabase Cloud!',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
-                      duration: const Duration(seconds: 2),
+                      duration: Duration(seconds: 2),
                     ),
                   );
                 },
@@ -299,13 +368,46 @@ class _DesktopReportViewState extends State<DesktopReportView> {
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: SizedBox(
-                width: 800,
+                width: 1100,
                 child: content,
               ),
             );
           }
           return content;
         },
+      ),
+    );
+  }
+
+  Widget _buildReportTabButton(int index, IconData icon, String label, EyeCareColors c) {
+    final isSelected = _selectedReportTab == index;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() => _selectedReportTab = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF10B981).withValues(alpha: 0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSelected ? const Color(0xFF10B981) : Colors.transparent),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: isSelected ? const Color(0xFF10B981) : c.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF10B981) : c.textSecondary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -26,7 +26,7 @@ Phản ánh toàn bộ hành trình của một sản phẩm từ khi nhà cung 
 2. **Làn Điều Phối Desktop (WMS Desktop)**: Admin tải phiếu Excel hoặc tạo đơn trên hệ thống, theo dõi tháp đèn và trạng thái cổng Gate.
 3. **Làn Thiết Bị RFID Tự Động (Hardware Gate CL7206C2 / Tower Light Modbus)**: Bắt sóng chùm chip EPC qua cổng TCP 9090, phân loại thẻ tức thời, đổi màu đèn tháp (Xanh/Vàng/Đỏ) và hú còi khi có lỗi.
 4. **Làn Hiện Trường & PDA (SEUIC Utouch 2 Android)**: Thủ kho nhận nhiệm vụ `[CẦN CẤT KỆ]`, dùng súng quét mã barcode kệ, xác nhận cất kệ, điều chuyển, dồn pallet và kiểm kê di động.
-5. **Làn Trạng Thái & CSDL (WarehouseRepository / Supabase Cloud / SQLite)**: Quản lý biến động trạng thái từ `PENDING_INBOUND` -> `WAITING_PUTAWAY` -> `IN_STOCK` -> `DELIVERED`, giải phóng vị trí kệ khi xuất hàng.
+5. **Làn Trạng Thái & CSDL (WarehouseRepository / Supabase Cloud / In-Memory Cache)**: Quản lý biến động trạng thái từ `PENDING_INBOUND` -> `WAITING_PUTAWAY` -> `IN_STOCK` -> `DELIVERED`, giải phóng vị trí kệ khi xuất hàng.
 
 ```mermaid
 graph LR

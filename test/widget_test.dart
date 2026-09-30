@@ -79,7 +79,33 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(DesktopInventoryView), findsOneWidget);
+  });
+
+  testWidgets('DesktopInventoryView shows Xuất File Kiểm Kê card and opens export dialog', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: const Scaffold(
+          body: DesktopInventoryView(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Xuất File Kiểm Kê (.xlsx)'), findsOneWidget);
+    expect(find.text('📥 XUẤT FILE KIỂM KÊ'), findsWidgets);
+
+    // Tap card button
+    await tester.tap(find.text('📥 XUẤT FILE KIỂM KÊ').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Xuất File Kiểm Kê Kho'), findsOneWidget);
+    expect(find.text('Biên Bản Kiểm Kê Kho (Form Mẫu Chuẩn)'), findsOneWidget);
+    expect(find.text('XUẤT FILE'), findsOneWidget);
   });
 
   testWidgets('DesktopGoodsReceiveView renders without overflow in ultra-narrow window', (WidgetTester tester) async {
@@ -578,6 +604,56 @@ void main() {
     expect(find.textContaining('DỪNG QUÉT'), findsNothing);
   });
 
+  testWidgets('DesktopGoodsReceiveView resets scan state after auto receiving and does not hang in scanning mode', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final oldPending = repo.items.where((it) => it.status == ItemStatus.pendingInbound).map((it) => it.epc).toList();
+    await repo.deleteItemsByEpcs(oldPending);
+
+    const testEpc = 'E280119100000000TESTAUTO01';
+    await repo.addItem(Item(
+      itemId: 'ITEM-AUTO-01',
+      productId: 'SKU-AUTO-01',
+      sku: 'SKU-AUTO-01',
+      productName: 'Sản Phẩm Tự Động 01',
+      serialNumber: 'SN-AUTO-01',
+      epc: testEpc,
+      status: ItemStatus.pendingInbound,
+      orderNo: 'INBOUND-AUTO-01',
+      palletId: 'PAL-999',
+    ));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(splashFactory: InkRipple.splashFactory),
+        home: const Scaffold(
+          body: DesktopGoodsReceiveView(isActive: true),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Bắt đầu quét
+    await tester.tap(find.textContaining('BẮT ĐẦU QUÉT'));
+    await tester.pump();
+    expect(find.textContaining('DỪNG QUÉT'), findsOneWidget);
+
+    // Mô phỏng nhận chip từ đầu đọc
+    UhfService().simulateTag(testEpc);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // Kiểm tra đã tự động hoàn tất và không bị kẹt ở chế độ DỪNG QUÉT
+    expect(find.textContaining('DỪNG QUÉT'), findsNothing);
+    expect(find.textContaining('ĐÃ ĐỐI SOÁT ĐỦ (KHOÁ QUÉT)'), findsOneWidget);
+
+    // Đợi xả timer
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('DesktopGoodsDeliveryView matches Inbound style: cyan dropdown XUẤT HÀNG, idle gate monitor, and history toggle', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -865,8 +941,12 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
           drawer: PdaDrawer(),
           body: Center(child: Text('Home')),
         ),
@@ -984,8 +1064,12 @@ void main() {
     pal.locationId = testLoc.locationId;
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: PdaWarehouseManagementScreen(),
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const PdaWarehouseManagementScreen(),
       ),
     );
     await tester.pump();
@@ -1018,8 +1102,12 @@ void main() {
 
     // 1. Kiểm tra PDA InboundScreen
     await tester.pumpWidget(
-      const MaterialApp(
-        home: InboundScreen(),
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const InboundScreen(),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));
@@ -1038,8 +1126,12 @@ void main() {
 
     // 2. Kiểm tra PDA OutboundScreen
     await tester.pumpWidget(
-      const MaterialApp(
-        home: OutboundScreen(),
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const OutboundScreen(),
       ),
     );
     await tester.pump(const Duration(milliseconds: 300));
@@ -1193,8 +1285,12 @@ void main() {
     await repo.addItem(testItem2);
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
           body: DesktopLocationManagementView(),
         ),
       ),
@@ -1246,8 +1342,12 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
           body: DesktopWarehouseManagementView(),
         ),
       ),
@@ -1303,8 +1403,12 @@ void main() {
     addTearDown(() => tester.view.resetPhysicalSize());
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
           body: DesktopReportView(),
         ),
       ),
@@ -1379,15 +1483,19 @@ void main() {
 
     await DatabaseService().insertTransaction(moveTx);
     await DatabaseService().insertTransaction(outTx);
-    await repo.reloadFromSqlite();
+    await repo.reloadFromDatabase();
 
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
           body: DesktopWarehouseManagementView(),
         ),
       ),
@@ -1436,11 +1544,15 @@ void main() {
 
     await DatabaseService().insertOutboundOrder(outOrder);
     await DatabaseService().insertTransaction(outTx);
-    await repo.reloadFromSqlite();
+    await repo.reloadFromDatabase();
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
           body: DesktopWarehouseManagementView(),
         ),
       ),
@@ -1503,11 +1615,15 @@ void main() {
 
     await DatabaseService().insertTransaction(moveTx);
     await DatabaseService().insertInventorySession(auditSession);
-    await repo.reloadFromSqlite();
+    await repo.reloadFromDatabase();
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
           body: PdaWarehouseManagementScreen(initialTabIndex: 2),
         ),
       ),

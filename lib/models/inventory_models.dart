@@ -250,6 +250,7 @@ class InventorySession {
   DateTime? completedAt;
   bool isCompleted;
   final List<InventoryItemResult> results;
+  final List<String> targetSkus;
 
   InventorySession({
     required this.sessionId,
@@ -260,7 +261,12 @@ class InventorySession {
     this.completedAt,
     this.isCompleted = false,
     List<InventoryItemResult>? results,
-  }) : results = results ?? [];
+    List<String>? targetSkus,
+  })  : results = results ?? [],
+        targetSkus = targetSkus ?? const [];
+
+  bool get isSkuSpecific => targetSkus.isNotEmpty;
+  String get targetSkusDisplay => targetSkus.isEmpty ? 'Tất cả mặt hàng' : targetSkus.join(', ');
 
   int get matchCount => results.where((r) => r.resultType == InventoryVarianceType.match).length;
   int get missingCount => results.where((r) => r.resultType == InventoryVarianceType.missing).length;
@@ -270,6 +276,53 @@ class InventorySession {
   int get actualScannedCount => results.where((r) => r.resultType != InventoryVarianceType.missing).length;
   int get knownInDbCount => results.where((r) => r.resultType != InventoryVarianceType.missing && r.resultType != InventoryVarianceType.unknownEpc).length;
   int get varianceOrUnknownCount => (actualScannedCount - knownInDbCount) > 0 ? (actualScannedCount - knownInDbCount) : 0;
+}
+
+/// Dòng đối soát tồn kho: Tồn dự kiến (Sổ sách) vs Tồn thực tế (Kiểm kê) theo từng SKU
+class SkuStockReconciliationRow {
+  final String sku;
+  final String productName;
+  final String unit;
+  final String zoneOrLocation;
+  final int expectedQty; // Tồn kho dự kiến (Sổ sách / CSDL)
+  final int actualQty;   // Tồn kho kiểm kê theo thực tế (Quét RFID)
+  final int matchedCount;
+  final int missingCount;
+  final int wrongLocationCount;
+  final int unknownCount;
+  final List<InventoryItemResult> itemResults;
+
+  const SkuStockReconciliationRow({
+    required this.sku,
+    required this.productName,
+    required this.unit,
+    required this.zoneOrLocation,
+    required this.expectedQty,
+    required this.actualQty,
+    this.matchedCount = 0,
+    this.missingCount = 0,
+    this.wrongLocationCount = 0,
+    this.unknownCount = 0,
+    this.itemResults = const [],
+  });
+
+  /// Chênh lệch = Thực tế - Dự kiến
+  int get difference => actualQty - expectedQty;
+
+  /// Tỷ lệ chính xác đối soát (%)
+  double get accuracyPercent {
+    if (expectedQty == 0 && actualQty == 0) return 100.0;
+    if (expectedQty == 0) return 0.0;
+    return (matchedCount / expectedQty * 100).clamp(0.0, 100.0);
+  }
+
+  /// Nhãn trạng thái đối soát
+  String get statusLabel {
+    if (difference == 0 && wrongLocationCount == 0) return 'Khớp đủ';
+    if (difference == 0 && wrongLocationCount > 0) return 'Sai vị trí';
+    if (difference < 0) return 'Thiếu ${-difference}';
+    return 'Thừa $difference';
+  }
 }
 
 /// Chi tiết đối chiếu Gate theo từng SKU

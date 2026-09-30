@@ -1054,7 +1054,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
                   onPressed: () async {
-                    await _repo.reloadFromSqlite();
+                    await _repo.reloadFromDatabase();
                     await _supabaseSync.syncNow();
                     if (mounted) setState(() {});
                   },

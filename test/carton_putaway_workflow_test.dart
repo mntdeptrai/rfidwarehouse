@@ -83,7 +83,7 @@ void main() {
       expect(tx, isNotNull);
       expect(tx!.type, equals(TransactionType.movement));
 
-      // Dọn dẹp dữ liệu test khỏi SQLite sau khi test xong
+      // Dọn dẹp dữ liệu test sau khi test xong
       await repo.clearAllData(alsoClearCloud: false);
     });
 
@@ -265,7 +265,7 @@ void main() {
       await repo.clearAllData(alsoClearCloud: false);
     });
 
-    test('Inventory Session created, scanned, and completed is persisted in SQLite and survives reloadFromSqlite', () async {
+    test('Inventory Session created, scanned, and completed is persisted and survives reloadFromDatabase', () async {
       final repo = WarehouseRepository();
       await repo.clearAllData(alsoClearCloud: false);
 
@@ -277,8 +277,8 @@ void main() {
 
       expect(repo.inventorySessions.first.isCompleted, isTrue);
 
-      // Giả lập làm mới từ SQLite
-      await repo.reloadFromSqlite();
+      // Giả lập làm mới từ Database
+      await repo.reloadFromDatabase();
 
       expect(repo.inventorySessions.length, equals(1));
       expect(repo.inventorySessions.first.sessionId, equals(session.sessionId));

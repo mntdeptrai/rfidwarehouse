@@ -430,7 +430,15 @@ class ExcelImportService {
           if (existingItem != null && existingItem.sku.isNotEmpty && existingItem.sku != '--') {
             rowBarcode = existingItem.sku;
           } else {
-            rowBarcode = WarehouseRepository().generateHexBarcode128();
+            // Tra cứu thêm trong danh mục sản phẩm đã có để tái sử dụng đúng SKU, tránh sinh mã trùng lặp
+            final existingProd = WarehouseRepository().products.where((p) =>
+              p.productName.trim().isNotEmpty && p.productName.trim().toLowerCase() == effectiveName.trim().toLowerCase()
+            ).firstOrNull;
+            if (existingProd != null && existingProd.sku.isNotEmpty && existingProd.sku != '--') {
+              rowBarcode = existingProd.sku;
+            } else {
+              rowBarcode = WarehouseRepository().generateHexBarcode128();
+            }
           }
           nameToBarcodeMap[effectiveName] = rowBarcode;
         }

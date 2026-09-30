@@ -25,7 +25,7 @@ void main() {
   SupabaseSyncService();
   ApiService().init();
 
-  // Nạp trước CSDL SQLite và cấu hình vào RAM ngay lập tức (non-blocking pre-warm)
+  // Nạp trước dữ liệu và cấu hình vào RAM ngay lập tức (non-blocking pre-warm)
   WarehouseRepository().ensureInitialized();
   AuthService().init();
 

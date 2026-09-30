@@ -6,6 +6,7 @@ void main() {
   testWidgets('AppSnackBar shows and automatically slides down after 2s', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
         home: Scaffold(
           body: Builder(
             builder: (context) => ElevatedButton(
@@ -47,6 +48,7 @@ void main() {
   testWidgets('AppSnackBar dismisses previous notification immediately when new one is triggered', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
         home: Scaffold(
           body: Builder(
             builder: (context) => Column(
@@ -91,6 +93,7 @@ void main() {
   testWidgets('AppSnackBar allows swiping down on PDA (DismissDirection.down)', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
         home: Scaffold(
           body: Builder(
             builder: (context) => ElevatedButton(
@@ -119,6 +122,7 @@ void main() {
   testWidgets('AppSnackBar correctly formats workflow-specific completion messages', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
         home: Scaffold(
           body: Builder(
             builder: (context) => Column(

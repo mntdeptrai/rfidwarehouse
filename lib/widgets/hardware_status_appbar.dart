@@ -144,8 +144,8 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                       duration: const Duration(seconds: 1),
                       content: Text(
                         isOnline
-                            ? 'Đang kích hoạt đồng bộ Supabase Cloud...'
-                            : 'Đang kết nối lại Supabase Cloud...',
+                            ? 'Đang đồng bộ dữ liệu hệ thống...'
+                            : 'Đang kết nối lại máy chủ...',
                         style: TextStyle(color: c.textPrimary),
                       ),
                     ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../models/wms_models.dart';
@@ -6,11 +7,12 @@ import '../../services/warehouse_repository.dart';
 import '../../services/auth_service.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
-import '../../services/excel_import_service.dart';
+import '../../services/report_export_service.dart';
 import '../../theme/eye_care_theme.dart';
+import 'desktop_audit_ticket_detail_view.dart';
 
 /// Màn hình Kiểm Kê Kho & Đối Soát RFID UHF Desktop
-/// Nghiệp vụ: Tạo Đơn Kiểm Kê (Toàn kho/Khu vực/Kệ) HOẶC Nạp File Excel Kiểm Kê để Quét Đủ
+/// Nghiệp vụ: Tạo Đơn Kiểm Kê (Toàn kho/Khu vực/Kệ) VÀ Xuất File Kiểm Kê (.xlsx)
 class DesktopInventoryView extends StatefulWidget {
   const DesktopInventoryView({super.key});
 
@@ -24,7 +26,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   final AuthService _auth = AuthService();
   final DesktopUhfTcpService _desktopUhf = DesktopUhfTcpService();
   final UhfService _uhf = UhfService();
-  final ExcelImportService _excelService = ExcelImportService();
+  final ReportExportService _exportService = ReportExportService();
 
   // Phiên kiểm kê hiện hành đang thực hiện quét đối soát
   InventorySession? _activeSession;
@@ -63,6 +65,11 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
         _handleTagScanned(tag.epc);
       }
     });
+
+    // Tự động tải lại dữ liệu các đợt kiểm kê từ Cloud
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      unawaited(_repo.reloadFromDatabase());
+    }
   }
 
   @override
@@ -210,7 +217,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             Text('• Hàng lạ / ngoài đơn: ${s.varianceOrUnknownCount} thẻ chip', style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 13)),
             Text('• Tỷ lệ chính xác: $accuracyPercent%', style: TextStyle(color: _eyeCare.colors.rfidCyan, fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 14),
-            Text('Bạn có chắc chắn muốn chốt và lưu kết quả đợt kiểm kê này vào CSDL không?', style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13)),
+            Text('Bạn có chắc chắn muốn chốt và lưu kết quả đợt kiểm kê này vào hệ thống không?', style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13)),
           ],
         ),
         actions: [
@@ -235,9 +242,20 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-          duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 4),
             backgroundColor: const Color(0xFF10B981),
-            content: Text('✓ Đã chốt và lưu kết quả đợt kiểm kê ${s.sessionCode} thành công!'),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '✓ Đã chốt kiểm kê ${s.sessionCode}! Bảng đối soát tồn kho tự động cập nhật tại mục Báo Cáo.',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
         setState(() {
@@ -288,15 +306,30 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   // 1. TẠO ĐƠN KIỂM KÊ MỚI (DIALOG CHỌN TOÀN KHO / THEO KHU VỰC / THEO KỆ)
   // ===========================================================================
   void _showCreateSessionDialog() {
-    String selectedScope = 'ALL'; // ALL, ZONE, SHELF
+    String selectedScope = 'ALL'; // ALL, ZONE, SHELF, SKU
     String selectedZone = 'Khu A';
     String? selectedShelf;
+    final Set<String> selectedSkus = {};
+    String skuSearchQuery = '';
 
     // Lấy danh sách zones và kệ thực tế
     final allZones = _repo.locations.map((l) => l.zone.trim()).where((z) => z.isNotEmpty).toSet().toList();
     if (allZones.isEmpty) allZones.addAll(['Khu A', 'Khu B', 'Khu C']);
 
     final allShelves = _repo.locations.toList();
+
+    // Lấy danh mục SKU thực tế ĐANG CÓ HÀNG LƯU KHO (Chỉ lấy mặt hàng có tồn > 0)
+    final Map<String, ({String name, int inStockCount})> skuMap = {};
+    for (final it in _repo.items) {
+      if (it.sku.isNotEmpty && it.sku != 'UNKNOWN' && it.status == ItemStatus.inStock) {
+        final existing = skuMap[it.sku];
+        skuMap[it.sku] = (
+          name: it.productName.isNotEmpty ? it.productName : (existing?.name ?? it.sku),
+          inStockCount: (existing?.inStockCount ?? 0) + 1,
+        );
+      }
+    }
+    final allSkuList = skuMap.keys.toList()..sort();
 
     showDialog(
       context: context,
@@ -320,82 +353,179 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             ),
             content: SizedBox(
               width: 500,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Chọn phạm vi kiểm kê hàng hóa:', style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 12),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Chọn phạm vi kiểm kê hàng hóa:', style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 12),
 
-                  // Lựa chọn 1: Toàn bộ kho
-                  _buildScopeOption(
-                    title: 'Toàn Bộ Hàng Hóa Trong Kho',
-                    subtitle: 'Kiểm đếm tất cả sản phẩm đang lưu kho',
-                    val: 'ALL',
-                    currentVal: selectedScope,
-                    onSelect: (val) => setDialogState(() => selectedScope = val),
-                    c: c,
-                  ),
-
-                  // Lựa chọn 2: Theo khu vực (Zone)
-                  _buildScopeOption(
-                    title: 'Theo Khu Vực Cụ Thể (Zone)',
-                    subtitle: 'Kiểm đếm hàng thuộc Zone A, Zone B, v.v.',
-                    val: 'ZONE',
-                    currentVal: selectedScope,
-                    onSelect: (val) => setDialogState(() => selectedScope = val),
-                    c: c,
-                  ),
-
-                  if (selectedScope == 'ZONE')
-                    Padding(
-                      padding: const EdgeInsets.only(left: 32, right: 8, bottom: 8),
-                      child: DropdownButtonFormField<String>(
-                        initialValue: allZones.contains(selectedZone) ? selectedZone : allZones.first,
-                        decoration: InputDecoration(
-                          labelText: 'Chọn khu vực kiểm kê',
-                          labelStyle: TextStyle(color: c.textSecondary),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        dropdownColor: c.bgCard,
-                        style: TextStyle(color: c.textPrimary, fontSize: 13),
-                        items: allZones.map((z) => DropdownMenuItem(value: z, child: Text(z))).toList(),
-                        onChanged: (val) => setDialogState(() => selectedZone = val ?? selectedZone),
-                      ),
+                    // Lựa chọn 1: Toàn bộ kho
+                    _buildScopeOption(
+                      title: 'Toàn Bộ Hàng Hóa Trong Kho',
+                      subtitle: 'Kiểm đếm tất cả sản phẩm đang lưu kho',
+                      val: 'ALL',
+                      currentVal: selectedScope,
+                      onSelect: (val) => setDialogState(() => selectedScope = val),
+                      c: c,
                     ),
 
-                  // Lựa chọn 3: Theo dãy kệ cụ thể
-                  _buildScopeOption(
-                    title: 'Theo Vị Trí / Dãy Kệ Cụ Thể',
-                    subtitle: 'Kiểm đếm một vị trí kệ duy nhất',
-                    val: 'SHELF',
-                    currentVal: selectedScope,
-                    onSelect: (val) => setDialogState(() => selectedScope = val),
-                    c: c,
-                  ),
-
-                  if (selectedScope == 'SHELF')
-                    Padding(
-                      padding: const EdgeInsets.only(left: 32, right: 8, bottom: 8),
-                      child: DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        initialValue: selectedShelf,
-                        hint: Text('Chọn vị trí kệ...', style: TextStyle(color: c.textMuted, fontSize: 13)),
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        dropdownColor: c.bgCard,
-                        style: TextStyle(color: c.textPrimary, fontSize: 13),
-                        items: allShelves.map((s) => DropdownMenuItem(
-                          value: s.locationCode,
-                          child: Text('${s.displayName} (${s.locationCode})', overflow: TextOverflow.ellipsis, maxLines: 1),
-                        )).toList(),
-                        onChanged: (val) => setDialogState(() => selectedShelf = val),
-                      ),
+                    // Lựa chọn 2: Theo khu vực (Zone)
+                    _buildScopeOption(
+                      title: 'Theo Khu Vực Cụ Thể (Zone)',
+                      subtitle: 'Kiểm đếm hàng thuộc Zone A, Zone B, v.v.',
+                      val: 'ZONE',
+                      currentVal: selectedScope,
+                      onSelect: (val) => setDialogState(() => selectedScope = val),
+                      c: c,
                     ),
-                ],
+
+                    if (selectedScope == 'ZONE')
+                      Padding(
+                        padding: const EdgeInsets.only(left: 32, right: 8, bottom: 8),
+                        child: DropdownButtonFormField<String>(
+                          initialValue: allZones.contains(selectedZone) ? selectedZone : allZones.first,
+                          decoration: InputDecoration(
+                            labelText: 'Chọn khu vực kiểm kê',
+                            labelStyle: TextStyle(color: c.textSecondary),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          dropdownColor: c.bgCard,
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          items: allZones.map((z) => DropdownMenuItem(value: z, child: Text(z))).toList(),
+                          onChanged: (val) => setDialogState(() => selectedZone = val ?? selectedZone),
+                        ),
+                      ),
+
+                    // Lựa chọn 3: Theo dãy kệ cụ thể
+                    _buildScopeOption(
+                      title: 'Theo Vị Trí / Dãy Kệ Cụ Thể',
+                      subtitle: 'Kiểm đếm một vị trí kệ duy nhất',
+                      val: 'SHELF',
+                      currentVal: selectedScope,
+                      onSelect: (val) => setDialogState(() => selectedScope = val),
+                      c: c,
+                    ),
+
+                    if (selectedScope == 'SHELF')
+                      Padding(
+                        padding: const EdgeInsets.only(left: 32, right: 8, bottom: 8),
+                        child: DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: selectedShelf,
+                          hint: Text('Chọn vị trí kệ...', style: TextStyle(color: c.textMuted, fontSize: 13)),
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          dropdownColor: c.bgCard,
+                          style: TextStyle(color: c.textPrimary, fontSize: 13),
+                          items: allShelves.map((s) => DropdownMenuItem(
+                            value: s.locationCode,
+                            child: Text('${s.displayName} (${s.locationCode})', overflow: TextOverflow.ellipsis, maxLines: 1),
+                          )).toList(),
+                          onChanged: (val) => setDialogState(() => selectedShelf = val),
+                        ),
+                      ),
+
+                    // Lựa chọn 4: Theo từng mặt hàng cụ thể (SKU)
+                    _buildScopeOption(
+                      title: 'Theo Từng Mặt Hàng Cụ Thể (SKU)',
+                      subtitle: 'Chỉ quét lọc và đối soát các mặt hàng được chọn',
+                      val: 'SKU',
+                      currentVal: selectedScope,
+                      onSelect: (val) => setDialogState(() => selectedScope = val),
+                      c: c,
+                    ),
+
+                    if (selectedScope == 'SKU')
+                      Padding(
+                        padding: const EdgeInsets.only(left: 32, right: 8, bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Tìm kiếm mã SKU, tên hàng...',
+                                hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
+                                prefixIcon: Icon(Icons.search, size: 16, color: c.textSecondary),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                isDense: true,
+                              ),
+                              style: TextStyle(color: c.textPrimary, fontSize: 12.5),
+                              onChanged: (q) => setDialogState(() => skuSearchQuery = q.trim().toLowerCase()),
+                            ),
+                            const SizedBox(height: 6),
+                            Material(
+                              color: c.bgCardElevated,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(color: c.border),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 160),
+                                child: allSkuList.isEmpty
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Text('Chưa có mặt hàng nào trong kho', style: TextStyle(color: c.textMuted, fontSize: 12)),
+                                    )
+                                  : ListView(
+                                      shrinkWrap: true,
+                                      children: allSkuList.where((sku) {
+                                        if (skuSearchQuery.isEmpty) return true;
+                                        final name = skuMap[sku]?.name.toLowerCase() ?? '';
+                                        return sku.toLowerCase().contains(skuSearchQuery) || name.contains(skuSearchQuery);
+                                      }).map((sku) {
+                                        final info = skuMap[sku];
+                                        final isChecked = selectedSkus.contains(sku);
+                                        return CheckboxListTile(
+                                          dense: true,
+                                          visualDensity: VisualDensity.compact,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                          title: Text(
+                                            sku,
+                                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+                                          ),
+                                          subtitle: Text(
+                                            '${info?.name ?? ""} • Tồn: ${info?.inStockCount ?? 0} SP',
+                                            style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                          ),
+                                          value: isChecked,
+                                          activeColor: c.rfidCyan,
+                                          onChanged: (v) {
+                                            setDialogState(() {
+                                              if (v == true) {
+                                                selectedSkus.add(sku);
+                                              } else {
+                                                selectedSkus.remove(sku);
+                                              }
+                                            });
+                                          },
+                                        );
+                                      }).toList(),
+                                    ),
+                                ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              selectedSkus.isEmpty
+                                  ? 'Chưa chọn mặt hàng nào (vui lòng chọn ít nhất 1 SKU)'
+                                  : '✓ Đã chọn ${selectedSkus.length} mặt hàng: ${selectedSkus.join(", ")}',
+                              style: TextStyle(
+                                color: selectedSkus.isEmpty ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             actions: [
@@ -413,18 +543,35 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 icon: const Icon(Icons.play_arrow_rounded, size: 18),
                 label: const Text('BẮT ĐẦU KIỂM KÊ', style: TextStyle(fontWeight: FontWeight.bold)),
                 onPressed: () {
+                  if (selectedScope == 'SKU' && selectedSkus.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Vui lòng chọn ít nhất một mặt hàng (SKU) để kiểm kê.'),
+                        backgroundColor: Color(0xFFEF4444),
+                      ),
+                    );
+                    return;
+                  }
+
                   String zoneParam = 'Toàn bộ kho';
                   String? locParam;
+                  List<String>? targetSkusParam;
 
                   if (selectedScope == 'ZONE') {
                     zoneParam = selectedZone;
                   } else if (selectedScope == 'SHELF') {
                     locParam = selectedShelf;
                     zoneParam = allShelves.firstWhere((s) => s.locationCode == selectedShelf, orElse: () => allShelves.first).zone;
+                  } else if (selectedScope == 'SKU') {
+                    targetSkusParam = selectedSkus.toList();
                   }
 
                   Navigator.pop(ctx);
-                  final session = _repo.startInventorySession(zone: zoneParam, locationCode: locParam);
+                  final session = _repo.startInventorySession(
+                    zone: zoneParam,
+                    locationCode: locParam,
+                    targetSkus: targetSkusParam,
+                  );
                   setState(() {
                     _activeSession = session;
                     _scannedEpcs.clear();
@@ -484,86 +631,290 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   }
 
   // ===========================================================================
-  // 2. NẠP FILE EXCEL KIỂM KÊ (.XLSX) ĐỂ QUÉT ĐỐI SOÁT ĐỦ
+  // 2. XUẤT FILE KIỂM KÊ (.XLSX / .CSV) ĐỂ IN ẤN & LƯU TRỮ BÁO CÁO
   // ===========================================================================
-  Future<void> _pickAndLoadExcelAudit() async {
-    try {
-      final result = await _excelService.pickAndParseGoodsReceiveExcel();
-      if (result == null || result.cartons.isEmpty) return;
+  Future<void> _showExportAuditDialog() async {
+    final c = _eyeCare.colors;
+    final sessions = _repo.inventorySessions;
+    final activeSession = _activeSession;
 
-      final sessionId = 'SESS-EXCEL-${DateTime.now().millisecondsSinceEpoch}';
-      final sessionCode = 'KK-EXCEL-${DateTime.now().day}${DateTime.now().month}-${math.Random().nextInt(900) + 100}';
-      final fileName = result.fileName.isNotEmpty ? result.fileName : 'File Excel';
+    String exportType = 'AUDIT_TICKET';
+    ReportFormat format = ReportFormat.xlsx;
+    String? selectedSessionCode = activeSession?.sessionCode ?? (sessions.isNotEmpty ? sessions.first.sessionCode : null);
 
-      final session = InventorySession(
-        sessionId: sessionId,
-        sessionCode: sessionCode,
-        zone: 'File: $fileName',
-        startedAt: DateTime.now(),
-      );
-
-      int totalLoaded = 0;
-      for (final carton in result.cartons) {
-        final cartonCode = carton['cartonCode']?.toString() ?? '';
-        final prodCode = carton['productCode']?.toString() ?? (carton['sku']?.toString() ?? 'SKU-EXCEL');
-        final prodName = carton['productName']?.toString() ?? 'Sản phẩm kiểm kê';
-        final serials = (carton['serials'] as List<dynamic>?) ?? [];
-
-        if (serials.isNotEmpty) {
-          for (final s in serials) {
-            final epcVal = s.toString().trim().toUpperCase();
-            if (epcVal.isNotEmpty) {
-              session.results.add(InventoryItemResult(
-                epc: epcVal,
-                sku: prodCode,
-                productName: prodName,
-                expectedLocation: cartonCode.isNotEmpty ? 'Thùng $cartonCode' : 'Theo File Excel',
-                resultType: InventoryVarianceType.missing,
-                readAt: DateTime.now(),
-              ));
-              totalLoaded++;
-            }
-          }
-        } else {
-          session.results.add(InventoryItemResult(
-            epc: 'NO-EPC-${math.Random().nextInt(999999)}',
-            sku: prodCode,
-            productName: prodName,
-            expectedLocation: cartonCode.isNotEmpty ? 'Thùng $cartonCode' : 'Theo File Excel',
-            resultType: InventoryVarianceType.missing,
-            readAt: DateTime.now(),
-          ));
-          totalLoaded++;
-        }
-      }
-
-      await _repo.saveInventorySession(session);
-
-      setState(() {
-        _activeSession = session;
-        _scannedEpcs.clear();
-        _isScanning = false;
-        _tableFilter = 'ALL';
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-          duration: const Duration(seconds: 2),
-            backgroundColor: const Color(0xFF10B981),
-            content: Text('✓ Đã nạp thành công $totalLoaded mặt hàng từ file Excel vào đơn kiểm kê!'),
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: c.bgCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: c.border),
           ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF8B5CF6).withValues(alpha: 0.3)),
+                ),
+                child: const Icon(Icons.file_download_outlined, color: Color(0xFF8B5CF6), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Xuất File Kiểm Kê Kho', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 2),
+                    Text('Chọn loại biểu mẫu & định dạng để xuất báo cáo', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Lựa chọn 1: Biên bản kiểm kê
+                  _buildExportOptionCard(
+                    title: 'Biên Bản Kiểm Kê Kho (Form Mẫu Chuẩn)',
+                    subtitle: 'Bao gồm hội đồng kiểm kê, kết quả đối soát RFID từng thẻ chip và chữ ký các bên.',
+                    val: 'AUDIT_TICKET',
+                    currentVal: exportType,
+                    onSelect: (val) => setDialogState(() => exportType = val),
+                    c: c,
+                    extraWidget: exportType == 'AUDIT_TICKET' && sessions.isNotEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: DropdownButtonFormField<String>(
+                              initialValue: selectedSessionCode,
+                              dropdownColor: c.bgCard,
+                              style: TextStyle(color: c.textPrimary, fontSize: 12.5),
+                              decoration: InputDecoration(
+                                labelText: 'Chọn đợt kiểm kê',
+                                labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                              ),
+                              items: sessions.map((s) {
+                                return DropdownMenuItem(
+                                  value: s.sessionCode,
+                                  child: Text(
+                                    '${s.sessionCode} - ${s.zone} (${s.actualScannedCount} đã quét, ${s.results.length} thẻ)',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) => setDialogState(() => selectedSessionCode = val),
+                            ),
+                          )
+                        : (exportType == 'AUDIT_TICKET' && sessions.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text('Chưa có đợt kiểm kê nào đã lưu trong lịch sử.', style: TextStyle(color: c.textMuted, fontSize: 11, fontStyle: FontStyle.italic)),
+                              )
+                            : null),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Lựa chọn 2: Bảng đối soát tồn kho
+                  _buildExportOptionCard(
+                    title: 'Bảng Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)',
+                    subtitle: 'Báo cáo tổng hợp số lượng sổ sách vs thực tế kiểm kê theo từng mã SKU/mặt hàng.',
+                    val: 'RECONCILIATION',
+                    currentVal: exportType,
+                    onSelect: (val) => setDialogState(() => exportType = val),
+                    c: c,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Lựa chọn 3: Bảng kê tồn kho kiểm đếm
+                  _buildExportOptionCard(
+                    title: 'Bảng Kê Hàng Tồn Phục Vụ Đi Kiểm Đếm',
+                    subtitle: 'Bảng danh mục toàn bộ sản phẩm và vị trí kệ hiện có phục vụ in ra giấy kiểm đếm thực địa.',
+                    val: 'INVENTORY_SHEET',
+                    currentVal: exportType,
+                    onSelect: (val) => setDialogState(() => exportType = val),
+                    c: c,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Định dạng file: Excel (.xlsx) / CSV (.csv)
+                  Row(
+                    children: [
+                      Text('Định dạng:', style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 12),
+                      ChoiceChip(
+                        label: const Text('Excel (.xlsx)'),
+                        selected: format == ReportFormat.xlsx,
+                        onSelected: (sel) {
+                          if (sel) setDialogState(() => format = ReportFormat.xlsx);
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('CSV (.csv)'),
+                        selected: format == ReportFormat.csv,
+                        onSelected: (sel) {
+                          if (sel) setDialogState(() => format = ReportFormat.csv);
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B5CF6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('XUẤT FILE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _performExportAuditFile(exportType, format, selectedSessionCode);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExportOptionCard({
+    required String title,
+    required String subtitle,
+    required String val,
+    required String currentVal,
+    required Function(String) onSelect,
+    required EyeCareColors c,
+    Widget? extraWidget,
+  }) {
+    final isSelected = val == currentVal;
+    return InkWell(
+      onTap: () => onSelect(val),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF8B5CF6).withValues(alpha: 0.12) : c.bgCardElevated,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isSelected ? const Color(0xFF8B5CF6) : c.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                  color: isSelected ? const Color(0xFF8B5CF6) : c.textMuted,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(subtitle, style: TextStyle(color: c.textMuted, fontSize: 11.5)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            ?extraWidget,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _performExportAuditFile(String exportType, ReportFormat format, String? sessionCode) async {
+    try {
+      File file;
+      if (exportType == 'AUDIT_TICKET') {
+        file = await _exportService.exportReportSelected(
+          ReportType.audit,
+          format,
+          selectedKeys: sessionCode != null ? [sessionCode] : null,
         );
+      } else if (exportType == 'RECONCILIATION') {
+        final session = sessionCode != null
+            ? _repo.inventorySessions.where((s) => s.sessionCode == sessionCode).firstOrNull
+            : null;
+        final rows = _repo.getStockReconciliation(
+          sessionId: session?.sessionId,
+        );
+        final scopeTitle = session != null
+            ? 'Phiếu kiểm kê ${session.sessionCode} (${session.zone})'
+            : 'Toàn bộ kho hàng';
+        file = await _exportService.exportStockReconciliationReport(
+          format,
+          rows: rows,
+          scopeTitle: scopeTitle,
+          sessionCode: session?.sessionCode,
+        );
+      } else {
+        file = await _exportService.exportReport(ReportType.inventory, format);
       }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF10B981),
+          duration: const Duration(seconds: 4),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '✓ Đã xuất file kiểm kê thành công: ${file.path.split(Platform.pathSeparator).last}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  if (Platform.isWindows) {
+                    Process.run('explorer.exe', ['/select,', file.path]);
+                  }
+                },
+                child: const Text('MỞ THƯ MỤC', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-          duration: const Duration(seconds: 2),backgroundColor: const Color(0xFFEF4444), content: Text('Lỗi nạp file: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 3),
+          content: Text('❌ Lỗi xuất file kiểm kê: $e'),
+        ),
+      );
     }
   }
 
@@ -580,7 +931,16 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
         Widget content;
         if (_selectedSessionDetail != null) {
-          content = _buildSessionDetailView(_selectedSessionDetail!, c);
+          content = DesktopAuditTicketDetailView(
+            session: _selectedSessionDetail!,
+            onBack: () => setState(() => _selectedSessionDetail = null),
+            onContinueScanning: () {
+              setState(() {
+                _activeSession = _selectedSessionDetail;
+                _selectedSessionDetail = null;
+              });
+            },
+          );
         } else if (_activeSession != null) {
           content = _buildActiveInventoryView(_activeSession!, c);
         } else {
@@ -627,7 +987,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                           icon: Icons.post_add_rounded,
                           iconColor: c.rfidCyan,
                           title: 'Tạo Đơn Kiểm Kê Mới',
-                          desc: 'Khởi tạo đợt kiểm kê dựa trên dữ liệu hàng tồn kho CSDL (Toàn bộ kho, Theo khu vực Zone hoặc Từng dãy kệ).',
+                          desc: 'Khởi tạo đợt kiểm kê dựa trên dữ liệu hàng tồn kho thực tế (Toàn bộ kho, Theo khu vực Zone hoặc Từng dãy kệ).',
                           btnLabel: '+ TẠO ĐƠN KIỂM KÊ',
                           btnColor: c.rfidCyan,
                           textColor: const Color(0xFF2C251E),
@@ -637,17 +997,17 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       ),
                       const SizedBox(width: 16),
 
-                      // Card 2: Nạp File Excel Kiểm Kê
+                      // Card 2: Xuất File Kiểm Kê (.xlsx)
                       Expanded(
                         child: _buildActionHeroCard(
-                          icon: Icons.upload_file_rounded,
+                          icon: Icons.file_download_outlined,
                           iconColor: const Color(0xFF8B5CF6),
-                          title: 'Nạp File Kiểm Kê (.xlsx)',
-                          desc: 'Nạp bảng tính danh mục hàng hóa từ file Excel để quét đối soát RFID xem hàng có đủ số lượng & vị trí hay không.',
-                          btnLabel: '📁 NẠP FILE QUÉT ĐỦ',
+                          title: 'Xuất File Kiểm Kê (.xlsx)',
+                          desc: 'Xuất biên bản kiểm kê, phiếu kiểm đếm hoặc bảng đối soát tồn kho thực tế ra file Excel (.xlsx) để in ấn và đối chiếu.',
+                          btnLabel: '📥 XUẤT FILE KIỂM KÊ',
                           btnColor: const Color(0xFF8B5CF6),
                           textColor: Colors.white,
-                          onTap: _pickAndLoadExcelAudit,
+                          onTap: _showExportAuditDialog,
                           c: c,
                         ),
                       ),
@@ -672,7 +1032,17 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       TextButton.icon(
                         icon: const Icon(Icons.refresh, size: 16),
                         label: const Text('Làm mới'),
-                        onPressed: () => setState(() {}),
+                        onPressed: () async {
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Đang làm mới dữ liệu kiểm kê từ Cloud...'),
+                              duration: Duration(milliseconds: 800),
+                            ),
+                          );
+                          await _repo.reloadFromDatabase();
+                          if (mounted) setState(() {});
+                        },
                       ),
                     ],
                   ),
@@ -745,10 +1115,33 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                   ),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    child: Text(
-                                      s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone,
-                                      style: TextStyle(color: c.textSecondary, fontSize: 12),
-                                      overflow: TextOverflow.ellipsis,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone,
+                                          style: TextStyle(color: c.textSecondary, fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        if (s.isSkuSpecific)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 3),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(color: const Color(0xFF8B5CF6), width: 0.8),
+                                              ),
+                                              child: Text(
+                                                '🏷️ SKU: ${s.targetSkus.join(", ")}',
+                                                style: const TextStyle(color: Color(0xFF7C3AED), fontSize: 10, fontWeight: FontWeight.bold),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                   Padding(
@@ -877,58 +1270,68 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _isScanning ? const Color(0xFF10B981).withValues(alpha: 0.15) : c.bgCardElevated,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _isScanning ? const Color(0xFF10B981) : c.border),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _isScanning ? const Color(0xFF10B981).withValues(alpha: 0.15) : c.bgCardElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _isScanning ? const Color(0xFF10B981) : c.border),
+                        ),
+                        child: Icon(
+                          _isScanning ? Icons.sensors_rounded : Icons.sensors_off_rounded,
+                          color: _isScanning ? const Color(0xFF10B981) : c.textMuted,
+                          size: 22,
+                        ),
                       ),
-                      child: Icon(
-                        _isScanning ? Icons.sensors_rounded : Icons.sensors_off_rounded,
-                        color: _isScanning ? const Color(0xFF10B981) : c.textMuted,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              'ĐƠN KIỂM KÊ: ${session.sessionCode}',
-                              style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: _isScanning ? const Color(0xFF10B981).withValues(alpha: 0.15) : c.bgCardElevated,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                _isScanning ? 'ĐANG QUÉT RFID' : 'TẠM DỪNG',
-                                style: TextStyle(
-                                  color: _isScanning ? const Color(0xFF10B981) : c.textSecondary,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.bold,
+                            Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                Text(
+                                  'ĐƠN KIỂM KÊ: ${session.sessionCode}',
+                                  style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
-                              ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _isScanning ? const Color(0xFF10B981).withValues(alpha: 0.15) : c.bgCardElevated,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _isScanning ? 'ĐANG QUÉT RFID' : 'TẠM DỪNG',
+                                    style: TextStyle(
+                                      color: _isScanning ? const Color(0xFF10B981) : c.textSecondary,
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Phạm vi: ${session.locationCode != null ? "${session.locationCode} (${session.zone})" : session.zone}${session.isSkuSpecific ? " • Lọc ${session.targetSkus.length} SKU (${session.targetSkus.join(', ')})" : ""}',
+                              style: TextStyle(color: c.textSecondary, fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Phạm vi: ${session.locationCode != null ? "${session.locationCode} (${session.zone})" : session.zone}',
-                          style: TextStyle(color: c.textSecondary, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 12),
 
                 // Control Action Buttons
                 Row(
@@ -1184,142 +1587,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     );
   }
 
-  // ===========================================================================
-  // GIAO DIỆN 3: XEM CHI TIẾT PHIÊN KIỂM KÊ CŨ
-  // ===========================================================================
-  Widget _buildSessionDetailView(InventorySession s, EyeCareColors c) {
-    return Container(
-      color: c.bgDeep,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back, color: c.textPrimary),
-                    onPressed: () => setState(() => _selectedSessionDetail = null),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Chi tiết kiểm kê: ${s.sessionCode}',
-                    style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.arrow_back, size: 16),
-                label: const Text('QUAY LẠI'),
-                onPressed: () => setState(() => _selectedSessionDetail = null),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Cột trái: Thông tin tóm tắt
-                SizedBox(
-                  width: 320,
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: c.bgCard,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _detailRow('Mã kiểm kê', s.sessionCode, c),
-                        const SizedBox(height: 10),
-                        _detailRow('Ngày kiểm kê', '${s.startedAt.day}/${s.startedAt.month}/${s.startedAt.year}', c),
-                        const SizedBox(height: 10),
-                        _detailRow('Phạm vi', s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone, c),
-                        const SizedBox(height: 10),
-                        _detailRow('Trạng thái', s.isCompleted ? 'Đã hoàn tất' : 'Đang kiểm kê', c),
-                        const Divider(height: 24),
-                        Text('SỐ LIỆU ĐỐI SOÁT', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
-                        const SizedBox(height: 10),
-                        _detailRow('Tổng dự kiến', '${s.matchCount + s.missingCount} SP', c),
-                        const SizedBox(height: 8),
-                        _detailRow('Thực tế quét', '${s.actualScannedCount} Chip', c),
-                        const SizedBox(height: 8),
-                        _detailRow('✓ Khớp đủ', '${s.matchCount} SP', c, valColor: const Color(0xFF10B981)),
-                        const SizedBox(height: 8),
-                        _detailRow('⚠️ Còn thiếu', '${s.missingCount} SP', c, valColor: const Color(0xFFEF4444)),
-                        const SizedBox(height: 8),
-                        _detailRow('⛔ Sai vị trí', '${s.wrongLocationCount} SP', c, valColor: const Color(0xFFF59E0B)),
-                        const SizedBox(height: 8),
-                        _detailRow('❓ Thẻ lạ ngoài đơn', '${s.unknownEpcCount} Thẻ', c, valColor: const Color(0xFF8B5CF6)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-
-                // Cột phải: Bảng kết quả
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: c.bgCard,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: c.border),
-                    ),
-                    child: s.results.isEmpty
-                        ? Center(child: Text('Đợt kiểm kê này chưa có bản ghi quét nào.', style: TextStyle(color: c.textSecondary)))
-                        : ListView.separated(
-                            itemCount: s.results.length + 1,
-                            separatorBuilder: (_, _) => Divider(height: 1, color: c.border),
-                            itemBuilder: (ctx, idx) {
-                              if (idx == 0) {
-                                return Container(
-                                  color: c.bgCardElevated,
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                  child: Row(
-                                    children: [
-                                      _colHeader('#', 40, c),
-                                      _colHeader('MÃ CHIP EPC', 200, c),
-                                      _colHeader('SKU', 120, c),
-                                      Expanded(child: _colHeader('TÊN SẢN PHẨM', 0, c)),
-                                      _colHeader('VỊ TRÍ DỰ KIẾN', 120, c),
-                                      _colHeader('KẾT QUẢ', 150, c),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              final r = s.results[idx - 1];
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                child: Row(
-                                  children: [
-                                    SizedBox(width: 40, child: Text('$idx', style: TextStyle(color: c.textMuted, fontSize: 12))),
-                                    SizedBox(width: 200, child: Text(r.epc, style: TextStyle(color: c.textPrimary, fontFamily: 'Courier', fontSize: 11))),
-                                    SizedBox(width: 120, child: Text(r.sku ?? '--', style: TextStyle(color: c.rfidCyan, fontSize: 12))),
-                                    Expanded(child: Text(r.productName ?? (r.sku ?? '--'), style: TextStyle(color: c.textPrimary, fontSize: 12), overflow: TextOverflow.ellipsis)),
-                                    SizedBox(width: 120, child: Text(r.expectedLocation ?? '--', style: TextStyle(color: c.textSecondary, fontSize: 12))),
-                                    SizedBox(width: 150, child: _buildStatusPill(r.resultType)),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ===========================================================================
   // WIDGETS & HELPER METHODS
@@ -1358,7 +1625,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Tạo đơn kiểm kê hoặc nạp file Excel để quét nhận diện đối soát đủ / thiếu / lạ',
+                      'Tạo đợt kiểm kê thực tế, đối soát chênh lệch tồn kho và xuất báo cáo kiểm kê (.xlsx)',
                       style: TextStyle(color: c.textMuted, fontSize: 11.5),
                     ),
                   ],
@@ -1367,7 +1634,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             ),
 
             if (!hasActiveSession) ...[
-              const SizedBox(width: 24),
+              const SizedBox(width: 20),
               Row(
                 children: [
                   OutlinedButton.icon(
@@ -1377,9 +1644,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.upload_file_rounded, size: 18),
-                    label: const Text('📁 NẠP FILE EXCEL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    onPressed: _pickAndLoadExcelAudit,
+                    icon: const Icon(Icons.file_download_outlined, size: 18),
+                    label: const Text('📥 XUẤT FILE KIỂM KÊ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: _showExportAuditDialog,
                   ),
                   const SizedBox(width: 10),
                   ElevatedButton.icon(
@@ -1592,14 +1859,4 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     return Text(title, style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold));
   }
 
-  Widget _detailRow(String label, String value, EyeCareColors c, {Color? valColor}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(color: c.textMuted, fontSize: 11)),
-        const SizedBox(height: 2),
-        Text(value, style: TextStyle(color: valColor ?? c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-      ],
-    );
-  }
 }

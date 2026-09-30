@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/warehouse_repository.dart';
 import '../../models/wms_models.dart';
 import '../../theme/eye_care_theme.dart';
+import '../radar_locate_screen.dart';
 
 enum LookupDisplayMode {
   groupBySku,  // 1 mặt hàng (SKU) có nhiều mã RFID
@@ -286,6 +287,35 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                       ),
                       onChanged: (val) => setState(() => _searchQuery = val.trim()),
                     ),
+                  ),
+
+                  // Nút mở màn hình Định Vị RFID (Radar / AirTag)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: c.rfidCyan,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.track_changes_rounded, size: 18),
+                    label: const Text('🎯 ĐỊNH VỊ RFID (RADAR)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => Dialog(
+                          backgroundColor: Colors.transparent,
+                          insetPadding: const EdgeInsets.all(24),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: const SizedBox(
+                              width: 520,
+                              height: 680,
+                              child: RadarLocateScreen(),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

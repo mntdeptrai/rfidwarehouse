@@ -10,6 +10,7 @@ import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
 import 'pda_transfer_screen.dart';
 import '../../widgets/app_notification_bar.dart';
+import '../radar_locate_screen.dart';
 
 /// Màn hình Quản Lý Kho tối ưu chuyên biệt cho tay cầm PDA (Handheld Terminal)
 /// Đồng bộ 4 Tabs nghiệp vụ với app Desktop:
@@ -597,7 +598,6 @@ class _LocationManagementTabState extends State<_LocationManagementTab>
   bool get wantKeepAlive => true;
 
   final WarehouseRepository _repo = WarehouseRepository();
-  final AuthService _auth = AuthService();
   final TextEditingController _locationSearchCtrl = TextEditingController();
   String _locationQuery = '';
   String _selectedZoneFilter = 'ALL';
@@ -1008,7 +1008,6 @@ class _HistoryManagementTabState extends State<_HistoryManagementTab>
   bool get wantKeepAlive => true;
 
   final WarehouseRepository _repo = WarehouseRepository();
-  final AuthService _auth = AuthService();
   final TextEditingController _historySearchCtrl = TextEditingController();
   String _historyQuery = '';
   String _historyCategoryFilter = 'ALL';
@@ -1937,7 +1936,7 @@ class _HistoryManagementTabState extends State<_HistoryManagementTab>
     try {
       await SupabaseSyncService().syncNow();
     } catch (_) {
-      await _repo.reloadFromSqlite();
+      await _repo.reloadFromDatabase();
     } finally {
       if (mounted) {
         setState(() => _isHistoryRefreshing = false);
@@ -1965,7 +1964,6 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
   bool get wantKeepAlive => true;
 
   final WarehouseRepository _repo = WarehouseRepository();
-  final AuthService _auth = AuthService();
   final TextEditingController _productSearchCtrl = TextEditingController();
   String _productQuery = '';
   ItemStatus? _selectedProductStatusFilter;
@@ -2200,29 +2198,38 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
             const SizedBox(height: 8),
 
             // Vị trí kệ & Pallet
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Icon(Icons.location_on, size: 14, color: isOut ? c.textMuted : const Color(0xFFEF4444)),
-                const SizedBox(width: 4),
-                Text('Kệ: ', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
-                Expanded(
-                  child: Text(
-                    locDisplay,
-                    style: TextStyle(
-                      color: isOut ? c.textMuted : c.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.location_on, size: 14, color: isOut ? c.textMuted : const Color(0xFFEF4444)),
+                    const SizedBox(width: 4),
+                    Text('Kệ: ', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
+                    Text(
+                      locDisplay,
+                      style: TextStyle(
+                        color: isOut ? c.textMuted : c.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.pallet, size: 14, color: isOut ? c.textMuted : const Color(0xFFF59E0B)),
-                const SizedBox(width: 4),
-                Text('Pallet: ', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
-                Text(
-                  palletDisplay,
-                  style: TextStyle(color: isOut ? c.textMuted : c.textPrimary, fontSize: 11.5),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.pallet, size: 14, color: isOut ? c.textMuted : const Color(0xFFF59E0B)),
+                    const SizedBox(width: 4),
+                    Text('Pallet: ', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
+                    Text(
+                      palletDisplay,
+                      style: TextStyle(color: isOut ? c.textMuted : c.textPrimary, fontSize: 11.5),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -2233,27 +2240,47 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
               Text('S/N: ${it.serialNumber}', style: TextStyle(color: c.textSecondary, fontSize: 11, fontFamily: 'monospace')),
             Text('EPC: ${it.epc}', style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontFamily: 'monospace')),
 
-            // Nút chuyển vị trí kệ nếu hàng còn trong kho
+            // Nút định vị và chuyển vị trí kệ nếu hàng còn trong kho
             if (!isOut) ...[
               const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF10B981),
-                    side: const BorderSide(color: Color(0xFF10B981)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0284C7),
+                      side: const BorderSide(color: Color(0xFF0284C7)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    icon: const Icon(Icons.track_changes_rounded, size: 14),
+                    label: const Text('Định vị (AirTag)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => RadarLocateScreen(initialEpc: it.epc)),
+                      );
+                    },
                   ),
-                  icon: const Icon(Icons.drive_file_move_rounded, size: 14),
-                  label: const Text('Đổi kệ / Chuyển vị trí', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => PdaTransferScreen(initialItem: it)),
-                    );
-                  },
-                ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF10B981),
+                      side: const BorderSide(color: Color(0xFF10B981)),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    icon: const Icon(Icons.drive_file_move_rounded, size: 14),
+                    label: const Text('Đổi kệ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => PdaTransferScreen(initialItem: it)),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ],

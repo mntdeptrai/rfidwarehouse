@@ -422,7 +422,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         color: c.rfidCyan,
         onRefresh: () async {
           await SupabaseSyncService().syncNow();
-          await _repo.reloadFromSqlite();
+          await _repo.reloadFromDatabase();
           _invalidateGroupsCache();
           if (mounted) setState(() {});
         },
@@ -879,7 +879,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               onPressed: () async {
                 HapticFeedback.selectionClick();
                 await SupabaseSyncService().syncNow();
-                await _repo.reloadFromSqlite();
+                await _repo.reloadFromDatabase();
                 _invalidateGroupsCache();
                 if (mounted) setState(() {});
               },
@@ -953,7 +953,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                   onPressed: () async {
                     HapticFeedback.selectionClick();
                     await SupabaseSyncService().syncNow();
-                    await _repo.reloadFromSqlite();
+                    await _repo.reloadFromDatabase();
                     _invalidateGroupsCache();
                     if (mounted) setState(() {});
                   },

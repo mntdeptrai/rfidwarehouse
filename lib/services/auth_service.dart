@@ -49,7 +49,7 @@ class AuthService extends ChangeNotifier {
         }
       }
 
-      // 2. Khôi phục phiên đăng nhập trước đó từ SQLite system_config
+      // 2. Khôi phục phiên đăng nhập trước đó từ DatabaseService system_config
       final savedUserId = await _dbService.getSystemConfig('active_user_id');
       if (savedUserId != null && savedUserId.trim().isNotEmpty) {
         final user = await _dbService.getUserById(savedUserId.trim());
@@ -123,7 +123,7 @@ class AuthService extends ChangeNotifier {
       }
       Map<String, dynamic>? userMap = await _dbService.getUserAuth(cleanUsername);
 
-      // Nếu trong SQLite cục bộ chưa có user, nhưng máy đang online kết nối Supabase, tìm trực tiếp trên Cloud
+      // Nếu trong bộ nhớ cục bộ chưa có user, nhưng máy đang online kết nối Supabase, tìm trực tiếp trên Cloud
       if (userMap == null && SupabaseSyncService().isOnline) {
         try {
           final supa = Supabase.instance.client;
@@ -199,7 +199,7 @@ class AuthService extends ChangeNotifier {
 
       final user = WmsUser.fromMap(userMap);
 
-      // Tự động chữa lành: Cập nhật lại hash vào SQLite và Supabase Cloud nếu trước đó tài khoản chưa có hash
+      // Tự động chữa lành: Cập nhật lại hash vào DatabaseService và Supabase Cloud nếu trước đó tài khoản chưa có hash
       if (savedHash == null) {
         await _dbService.insertUserWithPassword(user, inputHash);
         await WarehouseRepository().syncUserPassword(user.userId, inputHash);
@@ -291,7 +291,7 @@ class AuthService extends ChangeNotifier {
         createdAt: now,
       );
 
-      // 3. Băm mật khẩu và lưu vào SQLite
+      // 3. Băm mật khẩu và lưu vào DatabaseService
       final hashedPass = hashPassword(cleanPassword);
       await _dbService.insertUserWithPassword(newUser, hashedPass);
 

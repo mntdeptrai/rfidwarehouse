@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:excel/excel.dart';
 import 'package:uhf/models/wms_models.dart';
@@ -166,7 +168,7 @@ void main() {
 
     // Clean up
     await DatabaseService().deleteOutboundOrder(testOutOrder.outboundOrderId);
-    await repo.reloadFromSqlite();
+    await repo.reloadFromDatabase();
     if (await csvFile.exists()) await csvFile.delete();
     if (await xlsxFile.exists()) await xlsxFile.delete();
   });
@@ -217,6 +219,58 @@ void main() {
     // Clean up
     await repo.deleteInventorySession(testSession.sessionId);
     if (await csvFile.exists()) await csvFile.delete();
+    if (await xlsxFile.exists()) await xlsxFile.delete();
+  });
+
+  test('ReportExportService exports Excel files with anti-tamper sheet protection and read-only recommendation', () async {
+    final testItem = Item(
+      itemId: 'ITEM-PROT-01',
+      productId: 'P-PROT-01',
+      sku: 'SKU-PROT-01',
+      productName: 'Mặt Hàng Khóa Chống Sửa',
+      serialNumber: 'SN-PROT-999',
+      epc: 'E2801160600002198000PROT',
+      status: ItemStatus.inStock,
+    );
+    await repo.addItem(testItem);
+
+    final xlsxFile = await exportService.exportInventoryReport(
+      ReportFormat.xlsx,
+      items: [testItem],
+    );
+    expect(await xlsxFile.exists(), isTrue);
+
+    final bytes = await xlsxFile.readAsBytes();
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    bool hasSheetProtection = false;
+    bool hasFileSharing = false;
+    bool hasWorkbookProtection = false;
+
+    for (final f in archive) {
+      if (f.name.startsWith('xl/worksheets/sheet') && f.name.endsWith('.xml')) {
+        final xml = utf8.decode(f.content as List<int>);
+        if (xml.contains('<sheetProtection sheet="true"') && xml.contains('password="DFEE"')) {
+          hasSheetProtection = true;
+        }
+      }
+      if (f.name == 'xl/workbook.xml') {
+        final xml = utf8.decode(f.content as List<int>);
+        if (xml.contains('<fileSharing readOnlyRecommended="1"')) {
+          hasFileSharing = true;
+        }
+        if (xml.contains('<workbookProtection lockStructure="true"') && xml.contains('workbookPassword="DFEE"')) {
+          hasWorkbookProtection = true;
+        }
+      }
+    }
+
+    expect(hasSheetProtection, isTrue, reason: 'Mọi sheet trong file Excel phải có khóa sheetProtection chống sửa');
+    expect(hasFileSharing, isTrue, reason: 'Workbook phải có cờ fileSharing khuyến nghị mở Chỉ Đọc');
+    expect(hasWorkbookProtection, isTrue, reason: 'Workbook phải có khóa workbookProtection chống sửa cấu trúc');
+
+    // Clean up
+    await repo.deleteItem(testItem.epc);
     if (await xlsxFile.exists()) await xlsxFile.delete();
   });
 }

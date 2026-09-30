@@ -168,7 +168,7 @@ void main() {
       // Admin should remain logged in
       expect(authService.currentUser?.username, equals('admin'));
 
-      // Verify user persisted to SQLite
+      // Verify user persisted to DatabaseService
       final authRecord = await dbService.getUserAuth('tech_lan');
       expect(authRecord, isNotNull);
       expect(authRecord!['role'], equals('kythuat'));
@@ -267,7 +267,7 @@ void main() {
       expect(savedId, equals(''));
     });
 
-    test('User with null password_hash from cloud sync can login with 12345678 and gets self-healed in SQLite', () async {
+    test('User with null password_hash from cloud sync can login with 12345678 and gets self-healed in DatabaseService', () async {
       await authService.init(force: true);
 
       // Simulate a user pulled from Cloud with null password_hash
@@ -291,7 +291,7 @@ void main() {
       expect(loginSuccess, isTrue);
       expect(authService.currentUser?.username, equals('pda_test'));
 
-      // Verify self-healing: password_hash is now populated in SQLite
+      // Verify self-healing: password_hash is now populated in DatabaseService
       final healedAuth = await dbService.getUserAuth('pda_test');
       expect(healedAuth!['password_hash'], equals(AuthService.hashPassword('12345678')));
 

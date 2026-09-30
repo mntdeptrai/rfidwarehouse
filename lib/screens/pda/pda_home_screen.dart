@@ -12,6 +12,7 @@ import 'pda_inbound_screen.dart';
 import 'pda_transfer_screen.dart';
 import 'pda_putaway_screen.dart';
 import 'pda_warehouse_management_screen.dart';
+import '../radar_locate_screen.dart';
 
 class PdaHomeScreen extends StatefulWidget {
   const PdaHomeScreen({super.key});
@@ -131,8 +132,8 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                     duration: const Duration(seconds: 1),
                     content: Text(
                       isOnline
-                          ? 'Đang kích hoạt đồng bộ Supabase Cloud...'
-                          : 'Đang kết nối lại Supabase Cloud...',
+                          ? 'Đang đồng bộ dữ liệu hệ thống...'
+                          : 'Đang kết nối lại máy chủ...',
                       style: TextStyle(color: c.textPrimary),
                     ),
                   ),
@@ -287,6 +288,20 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => const PdaWarehouseManagementScreen()),
+                            );
+                          },
+                        ),
+                        _buildPdaActionTile(
+                          context,
+                          title: 'Tìm & Định vị',
+                          icon: Icons.track_changes_rounded,
+                          accentColor: c.rfidCyan,
+                          badgeColor: c.successEmerald,
+                          colors: c,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const RadarLocateScreen()),
                             );
                           },
                         ),
