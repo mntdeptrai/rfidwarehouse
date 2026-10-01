@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhf/models/wms_models.dart';
-import 'package:uhf/models/tag_info.dart';
 import 'package:uhf/services/warehouse_repository.dart';
 import 'package:uhf/services/uhf_service.dart';
 import 'package:uhf/screens/radar_locate_screen.dart';
-import 'package:uhf/widgets/sonar_radar_widget.dart';
+import 'package:uhf/widgets/direction_arrow_widget.dart';
 import 'package:uhf/screens/pda/pda_home_screen.dart';
 import 'package:uhf/screens/pda/pda_warehouse_management_screen.dart';
 
@@ -75,7 +74,7 @@ void main() {
 
   final testTheme = ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory);
 
-  testWidgets('1. SonarRadarWidget: Hiển thị đúng cự ly từng cm và mũi tên chỉ hướng theo sóng RSSI', (WidgetTester tester) async {
+  testWidgets('1. DirectionArrowWidget: Hiển thị đúng cự ly từng cm và mũi tên chỉ hướng theo sóng RSSI', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
@@ -85,7 +84,7 @@ void main() {
       MaterialApp(
         theme: testTheme,
         home: const Scaffold(
-          body: SonarRadarWidget(
+          body: DirectionArrowWidget(
             rssi: -36.0,
             previousRssi: -40.0,
             isTracking: true,
@@ -99,7 +98,7 @@ void main() {
     // Xác nhận hiển thị số đo cự ly theo đơn vị cm (25 cm)
     expect(find.text('25 cm'), findsOneWidget);
     // Xác nhận mũi tên chỉ đúng hướng
-    expect(find.byIcon(Icons.arrow_upward_rounded), findsWidgets);
+    expect(find.byIcon(Icons.trending_up_rounded), findsWidgets);
     expect(find.textContaining('ĐÚNG HƯỚNG'), findsOneWidget);
 
     // 1.2 Trường hợp lia súng lệch hướng: previousRssi = -36.0, rssi = -42.0 (-6.0 dBm) -> Biểu tượng cảnh báo lệch hướng
@@ -107,7 +106,7 @@ void main() {
       MaterialApp(
         theme: testTheme,
         home: const Scaffold(
-          body: SonarRadarWidget(
+          body: DirectionArrowWidget(
             rssi: -42.0,
             previousRssi: -36.0,
             isTracking: true,
@@ -119,7 +118,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('50 cm'), findsOneWidget);
-    expect(find.byIcon(Icons.sync_problem_rounded), findsWidgets);
+    expect(find.byIcon(Icons.trending_down_rounded), findsWidgets);
     expect(find.textContaining('LỆCH HƯỚNG'), findsOneWidget);
   });
 
@@ -152,8 +151,8 @@ void main() {
     await tester.tap(find.text('ĐỊNH VỊ'));
     await tester.pumpAndSettle();
 
-    // Xác nhận đã vào màn hình AirTag với SonarRadarWidget
-    expect(find.byType(SonarRadarWidget), findsOneWidget);
+    // Xác nhận đã vào màn hình AirTag với DirectionArrowWidget
+    expect(find.byType(DirectionArrowWidget), findsOneWidget);
     expect(find.text('ĐỔI MÃ'), findsOneWidget);
     expect(find.text('BẬT QUÉT ĐỊNH VỊ (BÓP CÒ SÚNG)'), findsOneWidget);
 
@@ -184,7 +183,9 @@ void main() {
     final tileFinder = find.text('Tìm & Định vị');
     expect(tileFinder, findsOneWidget);
 
-    // Chạm vào tile
+    // Chạm vào tile (cuộn nếu màn hình nhỏ)
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -200));
+    await tester.pumpAndSettle();
     await tester.tap(tileFinder);
     await tester.pumpAndSettle();
 
@@ -214,6 +215,6 @@ void main() {
 
     // Xác nhận mở màn hình RadarLocateScreen với mục tiêu đã nạp sẵn
     expect(find.byType(RadarLocateScreen), findsOneWidget);
-    expect(find.byType(SonarRadarWidget), findsOneWidget);
+    expect(find.byType(DirectionArrowWidget), findsOneWidget);
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../services/warehouse_repository.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../services/uhf_service.dart';
+import '../../services/auth_service.dart';
 import '../../models/wms_models.dart';
 
 class PdaInventoryScreen extends StatefulWidget {
@@ -17,12 +18,14 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
   final WarehouseRepository _repo = WarehouseRepository();
   final UhfService _uhf = UhfService();
   InventorySession? _activeSession;
+  String _sessionFilter = 'ALL'; // ALL or ASSIGNED_TO_ME
 
   @override
   void initState() {
     super.initState();
     // Bắt buộc kích hoạt chế độ đọc thẻ UHF RFID cho toàn bộ màn hình kiểm kê kho
     _uhf.setScanMode(PdaScanMode.rfid);
+    unawaited(_repo.reloadFromDatabase());
   }
 
   @override
@@ -96,54 +99,169 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           ),
         ],
       ),
-      body: sessions.isEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+      body: Builder(
+        builder: (context) {
+          final currentUser = AuthService().currentUser;
+          final mySessionsCount = sessions.where((s) {
+            if (currentUser == null) return false;
+            return s.assignedToUserId == currentUser.userId ||
+                (s.assignedToName != null && s.assignedToName!.trim().toLowerCase() == currentUser.fullName.trim().toLowerCase());
+          }).length;
+
+          final displayedSessions = _sessionFilter == 'ASSIGNED_TO_ME'
+              ? sessions.where((s) {
+                  if (currentUser == null) return false;
+                  return s.assignedToUserId == currentUser.userId ||
+                      (s.assignedToName != null && s.assignedToName!.trim().toLowerCase() == currentUser.fullName.trim().toLowerCase());
+                }).toList()
+              : sessions;
+
+          return Column(
+            children: [
+              // Filter segment: Tất cả vs Được giao cho tôi
+              Container(
+                color: const Color(0xFFE9E2D5),
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _sessionFilter = 'ALL'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _sessionFilter == 'ALL' ? const Color(0xFF0284C7) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _sessionFilter == 'ALL' ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            'Tất cả (${sessions.length})',
+                            style: TextStyle(
+                              color: _sessionFilter == 'ALL' ? Colors.white : const Color(0xFF6B5D4D),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
                       ),
-                      child: const Icon(Icons.fact_check_outlined, size: 56, color: Color(0xFF0284C7)),
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Chưa có phiếu kiểm kê nào',
-                      style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0284C7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _sessionFilter = 'ASSIGNED_TO_ME'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _sessionFilter == 'ASSIGNED_TO_ME' ? const Color(0xFF0284C7) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _sessionFilter == 'ASSIGNED_TO_ME' ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+                            ),
+                          ),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.person_rounded,
+                                size: 13,
+                                color: _sessionFilter == 'ASSIGNED_TO_ME' ? Colors.white : const Color(0xFF0284C7),
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  'Giao cho tôi ($mySessionsCount)',
+                                  style: TextStyle(
+                                    color: _sessionFilter == 'ASSIGNED_TO_ME' ? Colors.white : const Color(0xFF6B5D4D),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11.5,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        icon: const Icon(Icons.add, color: Colors.white),
-                        label: const Text(
-                          'TẠO PHIẾU KIỂM KÊ',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                        onPressed: _showCreateInventoryWorkflowDialog,
                       ),
                     ),
                   ],
                 ),
               ),
-            )
-          : ListView.builder(
-              physics: const ClampingScrollPhysics(),
-              cacheExtent: 400,
-              padding: const EdgeInsets.all(14),
-              itemCount: sessions.length,
-              itemBuilder: (context, index) {
-                final s = sessions[index];
+
+              // Danh sách đợt kiểm kê (hỗ trợ vuốt xuống để làm mới)
+              Expanded(
+                child: RefreshIndicator(
+                  color: const Color(0xFF0284C7),
+                  onRefresh: () async {
+                    await SupabaseSyncService().syncNow();
+                    await _repo.reloadFromDatabase();
+                  },
+                  child: displayedSessions.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(height: MediaQuery.of(context).size.height * 0.12),
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.fact_check_outlined, size: 56, color: Color(0xFF0284C7)),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _sessionFilter == 'ASSIGNED_TO_ME'
+                                          ? 'Chưa có phiếu kiểm kê nào được giao cho bạn'
+                                          : 'Chưa có phiếu kiểm kê nào',
+                                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 48,
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF0284C7),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: const Icon(Icons.add, color: Colors.white),
+                                        label: const Text(
+                                          'TẠO PHIẾU KIỂM KÊ',
+                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                        onPressed: _showCreateInventoryWorkflowDialog,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Vuốt xuống để làm mới dữ liệu từ Cloud',
+                                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(14),
+                          itemCount: displayedSessions.length,
+                        itemBuilder: (context, index) {
+                          final s = displayedSessions[index];
                 final isCompleted = s.isCompleted;
 
                 return GestureDetector(
@@ -301,12 +419,61 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                               ),
                           ],
                         ),
+                        if (s.assignedToName != null && s.assignedToName!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Builder(
+                            builder: (context) {
+                              final currentUser = AuthService().currentUser;
+                              final isAssignedToMe = currentUser != null &&
+                                  (s.assignedToUserId == currentUser.userId ||
+                                      s.assignedToName!.trim().toLowerCase() == currentUser.fullName.trim().toLowerCase());
+
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isAssignedToMe
+                                      ? const Color(0xFF0284C7).withValues(alpha: 0.12)
+                                      : const Color(0xFFF1ECE4),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: isAssignedToMe ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.phone_android_rounded,
+                                      size: 13,
+                                      color: isAssignedToMe ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      isAssignedToMe ? 'Giao cho bạn (${s.assignedToName!})' : 'Phụ trách: ${s.assignedToName!}',
+                                      style: TextStyle(
+                                        color: isAssignedToMe ? const Color(0xFF0284C7) : const Color(0xFF4A3E31),
+                                        fontSize: 11,
+                                        fontWeight: isAssignedToMe ? FontWeight.bold : FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 );
               },
             ),
+          ),
+        ),
+      ],
+    );
+    }),
       bottomNavigationBar: sessions.isNotEmpty
           ? Container(
               padding: const EdgeInsets.all(12),
@@ -372,41 +539,43 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             ),
             content: SizedBox(
               width: 380,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildInventoryTypeCard(
-                    title: 'Theo Vị Trí / Kệ Kho',
-                    subtitle: 'Kiểm kê từng vị trí kệ cụ thể',
-                    icon: Icons.grid_view_rounded,
-                    isSelected: selectedType == 'by_location',
-                    onTap: () => setDialogState(() => selectedType = 'by_location'),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildInventoryTypeCard(
-                    title: 'Theo Phân Khu (Zone)',
-                    subtitle: 'Kiểm kê các kệ trong phân khu',
-                    icon: Icons.warehouse_rounded,
-                    isSelected: selectedType == 'by_zone',
-                    onTap: () => setDialogState(() => selectedType = 'by_zone'),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildInventoryTypeCard(
-                    title: 'Theo Từng Mặt Hàng (SKU)',
-                    subtitle: 'Chỉ quét lọc các mặt hàng được chọn',
-                    icon: Icons.category_outlined,
-                    isSelected: selectedType == 'by_sku',
-                    onTap: () => setDialogState(() => selectedType = 'by_sku'),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildInventoryTypeCard(
-                    title: 'Toàn Bộ Kho Hàng',
-                    subtitle: 'Kiểm kê toàn bộ hàng hóa trong kho',
-                    icon: Icons.storefront_outlined,
-                    isSelected: selectedType == 'all',
-                    onTap: () => setDialogState(() => selectedType = 'all'),
-                  ),
-                ],
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildInventoryTypeCard(
+                      title: 'Theo Vị Trí / Kệ Kho',
+                      subtitle: 'Kiểm kê từng vị trí kệ cụ thể',
+                      icon: Icons.grid_view_rounded,
+                      isSelected: selectedType == 'by_location',
+                      onTap: () => setDialogState(() => selectedType = 'by_location'),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildInventoryTypeCard(
+                      title: 'Theo Phân Khu (Zone)',
+                      subtitle: 'Kiểm kê các kệ trong phân khu',
+                      icon: Icons.warehouse_rounded,
+                      isSelected: selectedType == 'by_zone',
+                      onTap: () => setDialogState(() => selectedType = 'by_zone'),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildInventoryTypeCard(
+                      title: 'Theo Từng Mặt Hàng (SKU)',
+                      subtitle: 'Chỉ quét lọc các mặt hàng được chọn',
+                      icon: Icons.category_outlined,
+                      isSelected: selectedType == 'by_sku',
+                      onTap: () => setDialogState(() => selectedType = 'by_sku'),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildInventoryTypeCard(
+                      title: 'Toàn Bộ Kho Hàng',
+                      subtitle: 'Kiểm kê toàn bộ hàng hóa trong kho',
+                      icon: Icons.storefront_outlined,
+                      isSelected: selectedType == 'all',
+                      onTap: () => setDialogState(() => selectedType = 'all'),
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
@@ -1027,12 +1196,18 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
     required String warehouse,
     String? locationCode,
     List<String>? targetSkus,
+    String? assignedToUserId,
+    String? assignedToName,
   }) {
     _uhf.setScanMode(PdaScanMode.rfid);
+    final currentUser = AuthService().currentUser;
     final session = _repo.startInventorySession(
       zone: warehouse,
       locationCode: locationCode,
       targetSkus: targetSkus,
+      assignedToUserId: assignedToUserId ?? currentUser?.userId,
+      assignedToName: assignedToName ?? (currentUser?.fullName ?? 'Thủ kho PDA'),
+      assignedBy: currentUser?.fullName ?? 'Thủ kho PDA',
     );
     setState(() => _activeSession = session);
   }
@@ -1073,6 +1248,13 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   StreamSubscription? _triggerSub;
   Timer? _uiRefreshTimer;
 
+  // Lấy đối tượng session sống mới nhất từ Repository để tránh bị stale/orphaned sau background sync
+  InventorySession get _currentSession =>
+      _repo.inventorySessions.firstWhere(
+        (s) => s.sessionId == widget.session.sessionId,
+        orElse: () => widget.session,
+      );
+
   // Bộ lọc kết quả: 'all', 'match', 'missing', 'wrong', 'unknown'
   String _selectedFilter = 'all';
   int _lastWrongLocationCount = 0;
@@ -1083,46 +1265,72 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   @override
   void initState() {
     super.initState();
+    _repo.addListener(_onRepoChanged);
     _uhf.enableScanning('kiem_kho');
     // Đảm bảo module phần cứng ở chế độ đọc chip RFID UHF
     _uhf.setScanMode(PdaScanMode.rfid);
 
+    final curSession = _currentSession;
+
     // Nạp sẵn danh sách EPC thực tế đã quét trước đó nếu có
-    for (final r in widget.session.results) {
+    for (final r in curSession.results) {
       if (r.epc.isNotEmpty && r.resultType != InventoryVarianceType.missing) {
-        _scannedEpcs.add(r.epc);
+        final epcUpper = r.epc.trim().toUpperCase();
+        if (curSession.isSkuSpecific) {
+          if (r.sku != null && curSession.targetSkus.contains(r.sku)) {
+            _scannedEpcs.add(epcUpper);
+          }
+        } else {
+          _scannedEpcs.add(epcUpper);
+        }
       }
     }
 
-    _lastWrongLocationCount = widget.session.wrongLocationCount;
+    _lastWrongLocationCount = curSession.wrongLocationCount;
 
-    // Kích hoạt tính toán đối chiếu ban đầu (không trigger notifyListeners để tránh build collision)
+    // Kích hoạt tính toán đối chiếu ban đầu
     _repo.processAuditScan(
-      sessionId: widget.session.sessionId,
+      sessionId: curSession.sessionId,
       scannedEpcs: _scannedEpcs.toList(),
+      targetSession: curSession,
       notify: false,
     );
 
+    if (widget.session != curSession) {
+      widget.session.results
+        ..clear()
+        ..addAll(curSession.results);
+    }
+
     // Chỉ kích hoạt bộ đọc nếu phiên kiểm kê ĐANG MỞ (chưa hoàn tất)
-    if (!widget.session.isCompleted) {
+    if (!curSession.isCompleted) {
       _subscribeScanner();
     }
   }
 
   void _scheduleUiRefresh() {
-    if (widget.session.isCompleted) return;
+    final curSession = _currentSession;
+    if (curSession.isCompleted) return;
     if (_uiRefreshTimer?.isActive ?? false) return;
-    _uiRefreshTimer = Timer(const Duration(milliseconds: 60), () {
-      if (mounted && !widget.session.isCompleted) {
+    // 200ms throttle: cân bằng hoàn hảo giữa hiển thị thời gian thực mượt mà và không nghẽn CPU PDA
+    _uiRefreshTimer = Timer(const Duration(milliseconds: 200), () {
+      if (mounted && !curSession.isCompleted) {
         _repo.processAuditScan(
-          sessionId: widget.session.sessionId,
+          sessionId: curSession.sessionId,
           scannedEpcs: _scannedEpcs.toList(),
+          targetSession: curSession,
           notify: false,
         );
 
+        if (widget.session != curSession) {
+          widget.session.results
+            ..clear()
+            ..addAll(curSession.results);
+        }
+
         // Cảnh báo rung haptic mạnh nếu phát hiện chip từ kho khác lạc vào
-        if (widget.session.wrongLocationCount > _lastWrongLocationCount) {
-          _lastWrongLocationCount = widget.session.wrongLocationCount;
+        if (curSession.wrongLocationCount > _lastWrongLocationCount) {
+          _lastWrongLocationCount = curSession.wrongLocationCount;
           HapticFeedback.heavyImpact();
         }
         setState(() {});
@@ -1131,14 +1339,15 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   }
 
   void _subscribeScanner() {
-    if (widget.session.isCompleted) return;
+    final curSession = _currentSession;
+    if (curSession.isCompleted) return;
 
     // 1. Quét chip RFID UHF
     _tagSub = _uhf.onTagRead.listen((tag) {
-      if (widget.session.isCompleted) return;
-      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+      if (_currentSession.isCompleted) return;
+      if (!mounted) return;
       if (tag.epc.isNotEmpty) {
-        final cleanEpc = tag.epc.trim();
+        final cleanEpc = tag.epc.trim().toUpperCase();
         if (_uhf.filterDuplicates && _scannedEpcs.contains(cleanEpc)) return;
         _scannedEpcs.add(cleanEpc);
         _scheduleUiRefresh();
@@ -1147,21 +1356,20 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
 
     // 2. Hỗ trợ quét mã vạch Barcode nếu kiểm kê các mặt hàng có tem barcode
     _barcodeSub = _uhf.onBarcodeRead.listen((barcode) {
-      if (widget.session.isCompleted) return;
-      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
-      final clean = barcode.trim();
+      if (_currentSession.isCompleted) return;
+      if (!mounted) return;
+      final clean = barcode.trim().toUpperCase();
       if (clean.isEmpty) return;
 
       final matchedItem = _repo.items.where((it) {
-        final epc = it.epc.toLowerCase();
-        final sn = it.serialNumber.toLowerCase();
-        final sku = it.sku.toLowerCase();
-        final itemId = it.itemId.toLowerCase();
-        final q = clean.toLowerCase();
-        return epc == q || sn == q || sku == q || itemId == q;
+        final epc = it.epc.toUpperCase();
+        final sn = it.serialNumber.toUpperCase();
+        final sku = it.sku.toUpperCase();
+        final itemId = it.itemId.toUpperCase();
+        return epc == clean || sn == clean || sku == clean || itemId == clean;
       }).firstOrNull;
 
-      final epcToAdd = matchedItem?.epc ?? clean;
+      final epcToAdd = (matchedItem?.epc ?? clean).toUpperCase();
       if (!_scannedEpcs.contains(epcToAdd)) {
         _scannedEpcs.add(epcToAdd);
         _scheduleUiRefresh();
@@ -1170,8 +1378,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
 
     // 3. Lắng nghe bóp cò vật lý trên báng súng PDA
     _triggerSub = _uhf.onTriggerStateChanged.listen((isPressed) {
-      if (widget.session.isCompleted) return;
-      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+      if (_currentSession.isCompleted) return;
+      if (!mounted) return;
       if (isPressed) {
         _startHardwareScan();
       } else {
@@ -1195,7 +1403,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   }
 
   void _toggleScanning() async {
-    if (widget.session.isCompleted) return;
+    if (_currentSession.isCompleted) return;
     if (_isScanning) {
       _stopHardwareScan();
     } else {
@@ -1204,7 +1412,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
   }
 
   void _addManualEpc() {
-    final raw = _manualEpcCtrl.text.trim();
+    final raw = _manualEpcCtrl.text.trim().toUpperCase();
     if (raw.isEmpty) return;
     _manualEpcCtrl.clear();
     FocusScope.of(context).unfocus();
@@ -1218,21 +1426,29 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       return;
     }
 
+    final curSession = _currentSession;
     setState(() {
       _scannedEpcs.add(raw);
       _repo.processAuditScan(
-        sessionId: widget.session.sessionId,
+        sessionId: curSession.sessionId,
         scannedEpcs: _scannedEpcs.toList(),
+        targetSession: curSession,
       );
-      if (widget.session.wrongLocationCount > _lastWrongLocationCount) {
-        _lastWrongLocationCount = widget.session.wrongLocationCount;
+      if (widget.session != curSession) {
+        widget.session.results
+          ..clear()
+          ..addAll(curSession.results);
+      }
+      if (curSession.wrongLocationCount > _lastWrongLocationCount) {
+        _lastWrongLocationCount = curSession.wrongLocationCount;
         HapticFeedback.heavyImpact();
       }
     });
   }
 
   Future<void> _relocateItem(InventoryItemResult result) async {
-    final targetCode = widget.session.locationCode;
+    final curSession = _currentSession;
+    final targetCode = curSession.locationCode;
     if (targetCode == null || targetCode.isEmpty) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1264,9 +1480,15 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       setState(() {
         if (ok) {
           _repo.processAuditScan(
-            sessionId: widget.session.sessionId,
+            sessionId: curSession.sessionId,
             scannedEpcs: _scannedEpcs.toList(),
+            targetSession: curSession,
           );
+          if (widget.session != curSession) {
+            widget.session.results
+              ..clear()
+              ..addAll(curSession.results);
+          }
         }
       });
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -1282,8 +1504,13 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     }
   }
 
+  void _onRepoChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _repo.removeListener(_onRepoChanged);
     _uhf.disableScanning();
     _uhf.clearTags();
     _uiRefreshTimer?.cancel();
@@ -1330,13 +1557,15 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               await _uhf.stopInventory();
               _uhf.clearTags();
 
+              final curSession = _currentSession;
               _repo.processAuditScan(
-                sessionId: widget.session.sessionId,
+                sessionId: curSession.sessionId,
                 scannedEpcs: _scannedEpcs.toList(),
+                targetSession: curSession,
               );
 
               if (ctx.mounted) Navigator.pop(ctx);
-              await _repo.completeInventorySession(widget.session.sessionId, _repo.resolveUserFullName(null, defaultRole: 'handheld'));
+              await _repo.completeInventorySession(curSession.sessionId, _repo.resolveUserFullName(null, defaultRole: 'handheld'));
               widget.onBack();
               if (mounted) {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -1358,32 +1587,44 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
 
   @override
   Widget build(BuildContext context) {
-    final s = widget.session;
+    final s = _currentSession;
     final isDone = s.isCompleted;
 
     // Tính toán số lượng tồn CSDL đối chiếu
-    final expectedDbCount = s.matchCount + s.missingCount;
-    final totalScanned = _scannedEpcs.length;
-    final matchCount = s.matchCount;
-    final missingCount = s.missingCount;
+    // Với kiểm kê theo từng mặt hàng cụ thể (isSkuSpecific):
+    // Chỉ quan tâm các mặt hàng thuộc targetSkus, bỏ qua hoàn toàn các chip lạ hay mặt hàng khác
+    final baseResults = s.isSkuSpecific
+        ? s.results.where((r) => r.sku != null && s.targetSkus.contains(r.sku)).toList()
+        : s.results;
+
+    final matchCount = s.isSkuSpecific
+        ? baseResults.where((r) => r.resultType == InventoryVarianceType.match).length
+        : s.matchCount;
+    final missingCount = s.isSkuSpecific
+        ? baseResults.where((r) => r.resultType == InventoryVarianceType.missing).length
+        : s.missingCount;
+    final expectedDbCount = matchCount + missingCount;
+    final totalScanned = s.isSkuSpecific
+        ? matchCount
+        : _scannedEpcs.length;
     final wrongLocCount = s.wrongLocationCount;
     final unknownCount = s.unknownEpcCount;
 
     // Thông tin hiển thị vị trí kiểm kê
-    final loc = widget.session.locationCode != null
+    final loc = s.locationCode != null
         ? _repo.locations.where((l) =>
-            l.locationCode == widget.session.locationCode ||
-            l.locationId == widget.session.locationCode).firstOrNull
+            l.locationCode == s.locationCode ||
+            l.locationId == s.locationCode).firstOrNull
         : null;
-    final locDisplayTitle = widget.session.isSkuSpecific
-        ? 'Mặt hàng: ${widget.session.targetSkus.join(", ")}'
+    final locDisplayTitle = s.isSkuSpecific
+        ? 'Mặt hàng: ${s.targetSkus.join(", ")}'
         : (loc != null
             ? 'Kệ: ${loc.locationCode} • ${loc.displayName}'
             : (s.locationCode != null ? 'Kệ: ${s.locationCode}' : 'Phân khu: ${s.zone}'));
 
     // Lọc danh sách kết quả theo tab và tìm kiếm
     final searchQ = _searchCtrl.text.trim().toLowerCase();
-    final filteredResults = s.results.where((r) {
+    final filteredResults = baseResults.where((r) {
       if (_selectedFilter == 'match' && r.resultType != InventoryVarianceType.match) return false;
       if (_selectedFilter == 'missing' && r.resultType != InventoryVarianceType.missing) return false;
       if (_selectedFilter == 'wrong' && r.resultType != InventoryVarianceType.wrongLocation) return false;
@@ -1509,8 +1750,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               ),
             ),
 
-          // CẢNH BÁO NỔI BẬT: Khi phát hiện chip từ kho/kệ khác lạc vào
-          if (wrongLocCount > 0)
+          // CẢNH BÁO NỔI BẬT: Khi phát hiện chip từ kho/kệ khác lạc vào (chỉ áp dụng cho kiểm kê theo vị trí/kệ kho)
+          if (!s.isSkuSpecific && wrongLocCount > 0)
             Container(
               margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               padding: const EdgeInsets.all(10),
@@ -1542,9 +1783,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.session.isSkuSpecific
-                              ? 'CẢNH BÁO: CÓ $wrongLocCount CHIP NGOÀI PHIẾU HOẶC SAI VỊ TRÍ!'
-                              : 'CẢNH BÁO: CÓ $wrongLocCount CHIP TỪ KHO/KỆ KHÁC VÀO ĐÂY!',
+                          'CẢNH BÁO: CÓ $wrongLocCount CHIP TỪ KHO/KỆ KHÁC VÀO ĐÂY!',
                           style: const TextStyle(
                             color: Color(0xFF991B1B),
                             fontWeight: FontWeight.w900,
@@ -1552,11 +1791,9 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          widget.session.isSkuSpecific
-                              ? 'Phát hiện sản phẩm không thuộc danh sách mặt hàng cần kiểm kê.'
-                              : 'Sản phẩm thuộc vị trí khác trên CSDL nhưng quét thấy tại đây.',
-                          style: const TextStyle(color: Color(0xFF7F1D1D), fontSize: 10.5),
+                        const Text(
+                          'Sản phẩm thuộc vị trí khác trên CSDL nhưng quét thấy tại đây.',
+                          style: TextStyle(color: Color(0xFF7F1D1D), fontSize: 10.5),
                         ),
                       ],
                     ),
@@ -1579,91 +1816,188 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               ),
             ),
 
-          // KHỐI ĐỐI CHIẾU SỐ LƯỢNG THỰC TỒN VÀ TỒN KHO DATABASE (6 chỉ số rõ ràng)
-          Container(
-            margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFD1C7BA)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+          // KHỐI ĐỐI CHIẾU SỐ LƯỢNG THỰC TỒN VÀ TỒN KHO DATABASE
+          if (s.isSkuSpecific)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFD1C7BA)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _buildKpiCard(
+                        title: 'Tồn Database',
+                        value: '$expectedDbCount',
+                        unit: 'SP',
+                        color: const Color(0xFF1E293B),
+                        bg: const Color(0xFFF1F5F9),
+                        onTap: () => setState(() => _selectedFilter = 'all'),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildKpiCard(
+                        title: 'Đã quét',
+                        value: '$matchCount',
+                        unit: 'SP',
+                        color: const Color(0xFF059669),
+                        bg: const Color(0xFFECFDF5),
+                        highlightBorder: matchCount >= expectedDbCount && expectedDbCount > 0,
+                        onTap: () => setState(() => _selectedFilter = 'match'),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildKpiCard(
+                        title: '⚠️ Chưa quét',
+                        value: '$missingCount',
+                        unit: 'SP',
+                        color: missingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF64748B),
+                        bg: missingCount > 0 ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC),
+                        onTap: () => setState(() => _selectedFilter = 'missing'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: matchCount >= expectedDbCount && expectedDbCount > 0
+                          ? const Color(0xFFECFDF5)
+                          : const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: matchCount >= expectedDbCount && expectedDbCount > 0
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFF3B82F6),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          matchCount >= expectedDbCount && expectedDbCount > 0
+                              ? Icons.check_circle_rounded
+                              : Icons.inventory_2_outlined,
+                          size: 16,
+                          color: matchCount >= expectedDbCount && expectedDbCount > 0
+                              ? const Color(0xFF059669)
+                              : const Color(0xFF2563EB),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          matchCount >= expectedDbCount && expectedDbCount > 0
+                              ? 'TIẾN ĐỘ: ĐÃ QUÉT ĐỦ ($matchCount / $expectedDbCount SP - 100%)'
+                              : 'TIẾN ĐỘ: ĐÃ QUÉT $matchCount / $expectedDbCount SP (THIẾU $missingCount SP)',
+                          style: TextStyle(
+                            color: matchCount >= expectedDbCount && expectedDbCount > 0
+                                ? const Color(0xFF065F46)
+                                : const Color(0xFF1D4ED8),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFD1C7BA)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Hàng 1: Tổng quan đối chiếu
+                  Row(
+                    children: [
+                      _buildKpiCard(
+                        title: 'Tồn Database',
+                        value: '$expectedDbCount',
+                        unit: 'SP',
+                        color: const Color(0xFF1E293B),
+                        bg: const Color(0xFFF1F5F9),
+                        onTap: () => setState(() => _selectedFilter = 'all'),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildKpiCard(
+                        title: 'Thực tế quét',
+                        value: '$totalScanned',
+                        unit: 'Chip',
+                        color: const Color(0xFF0284C7),
+                        bg: const Color(0xFFE0F2FE),
+                        onTap: () => setState(() => _selectedFilter = 'all'),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildKpiCard(
+                        title: '✓ Khớp vị trí',
+                        value: '$matchCount',
+                        unit: 'SP',
+                        color: const Color(0xFF059669),
+                        bg: const Color(0xFFECFDF5),
+                        onTap: () => setState(() => _selectedFilter = 'match'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Hàng 2: Chi tiết sai lệch
+                  Row(
+                    children: [
+                      _buildKpiCard(
+                        title: '⚠️ Chưa quét',
+                        value: '$missingCount',
+                        unit: 'SP',
+                        color: const Color(0xFFD97706),
+                        bg: const Color(0xFFFFFBEB),
+                        onTap: () => setState(() => _selectedFilter = 'missing'),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildKpiCard(
+                        title: '⛔ Từ kho khác',
+                        value: '$wrongLocCount',
+                        unit: 'SP',
+                        color: const Color(0xFFDC2626),
+                        bg: const Color(0xFFFEF2F2),
+                        highlightBorder: wrongLocCount > 0,
+                        onTap: () => setState(() => _selectedFilter = 'wrong'),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildKpiCard(
+                        title: '❓ Thẻ lạ',
+                        value: '$unknownCount',
+                        unit: 'Thẻ',
+                        color: const Color(0xFF7C3AED),
+                        bg: const Color(0xFFF5F3FF),
+                        onTap: () => setState(() => _selectedFilter = 'unknown'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            child: Column(
-              children: [
-                // Hàng 1: Tổng quan đối chiếu
-                Row(
-                  children: [
-                    _buildKpiCard(
-                      title: 'Tồn Database',
-                      value: '$expectedDbCount',
-                      unit: 'SP',
-                      color: const Color(0xFF1E293B),
-                      bg: const Color(0xFFF1F5F9),
-                      onTap: () => setState(() => _selectedFilter = 'all'),
-                    ),
-                    const SizedBox(width: 6),
-                    _buildKpiCard(
-                      title: 'Thực tế quét',
-                      value: '$totalScanned',
-                      unit: 'Chip',
-                      color: const Color(0xFF0284C7),
-                      bg: const Color(0xFFE0F2FE),
-                      onTap: () => setState(() => _selectedFilter = 'all'),
-                    ),
-                    const SizedBox(width: 6),
-                    _buildKpiCard(
-                      title: '✓ Khớp vị trí',
-                      value: '$matchCount',
-                      unit: 'SP',
-                      color: const Color(0xFF059669),
-                      bg: const Color(0xFFECFDF5),
-                      onTap: () => setState(() => _selectedFilter = 'match'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                // Hàng 2: Chi tiết sai lệch
-                Row(
-                  children: [
-                    _buildKpiCard(
-                      title: '⚠️ Chưa quét',
-                      value: '$missingCount',
-                      unit: 'SP',
-                      color: const Color(0xFFD97706),
-                      bg: const Color(0xFFFFFBEB),
-                      onTap: () => setState(() => _selectedFilter = 'missing'),
-                    ),
-                    const SizedBox(width: 6),
-                    _buildKpiCard(
-                      title: '⛔ Từ kho khác',
-                      value: '$wrongLocCount',
-                      unit: 'SP',
-                      color: const Color(0xFFDC2626),
-                      bg: const Color(0xFFFEF2F2),
-                      highlightBorder: wrongLocCount > 0,
-                      onTap: () => setState(() => _selectedFilter = 'wrong'),
-                    ),
-                    const SizedBox(width: 6),
-                    _buildKpiCard(
-                      title: '❓ Thẻ lạ',
-                      value: '$unknownCount',
-                      unit: 'Thẻ',
-                      color: const Color(0xFF7C3AED),
-                      bg: const Color(0xFFF5F3FF),
-                      onTap: () => setState(() => _selectedFilter = 'unknown'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
 
           // Ô nhập mã EPC thủ công (nếu bật)
           if (_showManualInput)
@@ -1715,35 +2049,35 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 children: [
                   _buildFilterTabChip(
                     id: 'all',
-                    label: 'Tất cả (${s.results.length})',
+                    label: 'Tất cả (${baseResults.length})',
                     color: const Color(0xFF2C251E),
                   ),
                   const SizedBox(width: 6),
                   _buildFilterTabChip(
                     id: 'match',
-                    label: '✓ Khớp ($matchCount)',
+                    label: s.isSkuSpecific ? '✓ Đã quét ($matchCount)' : '✓ Khớp ($matchCount)',
                     color: const Color(0xFF059669),
                   ),
                   const SizedBox(width: 6),
                   _buildFilterTabChip(
                     id: 'missing',
-                    label: '⚠️ Thiếu ($missingCount)',
+                    label: s.isSkuSpecific ? '⚠️ Chưa quét ($missingCount)' : '⚠️ Thiếu ($missingCount)',
                     color: const Color(0xFFD97706),
                   ),
-                  const SizedBox(width: 6),
-                  _buildFilterTabChip(
-                    id: 'wrong',
-                    label: widget.session.isSkuSpecific
-                        ? '⛔ Ngoài phiếu ($wrongLocCount)'
-                        : '⛔ Từ kho khác ($wrongLocCount)',
-                    color: const Color(0xFFDC2626),
-                  ),
-                  const SizedBox(width: 6),
-                  _buildFilterTabChip(
-                    id: 'unknown',
-                    label: '❓ Thẻ lạ ($unknownCount)',
-                    color: const Color(0xFF7C3AED),
-                  ),
+                  if (!s.isSkuSpecific) ...[
+                    const SizedBox(width: 6),
+                    _buildFilterTabChip(
+                      id: 'wrong',
+                      label: '⛔ Từ kho khác ($wrongLocCount)',
+                      color: const Color(0xFFDC2626),
+                    ),
+                    const SizedBox(width: 6),
+                    _buildFilterTabChip(
+                      id: 'unknown',
+                      label: '❓ Thẻ lạ ($unknownCount)',
+                      color: const Color(0xFF7C3AED),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1806,8 +2140,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         Text(
                           _isScanning
                               ? 'Đang phát sóng đọc thẻ RFID...'
-                              : (s.results.isEmpty
-                                  ? 'Chưa có dữ liệu kiểm kê cho vị trí này.'
+                              : (baseResults.isEmpty
+                                  ? 'Chưa có dữ liệu kiểm kê cho mặt hàng này.'
                                   : 'Không có sản phẩm nào thuộc bộ lọc này.'),
                           style: TextStyle(
                             color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
@@ -1820,12 +2154,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                   )
                 : ListView.builder(
                     physics: const ClampingScrollPhysics(),
-                    cacheExtent: 400,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     itemCount: filteredResults.length,
                     itemBuilder: (context, index) {
                       final r = filteredResults[index];
-                      return _buildItemAuditCard(r, isDone);
+                      return _buildItemAuditCard(r, isDone, key: ValueKey(r.epc));
                     },
                   ),
           ),
@@ -1841,18 +2174,32 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 ? SizedBox(
                     width: double.infinity,
                     height: 48,
-                    child: OutlinedButton.icon(
+                    child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF059669),
                         side: const BorderSide(color: Color(0xFF059669), width: 1.5),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
-                      icon: const Icon(Icons.arrow_back, size: 18),
-                      label: const Text('QUAY LẠI DANH SÁCH (ĐÃ HOÀN TẤT)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       onPressed: () async {
                         await _uhf.stopInventory();
                         widget.onBack();
                       },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.arrow_back, size: 18),
+                          SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'QUAY LẠI DANH SÁCH (ĐÃ HOÀN TẤT)',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 : Row(
@@ -1932,11 +2279,12 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     );
   }
 
-  Widget _buildItemAuditCard(InventoryItemResult r, bool isDone) {
+  Widget _buildItemAuditCard(InventoryItemResult r, bool isDone, {Key? key}) {
     switch (r.resultType) {
       case InventoryVarianceType.wrongLocation:
         // Cảnh báo chip từ kho/kệ khác lạc vào
         return Container(
+          key: key,
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -1979,7 +2327,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                (widget.session.isSkuSpecific && r.sku != null && !widget.session.targetSkus.contains(r.sku))
+                                (_currentSession.isSkuSpecific && r.sku != null && !_currentSession.targetSkus.contains(r.sku))
                                     ? '⛔ NGOÀI PHIẾU KIỂM KÊ'
                                     : '⛔ TỪ KHO/KỆ KHÁC VÀO ĐÂY',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 9.5),
@@ -2055,7 +2403,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                   ],
                 ),
               ),
-              if (!isDone && widget.session.locationCode != null && (!widget.session.isSkuSpecific || (r.sku != null && widget.session.targetSkus.contains(r.sku)))) ...[
+              if (!isDone && _currentSession.locationCode != null && (!_currentSession.isSkuSpecific || (r.sku != null && _currentSession.targetSkus.contains(r.sku)))) ...[
                 const SizedBox(height: 8),
                 SizedBox(
                   width: double.infinity,
@@ -2081,6 +2429,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       case InventoryVarianceType.missing:
         // Hàng trên CSDL nhưng chưa quét thấy
         return Container(
+          key: key,
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -2149,6 +2498,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       case InventoryVarianceType.match:
         // Khớp hoàn toàn
         return Container(
+          key: key,
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
@@ -2180,7 +2530,10 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                             color: const Color(0xFF10B981).withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text('✓ ĐÚNG VỊ TRÍ', style: TextStyle(color: Color(0xFF059669), fontSize: 9, fontWeight: FontWeight.bold)),
+                          child: Text(
+                            _currentSession.isSkuSpecific ? '✓ ĐÃ QUÉT (KHỚP)' : '✓ ĐÚNG VỊ TRÍ',
+                            style: const TextStyle(color: Color(0xFF059669), fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -2212,6 +2565,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       case InventoryVarianceType.unknownEpc:
         // Thẻ lạ chưa khai báo trong CSDL
         return Container(
+          key: key,
           margin: const EdgeInsets.only(bottom: 6),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(

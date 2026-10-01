@@ -9,6 +9,7 @@ class SonarRadarWidget extends StatefulWidget {
   final String? sku;
   final String? locationDisplay;
   final double? previousRssi;
+  final double? readsPerSecond;
 
   const SonarRadarWidget({
     super.key,
@@ -19,6 +20,7 @@ class SonarRadarWidget extends StatefulWidget {
     this.sku,
     this.locationDisplay,
     this.previousRssi,
+    this.readsPerSecond,
   });
 
   @override
@@ -119,35 +121,27 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
       }
     }
 
-    String getProximityBadgeText() {
-      if (!widget.isTracking) return 'CHƯA BẬT ĐỊNH VỊ';
-      if (widget.rssi <= -88.0) return 'ĐANG DÒ TÍN HIỆU...';
-      if (isVeryClose) return '🎯 NGAY TRƯỚC MẶT · ĐÃ TÌM THẤY!';
-      if (isClose) return '⚡ RẤT GẦN · TIẾP CẬN MỤC TIÊU';
-      if (isModerate) return '📡 ĐANG TỚI GẦN';
-      return '🔎 TÍN HIỆU XA / YẾU';
-    }
-
     double diff = 0.0;
     if (widget.isTracking && widget.previousRssi != null && widget.rssi > -88.0) {
       diff = widget.rssi - widget.previousRssi!;
     }
 
-    // Xác định hướng lia súng theo Gradient cường độ sóng (Beam Sweeping Direction)
+    // Xác định hướng lia súng theo Gradient cường độ sóng thời gian thực (Realtime Sweep Direction)
     IconData getDirectionIcon() {
       if (!widget.isTracking) return Icons.sensors_off_rounded;
-      if (isVeryClose) return Icons.check_circle_rounded;
-      if (diff >= 0.8) return Icons.arrow_upward_rounded; // Đang lia đúng hướng (sóng tăng)
-      if (diff <= -1.2) return Icons.sync_problem_rounded; // Lệch hướng (sóng giảm)
+      // Khi quay lệch hướng khỏi búp sóng (sóng tụt), cảnh báo ngay lập tức dù đang ở cự ly nào
+      if (diff <= -1.0) return Icons.sync_problem_rounded;
+      if (diff >= 0.7) return Icons.arrow_upward_rounded; // Đang lia đúng hướng (sóng tăng)
+      if (isVeryClose) return Icons.check_circle_rounded; // Chạm đích rất gần và sóng ổn định
       return Icons.radar_rounded;
     }
 
     String getDirectionHintText() {
       if (!widget.isTracking) return 'CHƯA BẬT ĐỊNH VỊ';
       if (widget.rssi <= -88.0) return 'ĐANG DÒ TÍN HIỆU...';
+      if (diff <= -1.0) return '🔄 LỆCH HƯỚNG · LIA GÓC KHÁC';
+      if (diff >= 0.7) return '⬆️ ĐÚNG HƯỚNG · TIẾN LÊN';
       if (isVeryClose) return '🎯 ĐÃ CHẠM MỤC TIÊU (< 15 cm)';
-      if (diff >= 0.8) return '⬆️ ĐÚNG HƯỚNG · TIẾN LÊN';
-      if (diff <= -1.2) return '🔄 LỆCH HƯỚNG · LIA GÓC KHÁC';
       return '➡️ GIỮ HƯỚNG QUÉT ỔN ĐỊNH';
     }
 
@@ -155,8 +149,8 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
       if (!widget.isTracking || widget.previousRssi == null || widget.rssi <= -88.0) {
         return '---';
       }
-      if (diff > 1.5) return '🔥 NÓNG DẦN (Tiến gần)';
-      if (diff < -1.5) return '❄️ LẠNH DẦN (Xa ra / Lệch)';
+      if (diff > 1.0) return '🔥 NÓNG DẦN (Tiến gần)';
+      if (diff < -1.0) return '❄️ LẠNH DẦN (Xa ra / Lệch)';
       return '➡️ ỔN ĐỊNH';
     }
 
@@ -369,13 +363,21 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  if (widget.isTracking && (widget.readsPerSecond ?? 0) > 0)
+                    Text(
+                      '⚡ ${(widget.readsPerSecond ?? 0).toStringAsFixed(0)} gói/s',
+                      style: const TextStyle(
+                        color: Color(0xFF0D9488),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   Flexible(
                     child: Text(
                       getTrendText(),
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: diff <= -1.2 ? const Color(0xFFD97706) : signalColor,
+                        color: diff <= -1.0 ? const Color(0xFFD97706) : signalColor,
                         fontSize: 11.5,
                         fontWeight: FontWeight.bold,
                       ),

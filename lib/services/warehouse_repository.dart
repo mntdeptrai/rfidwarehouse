@@ -78,6 +78,7 @@ class WarehouseRepository extends ChangeNotifier {
       final dbCustomers = await _dbService.getCustomers();
       final dbDeliveryNotes = await _dbService.getDeliveryNotes();
       final dbInventorySessions = await _dbService.getInventorySessions();
+      final dbLocateOrders = await _dbService.getLocateOrders();
       final dbTransactions = await _dbService.getTransactions();
 
       _products.clear();
@@ -147,7 +148,13 @@ class WarehouseRepository extends ChangeNotifier {
       _deliveryNotes.addAll(dbDeliveryNotes);
 
       _inventorySessions.clear();
-      _inventorySessions.addAll(dbInventorySessions);
+      for (final s in dbInventorySessions) {
+        _sanitizeSessionResults(s);
+        _inventorySessions.add(s);
+      }
+
+      _locateOrders.clear();
+      _locateOrders.addAll(dbLocateOrders);
 
       _transactions.clear();
       _transactions.addAll(dbTransactions);
@@ -238,12 +245,13 @@ class WarehouseRepository extends ChangeNotifier {
         supa.from('outbound_order_details').select(),
         supa.from('users').select(),
         supa.from('customers').select(),
-        supa.from('inventory_transactions').select().order('timestamp', ascending: false).limit(200).catchError((_) => []),
-        supa.from('sync_logs').select().eq('table_name', 'inventory_transactions').order('timestamp', ascending: false).limit(200).catchError((_) => []),
-        supa.from('inventory_sessions').select().order('started_at', ascending: false).catchError((_) => []),
-        supa.from('inventory_session_details').select().catchError((_) => []),
-        supa.from('delivery_notes').select().catchError((_) => []),
-        supa.from('delivery_note_details').select().catchError((_) => []),
+        supa.from('inventory_transactions').select().order('timestamp', ascending: false).limit(200).catchError((_) => <Map<String, dynamic>>[]),
+        supa.from('sync_logs').select().eq('table_name', 'inventory_transactions').order('timestamp', ascending: false).limit(200).catchError((_) => <Map<String, dynamic>>[]),
+        supa.from('inventory_sessions').select().order('started_at', ascending: false).catchError((_) => <Map<String, dynamic>>[]),
+        supa.from('inventory_session_details').select().catchError((_) => <Map<String, dynamic>>[]),
+        supa.from('delivery_notes').select().catchError((_) => <Map<String, dynamic>>[]),
+        supa.from('delivery_note_details').select().catchError((_) => <Map<String, dynamic>>[]),
+        supa.from('locate_orders').select().order('created_at', ascending: false).catchError((_) => <Map<String, dynamic>>[]),
       ]);
 
       final locRows = results[0] as List<dynamic>;
@@ -566,6 +574,9 @@ class WarehouseRepository extends ChangeNotifier {
 
       _outboundOrders.clear();
       _outboundOrders.addAll(loadedOutOrders);
+      for (final o in loadedOutOrders) {
+        await _dbService.insertOutboundOrder(o);
+      }
 
       _users.clear();
       _users.addAll(loadedUsers);
@@ -638,7 +649,7 @@ class WarehouseRepository extends ChangeNotifier {
         final sId = (m['session_id'] ?? '').toString();
         final startedAtStr = (m['started_at'] ?? '').toString();
         final completedAtStr = m['completed_at']?.toString();
-        final isComp = m['is_completed'] == true || m['is_completed'] == 1;
+        final isComp = m['is_completed'] == true || m['is_completed'] == 1 || m['is_completed'] == 'true';
         final details = invDetailsMap[sId] ?? [];
         final targetSkusRaw = m['target_skus'];
         List<String> targetSkusList = [];
@@ -647,6 +658,37 @@ class WarehouseRepository extends ChangeNotifier {
         } else if (targetSkusRaw is String && targetSkusRaw.trim().isNotEmpty) {
           targetSkusList = targetSkusRaw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
         }
+
+        String? assignedToUserId = m['assigned_to_user_id']?.toString();
+        String? assignedToName = m['assigned_to_name']?.toString();
+        String? assignedBy = (m['created_by'] ?? m['assigned_by'])?.toString();
+        String? notes = m['notes']?.toString();
+
+        final createdByStr = assignedBy?.trim() ?? '';
+        if (createdByStr.startsWith('{') && createdByStr.endsWith('}')) {
+          try {
+            final parsedMeta = jsonDecode(createdByStr) as Map<String, dynamic>;
+            assignedBy = parsedMeta['by']?.toString() ?? assignedBy;
+            if (assignedToUserId == null || assignedToUserId.trim().isEmpty || assignedToUserId == 'null') {
+              assignedToUserId = parsedMeta['to_id']?.toString();
+            }
+            if (assignedToName == null || assignedToName.trim().isEmpty || assignedToName == 'null') {
+              assignedToName = parsedMeta['to_name']?.toString();
+            }
+            if (notes == null || notes.trim().isEmpty || notes == 'null') {
+              notes = parsedMeta['notes']?.toString();
+            }
+            if (targetSkusList.isEmpty && parsedMeta['skus'] != null) {
+              final rawSkus = parsedMeta['skus'];
+              if (rawSkus is List) {
+                targetSkusList = rawSkus.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+              } else if (rawSkus is String && rawSkus.isNotEmpty) {
+                targetSkusList = rawSkus.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+              }
+            }
+          } catch (_) {}
+        }
+
         return InventorySession(
           sessionId: sId,
           sessionCode: (m['session_code'] ?? sId).toString(),
@@ -657,6 +699,10 @@ class WarehouseRepository extends ChangeNotifier {
           isCompleted: isComp,
           results: details,
           targetSkus: targetSkusList,
+          assignedToUserId: assignedToUserId,
+          assignedToName: assignedToName,
+          assignedBy: assignedBy,
+          notes: notes,
         );
       }).toList();
 
@@ -712,8 +758,12 @@ class WarehouseRepository extends ChangeNotifier {
         await _dbService.insertInventorySession(s);
       }
       _inventorySessions.clear();
-      _inventorySessions.addAll(mergedSessionsMap.values.toList()
-        ..sort((a, b) => b.startedAt.compareTo(a.startedAt)));
+      final sortedMerged = mergedSessionsMap.values.toList()
+        ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+      for (final s in sortedMerged) {
+        _sanitizeSessionResults(s);
+        _inventorySessions.add(s);
+      }
 
       // 11. Delivery Notes & Details
       final List<dynamic> deliveryNoteRows = results.length > 14 ? results[14] : const [];
@@ -768,6 +818,28 @@ class WarehouseRepository extends ChangeNotifier {
       }
       _deliveryNotes.clear();
       _deliveryNotes.addAll(mergedDeliveriesMap.values.toList());
+
+      // 12. Locate Orders (Đơn tìm kiếm)
+      final List<dynamic> locateOrderRows = results.length > 16 ? results[16] as List<dynamic> : const [];
+      final List<LocateOrder> loadedLocateOrders = locateOrderRows.map((m) {
+        return LocateOrder.fromMap(m is Map<String, dynamic> ? m : Map<String, dynamic>.from(m as Map));
+      }).toList();
+
+      final localLocateOrders = await _dbService.getLocateOrders();
+      final Map<String, LocateOrder> mergedLocateOrdersMap = {};
+      for (final o in localLocateOrders) {
+        mergedLocateOrdersMap[o.orderId] = o;
+      }
+      for (final o in _locateOrders) {
+        mergedLocateOrdersMap[o.orderId] = o;
+      }
+      for (final o in loadedLocateOrders) {
+        mergedLocateOrdersMap[o.orderId] = o;
+        await _dbService.insertLocateOrder(o);
+      }
+      _locateOrders.clear();
+      _locateOrders.addAll(mergedLocateOrdersMap.values.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
 
       _rebuildIndexes();
 
@@ -1128,6 +1200,18 @@ class WarehouseRepository extends ChangeNotifier {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       try {
         final supa = Supabase.instance.client;
+        // Đảm bảo các sản phẩm trong chi tiết đơn hàng đều đã tồn tại trên Supabase trước khi ghi inbound_order_details (tránh lỗi FK 23503)
+        final prodRows = order.details.map((d) => {
+          'product_id': d.productId,
+          'sku': d.sku,
+          'product_name': d.productName,
+          'unit': 'Cái',
+          'category': 'Hàng nhập kho',
+        }).toList();
+        if (prodRows.isNotEmpty) {
+          await supa.from('products').upsert(prodRows, onConflict: 'product_id');
+        }
+
         await supa.from('inbound_orders').upsert({
           'inbound_order_id': order.inboundOrderId,
           'order_no': order.orderNo,
@@ -1455,14 +1539,9 @@ class WarehouseRepository extends ChangeNotifier {
         toAdd.add(p);
       }
     }
-    if (toAdd.isEmpty) return;
-
-    await _dbService.insertProducts(toAdd);
-    _products.addAll(toAdd);
-
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       try {
-        final rows = toAdd.map((p) => {
+        final rows = newProds.map((p) => {
           'product_id': p.productId,
           'sku': p.sku,
           'product_name': p.productName,
@@ -1470,11 +1549,16 @@ class WarehouseRepository extends ChangeNotifier {
           'category': p.category,
           'description': p.description,
         }).toList();
-        await Supabase.instance.client.from('products').upsert(rows);
+        await Supabase.instance.client.from('products').upsert(rows, onConflict: 'product_id');
       } catch (e) {
         debugPrint('addProductsBatch Supabase direct error: $e');
       }
     }
+
+    if (toAdd.isEmpty) return;
+
+    await _dbService.insertProducts(toAdd);
+    _products.addAll(toAdd);
 
     final syncRecords = toAdd.map((p) => {
       'table_name': 'products',
@@ -1497,7 +1581,69 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> addOutboundOrder(OutboundOrder order) async {
     await _dbService.insertOutboundOrder(order);
-    _outboundOrders.add(order);
+    final existingIdx = _outboundOrders.indexWhere((o) =>
+        o.outboundOrderId == order.outboundOrderId || o.poNo == order.poNo);
+    if (existingIdx >= 0) {
+      _outboundOrders[existingIdx] = order;
+    } else {
+      _outboundOrders.add(order);
+    }
+
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        final supa = Supabase.instance.client;
+        // 1. Đảm bảo các sản phẩm trong chi tiết đơn hàng xuất đều đã tồn tại trên Supabase trước khi ghi outbound_order_details (tránh lỗi FK 23503)
+        final prodRows = <Map<String, dynamic>>[];
+        for (final d in order.details) {
+          final matchingProd = _products.where((p) =>
+              p.sku.trim().toUpperCase() == d.sku.trim().toUpperCase() ||
+              p.productId == d.productId).firstOrNull;
+          final prodId = matchingProd?.productId ?? d.productId;
+          prodRows.add({
+            'product_id': prodId,
+            'sku': d.sku,
+            'product_name': d.productName,
+            'unit': matchingProd?.unit ?? 'Cái',
+            'category': matchingProd?.category ?? 'Hàng xuất kho',
+          });
+        }
+        if (prodRows.isNotEmpty) {
+          await supa.from('products').upsert(prodRows, onConflict: 'product_id');
+        }
+
+        // 2. Ghi/Cập nhật đơn xuất kho trên Supabase Cloud
+        await supa.from('outbound_orders').upsert({
+          'outbound_order_id': order.outboundOrderId,
+          'po_no': order.poNo,
+          'customer': order.customer,
+          'status': order.status.code,
+          'created_at': order.createdAt.toIso8601String(),
+        }, onConflict: 'outbound_order_id');
+
+        // 3. Ghi chi tiết đơn xuất kho vào outbound_order_details (xóa cũ trước để tránh trùng lặp)
+        await supa.from('outbound_order_details').delete().eq('order_id', order.outboundOrderId);
+        final detailRows = order.details.map((d) {
+          final matchingProd = _products.where((p) =>
+              p.sku.trim().toUpperCase() == d.sku.trim().toUpperCase() ||
+              p.productId == d.productId).firstOrNull;
+          final prodId = matchingProd?.productId ?? d.productId;
+          return {
+            'order_id': order.outboundOrderId,
+            'product_id': prodId,
+            'sku': d.sku,
+            'product_name': d.productName,
+            'required_qty': d.requiredQty,
+            'picked_qty': d.pickedQty,
+          };
+        }).toList();
+        if (detailRows.isNotEmpty) {
+          await supa.from('outbound_order_details').insert(detailRows);
+        }
+      } catch (e) {
+        debugPrint('addOutboundOrder Supabase direct error: $e');
+      }
+    }
+
     await _syncDirectOrQueue(
       tableName: 'outbound_orders',
       recordId: order.outboundOrderId,
@@ -2015,6 +2161,7 @@ class WarehouseRepository extends ChangeNotifier {
   final List<OutboundOrder> _outboundOrders = [];
   final List<PickingPlan> _pickingPlans = [];
   final List<InventorySession> _inventorySessions = [];
+  final List<LocateOrder> _locateOrders = [];
   final List<InventoryTransaction> _transactions = [];
   final List<RfidDevice> _devices = [];
   final List<WmsUser> _users = [];
@@ -2216,6 +2363,7 @@ class WarehouseRepository extends ChangeNotifier {
   List<OutboundOrder> get outboundOrders => List.unmodifiable(_outboundOrders);
   List<PickingPlan> get pickingPlans => List.unmodifiable(_pickingPlans);
   List<InventorySession> get inventorySessions => List.unmodifiable(_inventorySessions);
+  List<LocateOrder> get locateOrders => List.unmodifiable(_locateOrders);
   List<InventoryTransaction> get transactions => List.unmodifiable(_transactions);
   List<RfidDevice> get devices => List.unmodifiable(_devices);
   List<WmsUser> get users => List.unmodifiable(_users);
@@ -2315,8 +2463,12 @@ class WarehouseRepository extends ChangeNotifier {
         'location_code': session.locationCode,
         'started_at': session.startedAt.toIso8601String(),
         'completed_at': session.completedAt?.toIso8601String(),
-        'is_completed': session.isCompleted ? 1 : 0,
+        'is_completed': session.isCompleted,
         'target_skus': session.targetSkus.join(','),
+        'assigned_to_user_id': session.assignedToUserId,
+        'assigned_to_name': session.assignedToName,
+        'created_by': session.assignedBy,
+        'notes': session.notes,
       },
     );
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -2366,6 +2518,121 @@ class WarehouseRepository extends ChangeNotifier {
       recordId: cleanId,
       action: 'DELETE',
       payload: {'sessionId': cleanId},
+    );
+    notifyListeners();
+  }
+
+  // ==========================================
+  // LOCATE ORDERS (ĐƠN TÌM KIẾM THẺ / HÀNG HÓA)
+  // ==========================================
+  Future<LocateOrder> createLocateOrder({
+    required String title,
+    String? targetEpc,
+    String? targetSku,
+    String? targetProductName,
+    String? targetPalletCode,
+    String? expectedLocation,
+    required String assignedToUserId,
+    required String assignedToName,
+    String? createdBy,
+    String? notes,
+  }) async {
+    final now = DateTime.now();
+    final dStr = '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final randCode = (Random().nextInt(900) + 100).toString();
+    final order = LocateOrder(
+      orderId: 'LOC-TASK-${now.millisecondsSinceEpoch}',
+      orderNo: 'TK-$dStr-$randCode',
+      title: title,
+      targetEpc: targetEpc,
+      targetSku: targetSku,
+      targetProductName: targetProductName,
+      targetPalletCode: targetPalletCode,
+      expectedLocation: expectedLocation,
+      status: LocateOrderStatus.pending,
+      assignedToUserId: assignedToUserId,
+      assignedToName: assignedToName,
+      createdBy: createdBy ?? (AuthService().currentUser?.fullName ?? 'Thủ kho'),
+      createdAt: now,
+      notes: notes,
+    );
+
+    _locateOrders.insert(0, order);
+    await _dbService.insertLocateOrder(order);
+    await _syncDirectOrQueue(
+      tableName: 'locate_orders',
+      recordId: order.orderId,
+      action: 'INSERT',
+      payload: order.toMap(),
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+    return order;
+  }
+
+  Future<void> updateLocateOrderStatus(String orderId, LocateOrderStatus newStatus) async {
+    final order = _locateOrders.where((o) => o.orderId == orderId || o.orderNo == orderId).firstOrNull;
+    if (order == null) return;
+    order.status = newStatus;
+    await _dbService.insertLocateOrder(order);
+    await _syncDirectOrQueue(
+      tableName: 'locate_orders',
+      recordId: order.orderId,
+      action: 'UPDATE',
+      payload: order.toMap(),
+    );
+    notifyListeners();
+  }
+
+  Future<void> completeLocateOrder(
+    String orderId, {
+    required String foundLocation,
+    String? completedBy,
+    String? notes,
+  }) async {
+    final order = _locateOrders.where((o) => o.orderId == orderId || o.orderNo == orderId).firstOrNull;
+    if (order == null) return;
+    order.status = LocateOrderStatus.completed;
+    order.foundLocation = foundLocation;
+    order.completedAt = DateTime.now();
+    order.completedBy = completedBy ?? (AuthService().currentUser?.fullName ?? order.assignedToName);
+    if (notes != null && notes.trim().isNotEmpty) {
+      order.notes = (order.notes != null && order.notes!.isNotEmpty)
+          ? '${order.notes}\n[Hoàn thành]: $notes'
+          : notes;
+    }
+    await _dbService.insertLocateOrder(order);
+    await _syncDirectOrQueue(
+      tableName: 'locate_orders',
+      recordId: order.orderId,
+      action: 'UPDATE',
+      payload: order.toMap(),
+    );
+    _triggerBackgroundSync();
+    notifyListeners();
+  }
+
+  Future<void> cancelLocateOrder(String orderId) async {
+    await updateLocateOrderStatus(orderId, LocateOrderStatus.cancelled);
+  }
+
+  Future<void> deleteLocateOrder(String orderId) async {
+    final cleanId = orderId.trim();
+    await _dbService.deleteLocateOrder(cleanId);
+    _locateOrders.removeWhere((o) => o.orderId == cleanId || o.orderNo == cleanId);
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        final supa = Supabase.instance.client;
+        await supa.from('locate_orders').delete().eq('order_id', cleanId);
+      } catch (e) {
+        debugPrint('deleteLocateOrder Supabase direct error: $e');
+      }
+    }
+    await _syncDirectOrQueue(
+      tableName: 'locate_orders',
+      recordId: cleanId,
+      action: 'DELETE',
+      payload: {'order_id': cleanId},
     );
     notifyListeners();
   }
@@ -3342,16 +3609,16 @@ class WarehouseRepository extends ChangeNotifier {
     ).firstOrNull;
 
     final matchedItems = _items.where((it) {
-      if (cleanOrderNo.isNotEmpty && (it.orderNo?.trim().toUpperCase() == cleanOrderNo)) {
-        return true;
-      }
-      if (uniqueEpcs.isNotEmpty && it.epc.isNotEmpty && uniqueEpcs.contains(it.epc.trim().toUpperCase())) {
-        return true;
+      if (uniqueEpcs.isNotEmpty) {
+        return it.epc.isNotEmpty && uniqueEpcs.contains(it.epc.trim().toUpperCase());
       }
       if (cleanPallet != null) {
         return it.palletId != null &&
             (it.palletId!.trim().toUpperCase() == cleanPallet ||
              it.palletId!.trim().toUpperCase() == 'PAL-$cleanPallet');
+      }
+      if (cleanOrderNo.isNotEmpty && (it.orderNo?.trim().toUpperCase() == cleanOrderNo)) {
+        return true;
       }
       if (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanOrderNo) return true;
       return false;
@@ -3449,6 +3716,27 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
+    if (!Platform.environment.containsKey('FLUTTER_TEST') && matchedItems.isNotEmpty) {
+      try {
+        final matchedIds = matchedItems.map((i) => i.itemId).toList();
+        final effectivePalletId = hasPallet
+            ? (cleanPallet != null
+                ? (cleanPallet.startsWith('PAL-') ? cleanPallet : 'PAL-$cleanPallet')
+                : matchedItems.first.palletId)
+            : null;
+        await Supabase.instance.client.from('items').update({
+          'status': targetStatus.code,
+          'pallet_id': effectivePalletId,
+          'order_no': cleanOrderNo,
+          'inbound_time': now.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+          'inbound_by': effectivePerformer,
+        }).inFilter('item_id', matchedIds);
+      } catch (e) {
+        debugPrint('Direct update items status in confirmGateReceive error: $e');
+      }
+    }
+
     for (var it in matchedItems) {
       _transactions.insert(
         0,
@@ -3469,18 +3757,42 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     if (order != null) {
-      order.status = targetOrderStatus;
+      final allOrderItems = _items.where((i) =>
+        (i.orderNo?.trim().toUpperCase() == cleanOrderNo) ||
+        (i.orderNo?.trim().toUpperCase() == 'INB-$cleanOrderNo')
+      ).toList();
+
       for (var d in order.details) {
-        d.receivedQty = d.requiredQty;
+        final receivedCount = allOrderItems.where((i) =>
+          i.sku == d.sku && (i.status != ItemStatus.pendingInbound)
+        ).length;
+        d.receivedQty = receivedCount;
       }
-      await _dbService.updateInboundOrderStatus(order.inboundOrderId, targetOrderStatus);
+
+      final hasPendingItems = allOrderItems.any((i) => i.status == ItemStatus.pendingInbound);
+      final newOrderStatus = hasPendingItems
+          ? InboundOrderStatus.processing
+          : targetOrderStatus;
+
+      order.status = newOrderStatus;
+      await _dbService.updateInboundOrderStatus(order.inboundOrderId, newOrderStatus);
+      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+        try {
+          await Supabase.instance.client.from('inbound_orders').update({
+            'status': newOrderStatus.code,
+            'updated_at': now.toIso8601String(),
+          }).or('inbound_order_id.eq.${order.inboundOrderId},order_no.eq.${order.orderNo}');
+        } catch (e) {
+          debugPrint('Direct update inbound_orders status error: $e');
+        }
+      }
       await _syncDirectOrQueue(
         tableName: 'inbound_orders',
         recordId: order.inboundOrderId,
         action: 'UPDATE',
         payload: {
           'inbound_order_id': order.inboundOrderId,
-          'status': targetOrderStatus.code,
+          'status': newOrderStatus.code,
           'updated_at': now.toIso8601String(),
         },
       );
@@ -4567,18 +4879,28 @@ class WarehouseRepository extends ChangeNotifier {
 
         final itemInboundTime = getItemInboundTime(matchedItem);
 
+        final effectivePalletCode = (matchedItem.palletId != null && matchedItem.palletId!.isNotEmpty && matchedItem.palletId != '--')
+            ? matchedItem.palletId!
+            : palletCode;
+        String effectivePalletEpc = palletEpc;
+        if ((effectivePalletEpc.isEmpty || effectivePalletEpc == '--') && effectivePalletCode.isNotEmpty && effectivePalletCode != '--') {
+          final cleanP = effectivePalletCode.toUpperCase();
+          final pal = _pallets.where((p) => p.palletCode.toUpperCase() == cleanP || p.palletId.toUpperCase() == cleanP).firstOrNull;
+          if (pal?.rfidEpc != null && pal!.rfidEpc!.isNotEmpty) {
+            effectivePalletEpc = pal.rfidEpc!;
+          }
+        }
+
         validatedList.add(OutboundValidatedItem(
           sku: matchedItem.sku.isNotEmpty ? matchedItem.sku : sku,
           productName: matchedItem.productName.isNotEmpty ? matchedItem.productName : productName,
           cartonCode: (matchedItem.cartonCode != null && matchedItem.cartonCode!.isNotEmpty && matchedItem.cartonCode != '--')
               ? matchedItem.cartonCode!
               : cartonCode,
-          palletCode: (matchedItem.palletId != null && matchedItem.palletId!.isNotEmpty && matchedItem.palletId != '--')
-              ? matchedItem.palletId!
-              : palletCode,
+          palletCode: effectivePalletCode,
           supplier: supplier.isNotEmpty && supplier != '--' ? supplier : (matchedItem.supplier ?? '--'),
           customer: customer,
-          palletEpc: palletEpc,
+          palletEpc: effectivePalletEpc,
           epc: reqEpc.isNotEmpty && reqEpc != '--' ? reqEpc : matchedItem.epc.toUpperCase(),
           isInStock: true,
           locationCode: locCode,
@@ -4655,6 +4977,21 @@ class WarehouseRepository extends ChangeNotifier {
 
     int updatedCount = 0;
     final List<Item> affectedItems = [];
+
+    // Ghi nhận vị trí kệ ban đầu của từng sản phẩm trước khi xuất kho
+    final Map<String, String> itemOrigLocations = {};
+    for (var epc in uniqueEpcs) {
+      final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+      if (item != null) {
+        final loc = resolveItemLocation(item);
+        if (loc != null) {
+          itemOrigLocations[item.itemId] = loc.locationCode;
+        } else if (item.locationId != null && item.locationId!.trim().isNotEmpty) {
+          itemOrigLocations[item.itemId] = item.locationId!.trim();
+        }
+      }
+    }
+
     for (var epc in uniqueEpcs) {
       final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
       if (item != null) {
@@ -4675,6 +5012,7 @@ class WarehouseRepository extends ChangeNotifier {
               it.itemId != item.itemId
             ).length;
             if (remainingInStock == 0 && pal.itemIds.isEmpty) {
+              final oldLocId = pal.locationId;
               pal.locationId = null;
               await _dbService.insertPallet(pal);
               await _syncDirectOrQueue(
@@ -4687,6 +5025,20 @@ class WarehouseRepository extends ChangeNotifier {
                   'updated_at': now.toIso8601String(),
                 },
               );
+              if (oldLocId != null && oldLocId.trim().isNotEmpty) {
+                final cleanLoc = oldLocId.trim().toUpperCase();
+                final loc = _locations.where((l) =>
+                  l.locationId.trim().toUpperCase() == cleanLoc ||
+                  l.locationCode.trim().toUpperCase() == cleanLoc
+                ).firstOrNull;
+                if (loc != null) {
+                  loc.currentPallets = _pallets.where((p) =>
+                    p.locationId?.trim().toUpperCase() == loc.locationId.toUpperCase() ||
+                    p.locationId?.trim().toUpperCase() == loc.locationCode.toUpperCase()
+                  ).length;
+                  await _dbService.insertLocation(loc);
+                }
+              }
             }
           }
         }
@@ -4754,16 +5106,18 @@ class WarehouseRepository extends ChangeNotifier {
 
     late final OutboundOrder targetOrder;
     if (existingOrder != null) {
-      existingOrder.status = OutboundOrderStatus.shipped;
       if (existingOrder.details.isEmpty) {
         existingOrder.details.addAll(orderDetails);
       } else {
         for (var d in existingOrder.details) {
-          if (d.pickedQty < d.requiredQty) {
-            d.pickedQty = d.requiredQty;
+          final countForThisSku = affectedItems.where((it) => it.sku.toUpperCase() == d.sku.toUpperCase()).length;
+          if (countForThisSku > 0) {
+            d.pickedQty = (d.pickedQty + countForThisSku).clamp(0, d.requiredQty);
           }
         }
       }
+      final isAllPicked = existingOrder.details.every((d) => d.pickedQty >= d.requiredQty);
+      existingOrder.status = isAllPicked ? OutboundOrderStatus.shipped : OutboundOrderStatus.processing;
       targetOrder = existingOrder;
       await _dbService.insertOutboundOrder(existingOrder);
       await _syncDirectOrQueue(
@@ -4772,7 +5126,7 @@ class WarehouseRepository extends ChangeNotifier {
         action: 'UPDATE',
         payload: {
           'outbound_order_id': existingOrder.outboundOrderId,
-          'status': OutboundOrderStatus.shipped.code,
+          'status': targetOrder.status.code,
         },
       );
     } else {
@@ -4837,18 +5191,24 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
+    final fromLocSet = itemOrigLocations.values.where((l) => l.isNotEmpty && l != '--').toSet();
+    final fromLocStr = fromLocSet.isNotEmpty ? fromLocSet.join(', ') : 'KHO_TONG';
+    final isPda = performedBy.contains('PDA') || performedBy.contains('Tay Cầm');
+
     final tx = InventoryTransaction(
       transactionId: 'TX-OUT-GATE-${now.millisecondsSinceEpoch}-$poNo',
       type: TransactionType.outbound,
       documentNo: poNo,
-      sku: 'MULTI-SKU',
-      productName: 'Xuất kho qua cổng RFID',
+      sku: affectedItems.length == 1 ? affectedItems.first.sku : 'MULTI-SKU',
+      productName: affectedItems.length == 1 ? affectedItems.first.productName : 'Xuất kho RFID',
       quantity: uniqueEpcs.length,
-      fromLocation: 'KHO_TONG',
+      fromLocation: fromLocStr,
       toLocation: customer,
       performedBy: performedBy,
       timestamp: now,
-      notes: 'Xuất thành công ${uniqueEpcs.length} chip qua cổng RFID',
+      notes: isPda
+          ? 'Xuất hàng lẻ $updatedCount sản phẩm theo vị trí kệ: $fromLocStr qua PDA'
+          : 'Xuất $updatedCount sản phẩm qua cổng RFID Gate (vị trí: $fromLocStr)',
     );
     _transactions.insert(0, tx);
 
@@ -4883,6 +5243,10 @@ class WarehouseRepository extends ChangeNotifier {
     required String zone,
     String? locationCode,
     List<String>? targetSkus,
+    String? assignedToUserId,
+    String? assignedToName,
+    String? assignedBy,
+    String? notes,
   }) {
     final session = InventorySession(
       sessionId: 'SESS-${DateTime.now().millisecondsSinceEpoch}',
@@ -4891,6 +5255,10 @@ class WarehouseRepository extends ChangeNotifier {
       locationCode: locationCode,
       startedAt: DateTime.now(),
       targetSkus: targetSkus,
+      assignedToUserId: assignedToUserId,
+      assignedToName: assignedToName,
+      assignedBy: assignedBy,
+      notes: notes,
     );
     _inventorySessions.insert(0, session);
     _dbService.insertInventorySession(session);
@@ -4905,10 +5273,42 @@ class WarehouseRepository extends ChangeNotifier {
         'location_code': session.locationCode,
         'started_at': session.startedAt.toIso8601String(),
         'completed_at': null,
-        'is_completed': 0,
+        'is_completed': false,
         'target_skus': session.targetSkus.join(','),
+        'assigned_to_user_id': session.assignedToUserId,
+        'assigned_to_name': session.assignedToName,
+        'created_by': session.assignedBy,
+        'notes': session.notes,
       },
     );
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      unawaited(() async {
+        try {
+          final supa = SupabaseSyncService().client ?? Supabase.instance.client;
+          final meta = <String, dynamic>{
+            'by': session.assignedBy ?? 'Thủ kho (Admin)',
+          };
+          if (session.assignedToUserId != null) meta['to_id'] = session.assignedToUserId;
+          if (session.assignedToName != null) meta['to_name'] = session.assignedToName;
+          if (session.notes != null) meta['notes'] = session.notes;
+          if (session.targetSkus.isNotEmpty) meta['skus'] = session.targetSkus;
+
+          await supa.from('inventory_sessions').upsert({
+            'session_id': session.sessionId,
+            'session_code': session.sessionCode,
+            'zone': session.zone,
+            'location_code': session.locationCode,
+            'started_at': session.startedAt.toIso8601String(),
+            'completed_at': null,
+            'is_completed': false,
+            'created_by': jsonEncode(meta),
+          });
+          debugPrint('✓ startInventorySession direct upserted to Supabase: ${session.sessionCode}');
+        } catch (e) {
+          debugPrint('startInventorySession Supabase direct push error: $e');
+        }
+      }());
+    }
     _triggerBackgroundSync();
 
     // Nạp sẵn danh sách hàng kỳ vọng trên CSDL tại vị trí này (trạng thái missing ban đầu khi chưa quét)
@@ -4921,16 +5321,19 @@ class WarehouseRepository extends ChangeNotifier {
   void processAuditScan({
     required String sessionId,
     required List<String> scannedEpcs,
+    InventorySession? targetSession,
     bool notify = false,
   }) {
     _ensureIndexes();
-    final session = _inventorySessions.where((s) => s.sessionId == sessionId).firstOrNull;
+    final session = targetSession ?? _inventorySessions.where((s) => s.sessionId == sessionId).firstOrNull;
     if (session == null || session.isCompleted) return;
     session.results.clear();
 
     final uniqueScannedEpcs = scannedEpcs.map((e) => e.trim().toUpperCase()).where((e) => e.isNotEmpty).toSet();
 
     final isAllWarehouse = session.zone.trim().toLowerCase().contains('toàn bộ') ||
+        session.zone.trim().toLowerCase().contains('toàn kho') ||
+        session.zone.trim().toLowerCase().contains('tất cả') ||
         session.zone.trim().toUpperCase() == 'ALL' ||
         (session.locationCode == null && session.zone.isEmpty);
 
@@ -4973,6 +5376,7 @@ class WarehouseRepository extends ChangeNotifier {
       final item = _itemsByEpcIndex[epc] ?? _items.where((it) => it.epc.toUpperCase() == epc).firstOrNull;
 
       if (item == null || item.sku == 'UNKNOWN' || item.itemId.isEmpty) {
+        if (session.isSkuSpecific) continue;
         session.results.add(
           InventoryItemResult(
             epc: epc,
@@ -4980,21 +5384,24 @@ class WarehouseRepository extends ChangeNotifier {
             readAt: DateTime.now(),
           ),
         );
-      } else if (session.isSkuSpecific && !session.targetSkus.contains(item.sku)) {
-        // Mặt hàng khác quét được nhưng KHÔNG nằm trong phiếu kiểm kê chỉ định!
-        final actualLoc = resolveItemLocation(item);
-        final originLocDisplay = actualLoc != null
-            ? '${actualLoc.locationCode} • ${actualLoc.displayName} (${actualLoc.zone})'
-            : (item.locationId ?? 'Chưa gán vị trí');
+      } else if (session.isSkuSpecific) {
+        // Đơn kiểm kê theo từng mặt hàng cụ thể (SKU):
+        // Chỉ cần biết là có đủ hay không (số lượng quét vs tồn CSDL).
+        // Còn chip thuộc SKU khác (từ kho khác, kệ khác) thì BỎ QUA HOÀN TOÀN.
+        if (!session.targetSkus.contains(item.sku)) {
+          continue;
+        }
 
+        final actualLoc = resolveItemLocation(item);
+        final locDisplay = actualLoc?.displayName ?? (actualLoc?.locationCode ?? item.locationId ?? currentAuditLocDisplay);
         session.results.add(
           InventoryItemResult(
             epc: item.epc,
             sku: item.sku,
             productName: item.productName,
-            expectedLocation: 'Ngoài phiếu kiểm kê (SKU: ${item.sku})',
+            expectedLocation: locDisplay,
             actualLocation: currentAuditLocDisplay,
-            resultType: InventoryVarianceType.wrongLocation,
+            resultType: InventoryVarianceType.match,
             readAt: DateTime.now(),
           ),
         );
@@ -5051,9 +5458,58 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
+    // Sắp xếp danh sách kết quả ổn định tuyệt đối (Deterministic Stable Sort):
+    // 1. Phân loại theo nhóm nghiệp vụ: wrongLocation / unknownEpc -> match / missing.
+    // 2. Trong cùng nhóm: giữ nguyên vị trí cố định theo Mã SKU -> Tên sản phẩm -> Mã EPC.
+    // Nhờ đó, khi chip RFID được quét trúng, thẻ chỉ chuyển trạng thái từ "Chưa quét" sang "Đã quét"
+    // mà KHÔNG bao giờ bị nhảy lung tung, xáo trộn thứ tự trên màn hình PDA!
+    session.results.sort((a, b) {
+      int typeOrder(InventoryVarianceType t) {
+        switch (t) {
+          case InventoryVarianceType.wrongLocation:
+            return 0;
+          case InventoryVarianceType.unknownEpc:
+            return 1;
+          case InventoryVarianceType.match:
+          case InventoryVarianceType.missing:
+            return 2;
+        }
+      }
+
+      final tA = typeOrder(a.resultType);
+      final tB = typeOrder(b.resultType);
+      if (tA != tB) return tA.compareTo(tB);
+
+      final skuCmp = (a.sku ?? '').compareTo(b.sku ?? '');
+      if (skuCmp != 0) return skuCmp;
+
+      final nameCmp = (a.productName ?? '').compareTo(b.productName ?? '');
+      if (nameCmp != 0) return nameCmp;
+
+      return a.epc.toUpperCase().compareTo(b.epc.toUpperCase());
+    });
+
+    // Đồng bộ ngược lại cho session trong danh mục repo nếu targetSession là instance bên ngoài
+    final repoSession = _inventorySessions.where((s) => s.sessionId == sessionId).firstOrNull;
+    if (targetSession != null && repoSession != null && targetSession != repoSession) {
+      repoSession.results
+        ..clear()
+        ..addAll(session.results);
+    }
+
     _dbService.insertInventorySession(session);
     if (notify) {
       notifyListeners();
+    }
+  }
+
+  void _sanitizeSessionResults(InventorySession s) {
+    if (s.isSkuSpecific) {
+      s.results.removeWhere((r) =>
+          r.sku == null ||
+          !s.targetSkus.contains(r.sku) ||
+          r.resultType == InventoryVarianceType.unknownEpc ||
+          r.resultType == InventoryVarianceType.wrongLocation);
     }
   }
 
@@ -5062,6 +5518,7 @@ class WarehouseRepository extends ChangeNotifier {
     session.isCompleted = true;
     session.completedAt = DateTime.now();
 
+    _sanitizeSessionResults(session);
     // 1. Lưu DatabaseService
     await _dbService.insertInventorySession(session);
 
@@ -5093,7 +5550,7 @@ class WarehouseRepository extends ChangeNotifier {
         'location_code': session.locationCode,
         'started_at': session.startedAt.toIso8601String(),
         'completed_at': session.completedAt?.toIso8601String(),
-        'is_completed': 1,
+        'is_completed': true,
         'created_by': approvedBy,
         'target_skus': session.targetSkus.join(','),
       },
@@ -5266,6 +5723,10 @@ class WarehouseRepository extends ChangeNotifier {
     }
     final Map<String, List<InventoryItemResult>> map = {};
     for (final r in session.results) {
+      // Nếu là kiểm kê theo mặt hàng cụ thể (SKU): chỉ quan tâm đến các SKU mục tiêu, bỏ qua chip khác
+      if (session.isSkuSpecific && (r.sku == null || !session.targetSkus.contains(r.sku))) {
+        continue;
+      }
       if (zoneFilter != null && zoneFilter.isNotEmpty && zoneFilter != 'ALL') {
         final locStr = (r.expectedLocation ?? r.actualLocation ?? '').toUpperCase();
         bool match = locStr.contains(zoneFilter.toUpperCase());

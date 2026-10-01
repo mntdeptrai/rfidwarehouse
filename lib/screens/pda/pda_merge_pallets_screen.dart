@@ -686,92 +686,113 @@ class PdaMergePalletsScreenState extends State<PdaMergePalletsScreen> {
                 color: isSelected ? badgeColor.withValues(alpha: 0.12) : c.bgCardElevated,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(badge, style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                  // Chỉ báo đang chọn quét
-                  if (isSelected)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      margin: const EdgeInsets.only(right: 6),
-                      decoration: BoxDecoration(
-                        color: badgeColor,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
-                          SizedBox(width: 2),
-                          Text('ĐANG CHỜ QUÉT', style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    )
-                  else
-                    InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedSlot = isSource ? MergeScanSlot.source : MergeScanSlot.target;
-                        });
-                        HapticFeedback.selectionClick();
-                      },
-                      child: Container(
+                  Row(
+                    children: [
+                      Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        margin: const EdgeInsets.only(right: 6),
                         decoration: BoxDecoration(
-                          color: c.bgCard,
+                          color: badgeColor.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: c.border),
                         ),
-                        child: Text('Chạm chọn quét', style: TextStyle(color: c.textMuted, fontSize: 9.5, fontWeight: FontWeight.w500)),
+                        child: Text(badge, style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
-                    ),
-                  if (pallet != null)
-                    InkWell(
-                      onTap: _isProcessing
-                          ? null
-                          : () {
-                              setState(() {
-                                if (isSource) {
-                                  _sourcePallet = null;
-                                  _selectedSlot = MergeScanSlot.source;
-                                } else {
-                                  _targetPallet = null;
-                                  _selectedSlot = MergeScanSlot.target;
-                                }
-                              });
-                            },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        child: Text('Đổi', style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
-                    )
-                  else
-                    InkWell(
-                      onTap: _isProcessing ? null : () => _showManualSelectModal(isSource),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.list, color: c.rfidCyan, size: 16),
-                            const SizedBox(width: 3),
-                            Text('Chọn danh sách', style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
-                          ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Chỉ báo đang chọn quét
+                      if (isSelected)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: badgeColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.bolt_rounded, color: Colors.white, size: 12),
+                              SizedBox(width: 2),
+                              Text('ĐANG CHỜ QUÉT', style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        )
+                      else
+                        InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedSlot = isSource ? MergeScanSlot.source : MergeScanSlot.target;
+                            });
+                            HapticFeedback.selectionClick();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: c.bgCard,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: c.border),
+                            ),
+                            child: Text('Chạm chọn quét', style: TextStyle(color: c.textMuted, fontSize: 9.5, fontWeight: FontWeight.w500)),
+                          ),
+                        ),
+                      if (pallet != null)
+                        InkWell(
+                          onTap: _isProcessing
+                              ? null
+                              : () {
+                                  setState(() {
+                                    if (isSource) {
+                                      _sourcePallet = null;
+                                      _selectedSlot = MergeScanSlot.source;
+                                    } else {
+                                      _targetPallet = null;
+                                      _selectedSlot = MergeScanSlot.target;
+                                    }
+                                  });
+                                },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.refresh_rounded, color: c.rfidCyan, size: 14),
+                                const SizedBox(width: 3),
+                                Text('Đổi pallet', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        InkWell(
+                          onTap: _isProcessing ? null : () => _showManualSelectModal(isSource),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.list, color: c.rfidCyan, size: 15),
+                                const SizedBox(width: 3),
+                                Text('Chọn danh sách', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),

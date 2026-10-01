@@ -338,6 +338,7 @@ class SupabaseSyncService extends ChangeNotifier {
         'inventory_sessions',
         'inventory_session_details',
         'inventory_transactions',
+        'locate_orders',
         'users',
       ];
 
@@ -399,6 +400,41 @@ class SupabaseSyncService extends ChangeNotifier {
     if (tableName == 'outbound_orders' && result.containsKey('outbound_order_id')) {
       result.remove('details');
     }
+    if (tableName == 'inventory_sessions') {
+      final assignedBy = result['assigned_by'] ?? result['created_by'];
+      final assignedToId = result['assigned_to_user_id'];
+      final assignedToName = result['assigned_to_name'];
+      final targetSkus = result['target_skus'];
+      final notes = result['notes'];
+
+      // Bảng inventory_sessions trên Supabase Cloud chưa chạy migration thêm cột,
+      // vì vậy ta đóng gói metadata an toàn vào cột created_by (dạng JSON) và loại bỏ các cột không tồn tại
+      // để PostgREST không bị lỗi PGRST204 (Could not find column).
+      final meta = <String, dynamic>{
+        'by': assignedBy?.toString() ?? 'Thủ kho (Admin)',
+      };
+      if (assignedToId != null) meta['to_id'] = assignedToId.toString();
+      if (assignedToName != null) meta['to_name'] = assignedToName.toString();
+      if (notes != null) meta['notes'] = notes.toString();
+      if (targetSkus != null) {
+        if (targetSkus is List) {
+          meta['skus'] = targetSkus;
+        } else if (targetSkus is String && targetSkus.isNotEmpty) {
+          meta['skus'] = targetSkus.split(',').map((e) => e.trim()).toList();
+        }
+      }
+
+      result['created_by'] = jsonEncode(meta);
+      result.remove('assigned_by');
+      result.remove('assigned_to_user_id');
+      result.remove('assigned_to_name');
+      result.remove('target_skus');
+      result.remove('notes');
+
+      if (result['is_completed'] is num) {
+        result['is_completed'] = (result['is_completed'] as num) == 1;
+      }
+    }
     return result;
   }
 
@@ -428,6 +464,8 @@ class SupabaseSyncService extends ChangeNotifier {
         return 'config_key';
       case 'inventory_transactions':
         return 'transaction_id';
+      case 'locate_orders':
+        return 'order_id';
       default:
         return 'id';
     }

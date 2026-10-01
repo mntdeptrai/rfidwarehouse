@@ -349,6 +349,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         super.onCreate(savedInstanceState)
         bgThread = HandlerThread("UHF_BG").apply { start() }
         bgHandler = Handler(bgThread.looper)
@@ -466,7 +467,10 @@ class MainActivity : FlutterActivity() {
                 "getScanMode" -> result.success(currentScanMode)
                 "triggerBarcodeScan", "scanBarcode" -> { triggerBarcodeBroadcast(); result.success(true) }
                 "setFilterDuplicates" -> {
-                    filterDuplicates = call.argument<Boolean>("filter") ?: false; result.success(true)
+                    val filter = call.argument<Boolean>("filter") ?: false
+                    filterDuplicates = filter
+                    if (!filter) scannedEpcs.clear()
+                    result.success(true)
                 }
                 "clearScannedSession" -> { scannedEpcs.clear(); result.success(true) }
                 "inventorySingleTag" -> {
@@ -1064,10 +1068,6 @@ class MainActivity : FlutterActivity() {
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 stopBarcodeBroadcast()
-            } else {
-                if (isScanning.get()) {
-                    bgHandler.post { stopInventory() }
-                }
             }
             notifyFlutterTrigger(false, keyCode, mode)
         }
@@ -1112,6 +1112,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onResume() {
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         super.onResume()
         if (currentScanMode.lowercase() != "barcode") {
             disableBarcodeScannerHardware()

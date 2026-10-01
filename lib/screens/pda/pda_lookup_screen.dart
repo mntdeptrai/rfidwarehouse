@@ -6,6 +6,7 @@ import '../../services/uhf_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/wms_models.dart';
 import '../../theme/eye_care_theme.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../widgets/hardware_status_appbar.dart';
 import 'pda_transfer_screen.dart';
 
@@ -543,9 +544,18 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Danh sách kết quả tra cứu
+            // Danh sách kết quả tra cứu (hỗ trợ vuốt xuống để làm mới)
             Expanded(
-              child: _buildLookupBody(c),
+              child: RefreshIndicator(
+                color: c.rfidCyan,
+                backgroundColor: c.bgCardElevated,
+                onRefresh: () async {
+                  await SupabaseSyncService().syncNow();
+                  await _repo.reloadFromDatabase();
+                  _performLookup(_serialController.text);
+                },
+                child: _buildLookupBody(c),
+              ),
             ),
           ],
         ),
@@ -555,54 +565,61 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
 
   Widget _buildLookupBody(EyeCareColors c) {
     if (_serialController.text.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.radar_outlined, size: 56, color: c.textMuted.withValues(alpha: 0.4)),
-              const SizedBox(height: 12),
-              Text(
-                'Quét mã hoặc nhập để tra cứu',
-                style: TextStyle(color: c.textMuted, fontSize: 13),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_matchedItems.isEmpty && _matchedPallet == null && _matchedLocation == null) {
-      return Center(
-        child: SingleChildScrollView(
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: c.bgCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.errorCoral.withValues(alpha: 0.5)),
-            ),
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+          Center(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.search_off, size: 44, color: c.errorCoral),
-                const SizedBox(height: 10),
+                Icon(Icons.radar_outlined, size: 56, color: c.textMuted.withValues(alpha: 0.4)),
+                const SizedBox(height: 12),
                 Text(
-                  'Không tìm thấy "${_serialController.text}"',
-                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                  'Quét mã hoặc nhập để tra cứu\nVuốt xuống để làm mới dữ liệu',
+                  style: TextStyle(color: c.textMuted, fontSize: 13),
                   textAlign: TextAlign.center,
                 ),
               ],
             ),
           ),
-        ),
+        ],
+      );
+    }
+
+    if (_matchedItems.isEmpty && _matchedPallet == null && _matchedLocation == null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: c.bgCard,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: c.errorCoral.withValues(alpha: 0.5)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.search_off, size: 44, color: c.errorCoral),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Không tìm thấy "${_serialController.text}"',
+                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       );
     }
 
     return ListView(
-      physics: const ClampingScrollPhysics(),
-      cacheExtent: 400,
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         // 1. Kết quả Pallet (nếu khớp)
         if (_matchedPallet != null) ...[

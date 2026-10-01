@@ -252,6 +252,11 @@ class InventorySession {
   final List<InventoryItemResult> results;
   final List<String> targetSkus;
 
+  final String? assignedToUserId;
+  final String? assignedToName;
+  final String? assignedBy;
+  final String? notes;
+
   InventorySession({
     required this.sessionId,
     required this.sessionCode,
@@ -262,20 +267,51 @@ class InventorySession {
     this.isCompleted = false,
     List<InventoryItemResult>? results,
     List<String>? targetSkus,
+    this.assignedToUserId,
+    this.assignedToName,
+    this.assignedBy,
+    this.notes,
   })  : results = results ?? [],
         targetSkus = targetSkus ?? const [];
 
   bool get isSkuSpecific => targetSkus.isNotEmpty;
   String get targetSkusDisplay => targetSkus.isEmpty ? 'Tất cả mặt hàng' : targetSkus.join(', ');
 
-  int get matchCount => results.where((r) => r.resultType == InventoryVarianceType.match).length;
-  int get missingCount => results.where((r) => r.resultType == InventoryVarianceType.missing).length;
-  int get wrongLocationCount => results.where((r) => r.resultType == InventoryVarianceType.wrongLocation).length;
-  int get unknownEpcCount => results.where((r) => r.resultType == InventoryVarianceType.unknownEpc).length;
+  String get assignedToDisplay => (assignedToName != null && assignedToName!.trim().isNotEmpty)
+      ? assignedToName!.trim()
+      : 'Chưa chỉ định';
 
-  int get actualScannedCount => results.where((r) => r.resultType != InventoryVarianceType.missing).length;
-  int get knownInDbCount => results.where((r) => r.resultType != InventoryVarianceType.missing && r.resultType != InventoryVarianceType.unknownEpc).length;
-  int get varianceOrUnknownCount => (actualScannedCount - knownInDbCount) > 0 ? (actualScannedCount - knownInDbCount) : 0;
+  List<InventoryItemResult> get effectiveResults => isSkuSpecific
+      ? results.where((r) => r.sku != null && targetSkus.contains(r.sku)).toList()
+      : results;
+
+  int get matchCount => isSkuSpecific
+      ? effectiveResults.where((r) => r.resultType == InventoryVarianceType.match).length
+      : results.where((r) => r.resultType == InventoryVarianceType.match).length;
+
+  int get missingCount => isSkuSpecific
+      ? effectiveResults.where((r) => r.resultType == InventoryVarianceType.missing).length
+      : results.where((r) => r.resultType == InventoryVarianceType.missing).length;
+
+  int get wrongLocationCount => isSkuSpecific
+      ? 0
+      : results.where((r) => r.resultType == InventoryVarianceType.wrongLocation).length;
+
+  int get unknownEpcCount => isSkuSpecific
+      ? 0
+      : results.where((r) => r.resultType == InventoryVarianceType.unknownEpc).length;
+
+  int get actualScannedCount => isSkuSpecific
+      ? matchCount
+      : results.where((r) => r.resultType != InventoryVarianceType.missing).length;
+
+  int get knownInDbCount => isSkuSpecific
+      ? matchCount
+      : results.where((r) => r.resultType != InventoryVarianceType.missing && r.resultType != InventoryVarianceType.unknownEpc).length;
+
+  int get varianceOrUnknownCount => isSkuSpecific
+      ? 0
+      : ((actualScannedCount - knownInDbCount) > 0 ? (actualScannedCount - knownInDbCount) : 0);
 }
 
 /// Dòng đối soát tồn kho: Tồn dự kiến (Sổ sách) vs Tồn thực tế (Kiểm kê) theo từng SKU
@@ -420,3 +456,125 @@ class RfidDevice {
     required this.lastHeartbeat,
   });
 }
+
+/// Trạng thái của Đơn tìm kiếm vị trí thẻ / hàng hóa
+enum LocateOrderStatus {
+  pending('PENDING', 'Chờ tìm kiếm', 0xFFF59E0B),
+  inProgress('IN_PROGRESS', 'Đang tìm kiếm', 0xFF0284C7),
+  completed('COMPLETED', 'Đã tìm thấy', 0xFF10B981),
+  cancelled('CANCELLED', 'Đã hủy', 0xFF64748B);
+
+  final String code;
+  final String label;
+  final int colorValue;
+  const LocateOrderStatus(this.code, this.label, this.colorValue);
+
+  String get display => label;
+
+  static LocateOrderStatus fromCode(String? code) {
+    if (code == null) return LocateOrderStatus.pending;
+    final upper = code.trim().toUpperCase();
+    return LocateOrderStatus.values.firstWhere(
+      (s) => s.code == upper,
+      orElse: () => LocateOrderStatus.pending,
+    );
+  }
+}
+
+/// Đơn tìm kiếm vị trí thẻ RFID / Sản phẩm / Pallet (Locate Task / Search Order)
+class LocateOrder {
+  final String orderId;
+  final String orderNo;
+  final String title;
+  final String? targetEpc;
+  final String? targetSku;
+  final String? targetProductName;
+  final String? targetPalletCode;
+  final String? expectedLocation;
+  LocateOrderStatus status;
+  final String assignedToUserId; // ID nhân viên role handheld được chỉ định
+  final String assignedToName;   // Tên nhân viên handheld
+  final String createdBy;
+  final DateTime createdAt;
+  DateTime? completedAt;
+  String? completedBy;
+  String? foundLocation;
+  String? notes;
+
+  LocateOrder({
+    required this.orderId,
+    required this.orderNo,
+    required this.title,
+    this.targetEpc,
+    this.targetSku,
+    this.targetProductName,
+    this.targetPalletCode,
+    this.expectedLocation,
+    this.status = LocateOrderStatus.pending,
+    required this.assignedToUserId,
+    required this.assignedToName,
+    required this.createdBy,
+    required this.createdAt,
+    this.completedAt,
+    this.completedBy,
+    this.foundLocation,
+    this.notes,
+  });
+
+  String get targetDisplay {
+    if (targetProductName != null && targetProductName!.trim().isNotEmpty) {
+      return targetProductName!.trim();
+    }
+    if (targetSku != null && targetSku!.trim().isNotEmpty) {
+      return 'SKU: ${targetSku!.trim()}';
+    }
+    if (targetPalletCode != null && targetPalletCode!.trim().isNotEmpty) {
+      return 'Pallet: ${targetPalletCode!.trim()}';
+    }
+    if (targetEpc != null && targetEpc!.trim().isNotEmpty) {
+      return 'EPC: ${targetEpc!.trim()}';
+    }
+    return title;
+  }
+
+  Map<String, dynamic> toMap() => {
+    'order_id': orderId,
+    'order_no': orderNo,
+    'title': title,
+    'target_epc': targetEpc,
+    'target_sku': targetSku,
+    'target_product_name': targetProductName,
+    'target_pallet_code': targetPalletCode,
+    'expected_location': expectedLocation,
+    'status': status.code,
+    'assigned_to_user_id': assignedToUserId,
+    'assigned_to_name': assignedToName,
+    'created_by': createdBy,
+    'created_at': createdAt.toIso8601String(),
+    'completed_at': completedAt?.toIso8601String(),
+    'completed_by': completedBy,
+    'found_location': foundLocation,
+    'notes': notes,
+  };
+
+  factory LocateOrder.fromMap(Map<String, dynamic> map) => LocateOrder(
+    orderId: (map['order_id'] ?? '').toString(),
+    orderNo: (map['order_no'] ?? '').toString(),
+    title: (map['title'] ?? '').toString(),
+    targetEpc: map['target_epc']?.toString(),
+    targetSku: map['target_sku']?.toString(),
+    targetProductName: map['target_product_name']?.toString(),
+    targetPalletCode: map['target_pallet_code']?.toString(),
+    expectedLocation: map['expected_location']?.toString(),
+    status: LocateOrderStatus.fromCode(map['status']?.toString()),
+    assignedToUserId: (map['assigned_to_user_id'] ?? '').toString(),
+    assignedToName: (map['assigned_to_name'] ?? 'Nhân viên PDA').toString(),
+    createdBy: (map['created_by'] ?? 'Quản lý').toString(),
+    createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
+    completedAt: map['completed_at'] != null ? DateTime.tryParse(map['completed_at'].toString()) : null,
+    completedBy: map['completed_by']?.toString(),
+    foundLocation: map['found_location']?.toString(),
+    notes: map['notes']?.toString(),
+  );
+}
+

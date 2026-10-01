@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/services/warehouse_repository.dart';
-import 'package:uhf/services/uhf_service.dart';
 import 'package:uhf/screens/pda/pda_inventory_screen.dart';
 import 'package:uhf/screens/desktop/desktop_inventory_view.dart';
+import 'package:uhf/screens/desktop/desktop_audit_ticket_detail_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -109,13 +109,13 @@ void main() {
       final missingItem = session.results.firstWhere((r) => r.epc == epcPepsi2);
       expect(missingItem.resultType, equals(InventoryVarianceType.missing));
 
-      // - epcCoca: thuộc SKU-COCA (NGOÀI PHIẾU KIỂM KÊ) -> Cảnh báo sai vị trí / ngoài phiếu (wrongLocation)
-      expect(session.wrongLocationCount, equals(1));
-      final wrongItem = session.results.firstWhere((r) => r.epc == epcCoca);
-      expect(wrongItem.resultType, equals(InventoryVarianceType.wrongLocation));
-      expect(wrongItem.expectedLocation, contains('Ngoài phiếu kiểm kê'));
+      // - epcCoca: thuộc SKU-COCA (NGOÀI PHIẾU KIỂM KÊ) -> Bỏ qua hoàn toàn, không tính vào lệch/lạ
+      expect(session.wrongLocationCount, equals(0));
+      expect(session.unknownEpcCount, equals(0));
+      expect(session.results.any((r) => r.epc == epcCoca), isFalse);
 
       // 5. Quét tiếp lon Pepsi thứ 2 và một thẻ lạ (UNKNOWN)
+      // Thẻ lạ UNKNOWN_TAG_999 và lon Coca tiếp tục bị bỏ qua, chỉ ghi nhận đủ 2 lon Pepsi
       repo.processAuditScan(
         sessionId: session.sessionId,
         scannedEpcs: [epcPepsi1, epcPepsi2, epcCoca, 'UNKNOWN_TAG_999'],
@@ -123,8 +123,9 @@ void main() {
 
       expect(session.matchCount, equals(2));
       expect(session.missingCount, equals(0));
-      expect(session.wrongLocationCount, equals(1));
-      expect(session.unknownEpcCount, equals(1));
+      expect(session.wrongLocationCount, equals(0));
+      expect(session.unknownEpcCount, equals(0));
+      expect(session.results.length, equals(2)); // Chỉ có đúng 2 lon Pepsi cần kiểm, đã đủ 100%
 
       // 6. Hoàn tất phiếu kiểm kê
       await repo.completeInventorySession(session.sessionId, 'Thủ kho PDA');
@@ -239,6 +240,85 @@ void main() {
 
       // Kiểm tra banner session active trên Desktop hiển thị phạm vi lọc SKU
       expect(find.textContaining('Lọc 1 SKU (SKU-COFFEE)'), findsOneWidget);
+    });
+
+    testWidgets('4. DesktopAuditTicketDetailView hiển thị chuẩn cho phiếu kiểm kê theo SKU (không báo sai vị trí, không thẻ lạ)', (tester) async {
+      final session = InventorySession(
+        sessionId: 'SESS-SKU-TEST-001',
+        sessionCode: 'KK-SKU-001',
+        zone: 'Toàn bộ kho',
+        targetSkus: ['SKU-TEST-POLO'],
+        isCompleted: true,
+        startedAt: DateTime.now().subtract(const Duration(minutes: 10)),
+        completedAt: DateTime.now(),
+        results: [
+          InventoryItemResult(
+            epc: 'EPC-MATCH-01',
+            sku: 'SKU-TEST-POLO',
+            productName: 'Áo Polo Test',
+            resultType: InventoryVarianceType.match,
+            readAt: DateTime.now(),
+          ),
+          InventoryItemResult(
+            epc: 'EPC-MATCH-02',
+            sku: 'SKU-TEST-POLO',
+            productName: 'Áo Polo Test',
+            resultType: InventoryVarianceType.match,
+            readAt: DateTime.now(),
+          ),
+          // Các thẻ khác bị dính từ trước nếu có
+          InventoryItemResult(
+            epc: 'EPC-FOREIGN-01',
+            sku: 'SKU-OTHER',
+            productName: 'Quần Khác',
+            resultType: InventoryVarianceType.wrongLocation,
+            readAt: DateTime.now(),
+          ),
+          InventoryItemResult(
+            epc: 'EPC-UNKNOWN-01',
+            resultType: InventoryVarianceType.unknownEpc,
+            readAt: DateTime.now(),
+          ),
+        ],
+      );
+
+      // Verify model getters ignore extraneous items
+      expect(session.isSkuSpecific, isTrue);
+      expect(session.matchCount, equals(2));
+      expect(session.missingCount, equals(0));
+      expect(session.wrongLocationCount, equals(0));
+      expect(session.unknownEpcCount, equals(0));
+      expect(session.actualScannedCount, equals(2));
+      expect(session.effectiveResults.length, equals(2));
+
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
+          home: Scaffold(
+            body: DesktopAuditTicketDetailView(
+              session: session,
+              onBack: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Kiểm tra Phạm vi hiển thị theo mặt hàng
+      expect(find.textContaining('Theo mặt hàng: SKU-TEST-POLO'), findsOneWidget);
+
+      // Kiểm tra Thẻ Tồn dự kiến và Khớp chuẩn
+      expect(find.text('2 SP'), findsNWidgets(2)); // Tồn dự kiến 2 SP, Khớp chuẩn 2 SP
+      expect(find.text('2 Chip'), findsOneWidget); // Thực tế quét 2 Chip
+
+      // Xác nhận KHÔNG hiển thị thẻ "SAI VỊ TRÍ" hay "THẺ LẠ"
+      expect(find.text('🔀 SAI VỊ TRÍ'), findsNothing);
+      expect(find.text('❓ THẺ LẠ'), findsNothing);
+
+      // Xác nhận Tab 2 hiển thị đúng số lượng hiệu lực (2 chip)
+      expect(find.text('CHI TIẾT DANH SÁCH CHIP RFID EPC (2)'), findsOneWidget);
     });
   });
 }

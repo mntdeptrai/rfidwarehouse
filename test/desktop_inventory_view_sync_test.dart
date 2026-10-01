@@ -88,5 +88,67 @@ void main() {
       // Dọn dẹp
       await repo.deleteInventorySession(session.sessionId);
     });
+
+    testWidgets('Desktop creates inventory session assigned to PDA worker and stays on dashboard without forcing scan mode', (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      // Tạo người dùng cầm tay PDA
+      final pdaUser = WmsUser(
+        userId: 'USER-PDA-01',
+        username: 'ngovan_hai',
+        fullName: 'Ngô Văn Hải',
+        role: 'handheld',
+        isActive: true,
+      );
+      await repo.addUser(pdaUser);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(splashFactory: InkRipple.splashFactory),
+          home: const Scaffold(
+            body: DesktopInventoryView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Bấm nút tạo đơn kiểm kê
+      final createBtn = find.text('+ TẠO ĐƠN KIỂM KÊ').last;
+      await tester.tap(createBtn);
+      await tester.pumpAndSettle();
+
+      // Chọn nhân viên Ngô Văn Hải từ Dropdown
+      final dropdown = find.byType(DropdownButton<String?>);
+      expect(dropdown, findsOneWidget);
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+
+      final staffItem = find.textContaining('Ngô Văn Hải').last;
+      await tester.tap(staffItem);
+      await tester.pumpAndSettle();
+
+      // Nút hành động đổi thành "TẠO ĐƠN & GIAO MÁY CẦM TAY"
+      expect(find.text('TẠO ĐƠN & GIAO MÁY CẦM TAY'), findsOneWidget);
+
+      // Bấm giao đơn cho máy cầm tay
+      await tester.tap(find.text('TẠO ĐƠN & GIAO MÁY CẦM TAY'));
+      await tester.pumpAndSettle();
+
+      // Đảm bảo Desktop KHÔNG bị ép vào màn hình quét ("BẮT ĐẦU QUÉT RFID")
+      expect(find.text('BẮT ĐẦU QUÉT RFID'), findsNothing);
+
+      // Đảm bảo Desktop vẫn ở Dashboard và hiển thị thông báo đã giao cho PDA
+      expect(find.textContaining('và giao cho Ngô Văn Hải trên máy cầm tay PDA thành công!'), findsOneWidget);
+
+      // Đảm bảo trong bảng danh sách hiển thị trạng thái "CHỜ PDA QUÉT" và người phụ trách
+      expect(find.text('CHỜ PDA QUÉT'), findsWidgets);
+      expect(find.textContaining('Phụ trách: Ngô Văn Hải'), findsWidgets);
+
+      // Dọn dẹp
+      final created = repo.inventorySessions.firstWhere((s) => s.assignedToUserId == 'USER-PDA-01');
+      await repo.deleteInventorySession(created.sessionId);
+    });
   });
 }

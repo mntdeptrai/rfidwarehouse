@@ -112,11 +112,13 @@ class _OutboundScreenState extends State<OutboundScreen> {
   Set<String>? _cachedExpectedEpcs;
   Set<String>? _cachedValidPalletEpcs;
   Map<String, _PendingOutboundItem>? _cachedItemByEpc;
+  String? _selectedLocationFilter;
 
   void _invalidateOutboundCache() {
     _cachedExpectedEpcs = null;
     _cachedValidPalletEpcs = null;
     _cachedItemByEpc = null;
+    _selectedLocationFilter = null;
   }
 
   bool _isImporting = false;
@@ -137,6 +139,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _uhf.setScanMode(PdaScanMode.rfid);
     _initHardwareListeners();
     _initInitialData();
+    // Tự động kéo đơn xuất kho mới nhất từ Supabase Cloud khi vào màn hình
+    unawaited(_repo.reloadFromDatabase());
   }
 
   void _onStateChange() {
@@ -241,11 +245,58 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _gateScannedTags[epc] = tag;
 
     final order = _pendingOutboundOrder!;
-    final expectedEpcs = _cachedExpectedEpcs ??= order.items.map((i) => i.epc.toUpperCase()).toSet();
-    final validPalletEpcs = _cachedValidPalletEpcs ??= order.pallets.values.where((e) => e != null && e.isNotEmpty && e != '--').map((e) => e!.toUpperCase()).toSet();
+
+    // 1. Kiểm tra xem thẻ quét có phải là Pallet RFID Tag (xuất cả Pallet)
+    final matchingPalletInOrder = order.pallets.entries.where(
+      (e) => (e.value != null && e.value!.trim().toUpperCase() == epc) || e.key.trim().toUpperCase() == epc,
+    ).firstOrNull;
+    final matchedPalletCode = matchingPalletInOrder?.key ?? _repo.pallets.where(
+      (p) => (p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == epc) || p.palletCode.trim().toUpperCase() == epc || p.palletId.trim().toUpperCase() == epc,
+    ).firstOrNull?.palletCode;
+
+    List<_PendingOutboundItem> autoMatchedPalletItems = [];
+    if (matchedPalletCode != null || matchingPalletInOrder != null) {
+      final pCode = (matchedPalletCode ?? matchingPalletInOrder!.key).trim().toUpperCase();
+      autoMatchedPalletItems = order.items.where((i) =>
+        i.palletCode.trim().toUpperCase() == pCode ||
+        (i.palletEpc.isNotEmpty && i.palletEpc.trim().toUpperCase() == epc)
+      ).toList();
+
+      for (final it in autoMatchedPalletItems) {
+        final itemEpc = it.epc.trim().toUpperCase();
+        if (itemEpc.isNotEmpty && itemEpc != '--') {
+          _gateScannedTags[itemEpc] = TagInfo(
+            epc: it.epc,
+            rssi: tag.rssi,
+            count: tag.count,
+            timestamp: tag.timestamp,
+            ant: tag.ant,
+          );
+        }
+      }
+    }
+
+    final expectedEpcs = _cachedExpectedEpcs ??= order.items.map((i) => i.epc.toUpperCase()).where((e) => e.isNotEmpty && e != '--').toSet();
+    final validPalletEpcs = _cachedValidPalletEpcs ??= () {
+      final set = <String>{};
+      for (final e in order.pallets.values) {
+        if (e != null && e.isNotEmpty && e != '--') set.add(e.toUpperCase());
+      }
+      for (final code in order.pallets.keys) {
+        set.add(code.toUpperCase());
+        final pal = _repo.pallets.where((p) => p.palletCode.toUpperCase() == code.toUpperCase() || p.palletId.toUpperCase() == code.toUpperCase()).firstOrNull;
+        if (pal?.rfidEpc != null && pal!.rfidEpc!.isNotEmpty) set.add(pal.rfidEpc!.toUpperCase());
+      }
+      for (final it in order.items) {
+        if (it.palletEpc.isNotEmpty && it.palletEpc != '--') set.add(it.palletEpc.toUpperCase());
+        if (it.palletCode.isNotEmpty && it.palletCode != '--') set.add(it.palletCode.toUpperCase());
+      }
+      return set;
+    }();
+
     _cachedItemByEpc ??= { for (final it in order.items) it.epc.toUpperCase(): it };
-    final totalExpected = expectedEpcs.length + validPalletEpcs.length;
-    final scannedMatching = _gateScannedTags.keys.where((e) => expectedEpcs.contains(e) || validPalletEpcs.contains(e)).length;
+    final totalExpected = expectedEpcs.length;
+    final scannedMatching = order.items.where((i) => _gateScannedTags.containsKey(i.epc.toUpperCase())).length;
     final unexpected = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
     if (unexpected.isNotEmpty) {
@@ -254,36 +305,43 @@ class _OutboundScreenState extends State<OutboundScreen> {
         reason: 'CẢNH BÁO: Phát hiện ${unexpected.length} chip lạ ngoài danh sách xuất kho!',
       );
     } else {
-      // Đối soát tồn kho và thứ tự FIFO cho chip vừa quét
-      final item = _cachedItemByEpc![epc];
-      if (item != null) {
-        if (!item.isInStock) {
-          _towerLight.triggerWarningRed(
-            withBuzzer: true,
-            reason: 'CẢNH BÁO TỒN KHO: Mã chip $epc (SKU: ${item.sku}) không có trong kho!',
-          );
-        } else {
-          // Kiểm tra xem có lô cũ hơn cùng SKU chưa quét không
-          final olderUnscanned = order.items.where((i) =>
-              i.sku.toUpperCase() == item.sku.toUpperCase() &&
-              i.isInStock &&
-              i.fifoPriority < item.fifoPriority &&
-              !_gateScannedTags.containsKey(i.epc.toUpperCase())
-          ).toList();
-
-          if (olderUnscanned.isNotEmpty) {
-            final oldest = olderUnscanned.first;
+      if (autoMatchedPalletItems.isNotEmpty) {
+        final palName = matchedPalletCode ?? matchingPalletInOrder?.key ?? epc;
+        _towerLight.triggerPass(
+          reason: 'NHẬN DIỆN NGUYÊN PALLET [$palName]: Tự động đối soát trọn gói ${autoMatchedPalletItems.length} sản phẩm!',
+        );
+      } else {
+        // Đối soát tồn kho và thứ tự FIFO cho chip vừa quét
+        final item = _cachedItemByEpc![epc];
+        if (item != null) {
+          if (!item.isInStock) {
             _towerLight.triggerWarningRed(
-              withBuzzer: false,
-              reason: 'LƯU Ý FIFO: Quét lô mới (FIFO #${item.fifoPriority}) của ${item.sku}. Cần lấy lô cũ trước: kệ ${oldest.locationCode} (FIFO #${oldest.fifoPriority})!',
+              withBuzzer: true,
+              reason: 'CẢNH BÁO TỒN KHO: Mã chip $epc (SKU: ${item.sku}) không có trong kho!',
             );
+          } else {
+            // Kiểm tra xem có lô cũ hơn cùng SKU chưa quét không
+            final olderUnscanned = order.items.where((i) =>
+                i.sku.toUpperCase() == item.sku.toUpperCase() &&
+                i.isInStock &&
+                i.fifoPriority < item.fifoPriority &&
+                !_gateScannedTags.containsKey(i.epc.toUpperCase())
+            ).toList();
+
+            if (olderUnscanned.isNotEmpty) {
+              final oldest = olderUnscanned.first;
+              _towerLight.triggerWarningRed(
+                withBuzzer: false,
+                reason: 'LƯU Ý FIFO: Quét lô mới (FIFO #${item.fifoPriority}) của ${item.sku}. Cần lấy lô cũ trước: kệ ${oldest.locationCode} (FIFO #${oldest.fifoPriority})!',
+              );
+            }
           }
         }
       }
 
       if (totalExpected > 0 && scannedMatching >= totalExpected) {
         _towerLight.triggerPass(
-          reason: 'ĐỦ HÀNG XUẤT KHO: $scannedMatching/$totalExpected chip đã thông qua tay cầm!',
+          reason: 'ĐỦ HÀNG XUẤT KHO: $scannedMatching/$totalExpected sản phẩm đã thông qua tay cầm!',
         );
       }
     }
@@ -598,7 +656,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-          duration: const Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
               backgroundColor: const Color(0xFF10B981),
               content: Text('✓ Đã nạp thành công đơn $orderNo (${validatedItems.length} SP - Đủ tồn kho)'),
             ),
@@ -610,7 +668,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-          duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi nạp file PO: $e'),
           ),
@@ -629,18 +687,22 @@ class _OutboundScreenState extends State<OutboundScreen> {
     for (final detail in order.details) {
       if (detail.epcList != null && detail.epcList!.isNotEmpty) {
         for (final epc in detail.epcList!) {
-          rawRequests.add({
-            'sku': detail.sku,
-            'cartonCode': '--',
-            'palletCode': '--',
-            'customer': order.customer,
-            'productName': detail.productName,
-            'palletEpc': '--',
-            'epc': epc,
-          });
+          final st = _repo.items.where((s) => s.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
+          if (st == null || st.status == ItemStatus.inStock) {
+            rawRequests.add({
+              'sku': detail.sku,
+              'cartonCode': '--',
+              'palletCode': '--',
+              'customer': order.customer,
+              'productName': detail.productName,
+              'palletEpc': '--',
+              'epc': epc,
+            });
+          }
         }
       } else {
-        for (int i = 0; i < detail.requiredQty; i++) {
+        final remainingQty = detail.requiredQty - detail.pickedQty;
+        for (int i = 0; i < (remainingQty > 0 ? remainingQty : 0); i++) {
           rawRequests.add({
             'sku': detail.sku,
             'cartonCode': '--',
@@ -652,6 +714,18 @@ class _OutboundScreenState extends State<OutboundScreen> {
           });
         }
       }
+    }
+
+    if (rawRequests.isEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          backgroundColor: const Color(0xFF10B981),
+          content: Text('✓ Đơn hàng ${order.poNo} đã hoàn tất xuất kho toàn bộ!'),
+        ),
+      );
+      return;
     }
 
     final validation = _repo.validateOutboundInventoryAndFifo(requestedItems: rawRequests);
@@ -673,6 +747,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
     _clearGateScan();
     setState(() {
+      _selectedLocationFilter = null;
       _pendingOutboundOrder = _PendingOutboundOrder(
         orderNo: order.poNo,
         customer: order.customer,
@@ -699,9 +774,9 @@ class _OutboundScreenState extends State<OutboundScreen> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-          duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFF10B981),
-            content: Text('✓ Đã nạp đơn ${order.poNo} (${validatedItems.length} sản phẩm - Đủ tồn kho)'),
+            content: Text('✓ Đã nạp đơn ${order.poNo} (${validatedItems.length} sản phẩm cần nhặt - Đủ tồn kho)'),
           ),
         );
       }
@@ -833,7 +908,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     );
   }
 
-  // ---------- XÁC NHẬN XUẤT KHO HOÀN TẤT & CẬP NHẬT KHO ----------
+  // ---------- XÁC NHẬN XUẤT KHO HOÀN TẤT & CẬP NHẬT KHO (HỖ TRỢ XUẤT LẺ THEO VỊ TRÍ) ----------
   Future<void> _confirmOutboundDelivery() async {
     if (_isSaving || _pendingOutboundOrder == null) return;
     final order = _pendingOutboundOrder!;
@@ -852,21 +927,120 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
     final expectedEpcs = order.items.map((i) => i.epc.toUpperCase()).toSet();
     final validPalletEpcs = order.pallets.values.where((e) => e != null && e.isNotEmpty && e != '--').map((e) => e!.toUpperCase()).toSet();
-    final totalExpected = expectedEpcs.length + validPalletEpcs.length;
-    final scannedMatching = _gateScannedTags.keys.where((e) => expectedEpcs.contains(e) || validPalletEpcs.contains(e)).length;
     final unexp = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
-    if (scannedMatching < totalExpected || unexp.isNotEmpty) {
+    if (unexp.isNotEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text('Không thể xuất kho: Có ${unexp.length} chip lạ ngoài đơn hàng đang gần đầu đọc! Vui lòng làm mới quét.'),
+        ),
+      );
+      return;
+    }
+
+    // Lọc danh sách sản phẩm khớp trong đơn đã quét
+    final scannedMatchingItems = order.items.where((i) => _gateScannedTags.containsKey(i.epc.toUpperCase())).toList();
+    if (scannedMatchingItems.isEmpty) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           duration: Duration(seconds: 2),
           backgroundColor: Color(0xFFEF4444),
-          content: Text('Không thể xuất kho: Chưa quét đủ mã pallet/hàng hoặc có chip lạ ngoài đơn!'),
+          content: Text('Chưa quét được sản phẩm nào trong đơn hàng để xuất kho!'),
         ),
       );
       return;
     }
+
+    final isPartial = scannedMatchingItems.length < order.items.length;
+    final scannedEpcs = scannedMatchingItems.map((i) => i.epc.toUpperCase()).toList();
+
+    // Gom nhóm các vị trí kệ của sản phẩm đã quét để hiển thị rõ ràng cho thủ kho
+    final Map<String, int> locCounts = {};
+    for (final it in scannedMatchingItems) {
+      final loc = it.locationCode.isNotEmpty && it.locationCode != '--' ? it.locationCode : 'Chưa gán kệ';
+      locCounts[loc] = (locCounts[loc] ?? 0) + 1;
+    }
+    final locSummary = locCounts.entries.map((e) => '${e.key}: ${e.value} SP').join(', ');
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _eyeCare.colors.bgCardElevated,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              isPartial ? Icons.shopping_basket_outlined : Icons.check_circle_outline,
+              color: isPartial ? const Color(0xFF0284C7) : const Color(0xFF10B981),
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isPartial ? 'XÁC NHẬN XUẤT LẺ' : 'XÁC NHẬN XUẤT KHO ĐỦ',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isPartial
+                  ? 'Bạn đang thực hiện xuất lẻ ${scannedMatchingItems.length}/${order.items.length} sản phẩm theo vị trí kệ.'
+                  : 'Xác nhận xuất hoàn tất toàn bộ ${scannedMatchingItems.length} sản phẩm của đơn hàng ${order.orderNo}.',
+              style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: _eyeCare.colors.bgDeep,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _eyeCare.colors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Vị trí kệ lấy hàng:', style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(locSummary, style: TextStyle(color: _eyeCare.colors.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            if (isPartial) ...[
+              const SizedBox(height: 8),
+              Text(
+                '• Tồn kho tại các kệ trên sẽ được trừ ngay lập tức.\n• ${order.items.length - scannedMatchingItems.length} sản phẩm còn lại sẽ tiếp tục được giữ trong đơn để nhặt tiếp.',
+                style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 11.5, height: 1.4),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('HỦY', style: TextStyle(color: _eyeCare.colors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isPartial ? const Color(0xFF0284C7) : const Color(0xFF10B981),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isPartial ? 'XUẤT LẺ' : 'XUẤT HOÀN TẤT'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
 
     setState(() => _isSaving = true);
     try {
@@ -875,55 +1049,80 @@ class _OutboundScreenState extends State<OutboundScreen> {
       final shippedCount = await _repo.confirmGateOutbound(
         poNo: order.orderNo,
         customer: order.customer,
-        scannedEpcs: expectedEpcs.toList(),
+        scannedEpcs: scannedEpcs,
         performedBy: _auth.currentUser?.fullName ?? 'Tay Cầm PDA Xuất Kho',
       );
 
-      _towerLight.triggerPass(reason: 'HOÀN TẤT XUẤT KHO: $shippedCount sản phẩm đã đối soát thành công');
+      _towerLight.triggerPass(reason: 'XUẤT THÀNH CÔNG: $shippedCount sản phẩm đã đối soát');
       await _supabaseSync.syncNow();
 
       if (!mounted) return;
 
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: _eyeCare.colors.bgCardElevated,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
-              SizedBox(width: 8),
-              Text('XUẤT KHO THÀNH CÔNG', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      if (isPartial) {
+        final remainingItems = order.items.where((i) => !_gateScannedTags.containsKey(i.epc.toUpperCase())).toList();
+        _clearGateScan();
+        setState(() {
+          _pendingOutboundOrder = _PendingOutboundOrder(
+            orderNo: order.orderNo,
+            customer: order.customer,
+            items: remainingItems,
+            pallets: order.pallets,
+            fileName: order.fileName,
+            isStockSufficient: true,
+            shortageCount: 0,
+            shortageBySku: {},
+          );
+        });
+
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF10B981),
+            content: Text('✓ Đã xuất lẻ $shippedCount SP từ kệ ($locSummary)! Còn ${remainingItems.length} SP cần nhặt.'),
+          ),
+        );
+      } else {
+        _clearGateScan();
+        setState(() {
+          _pendingOutboundOrder = null;
+        });
+
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: _eyeCare.colors.bgCardElevated,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
+                SizedBox(width: 8),
+                Text('XUẤT KHO HOÀN TẤT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ],
+            ),
+            content: Text(
+              'Đã xuất kho toàn bộ $shippedCount sản phẩm theo chứng từ ${order.orderNo}.\nDữ liệu tồn kho và vị trí kệ đã được cập nhật.',
+              style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13),
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('ĐỒNG Ý'),
+              ),
             ],
           ),
-          content: Text(
-            'Đã xuất kho thành công $shippedCount sản phẩm theo chứng từ ${order.orderNo}.\nDữ liệu tồn kho đã được cập nhật.',
-            style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13),
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                setState(() {
-                  _pendingOutboundOrder = null;
-                  _clearGateScan();
-                });
-              },
-              child: const Text('ĐỒNG Ý'),
-            ),
-          ],
-        ),
-      );
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-          duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi xác nhận xuất kho: $e'),
           ),
@@ -952,9 +1151,23 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
           // 2. NỘI DUNG CHÍNH: Màn hình chờ hoặc Bảng hàng hóa + 3 ô chỉ số + 3 nút điều khiển
           Expanded(
-            child: _pendingOutboundOrder == null
-                ? _buildIdleGateMonitor(c)
-                : _buildActiveOutboundView(c),
+            child: RefreshIndicator(
+              color: c.rfidCyan,
+              backgroundColor: c.bgCardElevated,
+              onRefresh: () async {
+                await SupabaseSyncService().syncNow();
+                await _repo.reloadFromDatabase();
+              },
+              child: _pendingOutboundOrder == null
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      children: [
+                        _buildIdleGateMonitor(c),
+                      ],
+                    )
+                  : _buildActiveOutboundView(c),
+            ),
           ),
         ],
       ),
@@ -1152,32 +1365,163 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   // ---------- 2. MÀN HÌNH CHỜ QUÉT KHI CHƯA NẠP FILE (CHUẨN DESKTOP) ----------
   Widget _buildIdleGateMonitor(EyeCareColors c) {
+    final pendingOrders = _repo.outboundOrders
+        .where((o) => o.status != OutboundOrderStatus.shipped)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: c.rfidCyan.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.sensors, size: 50, color: c.rfidCyan),
+              child: Icon(Icons.sensors, size: 42, color: c.rfidCyan),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
               'CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT',
               textAlign: TextAlign.center,
-              style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+              style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 0.3),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Text(
-              'Vui lòng bấm nút [XUẤT HÀNG] ở góc trên để tải file danh sách xuất kho vào hệ thống.\nSau khi nạp file, bạn có thể bóp cò tay cầm PDA để đối soát xuất hàng.',
+              'Bấm [XUẤT HÀNG ▼] ở trên để nạp file Excel/PO, hoặc chọn đơn xuất từ máy tính bên dưới để bắt đầu quét:',
               textAlign: TextAlign.center,
-              style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.45),
+              style: TextStyle(color: c.textSecondary, fontSize: 11.5, height: 1.4),
             ),
+            const SizedBox(height: 16),
+            if (pendingOrders.isNotEmpty) ...[
+              Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 16, color: c.rfidCyan),
+                    const SizedBox(width: 6),
+                    Text(
+                      'ĐƠN XUẤT CHỜ QUÉT (${pendingOrders.length})',
+                      style: TextStyle(color: c.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    ),
+                  ],
+                ),
+              ),
+              ...pendingOrders.map((o) {
+                final totalQty = o.details.fold(0, (s, d) => s + d.requiredQty);
+                final pickedQty = o.details.fold(0, (s, d) => s + d.pickedQty);
+                final isPartial = pickedQty > 0 && pickedQty < totalQty;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: c.bgCard,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: BorderSide(
+                      color: isPartial ? const Color(0xFFF59E0B).withValues(alpha: 0.5) : c.border,
+                      width: isPartial ? 1.4 : 1.0,
+                    ),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _loadOutboundOrderFromDb(o),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: (isPartial ? const Color(0xFFF59E0B) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              isPartial ? Icons.shopping_basket_outlined : Icons.receipt_long,
+                              color: isPartial ? const Color(0xFFF59E0B) : const Color(0xFF0284C7),
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(o.poNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: (isPartial ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        isPartial ? 'Đang xuất ($pickedQty/$totalQty)' : 'Mới tạo ($totalQty SP)',
+                                        style: TextStyle(
+                                          color: isPartial ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${o.customer} • ${o.details.length} loại hàng',
+                                  style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(Icons.arrow_forward_ios, size: 14, color: c.textSecondary),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: c.bgCard,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.border),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.inventory_2_outlined, size: 28, color: c.textSecondary.withValues(alpha: 0.6)),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Chưa có đơn xuất kho nào trong hệ thống',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.file_upload_outlined, size: 16),
+                      label: const Text('Nạp File Đơn Xuất (Excel/PO)', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                      onPressed: _showOutboundPoOptionsDialog,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -1187,6 +1531,15 @@ class _OutboundScreenState extends State<OutboundScreen> {
   // ---------- 3. GIAO DIỆN XUẤT HÀNG KHI ĐÃ NẠP FILE (CHUẨN DESKTOP) ----------
   Widget _buildActiveOutboundView(EyeCareColors c) {
     final order = _pendingOutboundOrder!;
+    final locations = order.items
+        .map((i) => i.locationCode)
+        .where((loc) => loc.isNotEmpty && loc != '--')
+        .toSet()
+        .toList()
+      ..sort();
+    final displayedItems = _selectedLocationFilter == null
+        ? order.items
+        : order.items.where((i) => i.locationCode == _selectedLocationFilter).toList();
     final expectedEpcs = _cachedExpectedEpcs ??= order.items.map((i) => i.epc.toUpperCase()).toSet();
     final validPalletEpcs = _cachedValidPalletEpcs ??= order.pallets.values.where((e) => e != null && e.isNotEmpty && e != '--').map((e) => e!.toUpperCase()).toSet();
 
@@ -1298,6 +1651,44 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
         ),
 
+        // 2b. LỌC THEO VỊ TRÍ KỆ CHO THỦ KHO NHẶT HÀNG LẺ
+        if (locations.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 2, 10, 4),
+            alignment: Alignment.centerLeft,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  Text('Lọc kệ: ', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 4),
+                  ChoiceChip(
+                    label: Text('Tất cả (${order.items.length})', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    selected: _selectedLocationFilter == null,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => setState(() => _selectedLocationFilter = null),
+                  ),
+                  const SizedBox(width: 6),
+                  ...locations.map((loc) {
+                    final cnt = order.items.where((i) => i.locationCode == loc).length;
+                    final isSel = _selectedLocationFilter == loc;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ChoiceChip(
+                        avatar: Icon(Icons.location_on, size: 12, color: isSel ? Colors.white : const Color(0xFF0284C7)),
+                        label: Text('$loc ($cnt)', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold)),
+                        selected: isSel,
+                        visualDensity: VisualDensity.compact,
+                        onSelected: (_) => setState(() => _selectedLocationFilter = isSel ? null : loc),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+        ],
+
         // 3 Ô CHỈ SỐ: ĐÃ QUÉT (xanh), THIẾU (vàng), LẠ (đỏ) - Đều nhau (RepaintBoundary cách ly vẽ lại)
         RepaintBoundary(
           child: Container(
@@ -1389,12 +1780,11 @@ class _OutboundScreenState extends State<OutboundScreen> {
                       Expanded(
                         child: ListView.separated(
                           physics: const ClampingScrollPhysics(),
-                          cacheExtent: 600,
-                          itemCount: order.items.length + unexpList.length,
+                          itemCount: displayedItems.length + unexpList.length,
                           separatorBuilder: (_, _) => Divider(height: 1, color: c.border.withValues(alpha: 0.4)),
                           itemBuilder: (context, index) {
-                            if (index < order.items.length) {
-                              final item = order.items[index];
+                            if (index < displayedItems.length) {
+                              final item = displayedItems[index];
                               final epc = item.epc.trim().toUpperCase();
                               final isScanned = _gateScannedTags.containsKey(epc);
 
@@ -1546,7 +1936,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                 ),
                               );
                             } else {
-                              final unexp = unexpList[index - order.items.length];
+                              final unexp = unexpList[index - displayedItems.length];
 
                               return Container(
                                 color: const Color(0xFFEF4444).withValues(alpha: 0.08),
@@ -1600,7 +1990,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     );
   }
 
-  // ---------- 4. THANH ĐIỀU KHIỂN DƯỚI CÙNG (3 NÚT GIỐNG XUẤT KHO DESKTOP) ----------
+  // ---------- 4. THANH ĐIỀU KHIỂN DƯỚI CÙNG (HỖ TRỢ XUẤT LẺ & XUẤT ĐỦ) ----------
   Widget _buildBottomControlBar(
     EyeCareColors c, {
     required int scannedCount,
@@ -1610,7 +2000,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     required bool isStockSufficient,
   }) {
     final hasUnexpected = unexpCount > 0;
-    final canConfirm = isComplete && !hasUnexpected;
+    final canConfirm = scannedCount > 0 && !hasUnexpected;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1650,11 +2040,13 @@ class _OutboundScreenState extends State<OutboundScreen> {
             ),
             if (canConfirm) ...[
               const SizedBox(width: 8),
-              // Nút Xác Nhận Xuất Kho: Chỉ hiện khi đã quét đủ 100% và không có chip lạ
+              // Nút Xác Nhận Xuất Kho: Hỗ trợ Xuất Lẻ ($scanned/$expected) hoặc Xuất Đủ
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isStockSufficient ? const Color(0xFF10B981) : const Color(0xFF9CA3AF),
+                    backgroundColor: !isStockSufficient
+                        ? const Color(0xFF9CA3AF)
+                        : (isComplete ? const Color(0xFF10B981) : const Color(0xFF0284C7)),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1662,14 +2054,18 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   icon: isStockSufficient
                       ? (_isSaving
                           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.check_circle, size: 16))
+                          : Icon(isComplete ? Icons.check_circle : Icons.shopping_basket, size: 16))
                       : const Icon(Icons.block, size: 16),
                   label: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
                       !isStockSufficient
                           ? 'KHÓA XUẤT (THIẾU TỒN)'
-                          : (_isSaving ? 'ĐANG LƯU KHO...' : '✓ XÁC NHẬN XUẤT KHO ($scannedCount/$expectedCount)'),
+                          : (_isSaving
+                              ? 'ĐANG LƯU KHO...'
+                              : (isComplete
+                                  ? '✓ XÁC NHẬN XUẤT ĐỦ ($scannedCount/$expectedCount)'
+                                  : '✓ XÁC NHẬN XUẤT LẺ ($scannedCount/$expectedCount)')),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),

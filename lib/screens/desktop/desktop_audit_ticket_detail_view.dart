@@ -160,7 +160,7 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
                   decoration: BoxDecoration(color: c.bgCardElevated, borderRadius: BorderRadius.circular(8)),
                   child: Row(
                     children: [
-                      Expanded(child: Text('Phạm vi: ${s.locationCode != null ? "${s.locationCode} (${s.zone})" : s.zone}', style: TextStyle(color: c.textPrimary, fontSize: 12))),
+                      Expanded(child: Text('Phạm vi: ${s.isSkuSpecific ? "Theo mặt hàng: ${s.targetSkus.join(', ')}" : (s.locationCode != null ? "${s.locationCode} (${s.zone})" : s.zone)}', style: TextStyle(color: c.textPrimary, fontSize: 12))),
                       Expanded(child: Text('Trạng thái: ${s.isCompleted ? "ĐÃ HOÀN TẤT" : "ĐANG KIỂM KÊ"}', style: TextStyle(color: c.textPrimary, fontSize: 12))),
                     ],
                   ),
@@ -293,7 +293,7 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
                   const SizedBox(height: 20),
 
                   // TAB BAR CHUYỂN ĐỔI: TỔNG HỢP SKU vs CHI TIẾT CHIP EPC
-                  _buildTabBarContainer(c, skuBreakdowns.length, s.results.length),
+                  _buildTabBarContainer(c, skuBreakdowns.length, s.effectiveResults.length),
                   const SizedBox(height: 14),
 
                   // NỘI DUNG TAB ĐƯỢC CHỌN
@@ -303,7 +303,7 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
                       if (_tabController.index == 0) {
                         return _buildSkuBreakdownSection(c, skuBreakdowns);
                       } else {
-                        return _buildEpcTagsSection(c, s.results);
+                        return _buildEpcTagsSection(c, s.effectiveResults);
                       }
                     },
                   ),
@@ -459,7 +459,13 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
             children: [
               _metadataRow('Mã Phiếu:', s.sessionCode, isBold: true, c: c),
               const SizedBox(height: 8),
-              _metadataRow('Phạm Vi:', s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone, c: c),
+              _metadataRow(
+                'Phạm Vi:',
+                s.isSkuSpecific
+                    ? 'Theo mặt hàng: ${s.targetSkus.join(", ")}'
+                    : (s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone),
+                c: c,
+              ),
             ],
           );
 
@@ -592,33 +598,35 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
             ),
             const SizedBox(width: 10),
 
-            // Thẻ 5: Sai vị trí
-            Expanded(
-              child: _buildMetricTile(
-                title: '🔀 SAI VỊ TRÍ',
-                value: '${s.wrongLocationCount} SP',
-                icon: Icons.alt_route_rounded,
-                color: const Color(0xFFF59E0B),
-                bg: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                borderColor: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                c: c,
+            if (!s.isSkuSpecific) ...[
+              // Thẻ 5: Sai vị trí
+              Expanded(
+                child: _buildMetricTile(
+                  title: '🔀 SAI VỊ TRÍ',
+                  value: '${s.wrongLocationCount} SP',
+                  icon: Icons.alt_route_rounded,
+                  color: const Color(0xFFF59E0B),
+                  bg: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                  borderColor: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                  c: c,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
+              const SizedBox(width: 10),
 
-            // Thẻ 6: Thẻ lạ ngoài đơn
-            Expanded(
-              child: _buildMetricTile(
-                title: '❓ THẺ LẠ',
-                value: '+${s.unknownEpcCount} Chip',
-                icon: Icons.help_outline_rounded,
-                color: const Color(0xFF8B5CF6),
-                bg: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-                borderColor: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
-                c: c,
+              // Thẻ 6: Thẻ lạ ngoài đơn
+              Expanded(
+                child: _buildMetricTile(
+                  title: '❓ THẺ LẠ',
+                  value: '+${s.unknownEpcCount} Chip',
+                  icon: Icons.help_outline_rounded,
+                  color: const Color(0xFF8B5CF6),
+                  bg: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
+                  borderColor: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                  c: c,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
+              const SizedBox(width: 10),
+            ],
 
             // Thẻ 7: Tỷ lệ chính xác
             Expanded(
@@ -991,8 +999,10 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
                 _filterChip('Tất cả (${allResults.length})', 'ALL', _rfidFilter, (val) => setState(() => _rfidFilter = val), c),
                 _filterChip('✓ Khớp ($matchCount)', 'MATCH', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFF10B981)),
                 _filterChip('⚠️ Thiếu ($missingCount)', 'MISSING', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFFEF4444)),
-                _filterChip('🔀 Sai vị trí ($wrongLocCount)', 'WRONG_LOC', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFFF59E0B)),
-                _filterChip('❓ Thẻ lạ ($unknownCount)', 'UNKNOWN', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFF8B5CF6)),
+                if (!widget.session.isSkuSpecific) ...[
+                  _filterChip('🔀 Sai vị trí ($wrongLocCount)', 'WRONG_LOC', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFFF59E0B)),
+                  _filterChip('❓ Thẻ lạ ($unknownCount)', 'UNKNOWN', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFF8B5CF6)),
+                ],
 
                 SizedBox(
                   width: 240,

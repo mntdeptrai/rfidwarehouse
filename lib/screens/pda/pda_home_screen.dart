@@ -10,6 +10,7 @@ import 'pda_goods_delivery_screen.dart';
 import 'pda_inventory_screen.dart';
 import 'pda_inbound_screen.dart';
 import 'pda_transfer_screen.dart';
+import 'pda_merge_pallets_screen.dart';
 import 'pda_putaway_screen.dart';
 import 'pda_warehouse_management_screen.dart';
 import '../radar_locate_screen.dart';
@@ -196,21 +197,40 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
       ),
       drawer: const PdaDrawer(),
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: isUltraNarrow ? 8 : 18, vertical: isUltraNarrow ? 8 : 14),
-          child: Column(
-            children: [
-              // Ô thông tin khi nhận lệnh nhập hoặc xuất từ app desktop (WMS Dispatch Notification)
-              RepaintBoundary(child: _buildDesktopOrderNotificationCard(c, role)),
+        child: RefreshIndicator(
+          color: c.rfidCyan,
+          backgroundColor: c.bgCardElevated,
+          onRefresh: () async {
+            await _syncService.syncNow();
+            await _repo.reloadFromDatabase();
+            if (mounted) setState(() {});
+          },
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isUltraNarrowGrid = constraints.maxWidth < 260;
+              final crossAxisCount = isUltraNarrowGrid ? 1 : (constraints.maxWidth > 550 ? 3 : 2);
+              final childAspectRatio = isUltraNarrowGrid ? 2.6 : 1.05;
 
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, gridConstraints) {
-                    final isUltraNarrowGrid = gridConstraints.maxWidth < 260;
-                    final crossAxisCount = isUltraNarrowGrid ? 1 : (gridConstraints.maxWidth > 550 ? 3 : 2);
-                    final childAspectRatio = isUltraNarrowGrid ? 2.6 : 1.05;
-
-                    return GridView.count(
+              return CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      isUltraNarrow ? 8 : 18,
+                      isUltraNarrow ? 8 : 14,
+                      isUltraNarrow ? 8 : 18,
+                      0,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: RepaintBoundary(child: _buildDesktopOrderNotificationCard(c, role)),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isUltraNarrow ? 8 : 18,
+                      vertical: isUltraNarrow ? 8 : 14,
+                    ),
+                    sliver: SliverGrid.count(
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: isUltraNarrowGrid ? 8 : 16,
                       mainAxisSpacing: isUltraNarrowGrid ? 8 : 16,
@@ -261,7 +281,21 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                               );
                             },
                           ),
-
+                        if (role.canTransfer)
+                          _buildPdaActionTile(
+                            context,
+                            title: 'Gộp Pallet',
+                            icon: Icons.merge_rounded,
+                            accentColor: const Color(0xFFF59E0B),
+                            badgeColor: const Color(0xFFF59E0B),
+                            colors: c,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const PdaMergePalletsScreen()),
+                              );
+                            },
+                          ),
                         if (role.canAudit)
                           _buildPdaActionTile(
                             context,
@@ -306,11 +340,11 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           },
                         ),
                       ],
-                    );
-                  },
-                ),
-              ),
-            ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -597,7 +631,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
 
     if (hasPutaway) {
       final targetPallet = waitingPutawayItems.isNotEmpty
-          ? (waitingPutawayItems.first.palletId ?? 'Xe hàng')
+          ? (waitingPutawayItems.first.palletId ?? 'Pallet')
           : (waitingInboundOrders.first.orderNo);
       final count = waitingPutawayItems.isNotEmpty
           ? waitingPutawayItems.where((it) => it.palletId == targetPallet).length

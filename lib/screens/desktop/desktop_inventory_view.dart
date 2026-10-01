@@ -330,6 +330,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
       }
     }
     final allSkuList = skuMap.keys.toList()..sort();
+    final handheldUsers = _repo.users.where((u) => u.isActive && (u.role == 'handheld' || u.role == 'camtay' || u.role == 'pda')).toList();
+    final candidateUsers = handheldUsers.isNotEmpty ? handheldUsers : _repo.users.where((u) => u.isActive).toList();
+    WmsUser? selectedUser;
 
     showDialog(
       context: context,
@@ -524,60 +527,183 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                           ],
                         ),
                       ),
-                  ],
+                      const SizedBox(height: 16),
+                      Text(
+                        'CHỈ ĐỊNH NHÂN VIÊN KIỂM KÊ (ROLE: MÁY CẦM TAY - HANDHELD):',
+                        style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: c.bgCardElevated,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            isExpanded: true,
+                            value: selectedUser?.userId,
+                            dropdownColor: c.bgCard,
+                            hint: Text('Chọn nhân viên kiểm kê...', style: TextStyle(color: c.textMuted, fontSize: 12.5)),
+                            items: [
+                              DropdownMenuItem<String?>(
+                                value: null,
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.desktop_windows_rounded, size: 16, color: c.textSecondary),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Quét trực tiếp trên máy bàn Desktop (Đầu đọc Hopeland)',
+                                        style: TextStyle(color: c.textSecondary, fontSize: 13, fontStyle: FontStyle.italic),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              ...candidateUsers.map((u) {
+                                final isHandheld = u.role == 'handheld' || u.role == 'camtay' || u.role == 'pda';
+                                return DropdownMenuItem<String?>(
+                                  value: u.userId,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isHandheld ? Icons.phone_android_rounded : Icons.person_rounded,
+                                        size: 16,
+                                        color: isHandheld ? c.rfidCyan : c.textSecondary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '${u.fullName} (${u.username})',
+                                          style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (isHandheld)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: c.rfidCyan.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            'MÁY CẦM TAY PDA',
+                                            style: TextStyle(color: c.rfidCyan, fontSize: 10, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: (val) {
+                              setDialogState(() {
+                                selectedUser = val != null ? candidateUsers.where((u) => u.userId == val).firstOrNull : null;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
               ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: c.rfidCyan,
-                  foregroundColor: const Color(0xFF2C251E),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                label: const Text('BẮT ĐẦU KIỂM KÊ', style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  if (selectedScope == 'SKU' && selectedSkus.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Vui lòng chọn ít nhất một mặt hàng (SKU) để kiểm kê.'),
-                        backgroundColor: Color(0xFFEF4444),
-                      ),
-                    );
-                    return;
-                  }
+              Builder(
+                builder: (actionCtx) {
+                  final isAssignedToStaff = selectedUser != null;
+                  return ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isAssignedToStaff ? const Color(0xFF0284C7) : c.rfidCyan,
+                      foregroundColor: isAssignedToStaff ? Colors.white : const Color(0xFF2C251E),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: Icon(
+                      isAssignedToStaff ? Icons.send_to_mobile_rounded : Icons.play_arrow_rounded,
+                      size: 18,
+                    ),
+                    label: Text(
+                      isAssignedToStaff ? 'TẠO ĐƠN & GIAO MÁY CẦM TAY' : 'BẮT ĐẦU KIỂM KÊ',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      if (selectedScope == 'SKU' && selectedSkus.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Vui lòng chọn ít nhất một mặt hàng (SKU) để kiểm kê.'),
+                            backgroundColor: Color(0xFFEF4444),
+                          ),
+                        );
+                        return;
+                      }
 
-                  String zoneParam = 'Toàn bộ kho';
-                  String? locParam;
-                  List<String>? targetSkusParam;
+                      String zoneParam = 'Toàn bộ kho';
+                      String? locParam;
+                      List<String>? targetSkusParam;
 
-                  if (selectedScope == 'ZONE') {
-                    zoneParam = selectedZone;
-                  } else if (selectedScope == 'SHELF') {
-                    locParam = selectedShelf;
-                    zoneParam = allShelves.firstWhere((s) => s.locationCode == selectedShelf, orElse: () => allShelves.first).zone;
-                  } else if (selectedScope == 'SKU') {
-                    targetSkusParam = selectedSkus.toList();
-                  }
+                      if (selectedScope == 'ZONE') {
+                        zoneParam = selectedZone;
+                      } else if (selectedScope == 'SHELF') {
+                        locParam = selectedShelf;
+                        zoneParam = allShelves.firstWhere((s) => s.locationCode == selectedShelf, orElse: () => allShelves.first).zone;
+                      } else if (selectedScope == 'SKU') {
+                        targetSkusParam = selectedSkus.toList();
+                        zoneParam = 'Theo mặt hàng: ${selectedSkus.join(", ")}';
+                      }
 
-                  Navigator.pop(ctx);
-                  final session = _repo.startInventorySession(
-                    zone: zoneParam,
-                    locationCode: locParam,
-                    targetSkus: targetSkusParam,
+                      final assignedStaff = selectedUser;
+                      Navigator.pop(ctx);
+                      final session = _repo.startInventorySession(
+                        zone: zoneParam,
+                        locationCode: locParam,
+                        targetSkus: targetSkusParam,
+                        assignedToUserId: assignedStaff?.userId,
+                        assignedToName: assignedStaff?.fullName,
+                        assignedBy: AuthService().currentUser?.fullName ?? 'Thủ kho (Admin)',
+                      );
+
+                      if (assignedStaff != null) {
+                        // Khi giao cho nhân viên máy cầm tay PDA: Không ép Desktop vào màn hình quét,
+                        // giữ Desktop ở màn hình danh sách và gửi thông báo đã phân công đơn.
+                        setState(() {});
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFF0284C7),
+                            duration: const Duration(seconds: 4),
+                            content: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '✓ Đã tạo đơn kiểm kê ${session.sessionCode} và giao cho ${assignedStaff.fullName} trên máy cầm tay PDA thành công!',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      } else {
+                        // Người dùng Desktop tự quét tại chỗ bằng đầu đọc Hopeland
+                        setState(() {
+                          _activeSession = session;
+                          _scannedEpcs.clear();
+                          _isScanning = false;
+                          _tableFilter = 'ALL';
+                        });
+                      }
+                    },
                   );
-                  setState(() {
-                    _activeSession = session;
-                    _scannedEpcs.clear();
-                    _isScanning = false;
-                    _tableFilter = 'ALL';
-                  });
                 },
               ),
             ],
@@ -1120,7 +1246,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone,
+                                          s.isSkuSpecific
+                                              ? 'Theo mặt hàng'
+                                              : (s.locationCode != null ? '${s.locationCode} (${s.zone})' : s.zone),
                                           style: TextStyle(color: c.textSecondary, fontSize: 12),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1139,6 +1267,25 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                                 style: const TextStyle(color: Color(0xFF7C3AED), fontSize: 10, fontWeight: FontWeight.bold),
                                                 overflow: TextOverflow.ellipsis,
                                               ),
+                                            ),
+                                          ),
+                                        if (s.assignedToName != null && s.assignedToName!.trim().isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 3),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.phone_android_rounded, size: 11, color: Color(0xFF0284C7)),
+                                                const SizedBox(width: 3),
+                                                Flexible(
+                                                  child: Text(
+                                                    'Phụ trách: ${s.assignedToName!}',
+                                                    style: const TextStyle(color: Color(0xFF0284C7), fontSize: 10.5, fontWeight: FontWeight.w600),
+                                                    overflow: TextOverflow.ellipsis,
+                                                    maxLines: 1,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                       ],
@@ -1164,13 +1311,29 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: isDone ? const Color(0xFF10B981).withValues(alpha: 0.15) : const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                        color: isDone
+                                            ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                            : (s.actualScannedCount > 0
+                                                ? const Color(0xFFF59E0B).withValues(alpha: 0.15)
+                                                : (s.assignedToName != null
+                                                    ? const Color(0xFF0284C7).withValues(alpha: 0.15)
+                                                    : const Color(0xFFF59E0B).withValues(alpha: 0.15))),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        isDone ? 'ĐÃ HOÀN TẤT' : 'ĐANG DỞ DANG',
+                                        isDone
+                                            ? 'ĐÃ HOÀN TẤT'
+                                            : (s.actualScannedCount > 0
+                                                ? 'ĐANG QUÉT'
+                                                : (s.assignedToName != null ? 'CHỜ PDA QUÉT' : 'CHƯA QUÉT')),
                                         style: TextStyle(
-                                          color: isDone ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                          color: isDone
+                                              ? const Color(0xFF10B981)
+                                              : (s.actualScannedCount > 0
+                                                  ? const Color(0xFFF59E0B)
+                                                  : (s.assignedToName != null
+                                                      ? const Color(0xFF0284C7)
+                                                      : const Color(0xFFF59E0B))),
                                           fontWeight: FontWeight.bold,
                                           fontSize: 10.5,
                                         ),
@@ -1236,7 +1399,19 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
   // GIAO DIỆN 2: ACTIVE SESSION (ĐANG QUÉT ĐỐI SOÁT THỜI GIAN THỰC)
   // ===========================================================================
   Widget _buildActiveInventoryView(InventorySession session, EyeCareColors c) {
-    final results = session.results;
+    final results = session.isSkuSpecific
+        ? session.results.where((r) => r.sku != null && session.targetSkus.contains(r.sku)).toList()
+        : session.results;
+
+    final matchCount = session.isSkuSpecific
+        ? results.where((r) => r.resultType == InventoryVarianceType.match).length
+        : session.matchCount;
+    final missingCount = session.isSkuSpecific
+        ? results.where((r) => r.resultType == InventoryVarianceType.missing).length
+        : session.missingCount;
+    final scannedCount = session.isSkuSpecific
+        ? matchCount
+        : session.actualScannedCount;
 
     // Filter results
     final q = _searchQuery.trim().toLowerCase();
@@ -1320,7 +1495,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Phạm vi: ${session.locationCode != null ? "${session.locationCode} (${session.zone})" : session.zone}${session.isSkuSpecific ? " • Lọc ${session.targetSkus.length} SKU (${session.targetSkus.join(', ')})" : ""}',
+                              'Phạm vi: ${session.locationCode != null ? "${session.locationCode} (${session.zone})" : session.zone}${session.isSkuSpecific ? " • Lọc ${session.targetSkus.length} SKU (${session.targetSkus.join(', ')})" : ""} • 👤 Phụ trách: ${session.assignedToDisplay}',
                               style: TextStyle(color: c.textSecondary, fontSize: 12),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
@@ -1401,7 +1576,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 Expanded(
                   child: _buildAuditKpiCard(
                     title: 'ĐÃ QUÉT THỰC TẾ',
-                    count: session.actualScannedCount,
+                    count: scannedCount,
                     unit: 'chip',
                     subtitle: 'Tổng tem RFID UHF đọc được',
                     color: const Color(0xFF06B6D4),
@@ -1413,7 +1588,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 Expanded(
                   child: _buildAuditKpiCard(
                     title: 'KHỚP ĐỦ DANH SÁCH',
-                    count: session.matchCount,
+                    count: matchCount,
                     unit: 'sản phẩm',
                     subtitle: 'Đúng vị trí & đúng mã chip',
                     color: const Color(0xFF10B981),
@@ -1425,7 +1600,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 Expanded(
                   child: _buildAuditKpiCard(
                     title: 'CÒN THIẾU',
-                    count: session.missingCount,
+                    count: missingCount,
                     unit: 'sản phẩm',
                     subtitle: 'Chưa quét nhận diện được',
                     color: const Color(0xFFEF4444),
@@ -1433,18 +1608,20 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     c: c,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildAuditKpiCard(
-                    title: 'HÀNG LẠ / THỪA',
-                    count: session.unknownEpcCount + session.wrongLocationCount,
-                    unit: 'thẻ',
-                    subtitle: 'Ngoài danh sách hoặc sai vị trí',
-                    color: const Color(0xFFF59E0B),
-                    icon: Icons.warning_amber_rounded,
-                    c: c,
+                if (!session.isSkuSpecific) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildAuditKpiCard(
+                      title: 'HÀNG LẠ / THỪA',
+                      count: session.unknownEpcCount + session.wrongLocationCount,
+                      unit: 'thẻ',
+                      subtitle: 'Ngoài danh sách hoặc sai vị trí',
+                      color: const Color(0xFFF59E0B),
+                      icon: Icons.warning_amber_rounded,
+                      c: c,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -1457,13 +1634,15 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 // Filter pills
                 _buildFilterPill('Tất Cả (${results.length})', 'ALL', c),
                 const SizedBox(width: 6),
-                _buildFilterPill('Đã Khớp (${session.matchCount})', 'MATCH', c, activeColor: const Color(0xFF10B981)),
+                _buildFilterPill('Đã Khớp ($matchCount)', 'MATCH', c, activeColor: const Color(0xFF10B981)),
                 const SizedBox(width: 6),
-                _buildFilterPill('Còn Thiếu (${session.missingCount})', 'MISSING', c, activeColor: const Color(0xFFEF4444)),
-                const SizedBox(width: 6),
-                _buildFilterPill('Sai Vị Trí (${session.wrongLocationCount})', 'WRONG_LOC', c, activeColor: const Color(0xFFF59E0B)),
-                const SizedBox(width: 6),
-                _buildFilterPill('Thẻ Lạ (${session.unknownEpcCount})', 'UNKNOWN', c, activeColor: const Color(0xFF8B5CF6)),
+                _buildFilterPill('Còn Thiếu ($missingCount)', 'MISSING', c, activeColor: const Color(0xFFEF4444)),
+                if (!session.isSkuSpecific) ...[
+                  const SizedBox(width: 6),
+                  _buildFilterPill('Sai Vị Trí (${session.wrongLocationCount})', 'WRONG_LOC', c, activeColor: const Color(0xFFF59E0B)),
+                  const SizedBox(width: 6),
+                  _buildFilterPill('Thẻ Lạ (${session.unknownEpcCount})', 'UNKNOWN', c, activeColor: const Color(0xFF8B5CF6)),
+                ],
 
                 const Spacer(),
 

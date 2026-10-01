@@ -47,52 +47,106 @@ class ReportExportService {
     return reportDir;
   }
 
-  /// Xuất báo cáo theo loại và định dạng
-  Future<File> exportReport(ReportType type, ReportFormat format) async {
-    return exportReportSelected(type, format);
+  /// Format khoảng thời gian báo cáo
+  String formatPeriodSubtitle(DateTime? fromDate, DateTime? toDate) {
+    final df = DateFormat('dd/MM/yyyy');
+    if (fromDate != null && toDate != null) {
+      if (fromDate.year == toDate.year && fromDate.month == toDate.month && fromDate.day == toDate.day) {
+        return 'Thời điểm: Ngày ${df.format(fromDate)}';
+      }
+      return 'Giai đoạn: ${df.format(fromDate)} - ${df.format(toDate)}';
+    } else if (fromDate != null) {
+      return 'Từ ngày: ${df.format(fromDate)}';
+    } else if (toDate != null) {
+      return 'Thời điểm: Tính đến ${df.format(toDate)}';
+    }
+    return 'Toàn thời gian (Thời điểm xuất: ${_dtFmt.format(DateTime.now())})';
   }
 
-  /// Xuất báo cáo chọn lọc theo danh sách ID/Mã đơn được tick chọn
+  /// Xuất báo cáo theo loại và định dạng (hỗ trợ lọc theo thời điểm / giai đoạn)
+  Future<File> exportReport(
+    ReportType type,
+    ReportFormat format, {
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
+    return exportReportSelected(type, format, fromDate: fromDate, toDate: toDate);
+  }
+
+  /// Xuất báo cáo chọn lọc theo danh sách ID/Mã đơn được tick chọn và khoảng thời gian
   Future<File> exportReportSelected(
     ReportType type,
     ReportFormat format, {
     List<String>? selectedKeys,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
     switch (type) {
       case ReportType.inbound:
-        return _exportInboundForm(format, selectedOrderNos: selectedKeys);
+        return _exportInboundForm(format, selectedOrderNos: selectedKeys, fromDate: fromDate, toDate: toDate);
       case ReportType.outbound:
-        return _exportOutboundForm(format, selectedPoNos: selectedKeys);
+        return _exportOutboundForm(format, selectedPoNos: selectedKeys, fromDate: fromDate, toDate: toDate);
       case ReportType.inventory:
-        return _exportInventoryForm(format, selectedEpcs: selectedKeys);
+        return _exportInventoryForm(format, selectedEpcs: selectedKeys, fromDate: fromDate, toDate: toDate);
       case ReportType.audit:
         return _exportAuditForm(format, selectedSessionCodes: selectedKeys);
       case ReportType.transactionLog:
-        return _exportTransactionLogForm(format, selectedDocNos: selectedKeys);
+        return _exportTransactionLogForm(format, selectedDocNos: selectedKeys, fromDate: fromDate, toDate: toDate);
     }
   }
 
-  /// Số lượng bản ghi hiện có cho mỗi loại báo cáo
-  int getRecordCount(ReportType type) {
+  /// Số lượng bản ghi hiện có cho mỗi loại báo cáo (hỗ trợ lọc theo giai đoạn)
+  int getRecordCount(ReportType type, {DateTime? fromDate, DateTime? toDate}) {
+    final start = fromDate != null ? DateTime(fromDate.year, fromDate.month, fromDate.day, 0, 0, 0) : null;
+    final end = toDate != null ? DateTime(toDate.year, toDate.month, toDate.day, 23, 59, 59, 999) : null;
+
     switch (type) {
       case ReportType.inbound:
-        return _repo.inboundOrders.length;
+        var list = _repo.inboundOrders;
+        if (start != null) list = list.where((o) => o.createdAt.isAfter(start) || o.createdAt.isAtSameMomentAs(start)).toList();
+        if (end != null) list = list.where((o) => o.createdAt.isBefore(end) || o.createdAt.isAtSameMomentAs(end)).toList();
+        return list.length;
       case ReportType.outbound:
-        return _repo.outboundOrders.length;
+        var list = _repo.outboundOrders;
+        if (start != null) list = list.where((o) => o.createdAt.isAfter(start) || o.createdAt.isAtSameMomentAs(start)).toList();
+        if (end != null) list = list.where((o) => o.createdAt.isBefore(end) || o.createdAt.isAtSameMomentAs(end)).toList();
+        return list.length;
       case ReportType.inventory:
-        return _repo.items.where((i) => i.status.code == 'IN_STOCK').length;
+        var list = _repo.items.where((i) => i.status.code == 'IN_STOCK');
+        if (start != null) list = list.where((i) => i.inboundTime != null && (i.inboundTime!.isAfter(start) || i.inboundTime!.isAtSameMomentAs(start)));
+        if (end != null) list = list.where((i) => i.inboundTime != null && (i.inboundTime!.isBefore(end) || i.inboundTime!.isAtSameMomentAs(end)));
+        return list.length;
       case ReportType.audit:
-        return _repo.inventorySessions.length;
+        var list = _repo.inventorySessions;
+        if (start != null) list = list.where((s) => s.startedAt.isAfter(start) || s.startedAt.isAtSameMomentAs(start)).toList();
+        if (end != null) list = list.where((s) => s.startedAt.isBefore(end) || s.startedAt.isAtSameMomentAs(end)).toList();
+        return list.length;
       case ReportType.transactionLog:
-        return _repo.transactions.length;
+        var list = _repo.transactions;
+        if (start != null) list = list.where((t) => t.timestamp.isAfter(start) || t.timestamp.isAtSameMomentAs(start)).toList();
+        if (end != null) list = list.where((t) => t.timestamp.isBefore(end) || t.timestamp.isAtSameMomentAs(end)).toList();
+        return list.length;
     }
   }
 
   // =========================================================================
   // 1. FORM MẪU: PHIẾU NHẬP KHO (GOODS RECEIPT NOTE)
   // =========================================================================
-  Future<File> _exportInboundForm(ReportFormat format, {List<String>? selectedOrderNos}) async {
+  Future<File> _exportInboundForm(
+    ReportFormat format, {
+    List<String>? selectedOrderNos,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
     var orders = _repo.inboundOrders;
+    if (fromDate != null) {
+      final start = DateTime(fromDate.year, fromDate.month, fromDate.day, 0, 0, 0);
+      orders = orders.where((o) => o.createdAt.isAfter(start) || o.createdAt.isAtSameMomentAs(start)).toList();
+    }
+    if (toDate != null) {
+      final end = DateTime(toDate.year, toDate.month, toDate.day, 23, 59, 59, 999);
+      orders = orders.where((o) => o.createdAt.isBefore(end) || o.createdAt.isAtSameMomentAs(end)).toList();
+    }
     if (selectedOrderNos != null && selectedOrderNos.isNotEmpty) {
       orders = orders.where((o) => selectedOrderNos.contains(o.orderNo)).toList();
     }
@@ -322,8 +376,21 @@ class ReportExportService {
   // =========================================================================
   // 2. FORM MẪU: PHIẾU XUẤT KHO KIÊM BÀN GIAO (GOODS DELIVERY NOTE)
   // =========================================================================
-  Future<File> _exportOutboundForm(ReportFormat format, {List<String>? selectedPoNos}) async {
+  Future<File> _exportOutboundForm(
+    ReportFormat format, {
+    List<String>? selectedPoNos,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
     var orders = _repo.outboundOrders;
+    if (fromDate != null) {
+      final start = DateTime(fromDate.year, fromDate.month, fromDate.day, 0, 0, 0);
+      orders = orders.where((o) => o.createdAt.isAfter(start) || o.createdAt.isAtSameMomentAs(start)).toList();
+    }
+    if (toDate != null) {
+      final end = DateTime(toDate.year, toDate.month, toDate.day, 23, 59, 59, 999);
+      orders = orders.where((o) => o.createdAt.isBefore(end) || o.createdAt.isAtSameMomentAs(end)).toList();
+    }
     if (selectedPoNos != null && selectedPoNos.isNotEmpty) {
       orders = orders.where((o) => selectedPoNos.contains(o.poNo)).toList();
     }
@@ -1174,17 +1241,32 @@ class ReportExportService {
   // =========================================================================
   // 4. FORM MẪU: BÁO CÁO TỒN KHO CHI TIẾT THEO SỐ SERI (SN), VỊ TRÍ & RFID
   // =========================================================================
-  /// Xuất Báo Cáo Tồn Kho trực tiếp (hỗ trợ danh sách hàng lọc theo Số Seri - SN)
-  Future<File> exportInventoryReport(ReportFormat format, {List<Item>? items}) async {
-    return _exportInventoryForm(format, customItems: items);
+  /// Xuất Báo Cáo Tồn Kho trực tiếp (hỗ trợ danh sách hàng lọc theo Số Seri - SN hoặc theo giai đoạn)
+  Future<File> exportInventoryReport(
+    ReportFormat format, {
+    List<Item>? items,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
+    return _exportInventoryForm(format, customItems: items, fromDate: fromDate, toDate: toDate);
   }
 
   Future<File> _exportInventoryForm(
     ReportFormat format, {
     List<String>? selectedEpcs,
     List<Item>? customItems,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
     var inStockItems = customItems ?? _repo.items.where((i) => i.status.code == 'IN_STOCK').toList();
+    if (fromDate != null) {
+      final start = DateTime(fromDate.year, fromDate.month, fromDate.day, 0, 0, 0);
+      inStockItems = inStockItems.where((i) => i.inboundTime != null && (i.inboundTime!.isAfter(start) || i.inboundTime!.isAtSameMomentAs(start))).toList();
+    }
+    if (toDate != null) {
+      final end = DateTime(toDate.year, toDate.month, toDate.day, 23, 59, 59, 999);
+      inStockItems = inStockItems.where((i) => i.inboundTime != null && (i.inboundTime!.isBefore(end) || i.inboundTime!.isAtSameMomentAs(end))).toList();
+    }
     if (customItems == null && selectedEpcs != null && selectedEpcs.isNotEmpty) {
       inStockItems = inStockItems.where((i) => selectedEpcs.contains(i.epc) || selectedEpcs.contains(i.itemId) || selectedEpcs.contains(i.serialNumber)).toList();
     }
@@ -1415,11 +1497,21 @@ class ReportExportService {
     }
   }
 
-  // =========================================================================
-  // 5. FORM MẪU: SỔ NHẬT KÝ BIẾN ĐỘNG & ĐIỀU CHUYỂN KHO
-  // =========================================================================
-  Future<File> _exportTransactionLogForm(ReportFormat format, {List<String>? selectedDocNos}) async {
+  Future<File> _exportTransactionLogForm(
+    ReportFormat format, {
+    List<String>? selectedDocNos,
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
     var txs = _repo.transactions;
+    if (fromDate != null) {
+      final start = DateTime(fromDate.year, fromDate.month, fromDate.day, 0, 0, 0);
+      txs = txs.where((t) => t.timestamp.isAfter(start) || t.timestamp.isAtSameMomentAs(start)).toList();
+    }
+    if (toDate != null) {
+      final end = DateTime(toDate.year, toDate.month, toDate.day, 23, 59, 59, 999);
+      txs = txs.where((t) => t.timestamp.isBefore(end) || t.timestamp.isAtSameMomentAs(end)).toList();
+    }
     if (selectedDocNos != null && selectedDocNos.isNotEmpty) {
       txs = txs.where((t) => selectedDocNos.contains(t.documentNo) || selectedDocNos.contains(t.transactionId)).toList();
     }

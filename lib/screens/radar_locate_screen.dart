@@ -7,14 +7,22 @@ import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
 import '../theme/eye_care_theme.dart';
 import '../widgets/hardware_status_appbar.dart';
-import '../widgets/sonar_radar_widget.dart';
+import '../widgets/direction_arrow_widget.dart';
+import 'pda/pda_locate_tasks_screen.dart';
 
 class RadarLocateScreen extends StatefulWidget {
   final String? initialEpc;
-  const RadarLocateScreen({super.key, this.initialEpc});
+  final LocateOrder? locateTask;
+  const RadarLocateScreen({super.key, this.initialEpc, this.locateTask});
 
   @override
   State<RadarLocateScreen> createState() => _RadarLocateScreenState();
+}
+
+class _RssiSample {
+  final DateTime time;
+  final double rssi;
+  _RssiSample(this.time, this.rssi);
 }
 
 class _RadarLocateScreenState extends State<RadarLocateScreen> {
@@ -32,12 +40,27 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   double? _previousRssi;
   DateTime? _lastSeenTime;
 
+  // Bộ đệm tính xu hướng (Trend & Direction Gradient) và làm mượt sóng
+  final List<_RssiSample> _rssiHistory = [];
+  Timer? _radarTicker;
+  int _packetCountInWindow = 0;
+  double _readsPerSec = 0.0;
+  DateTime _lastRateReset = DateTime.now();
+
+  // Chế độ cò súng: Mặc định là Khóa dò liên tục (Toggle / Hands-Free) để không phải bóp giữ mỏi tay
+  bool _continuousLockMode = true;
+
   bool _soundHapticEnabled = true;
   int _lastFeedbackTimestamp = 0;
 
   StreamSubscription<bool>? _triggerSub;
   StreamSubscription<TagInfo>? _tagSub;
   StreamSubscription<String>? _barcodeSub;
+
+  // Ghi nhận chip khác gần nhất khi người dùng quét không khớp mã mục tiêu
+  String? _lastOtherTagEpc;
+  double? _lastOtherTagRssi;
+  DateTime? _lastOtherTagTime;
 
   // Danh sách các thẻ quét được gần đây khi ở chế độ tự do
   final Map<String, TagInfo> _nearbyTags = {};
@@ -48,28 +71,100 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     _eyeCare.addListener(_onStateUpdate);
     _repo.addListener(_onStateUpdate);
 
-    // Kích hoạt quyền quét cho phân hệ Định Vị / Radar sau khi build xong frame đầu
+    // Bắt buộc cấu hình chế độ quét sang RFID UHF và cấp quyền quét sau khi dựng widget tree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _uhfService.setScanMode(PdaScanMode.rfid);
         _uhfService.enableScanning('radar_locate');
       }
     });
 
-    // Nạp mặt hàng ban đầu nếu có initialEpc
-    if (widget.initialEpc != null && widget.initialEpc!.isNotEmpty) {
-      final epcUpper = widget.initialEpc!.toUpperCase();
+    // Nạp mặt hàng ban đầu nếu có initialEpc hoặc từ locateTask
+    final effectiveEpc = widget.initialEpc ?? widget.locateTask?.targetEpc;
+    if (effectiveEpc != null && effectiveEpc.isNotEmpty) {
+      final epcUpper = effectiveEpc.toUpperCase();
       _targetItem = _repo.items.where(
         (it) => it.epc.toUpperCase() == epcUpper,
       ).firstOrNull;
+      if (_targetItem == null && widget.locateTask != null) {
+        _targetItem = Item(
+          itemId: 'LOCATE_${widget.locateTask!.orderId}',
+          productId: widget.locateTask!.targetSku ?? 'PROD_UNKNOWN',
+          sku: widget.locateTask!.targetSku ?? 'SKU_UNKNOWN',
+          productName: widget.locateTask!.targetProductName ?? widget.locateTask!.title,
+          serialNumber: '',
+          epc: effectiveEpc,
+          locationId: widget.locateTask!.expectedLocation,
+          status: ItemStatus.inStock,
+        );
+      }
+    } else if (widget.locateTask != null && widget.locateTask!.targetSku != null) {
+      _targetItem = _repo.items.where((it) => it.sku.toUpperCase() == widget.locateTask!.targetSku!.toUpperCase()).firstOrNull;
     }
+
+    if (widget.locateTask != null && widget.locateTask!.status == LocateOrderStatus.pending) {
+      _repo.updateLocateOrderStatus(widget.locateTask!.orderId, LocateOrderStatus.inProgress);
+    }
+
+    // Timer thời gian thực (100ms): Tính tốc độ gói/giây và Decay tín hiệu khi lia máy lệch hướng/xa dần
+    _radarTicker = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted || !_isTracking) return;
+
+      final now = DateTime.now();
+
+      // Cập nhật tốc độ đọc (gói/giây)
+      final secElapsed = now.difference(_lastRateReset).inMilliseconds;
+      if (secElapsed >= 1000) {
+        _readsPerSec = (_packetCountInWindow * 1000.0) / secElapsed;
+        _packetCountInWindow = 0;
+        _lastRateReset = now;
+      }
+
+      // Xử lý Signal Decay khi súng lia lệch khỏi thẻ (không bắt được gói tin mới)
+      if (_targetItem != null && _lastSeenTime != null) {
+        final timeSinceLastSeen = now.difference(_lastSeenTime!).inMilliseconds;
+
+        // Nếu quá 650ms không có gói tin mới: tín hiệu đang giảm dần (Lia lệch hướng)
+        if (timeSinceLastSeen > 650) {
+          if (_currentRssi > -90.0) {
+            final oldRssi = _currentRssi;
+            _currentRssi = (_currentRssi - 3.2).clamp(-90.0, -25.0);
+            _previousRssi = oldRssi; // diff âm -> Mũi tên báo LỆCH HƯỚNG ngay
+            if (mounted) setState(() {});
+          }
+        }
+
+        // Nếu quá 2200ms không nhận thêm tín hiệu: xem như mất dấu sóng
+        if (timeSinceLastSeen > 2200) {
+          if (_currentRssi != -90.0 || _previousRssi != null) {
+            _currentRssi = -90.0;
+            _previousRssi = null;
+            _rssiHistory.clear();
+            if (mounted) setState(() {});
+          }
+        }
+      }
+    });
 
     // Lắng nghe nút bóp cò vật lý trên tay cầm PDA SEUIC UTouch 2
     _triggerSub = _uhfService.onTriggerStateChanged.listen((isPressed) {
       if (!mounted) return;
-      if (isPressed) {
-        if (!_isTracking) _startTracking();
+      if (_continuousLockMode) {
+        // Chế độ rảnh tay (Toggle): Bóp cò 1 lần -> Bắt đầu dò liên tục; bóp lần nữa -> Dừng
+        if (isPressed) {
+          if (!_isTracking) {
+            _startTracking();
+          } else {
+            _stopTracking();
+          }
+        }
       } else {
-        if (_isTracking) _stopTracking();
+        // Chế độ bóp giữ (Hold): Bóp giữ để quét, nhả ra thì dừng
+        if (isPressed) {
+          if (!_isTracking) _startTracking();
+        } else {
+          if (_isTracking) _stopTracking();
+        }
       }
     });
 
@@ -97,24 +192,61 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     _tagSub = _uhfService.onTagRead.listen((tag) {
       if (!mounted || !_isTracking) return;
 
-      final epcUpper = tag.epc.trim().toUpperCase();
+      final epcUpper = tag.epc.replaceAll(' ', '').trim().toUpperCase();
       final parsedRssi = double.tryParse(tag.rssi) ?? -65.0;
+      final now = DateTime.now();
 
       // 1. Nếu đã chọn mục tiêu cụ thể: CHỈ LỌC DUY NHẤT MÃ EPC CỦA MỤC TIÊU (Precision Finding)
       if (_targetItem != null) {
-        if (_targetItem!.epc.toUpperCase() == epcUpper) {
-          _previousRssi = _currentRssi;
-          _currentRssi = parsedRssi.clamp(-95.0, -25.0);
-          _lastSeenTime = DateTime.now();
+        final targetClean = _targetItem!.epc.replaceAll(' ', '').trim().toUpperCase();
+        final isMatched = epcUpper == targetClean ||
+            (targetClean.length >= 8 && epcUpper.contains(targetClean)) ||
+            (epcUpper.length >= 8 && targetClean.contains(epcUpper));
+
+        if (isMatched) {
+          _lastSeenTime = now;
+          _packetCountInWindow++;
+
+          final rawRssi = parsedRssi.clamp(-90.0, -25.0);
+
+          // Làm mượt tín hiệu qua hàm mũ (Exponential Moving Average) để khử nhiễu phản xạ
+          if (_currentRssi <= -88.0) {
+            _currentRssi = rawRssi;
+          } else {
+            _currentRssi = (_currentRssi * 0.60) + (rawRssi * 0.40);
+          }
+
+          // Cập nhật lịch sử mẫu cửa sổ trượt
+          _rssiHistory.add(_RssiSample(now, _currentRssi));
+          _rssiHistory.removeWhere((s) => now.difference(s.time).inMilliseconds > 1200);
+
+          // Lấy mốc RSSI từ 350ms - 750ms trước làm baseline để tính xu hướng lia súng
+          final pastSamples = _rssiHistory.where((s) {
+            final age = now.difference(s.time).inMilliseconds;
+            return age >= 350 && age <= 750;
+          }).toList();
+
+          if (pastSamples.isNotEmpty) {
+            _previousRssi = pastSamples.first.rssi;
+          } else if (_rssiHistory.length > 1) {
+            _previousRssi ??= _rssiHistory.first.rssi;
+          }
 
           _triggerPrecisionHapticAndSound(_currentRssi);
 
+          if (mounted) setState(() {});
+        } else {
+          // Ghi nhận chip khác gần đây khi không khớp mã đang tìm
+          _lastOtherTagEpc = epcUpper;
+          _lastOtherTagRssi = parsedRssi;
+          _lastOtherTagTime = now;
+          debugPrint('RadarLocate: Đọc được chip RFID khác: $epcUpper ($parsedRssi dBm) - Mục tiêu: $targetClean');
           if (mounted) setState(() {});
         }
       } else {
         // 2. Chế độ quét tự do dò tìm chip xung quanh
         _nearbyTags[epcUpper] = tag;
-        _currentRssi = parsedRssi.clamp(-95.0, -25.0);
+        _currentRssi = parsedRssi.clamp(-90.0, -25.0);
         if (mounted) setState(() {});
       }
     });
@@ -155,6 +287,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
 
   @override
   void dispose() {
+    _radarTicker?.cancel();
     _triggerSub?.cancel();
     _tagSub?.cancel();
     _barcodeSub?.cancel();
@@ -169,9 +302,18 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   }
 
   void _startTracking() {
+    _uhfService.setScanMode(PdaScanMode.rfid);
+    _uhfService.enableScanning('radar_locate');
     setState(() {
       _isTracking = true;
       _previousRssi = null;
+      _rssiHistory.clear();
+      _packetCountInWindow = 0;
+      _readsPerSec = 0.0;
+      _lastRateReset = DateTime.now();
+      _lastOtherTagEpc = null;
+      _lastOtherTagRssi = null;
+      _lastOtherTagTime = null;
       if (_targetItem != null) {
         _currentRssi = -90.0;
       }
@@ -183,6 +325,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     _uhfService.stopInventory();
     setState(() {
       _isTracking = false;
+      _readsPerSec = 0.0;
     });
   }
 
@@ -192,6 +335,10 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       _currentRssi = -90.0;
       _previousRssi = null;
       _lastSeenTime = null;
+      _rssiHistory.clear();
+      _lastOtherTagEpc = null;
+      _lastOtherTagRssi = null;
+      _lastOtherTagTime = null;
       _searchCtrl.clear();
       _searchQuery = '';
     });
@@ -204,7 +351,11 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       _currentRssi = -90.0;
       _previousRssi = null;
       _lastSeenTime = null;
+      _rssiHistory.clear();
       _nearbyTags.clear();
+      _lastOtherTagEpc = null;
+      _lastOtherTagRssi = null;
+      _lastOtherTagTime = null;
     });
   }
 
@@ -236,6 +387,17 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // Nút mở danh sách Đơn tìm kiếm
+          IconButton(
+            tooltip: 'Đơn tìm kiếm RFID',
+            icon: Icon(Icons.assignment_outlined, color: c.rfidCyan),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PdaLocateTasksScreen()),
+              );
+            },
+          ),
           // Nút bật/tắt phản hồi âm thanh & rung (Haptic / Sound)
           IconButton(
             tooltip: _soundHapticEnabled ? 'Tắt âm thanh & rung' : 'Bật âm thanh & rung',
@@ -266,13 +428,19 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 0. Banner Đơn Tìm Kiếm (nếu có nhiệm vụ được giao)
+              if (widget.locateTask != null) ...[
+                _buildLocateTaskBanner(widget.locateTask!, c),
+                const SizedBox(height: 12),
+              ],
+
               // 1. Thẻ mục tiêu đang định vị (Precision Target Card)
               if (_targetItem != null) ...[
                 _buildActiveTargetCard(c),
                 const SizedBox(height: 14),
 
-                // Radar Sonar Proximity Visualizer phong cách Apple AirTag
-                SonarRadarWidget(
+                // Mũi tên chỉ hướng lớn + khoảng cách (thay thế Radar Sonar)
+                DirectionArrowWidget(
                   rssi: _currentRssi,
                   isTracking: _isTracking,
                   targetEpc: _targetItem!.epc,
@@ -280,11 +448,19 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                   sku: _targetItem!.sku,
                   locationDisplay: _getLocationDisplay(_targetItem!),
                   previousRssi: _previousRssi,
+                  readsPerSecond: _readsPerSec,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+
+                // Thông báo hỗ trợ nếu đọc được chip khác gần máy mà không khớp mã đang tìm
+                _buildOtherTagAlertBanner(c),
 
                 // Nút điều khiển BẬT / DỪNG quét định vị
                 _buildTrackingControlButton(c),
+                if (widget.locateTask != null && widget.locateTask!.status != LocateOrderStatus.completed) ...[
+                  const SizedBox(height: 10),
+                  _buildConfirmFoundButton(c),
+                ],
                 const SizedBox(height: 14),
               ] else ...[
                 // Banner hướng dẫn tìm kiếm theo mã
@@ -300,6 +476,211 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Banner thông tin đơn tìm kiếm được giao cho nhân viên
+  Widget _buildLocateTaskBanner(LocateOrder task, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF0284C7), width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'ĐƠN TÌM KIẾM',
+                  style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  task.orderNo,
+                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Color(task.status.colorValue).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  task.status.label,
+                  style: TextStyle(color: Color(task.status.colorValue), fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Mục tiêu: ${task.title}',
+            style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+          if (task.expectedLocation != null && task.expectedLocation!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              '📍 Vị trí sổ sách: ${task.expectedLocation!}',
+              style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+            ),
+          ],
+          if (task.notes != null && task.notes!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              '💬 Ghi chú: ${task.notes!}',
+              style: TextStyle(color: c.textMuted, fontSize: 11, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Nút xác nhận đã tìm thấy thẻ theo đơn tìm kiếm
+  Widget _buildConfirmFoundButton(EyeCareColors c) {
+    return SizedBox(
+      width: double.infinity,
+      height: 46,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF10B981),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 1,
+        ),
+        icon: const Icon(Icons.check_circle_rounded, size: 20),
+        label: const Text(
+          'XÁC NHẬN ĐÃ TÌM THẤY THẺ',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        ),
+        onPressed: _showConfirmFoundDialog,
+      ),
+    );
+  }
+
+  void _showConfirmFoundDialog() {
+    final c = _eyeCare.colors;
+    final allLocations = _repo.locations;
+    String selectedLocation = _targetItem?.locationId ?? widget.locateTask?.expectedLocation ?? (allLocations.isNotEmpty ? allLocations.first.locationCode : 'LOC-A01-01');
+    final notesCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => AlertDialog(
+          backgroundColor: c.bgCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 24),
+              const SizedBox(width: 10),
+              Text(
+                'Xác Nhận Đã Tìm Thấy',
+                style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Ghi nhận vị trí thực tế tìm thấy mã ${widget.locateTask?.orderNo ?? ""}:',
+                  style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Vị trí thực tế:',
+                  style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue: allLocations.any((l) => l.locationCode == selectedLocation || l.locationId == selectedLocation)
+                      ? selectedLocation
+                      : (allLocations.isNotEmpty ? allLocations.first.locationCode : null),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    isDense: true,
+                  ),
+                  dropdownColor: c.bgCard,
+                  items: allLocations.map((l) => DropdownMenuItem(
+                    value: l.locationCode,
+                    child: Text('${l.displayName} (${l.locationCode})', style: TextStyle(color: c.textPrimary, fontSize: 12)),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => selectedLocation = val);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Ghi chú kết quả (nếu có):',
+                  style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: notesCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Ví dụ: Tìm thấy ở tầng 2, sau pallet PAL-01...',
+                    hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    isDense: true,
+                  ),
+                  style: TextStyle(color: c.textPrimary, fontSize: 12.5),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                if (widget.locateTask != null) {
+                  await _repo.completeLocateOrder(
+                    widget.locateTask!.orderId,
+                    foundLocation: selectedLocation,
+                    notes: notesCtrl.text.trim(),
+                  );
+                }
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('✓ Đã xác nhận tìm thấy ${widget.locateTask?.orderNo ?? "thẻ"} tại $selectedLocation'),
+                      backgroundColor: const Color(0xFF10B981),
+                    ),
+                  );
+                  Navigator.pop(context, true);
+                }
+              },
+              child: const Text('HOÀN THÀNH ĐƠN', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
       ),
     );
@@ -708,24 +1089,213 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     );
   }
 
+  Widget _buildOtherTagAlertBanner(EyeCareColors c) {
+    if (!_isTracking || _targetItem == null || _currentRssi > -88.0 || _lastOtherTagEpc == null || _lastOtherTagTime == null) {
+      return const SizedBox.shrink();
+    }
+    if (DateTime.now().difference(_lastOtherTagTime!).inSeconds > 5) {
+      return const SizedBox.shrink();
+    }
+
+    final otherEpc = _lastOtherTagEpc!;
+    final otherRssi = _lastOtherTagRssi?.toStringAsFixed(0) ?? '-45';
+    // Tìm xem tag này có trong danh mục sản phẩm CSDL hay không
+    final matchedInDb = _repo.items.where((it) => it.epc.replaceAll(' ', '').toUpperCase() == otherEpc).firstOrNull;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.warningAmber.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.warningAmber, width: 1.2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.sensors_rounded, color: c.warningAmber, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'ĐANG ĐỌC ĐƯỢC CHIP KHÁC GẦN MÁY:',
+                  style: TextStyle(
+                    color: c.warningAmber,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: c.warningAmber.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '$otherRssi dBm',
+                  style: TextStyle(color: c.warningAmber, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Mã EPC: $otherEpc',
+            style: TextStyle(color: c.textPrimary, fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+          ),
+          if (matchedInDb != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Tên SP: ${matchedInDb.productName} (${matchedInDb.sku})',
+              style: TextStyle(color: c.textSecondary, fontSize: 11),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.warningAmber,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.touch_app_rounded, size: 16, color: Colors.black87),
+              label: Text(
+                matchedInDb != null
+                    ? 'CHUYỂN SANG ĐỊNH VỊ: ${matchedInDb.productName}'
+                    : 'ĐỊNH VỊ THEO MÃ EPC NÀY',
+                style: const TextStyle(color: Colors.black87, fontSize: 11.5, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
+              onPressed: () {
+                if (matchedInDb != null) {
+                  _selectTargetItem(matchedInDb);
+                } else {
+                  setState(() {
+                    _targetItem = Item(
+                      itemId: 'TEMP_$otherEpc',
+                      epc: otherEpc,
+                      productId: 'PROD_TEMP',
+                      sku: otherEpc,
+                      productName: 'Mã EPC: $otherEpc',
+                      serialNumber: '',
+                      status: ItemStatus.inStock,
+                    );
+                    _currentRssi = _lastOtherTagRssi ?? -50.0;
+                    _previousRssi = null;
+                    _lastSeenTime = DateTime.now();
+                  });
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Nút bấm điều khiển Quét Định Vị
   Widget _buildTrackingControlButton(EyeCareColors c) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _isTracking ? c.errorCoral : c.successEmerald,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: _isTracking ? 2 : 1,
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _isTracking ? c.errorCoral : c.successEmerald,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: _isTracking ? 2 : 1,
+            ),
+            icon: Icon(
+              _isTracking ? Icons.stop_circle_rounded : Icons.radar_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+            label: Text(
+              _isTracking ? 'DỪNG QUÉT ĐỊNH VỊ' : 'BẬT QUÉT ĐỊNH VỊ (BÓP CÒ SÚNG)',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13.5,
+              ),
+            ),
+            onPressed: _isTracking ? _stopTracking : _startTracking,
+          ),
         ),
-        icon: Icon(_isTracking ? Icons.stop_circle_rounded : Icons.radar_rounded, color: Colors.white, size: 22),
-        label: Text(
-          _isTracking ? 'DỪNG QUÉT ĐỊNH VỊ' : 'BẬT QUÉT ĐỊNH VỊ (BÓP CÒ SÚNG)',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13.5),
+        const SizedBox(height: 8),
+
+        // Tùy chọn chế độ cò súng: Rảnh tay (Bấm 1 lần) vs Bóp giữ
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: c.bgCard,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: c.border),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                _continuousLockMode ? Icons.lock_clock_rounded : Icons.touch_app_rounded,
+                size: 15,
+                color: c.rfidCyan,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _continuousLockMode
+                      ? 'Chế độ: Bấm 1 lần (Dò liên tục)'
+                      : 'Chế độ: Bóp giữ cò để dò',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: () {
+                  setState(() => _continuousLockMode = !_continuousLockMode);
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      duration: const Duration(seconds: 1),
+                      backgroundColor: c.bgCardElevated,
+                      content: Text(
+                        _continuousLockMode
+                            ? '✓ Chế độ: Bấm 1 lần để Bật/Tắt dò tìm liên tục'
+                            : '✓ Chế độ: Bóp giữ cò súng để quét',
+                        style: TextStyle(color: c.textPrimary, fontSize: 12),
+                      ),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'ĐỔI',
+                    style: TextStyle(
+                      color: c.rfidCyan,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        onPressed: _isTracking ? _stopTracking : _startTracking,
-      ),
+      ],
     );
   }
 

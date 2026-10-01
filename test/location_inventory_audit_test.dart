@@ -355,6 +355,8 @@ void main() {
       // Bấm mở phiên kiểm kê đã chốt
       final sessionCard = find.text(session.sessionCode);
       expect(sessionCard, findsOneWidget);
+      await tester.drag(find.byType(ListView), const Offset(0, -150));
+      await tester.pumpAndSettle();
       await tester.tap(sessionCard);
       await tester.pumpAndSettle();
 

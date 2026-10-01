@@ -62,12 +62,24 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
     final clean = rawBarcode.trim();
     if (clean.isEmpty) return;
 
-    final upper = clean.toUpperCase();
-    final found = _repo.locations.where((l) =>
-        l.locationCode.trim().toUpperCase() == upper ||
-        l.locationId.trim().toUpperCase() == upper ||
-        l.locationCode.replaceAll('-', '').toUpperCase() == upper.replaceAll('-', '')
-    ).firstOrNull;
+    String normLoc = clean.toUpperCase();
+    if (normLoc.startsWith('LOCATION:')) normLoc = normLoc.substring(9).trim();
+    if (normLoc.startsWith('LOC:')) normLoc = normLoc.substring(4).trim();
+    if (normLoc.startsWith('SHELF:')) normLoc = normLoc.substring(6).trim();
+    final normStripped = normLoc.startsWith('LOC-') ? normLoc.substring(4) : normLoc;
+    final normWithLoc = normLoc.startsWith('LOC-') ? normLoc : 'LOC-$normLoc';
+
+    final found = _repo.locations.where((l) {
+      final locCode = l.locationCode.trim().toUpperCase();
+      final locId = l.locationId.trim().toUpperCase();
+      return locCode == normLoc ||
+          locId == normLoc ||
+          locCode == normStripped ||
+          locId == normStripped ||
+          locCode == normWithLoc ||
+          locId == normWithLoc ||
+          locCode.replaceAll('-', '') == normLoc.replaceAll('-', '');
+    }).firstOrNull;
 
     if (found == null) {
       // Không phải mã vị trí kệ kho hợp lệ -> Bỏ qua, tuyệt đối không chèn mã thẻ RFID/sản phẩm vào danh mục vị trí

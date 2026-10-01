@@ -198,6 +198,8 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
       skuGroups.putIfAbsent(key, () => []).add(item);
     }
 
+    final pendingLocateCount = _repo.locateOrders.where((o) => o.status == LocateOrderStatus.pending || o.status == LocateOrderStatus.inProgress).length;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenW = constraints.maxWidth;
@@ -316,6 +318,36 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                         ),
                       );
                     },
+                  ),
+
+                  // Nút xem Danh Sách Đơn Tìm Kiếm
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.rfidBlue,
+                      side: BorderSide(color: c.rfidBlue.withValues(alpha: 0.7)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: Badge(
+                      isLabelVisible: pendingLocateCount > 0,
+                      label: Text('$pendingLocateCount'),
+                      child: const Icon(Icons.assignment_outlined, size: 18),
+                    ),
+                    label: Text('📋 ĐƠN TÌM KIẾM (${_repo.locateOrders.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: () => _showLocateOrdersListDialog(context, c),
+                  ),
+
+                  // Nút Tạo Đơn Tìm Kiếm Mới
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.add_task_rounded, size: 18),
+                    label: const Text('➕ TẠO ĐƠN TÌM KIẾM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: () => _showCreateLocateOrderDialog(context, c),
                   ),
                 ],
               ),
@@ -460,6 +492,13 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
           ),
           const SizedBox(width: 8),
           SizedBox(
+            width: 75,
+            child: Center(
+              child: Text('TÌM KIẾM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
             width: 44,
             child: Center(
               child: Text('CHI TIẾT', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3)),
@@ -494,7 +533,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const double minTableWidth = 1050;
+        const double minTableWidth = 1130;
         final double tableWidth = constraints.maxWidth < minTableWidth ? minTableWidth : constraints.maxWidth;
         final bool isHeightFinite = constraints.maxHeight.isFinite;
 
@@ -706,6 +745,37 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                           ),
                           const SizedBox(width: 8),
 
+                          // Nút tạo đơn tìm kiếm cho cả SKU
+                          SizedBox(
+                            width: 75,
+                            child: Center(
+                              child: Tooltip(
+                                message: 'Tạo đơn tìm kiếm toàn bộ SKU này',
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(4),
+                                  onTap: () => _showCreateLocateOrderDialog(context, c, prefillSku: sku, prefillProdName: prodName),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.4)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.share_location_rounded, size: 13, color: Color(0xFF0284C7)),
+                                        SizedBox(width: 3),
+                                        Text('Giao đơn', style: TextStyle(color: Color(0xFF0284C7), fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+
                           // 8. CHI TIẾT
                           SizedBox(
                             width: 44,
@@ -817,6 +887,7 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                   DataColumn(label: Text('NGƯỜI CẤT KỆ', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
                   DataColumn(label: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
                   DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
+                  DataColumn(label: Text('THAO TÁC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.3))),
                 ],
                 rows: items.asMap().entries.map((e) {
                   final idx = e.key + 1;
@@ -1028,6 +1099,22 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                           ),
                         ),
                       ),
+
+                      // THAO TÁC
+                      DataCell(
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF0284C7),
+                            side: BorderSide(color: const Color(0xFF0284C7).withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            minimumSize: const Size(0, 26),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          icon: const Icon(Icons.share_location_rounded, size: 12),
+                          label: const Text('Giao đơn tìm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                          onPressed: () => _showCreateLocateOrderDialog(context, c, prefillItem: item),
+                        ),
+                      ),
                     ],
                   );
                 }).toList(),
@@ -1061,5 +1148,591 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
         ),
       ),
     );
+  }
+
+  void _showCreateLocateOrderDialog(
+    BuildContext context,
+    EyeCareColors c, {
+    Item? prefillItem,
+    String? prefillSku,
+    String? prefillProdName,
+  }) {
+    final titleCtrl = TextEditingController(
+      text: prefillItem != null
+          ? 'Tìm kiếm chip ${prefillItem.epc}'
+          : prefillSku != null
+              ? 'Tìm kiếm SKU $prefillSku'
+              : 'Đơn tìm kiếm hàng hóa',
+    );
+    final epcCtrl = TextEditingController(text: prefillItem?.epc ?? '');
+    final skuCtrl = TextEditingController(text: prefillItem?.sku ?? prefillSku ?? '');
+    final nameCtrl = TextEditingController(text: prefillItem?.productName ?? prefillProdName ?? '');
+    final palletCtrl = TextEditingController(text: prefillItem != null ? _repo.getItemCartonCode(prefillItem) : '');
+    final locCtrl = TextEditingController(text: prefillItem != null ? _getLocationDisplay(prefillItem) : '');
+    final notesCtrl = TextEditingController();
+
+    final handheldUsers = _repo.users.where((u) => u.isActive && (u.role == 'handheld' || u.role == 'camtay' || u.role == 'pda')).toList();
+    final candidateUsers = handheldUsers.isNotEmpty ? handheldUsers : _repo.users.where((u) => u.isActive).toList();
+    WmsUser? selectedUser = candidateUsers.firstOrNull;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: c.bgCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.add_task_rounded, color: Color(0xFF10B981), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Tạo Đơn Tìm Kiếm Vị Trí Thẻ / Hàng', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text('Chỉ định nhân viên cầm tay (Handheld) đi dò sóng định vị RFID', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildDialogTextField('Tiêu đề đơn tìm kiếm *', titleCtrl, c, hint: 'Ví dụ: Tìm gấp chip cho đơn xuất...'),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDialogTextField('Mã Chip RFID (EPC)', epcCtrl, c, hint: 'E280...')),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildDialogTextField('Mã SKU', skuCtrl, c, hint: 'SKU-001')),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDialogTextField('Tên sản phẩm', nameCtrl, c, hint: 'Tên hàng hóa...'),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDialogTextField('Thùng / Pallet', palletCtrl, c, hint: 'PALLET-01 / THUNG-01')),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildDialogTextField('Vị trí dự kiến / Gợi ý', locCtrl, c, hint: 'Dãy A1, Kệ 02...')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'CHỈ ĐỊNH NHÂN VIÊN TÌM KIẾM (ROLE: MÁY CẦM TAY - HANDHELD): *',
+                      style: TextStyle(color: c.textMuted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: c.bgCardElevated,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: selectedUser?.userId,
+                          dropdownColor: c.bgCard,
+                          hint: Text('Chọn nhân viên máy cầm tay...', style: TextStyle(color: c.textMuted, fontSize: 12.5)),
+                          items: candidateUsers.map((u) {
+                            final isHandheld = u.role == 'handheld' || u.role == 'camtay' || u.role == 'pda';
+                            return DropdownMenuItem<String>(
+                              value: u.userId,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isHandheld ? Icons.phone_android_rounded : Icons.person_rounded,
+                                    size: 16,
+                                    color: isHandheld ? c.rfidCyan : c.textSecondary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '${u.fullName} (${u.username})',
+                                      style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (isHandheld)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: c.rfidCyan.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'HANDHELD',
+                                        style: TextStyle(color: c.rfidCyan, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              selectedUser = candidateUsers.where((u) => u.userId == val).firstOrNull;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _buildDialogTextField('Ghi chú dặn dò cho người tìm kiếm', notesCtrl, c, maxLines: 2, hint: 'Ghi chú vị trí nghi ngờ, mức độ ưu tiên...'),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.send_rounded, size: 16),
+                label: const Text('XÁC NHẬN TẠO & GIAO ĐƠN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                onPressed: () async {
+                  if (titleCtrl.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Vui lòng nhập tiêu đề đơn tìm kiếm'), backgroundColor: Color(0xFFEF4444)),
+                    );
+                    return;
+                  }
+                  if (selectedUser == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Vui lòng chỉ định nhân viên máy cầm tay thực hiện'), backgroundColor: Color(0xFFEF4444)),
+                    );
+                    return;
+                  }
+
+                  Navigator.pop(ctx);
+                  final order = await _repo.createLocateOrder(
+                    title: titleCtrl.text.trim(),
+                    targetEpc: epcCtrl.text.trim().isNotEmpty ? epcCtrl.text.trim() : null,
+                    targetSku: skuCtrl.text.trim().isNotEmpty ? skuCtrl.text.trim() : null,
+                    targetProductName: nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : null,
+                    targetPalletCode: palletCtrl.text.trim().isNotEmpty ? palletCtrl.text.trim() : null,
+                    expectedLocation: locCtrl.text.trim().isNotEmpty ? locCtrl.text.trim() : null,
+                    assignedToUserId: selectedUser!.userId,
+                    assignedToName: selectedUser!.fullName,
+                    notes: notesCtrl.text.trim().isNotEmpty ? notesCtrl.text.trim() : null,
+                  );
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('✓ Đã tạo đơn tìm kiếm [${order.orderNo}] và giao cho ${order.assignedToName}'),
+                        backgroundColor: const Color(0xFF10B981),
+                      ),
+                    );
+                    setState(() {});
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showLocateOrdersListDialog(BuildContext context, EyeCareColors c) {
+    String statusFilter = 'ALL';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final allOrders = _repo.locateOrders;
+          final filteredOrders = allOrders.where((o) {
+            if (statusFilter == 'ALL') return true;
+            return o.status.code == statusFilter;
+          }).toList();
+
+          final pendingCount = allOrders.where((o) => o.status == LocateOrderStatus.pending).length;
+          final inProgressCount = allOrders.where((o) => o.status == LocateOrderStatus.inProgress).length;
+          final completedCount = allOrders.where((o) => o.status == LocateOrderStatus.completed).length;
+          final cancelledCount = allOrders.where((o) => o.status == LocateOrderStatus.cancelled).length;
+
+          return Dialog(
+            backgroundColor: c.bgCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            insetPadding: const EdgeInsets.all(24),
+            child: Container(
+              width: 1000,
+              height: 650,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: c.rfidBlue.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.assignment_outlined, color: c.rfidBlue, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Danh Sách Đơn Tìm Kiếm Vị Trí Thẻ / Hàng Hóa', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 2),
+                            Text('Quản lý phân công & tiến độ dò tìm của nhân viên máy cầm tay (Handheld)', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('TẠO ĐƠN MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                        onPressed: () {
+                          _showCreateLocateOrderDialog(context, c);
+                          setDialogState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(Icons.close, color: c.textSecondary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Filter tabs
+                  Row(
+                    children: [
+                      _buildOrderFilterChip('Tất cả (${allOrders.length})', 'ALL', statusFilter, (val) => setDialogState(() => statusFilter = val), c),
+                      const SizedBox(width: 8),
+                      _buildOrderFilterChip('Chờ tìm ($pendingCount)', LocateOrderStatus.pending.code, statusFilter, (val) => setDialogState(() => statusFilter = val), c),
+                      const SizedBox(width: 8),
+                      _buildOrderFilterChip('Đang tìm ($inProgressCount)', LocateOrderStatus.inProgress.code, statusFilter, (val) => setDialogState(() => statusFilter = val), c),
+                      const SizedBox(width: 8),
+                      _buildOrderFilterChip('Đã tìm thấy ($completedCount)', LocateOrderStatus.completed.code, statusFilter, (val) => setDialogState(() => statusFilter = val), c),
+                      const SizedBox(width: 8),
+                      _buildOrderFilterChip('Đã hủy ($cancelledCount)', LocateOrderStatus.cancelled.code, statusFilter, (val) => setDialogState(() => statusFilter = val), c),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Table / List
+                  Expanded(
+                    child: filteredOrders.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.inbox_outlined, size: 48, color: c.textMuted),
+                                const SizedBox(height: 10),
+                                Text('Không có đơn tìm kiếm nào trong mục này', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                              ],
+                            ),
+                          )
+                        : Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: c.border),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                child: DataTable(
+                                  headingRowHeight: 40,
+                                  dataRowMinHeight: 48,
+                                  dataRowMaxHeight: 56,
+                                  horizontalMargin: 12,
+                                  columnSpacing: 16,
+                                  headingRowColor: WidgetStatePropertyAll(c.bgCardElevated),
+                                  columns: [
+                                    DataColumn(label: Text('MÃ ĐƠN', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    DataColumn(label: Text('MỤC TIÊU TÌM KIẾM', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    DataColumn(label: Text('NGƯỜI PHỤ TRÁCH (PDA)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    DataColumn(label: Text('TRẠNG THÁI', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    DataColumn(label: Text('KẾT QUẢ / VỊ TRÍ TÌM THẤY', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    DataColumn(label: Text('THỜI GIAN', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    DataColumn(label: Text('GHI CHÚ', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                    DataColumn(label: Text('THAO TÁC', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11))),
+                                  ],
+                                  rows: filteredOrders.map((order) {
+                                    final statusColor = _getLocateStatusColor(order.status);
+                                    return DataRow(
+                                      cells: [
+                                        DataCell(
+                                          Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(order.orderNo, style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'monospace', fontSize: 11.5, color: Color(0xFF0284C7))),
+                                              Text(order.title, style: TextStyle(fontSize: 10.5, color: c.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            ],
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              if (order.targetProductName != null && order.targetProductName!.isNotEmpty)
+                                                Text(order.targetProductName!, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: c.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  if (order.targetSku != null && order.targetSku!.isNotEmpty)
+                                                    Text('SKU: ${order.targetSku}  ', style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace', color: Color(0xFF8B5CF6))),
+                                                  if (order.targetEpc != null && order.targetEpc!.isNotEmpty)
+                                                    Text('EPC: ${order.targetEpc}', style: TextStyle(fontSize: 10.5, fontFamily: 'monospace', color: c.textSecondary)),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.phone_android_rounded, size: 14, color: c.rfidCyan),
+                                              const SizedBox(width: 6),
+                                              Text(order.assignedToName, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: c.textPrimary)),
+                                            ],
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: statusColor.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                              border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                                            ),
+                                            child: Text(
+                                              order.status.display,
+                                              style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10.5),
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          order.foundLocation != null && order.foundLocation!.isNotEmpty
+                                              ? Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF10B981)),
+                                                    const SizedBox(width: 4),
+                                                    Text(order.foundLocation!, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF10B981), fontSize: 11.5)),
+                                                  ],
+                                                )
+                                              : Text(order.expectedLocation != null ? 'Gợi ý: ${order.expectedLocation}' : '--', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                                        ),
+                                        DataCell(
+                                          Text(
+                                            '${order.createdAt.hour.toString().padLeft(2, '0')}:${order.createdAt.minute.toString().padLeft(2, '0')} ${order.createdAt.day.toString().padLeft(2, '0')}/${order.createdAt.month.toString().padLeft(2, '0')}',
+                                            style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Container(
+                                            constraints: const BoxConstraints(maxWidth: 140),
+                                            child: Text(order.notes ?? '--', style: TextStyle(color: c.textSecondary, fontSize: 11), overflow: TextOverflow.ellipsis),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              // Nút radar tìm kiếm trên desktop
+                                              IconButton(
+                                                icon: Icon(Icons.track_changes_rounded, size: 18, color: c.rfidCyan),
+                                                tooltip: 'Mở Radar định vị trên Desktop',
+                                                onPressed: () {
+                                                  showDialog(
+                                                    context: context,
+                                                    builder: (_) => Dialog(
+                                                      backgroundColor: Colors.transparent,
+                                                      insetPadding: const EdgeInsets.all(24),
+                                                      child: ClipRRect(
+                                                        borderRadius: BorderRadius.circular(16),
+                                                        child: SizedBox(
+                                                          width: 520,
+                                                          height: 680,
+                                                          child: RadarLocateScreen(locateTask: order),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ).then((_) => setDialogState(() {}));
+                                                },
+                                              ),
+                                              // Nút Hủy
+                                              if (order.status == LocateOrderStatus.pending || order.status == LocateOrderStatus.inProgress)
+                                                IconButton(
+                                                  icon: const Icon(Icons.cancel_outlined, size: 18, color: Color(0xFFEF4444)),
+                                                  tooltip: 'Hủy đơn tìm kiếm',
+                                                  onPressed: () async {
+                                                    final confirm = await showDialog<bool>(
+                                                      context: context,
+                                                      builder: (cctx) => AlertDialog(
+                                                        backgroundColor: c.bgCard,
+                                                        title: const Text('Xác nhận hủy đơn?'),
+                                                        content: Text('Bạn có chắc chắn muốn hủy đơn tìm kiếm ${order.orderNo}?'),
+                                                        actions: [
+                                                          TextButton(onPressed: () => Navigator.pop(cctx, false), child: const Text('KHÔNG')),
+                                                          ElevatedButton(
+                                                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+                                                            onPressed: () => Navigator.pop(cctx, true),
+                                                            child: const Text('HỦY ĐƠN'),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                    if (confirm == true) {
+                                                      await _repo.cancelLocateOrder(order.orderId);
+                                                      setDialogState(() {});
+                                                    }
+                                                  },
+                                                ),
+                                              // Nút Xóa
+                                              IconButton(
+                                                icon: Icon(Icons.delete_outline, size: 18, color: c.textMuted),
+                                                tooltip: 'Xóa đơn',
+                                                onPressed: () async {
+                                                  final confirm = await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (cctx) => AlertDialog(
+                                                      backgroundColor: c.bgCard,
+                                                      title: const Text('Xác nhận xóa?'),
+                                                      content: Text('Xóa hoàn toàn đơn ${order.orderNo}?'),
+                                                      actions: [
+                                                        TextButton(onPressed: () => Navigator.pop(cctx, false), child: const Text('KHÔNG')),
+                                                        ElevatedButton(
+                                                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+                                                          onPressed: () => Navigator.pop(cctx, true),
+                                                          child: const Text('XÓA'),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                  if (confirm == true) {
+                                                    await _repo.deleteLocateOrder(order.orderId);
+                                                    setDialogState(() {});
+                                                  }
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDialogTextField(
+    String label,
+    TextEditingController controller,
+    EyeCareColors c, {
+    String? hint,
+    int maxLines = 1,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          style: TextStyle(color: c.textPrimary, fontSize: 13),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            isDense: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrderFilterChip(String label, String code, String currentFilter, ValueChanged<String> onSelect, EyeCareColors c) {
+    final isSelected = currentFilter == code;
+    return InkWell(
+      onTap: () => onSelect(code),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0284C7) : c.bgCardElevated,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? const Color(0xFF0284C7) : c.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : c.textSecondary,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 11.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getLocateStatusColor(LocateOrderStatus status) {
+    switch (status) {
+      case LocateOrderStatus.pending:
+        return const Color(0xFFF59E0B);
+      case LocateOrderStatus.inProgress:
+        return const Color(0xFF0284C7);
+      case LocateOrderStatus.completed:
+        return const Color(0xFF10B981);
+      case LocateOrderStatus.cancelled:
+        return const Color(0xFFEF4444);
+    }
   }
 }

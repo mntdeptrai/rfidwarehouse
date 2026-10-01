@@ -395,6 +395,7 @@ class ExcelImportService {
       final pallet = (palletCol != null && palletCol < row.length) ? row[palletCol].trim() : '';
       final palletEpc = (palletEpcCol != null && palletEpcCol < row.length) ? row[palletEpcCol].trim() : '';
       final serial = (serialCol != null && serialCol < row.length) ? row[serialCol].trim() : '';
+      debugPrint('📋 EXCEL ROW $r: serialCol=$serialCol → serial="$serial" (len=${serial.length})');
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
       final name = (nameCol < row.length) ? row[nameCol].trim() : '';
       final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
@@ -678,39 +679,112 @@ class ExcelImportService {
     }
   }
 
-  /// Xuất file Excel mẫu chuẩn 3 cột: Template-Goods-Receive.xlsx
-  Future<String> exportGoodsReceiveTemplate() async {
+  /// Xuất file Excel mẫu chuẩn nhập kho RFID WMS: cùng 1 loại sản phẩm, số lượng nhiều, khác EPC
+  Future<String> exportGoodsReceiveTemplate({String fileName = 'Mau_Nhap_Hang_Cung_Loai_Nhieu_EPC.xlsx'}) async {
     final excel = Excel.createExcel();
-    final sheetName = excel.getDefaultSheet() ?? 'Sheet1';
-    final sheet = excel[sheetName];
+    final defaultSheet = excel.getDefaultSheet() ?? 'Sheet1';
+    excel.rename(defaultSheet, 'Goods_Receive');
+    final sheet = excel['Goods_Receive'];
 
-    final headers = ['CARTON CODE', 'EPC', 'NAME'];
+    final headers = [
+      'CARTON CODE',
+      'EPC',
+      'NAME',
+      'SKU',
+      'NCC',
+      'BARCODE PALET',
+      'EPC PALLET',
+    ];
+
+    final headerStyle = CellStyle(
+      bold: true,
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: ExcelColor.fromHexString('#0F766E'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    final codeStyle = CellStyle(
+      fontColorHex: ExcelColor.fromHexString('#0F172A'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    final textStyle = CellStyle(
+      fontColorHex: ExcelColor.fromHexString('#1E293B'),
+      horizontalAlign: HorizontalAlign.Left,
+      verticalAlign: VerticalAlign.Center,
+    );
+
     for (int col = 0; col < headers.length; col++) {
       final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0));
       cell.value = TextCellValue(headers[col]);
+      cell.cellStyle = headerStyle;
     }
 
-    // Sample Data chuẩn 3 cột: Mã thùng, Mã chip EPC RFID, Tên sản phẩm
-    final sampleData = [
-      ['CARTONTEST0001', 'ABCDEF000000000000000001', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000002', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000003', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000004', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000005', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000006', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000007', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000008', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000009', 'Áo Polo RFID Cotton Standard'],
-      ['CARTONTEST0001', 'ABCDEF000000000000000010', 'Áo Polo RFID Cotton Standard'],
+    const productName = 'Áo Polo Nam Thể Thao RFID Coolmax';
+    const sku = 'SKU-POLO-COOLMAX-01';
+    const supplier = 'Tổng Công Ty May Việt Tiến';
+
+    // 60 sản phẩm, chia đều 6 thùng (10 sp/thùng), phân bố trên 3 Pallet (2 thùng/pallet)
+    const totalItems = 60;
+    const itemsPerCarton = 10;
+    const cartonsPerPallet = 2;
+
+    final palletConfigs = [
+      {'barcode': 'PL-01', 'epc': 'AB2600100000000000000201'},
+      {'barcode': 'PL-02', 'epc': 'AB2600100000000000000202'},
+      {'barcode': 'PL-03', 'epc': 'AB2600100000000000000203'},
     ];
 
-    for (int r = 0; r < sampleData.length; r++) {
-      final rowData = sampleData[r];
-      for (int c = 0; c < rowData.length; c++) {
-        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1));
-        cell.value = TextCellValue(rowData[c]);
-      }
+    for (int i = 1; i <= totalItems; i++) {
+      final cartonNum = ((i - 1) ~/ itemsPerCarton) + 1;
+      final cartonCode = 'CARTON-POLO-${cartonNum.toString().padLeft(3, '0')}';
+
+      final palletIndex = (cartonNum - 1) ~/ cartonsPerPallet;
+      final palletConfig = palletConfigs[palletIndex % palletConfigs.length];
+      final palletBarcode = palletConfig['barcode']!;
+      final palletEpc = palletConfig['epc']!;
+
+      final epc = 'E280689400005024B076${i.toString().padLeft(4, '0')}';
+      final rowIndex = i;
+
+      final c0 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex));
+      c0.value = TextCellValue(cartonCode);
+      c0.cellStyle = codeStyle;
+
+      final c1 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex));
+      c1.value = TextCellValue(epc);
+      c1.cellStyle = codeStyle;
+
+      final c2 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIndex));
+      c2.value = TextCellValue(productName);
+      c2.cellStyle = textStyle;
+
+      final c3 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIndex));
+      c3.value = TextCellValue(sku);
+      c3.cellStyle = codeStyle;
+
+      final c4 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: rowIndex));
+      c4.value = TextCellValue(supplier);
+      c4.cellStyle = textStyle;
+
+      final c5 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex));
+      c5.value = TextCellValue(palletBarcode);
+      c5.cellStyle = codeStyle;
+
+      final c6 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: rowIndex));
+      c6.value = TextCellValue(palletEpc);
+      c6.cellStyle = codeStyle;
     }
+
+    sheet.setColumnWidth(0, 22.0);
+    sheet.setColumnWidth(1, 34.0);
+    sheet.setColumnWidth(2, 42.0);
+    sheet.setColumnWidth(3, 24.0);
+    sheet.setColumnWidth(4, 34.0);
+    sheet.setColumnWidth(5, 20.0);
+    sheet.setColumnWidth(6, 32.0);
 
     final bytes = Uint8List.fromList(excel.encode() ?? []);
     if (bytes.isEmpty) throw Exception('Không thể tạo file Excel.');
@@ -718,7 +792,7 @@ class ExcelImportService {
     String? savePath;
     try {
       final savedUri = await FilePicker.saveFile(
-        fileName: 'Template-Goods-Receive.xlsx',
+        fileName: fileName,
         bytes: bytes,
       );
       if (savedUri != null) {
@@ -730,7 +804,7 @@ class ExcelImportService {
 
     if (savePath == null || savePath.isEmpty) {
       final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
-      savePath = '${dir.path}${Platform.pathSeparator}Template-Goods-Receive.xlsx';
+      savePath = '${dir.path}${Platform.pathSeparator}$fileName';
       final file = File(savePath);
       await file.writeAsBytes(bytes);
     }

@@ -312,13 +312,13 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Ô 1: Hiện thanh chọn pallet
-    expect(find.textContaining('PALLET ĐÃ CHỌN: PAL-TEST-99'), findsOneWidget);
+    // Ô 1: Hiện thanh quét pallet
+    expect(find.textContaining('PALLET ĐÃ QUÉT: PAL-TEST-99'), findsOneWidget);
     expect(find.textContaining('PAL-TEST-99 (1 sản phẩm)'), findsWidgets);
     expect(find.textContaining('Hàng Chờ Cất Kệ'), findsNothing);
 
-    // Ô 2: Dòng 1 chọn vị trí kệ
-    expect(find.textContaining('CHỌN VỊ TRÍ KỆ'), findsOneWidget);
+    // Ô 2: Dòng 1 quét vị trí kệ
+    expect(find.textContaining('VỊ TRÍ KỆ'), findsOneWidget);
 
     // Chọn vị trí bằng initialLocationId hoặc giả lập chọn vị trí
     await tester.pumpWidget(
@@ -366,9 +366,9 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
 
-    // Hiển thị thanh chọn pallet với số lượng xe
-    expect(find.textContaining('CHỌN PALLET CẦN CẤT'), findsOneWidget);
-    expect(find.textContaining('Bấm để chọn Pallet / Xe hàng'), findsOneWidget);
+    // Hiển thị thanh quét barcode pallet (không còn dropdown chọn)
+    expect(find.textContaining('QUÉT BARCODE PALLET CẦN CẤT'), findsOneWidget);
+    expect(find.textContaining('Bấm để chọn Pallet'), findsNothing);
 
     // Không còn nút quét thừa thãi trong ô 1
     expect(find.textContaining('BẬT TIA QUÉT BARCODE XE (CÒ PDA)'), findsNothing);
@@ -378,7 +378,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     // Xe 2 được tự động chọn sau khi quét barcode
-    expect(find.textContaining('PALLET ĐÃ CHỌN: PAL-BARCODE-02'), findsOneWidget);
+    expect(find.textContaining('PALLET ĐÃ QUÉT: PAL-BARCODE-02'), findsOneWidget);
   });
 
   testWidgets('DesktopGoodsReceiveView shows 3 metric boxes, 9 columns, and right-aligned controls without CHƯA ĐỌC ĐỦ', (WidgetTester tester) async {
@@ -840,7 +840,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
 
     // Hiển thị danh sách đơn hàng chờ qua cổng kèm nút XÓA ĐƠN & CHỌN ĐỐI SOÁT
-    expect(find.textContaining('DANH SÁCH ĐƠN HÀNG CHỜ QUA CỔNG'), findsOneWidget);
+    expect(find.textContaining('DANH SÁCH PALLET CHỜ QUA CỔNG'), findsOneWidget);
     expect(find.text(testOrdNo), findsOneWidget);
     expect(find.text('XÓA ĐƠN'), findsOneWidget);
     expect(find.text('CHỌN ĐỐI SOÁT'), findsOneWidget);
@@ -857,7 +857,7 @@ void main() {
     await tester.tap(find.text('DANH SÁCH ĐƠN'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('DANH SÁCH ĐƠN HÀNG CHỜ QUA CỔNG'), findsOneWidget);
+    expect(find.textContaining('DANH SÁCH PALLET CHỜ QUA CỔNG'), findsOneWidget);
 
     // Dọn dẹp
     await repo.wipeAllPendingInboundOrdersAndItems();

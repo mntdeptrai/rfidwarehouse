@@ -2,7 +2,7 @@ class TagInfo {
   final String epc;
   final String tid;
   final String user;
-  final String rssi;
+  String rssi;
   final String ant;
   int count;
   final String pc;

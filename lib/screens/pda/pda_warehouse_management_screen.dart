@@ -233,22 +233,35 @@ class _PalletManagementTabState extends State<_PalletManagementTab>
           ),
         ),
 
-        // 3. Danh sách Pallet
+        // 3. Danh sách Pallet (hỗ trợ vuốt xuống để làm mới)
         Expanded(
-          child: filteredPallets.isEmpty
-              ? Center(
-                  child: Text('Không tìm thấy pallet phù hợp', style: TextStyle(color: c.textMuted, fontSize: 13)),
-                )
-              : ListView.builder(
-                  physics: const ClampingScrollPhysics(),
-                  cacheExtent: 500,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  itemCount: filteredPallets.length,
-                  itemBuilder: (context, idx) {
-                    final p = filteredPallets[idx];
-                    return _buildPdaPalletCard(p, c);
-                  },
-                ),
+          child: RefreshIndicator(
+            color: c.rfidCyan,
+            backgroundColor: c.bgCardElevated,
+            onRefresh: () async {
+              await SupabaseSyncService().syncNow();
+              await _repo.reloadFromDatabase();
+            },
+            child: filteredPallets.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                      Center(
+                        child: Text('Không tìm thấy pallet phù hợp\nVuốt xuống để làm mới dữ liệu', textAlign: TextAlign.center, style: TextStyle(color: c.textMuted, fontSize: 13)),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    itemCount: filteredPallets.length,
+                    itemBuilder: (context, idx) {
+                      final p = filteredPallets[idx];
+                      return _buildPdaPalletCard(p, c);
+                    },
+                  ),
+          ),
         ),
       ],
     );
@@ -713,20 +726,33 @@ class _LocationManagementTabState extends State<_LocationManagementTab>
           ),
         ),
 
-        // 3. Danh sách Kệ Hàng PDA
+        // 3. Danh sách Kệ Hàng PDA (hỗ trợ vuốt xuống để làm mới)
         Expanded(
-          child: filteredLocations.isEmpty
-              ? Center(child: Text('Không có kệ nào', style: TextStyle(color: c.textMuted)))
-              : ListView.builder(
-                  physics: const ClampingScrollPhysics(),
-                  cacheExtent: 500,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  itemCount: filteredLocations.length,
-                  itemBuilder: (context, idx) {
-                    final loc = filteredLocations[idx];
-                    return _buildPdaLocationCard(loc, c);
-                  },
-                ),
+          child: RefreshIndicator(
+            color: c.rfidCyan,
+            backgroundColor: c.bgCardElevated,
+            onRefresh: () async {
+              await SupabaseSyncService().syncNow();
+              await _repo.reloadFromDatabase();
+            },
+            child: filteredLocations.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                      Center(child: Text('Không có kệ nào\nVuốt xuống để làm mới dữ liệu', textAlign: TextAlign.center, style: TextStyle(color: c.textMuted))),
+                    ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    itemCount: filteredLocations.length,
+                    itemBuilder: (context, idx) {
+                      final loc = filteredLocations[idx];
+                      return _buildPdaLocationCard(loc, c);
+                    },
+                  ),
+          ),
         ),
       ],
     );
@@ -1415,27 +1441,40 @@ class _HistoryManagementTabState extends State<_HistoryManagementTab>
 
         // 3. Danh sách lịch sử giao dịch & nghiệp vụ
         Expanded(
-          child: filteredHistory.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+          child: RefreshIndicator(
+            color: c.rfidCyan,
+            backgroundColor: c.bgCardElevated,
+            onRefresh: () async {
+              await SupabaseSyncService().syncNow();
+              await _repo.reloadFromDatabase();
+            },
+            child: filteredHistory.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      Icon(Icons.history_rounded, size: 48, color: c.textMuted.withValues(alpha: 0.5)),
-                      const SizedBox(height: 8),
-                      Text('Không tìm thấy lịch sử phù hợp bộ lọc', style: TextStyle(color: c.textMuted, fontSize: 13)),
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.history_rounded, size: 48, color: c.textMuted.withValues(alpha: 0.5)),
+                            const SizedBox(height: 8),
+                            Text('Không tìm thấy lịch sử phù hợp bộ lọc\nVuốt xuống để làm mới dữ liệu', textAlign: TextAlign.center, style: TextStyle(color: c.textMuted, fontSize: 13)),
+                          ],
+                        ),
+                      ),
                     ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
+                    itemCount: filteredHistory.length,
+                    itemBuilder: (context, idx) {
+                      final rec = filteredHistory[idx];
+                      return _buildHistoryItemCard(rec, c);
+                    },
                   ),
-                )
-              : ListView.builder(
-                  physics: const ClampingScrollPhysics(),
-                  cacheExtent: 500,
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
-                  itemCount: filteredHistory.length,
-                  itemBuilder: (context, idx) {
-                    final rec = filteredHistory[idx];
-                    return _buildHistoryItemCard(rec, c);
-                  },
-                ),
+          ),
         ),
       ],
     );
@@ -2079,29 +2118,42 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
           ),
         ),
 
-        // 2. Danh sách kết quả sản phẩm
+        // 2. Danh sách kết quả sản phẩm (hỗ trợ vuốt xuống để làm mới)
         Expanded(
-          child: filteredItems.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+          child: RefreshIndicator(
+            color: c.rfidCyan,
+            backgroundColor: c.bgCardElevated,
+            onRefresh: () async {
+              await SupabaseSyncService().syncNow();
+              await _repo.reloadFromDatabase();
+            },
+            child: filteredItems.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      Icon(Icons.search_off, size: 40, color: c.textMuted),
-                      const SizedBox(height: 8),
-                      Text('Không tìm thấy sản phẩm phù hợp', style: TextStyle(color: c.textMuted, fontSize: 13)),
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                      Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off, size: 40, color: c.textMuted),
+                            const SizedBox(height: 8),
+                            Text('Không tìm thấy sản phẩm phù hợp\nVuốt xuống để làm mới dữ liệu', textAlign: TextAlign.center, style: TextStyle(color: c.textMuted, fontSize: 13)),
+                          ],
+                        ),
+                      ),
                     ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(10),
+                    itemCount: filteredItems.length,
+                    itemBuilder: (context, idx) {
+                      final item = filteredItems[idx];
+                      return _buildPdaProductCard(item, c);
+                    },
                   ),
-                )
-              : ListView.builder(
-                  physics: const ClampingScrollPhysics(),
-                  cacheExtent: 500,
-                  padding: const EdgeInsets.all(10),
-                  itemCount: filteredItems.length,
-                  itemBuilder: (context, idx) {
-                    final item = filteredItems[idx];
-                    return _buildPdaProductCard(item, c);
-                  },
-                ),
+          ),
         ),
       ],
     );

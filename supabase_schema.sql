@@ -196,10 +196,18 @@ CREATE TABLE IF NOT EXISTS public.inventory_sessions (
     started_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ,
     is_completed BOOLEAN DEFAULT FALSE,
+    target_skus TEXT,
+    assigned_to_user_id TEXT,
+    assigned_to_name TEXT,
     created_by TEXT,
+    notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.inventory_sessions ADD COLUMN IF NOT EXISTS target_skus TEXT;
+ALTER TABLE public.inventory_sessions ADD COLUMN IF NOT EXISTS assigned_to_user_id TEXT;
+ALTER TABLE public.inventory_sessions ADD COLUMN IF NOT EXISTS assigned_to_name TEXT;
+ALTER TABLE public.inventory_sessions ADD COLUMN IF NOT EXISTS notes TEXT;
 CREATE INDEX IF NOT EXISTS idx_inventory_code ON public.inventory_sessions (session_code);
 
 -- 13. Bảng Chi tiết Sai lệch Kiểm Kê (inventory_session_details)
@@ -274,6 +282,31 @@ CREATE INDEX IF NOT EXISTS idx_inventory_transactions_type ON public.inventory_t
 CREATE INDEX IF NOT EXISTS idx_inventory_transactions_doc ON public.inventory_transactions (document_no);
 CREATE INDEX IF NOT EXISTS idx_inventory_transactions_pallet ON public.inventory_transactions (pallet_code);
 CREATE INDEX IF NOT EXISTS idx_inventory_transactions_timestamp ON public.inventory_transactions (timestamp DESC);
+
+-- 18. Bảng Đơn Tìm Kiếm Vị Trí Thẻ / Hàng Hóa (locate_orders)
+CREATE TABLE IF NOT EXISTS public.locate_orders (
+    order_id TEXT PRIMARY KEY,
+    order_no TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    target_epc TEXT,
+    target_sku TEXT,
+    target_product_name TEXT,
+    target_pallet_code TEXT,
+    expected_location TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    assigned_to_user_id TEXT NOT NULL,
+    assigned_to_name TEXT NOT NULL,
+    created_by TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    completed_by TEXT,
+    found_location TEXT,
+    notes TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_locate_orders_assigned ON public.locate_orders (assigned_to_user_id);
+CREATE INDEX IF NOT EXISTS idx_locate_orders_status ON public.locate_orders (status);
+CREATE INDEX IF NOT EXISTS idx_locate_orders_epc ON public.locate_orders (target_epc);
 
 
 -- ==========================================================
@@ -678,6 +711,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'users') THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.users;
   END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'locate_orders') THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.locate_orders;
+  END IF;
 END $$;
 
 -- ==========================================================
@@ -697,6 +734,7 @@ ALTER TABLE public.delivery_notes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.delivery_note_details DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory_session_details DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.locate_orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sync_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_config DISABLE ROW LEVEL SECURITY;

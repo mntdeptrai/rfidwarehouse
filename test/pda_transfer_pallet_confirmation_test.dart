@@ -59,11 +59,11 @@ void main() {
       await repo.addItem(item);
     });
 
-    testWidgets('PdaTransferScreen enables scanning and shows confirmation dialog upon pallet scan', (WidgetTester tester) async {
+    testWidgets('PdaTransferScreen enables scanning and shows confirmation dialog upon shelf scan then pallet scan', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
-          home: PdaTransferScreen(),
+          home: const PdaTransferScreen(),
         ),
       );
       await tester.pumpAndSettle();
@@ -72,7 +72,13 @@ void main() {
       expect(uhf.isScanAllowed, isTrue);
       expect(uhf.activeScanModule, 'chuyen_kho');
 
-      // Mô phỏng quét Barcode của Pallet
+      // Bước 1: Mô phỏng quét Barcode của Kệ kho đích trước (A1)
+      uhf.simulateBarcode('A1');
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('KỆ A1'), findsWidgets);
+
+      // Bước 2: Mô phỏng quét Barcode của Pallet sau đó (PAL-TEST-01)
       uhf.simulateBarcode('PAL-TEST-01');
       await tester.pump();
       await tester.pumpAndSettle();
@@ -112,16 +118,23 @@ void main() {
     });
 
     testWidgets('PdaTransferScreen Step 3 has both HỦY / QUÉT LẠI and XÁC NHẬN CHUYỂN buttons', (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1000));
       await tester.pumpWidget(
         MaterialApp(
           theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
-          home: PdaTransferScreen(),
+          home: const PdaTransferScreen(),
         ),
       );
       await tester.pumpAndSettle();
 
-      // Mô phỏng nhập thủ công mã pallet
-      final textInput = find.byType(TextField).first;
+      // Bước 1: Quét Barcode Kệ đích trước
+      uhf.simulateBarcode('A1');
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // Bước 2: Mô phỏng nhập thủ công mã pallet
+      final textInput = find.byKey(const Key('pallet_barcode_input'));
+      expect(textInput, findsOneWidget);
       await tester.enterText(textInput, 'PAL-TEST-01');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
@@ -136,6 +149,7 @@ void main() {
       // Bấm chọn từ danh sách Pallet
       final pickerBtn = find.text('CHỌN TỪ DANH SÁCH PALLET');
       expect(pickerBtn, findsOneWidget);
+      await tester.ensureVisible(pickerBtn);
       await tester.tap(pickerBtn);
       await tester.pumpAndSettle();
 
@@ -150,6 +164,63 @@ void main() {
       expect(find.byType(AlertDialog), findsOneWidget);
       final confirmBtn = find.descendant(of: find.byType(AlertDialog), matching: find.text('XÁC NHẬN CHUYỂN'));
       expect(confirmBtn, findsOneWidget);
+
+      await tester.binding.setSurfaceSize(null);
+    });
+
+    testWidgets('PdaTransferScreen supports reverse scan order: pallet first then shelf', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
+          home: const PdaTransferScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Quét Pallet trước khi quét Kệ
+      uhf.simulateBarcode('PAL-TEST-01');
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // Chưa mở AlertDialog vì chưa có kệ đích, mà hiện thông báo hướng dẫn
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.textContaining('Hãy quét Barcode Kệ đích'), findsOneWidget);
+
+      // 2. Quét Kệ đích sau đó
+      uhf.simulateBarcode('B2');
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // Bây giờ hộp thoại xác nhận đã xuất hiện với Kệ B2!
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.textContaining('KỆ B2'), findsWidgets);
+      expect(find.text('PAL-TEST-01'), findsWidgets);
+    });
+
+    testWidgets('PdaTransferScreen allows changing shelf with ĐỔI KỆ button', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false, splashFactory: NoSplash.splashFactory),
+          home: const PdaTransferScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Quét Kệ A1
+      uhf.simulateBarcode('A1');
+      await tester.pump();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('KỆ A1'), findsWidgets);
+
+      // Bấm nút ĐỔI KỆ
+      final changeShelfBtn = find.text('ĐỔI KỆ');
+      expect(changeShelfBtn, findsOneWidget);
+      await tester.tap(changeShelfBtn);
+      await tester.pumpAndSettle();
+
+      // Bước 1 quay về trạng thái nhập/quét Kệ
+      expect(find.text('CHỌN TỪ DANH SÁCH KỆ'), findsOneWidget);
+      expect(find.byKey(const Key('location_barcode_input')), findsOneWidget);
     });
   });
 }

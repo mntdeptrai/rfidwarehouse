@@ -5,6 +5,7 @@ import '../../services/uhf_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../services/warehouse_repository.dart';
 import 'pda_putaway_screen.dart';
+import 'pda_locate_tasks_screen.dart';
 import '../desktop/desktop_user_management_view.dart';
 
 class PdaDrawer extends StatelessWidget {
@@ -97,6 +98,32 @@ class PdaDrawer extends StatelessWidget {
                     );
                   },
                 ),
+
+              ListTile(
+                leading: Icon(
+                  Icons.assignment_late_rounded,
+                  color: c.warningAmber,
+                ),
+                title: Text(
+                  'Đơn Tìm Kiếm (Được Giao)',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  'Nhiệm vụ dò tìm chip RFID từ thủ kho',
+                  style: TextStyle(color: c.textMuted, fontSize: 11),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PdaLocateTasksScreen()),
+                  );
+                },
+              ),
 
               ListTile(
                 leading: Icon(Icons.settings_input_antenna_rounded, color: c.rfidCyan),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../models/wms_models.dart';
 import '../../services/warehouse_repository.dart';
 import '../../services/uhf_service.dart';
+import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 
 class PdaShelfStatusScreen extends StatefulWidget {
@@ -235,22 +236,37 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
             ),
             const SizedBox(height: 10),
 
-            // 3. Danh sách toàn bộ kệ kho
+            // 3. Danh sách toàn bộ kệ kho (hỗ trợ vuốt xuống để làm mới)
             Expanded(
-              child: filteredLocations.isEmpty
-                  ? Center(
-                      child: Text('Không có kệ kho nào.', style: TextStyle(color: c.textMuted)),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                      itemCount: filteredLocations.length,
-                      itemBuilder: (ctx, idx) {
-                        final loc = filteredLocations[idx];
-                        final isSelected = activeSelectedLocation?.locationId == loc.locationId ||
-                                           activeSelectedLocation?.locationCode == loc.locationCode;
-                        return _buildShelfListItem(loc, isSelected, c);
-                      },
-                    ),
+              child: RefreshIndicator(
+                color: c.rfidCyan,
+                backgroundColor: c.bgCardElevated,
+                onRefresh: () async {
+                  await SupabaseSyncService().syncNow();
+                  await _repo.reloadFromDatabase();
+                },
+                child: filteredLocations.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          SizedBox(height: MediaQuery.of(context).size.height * 0.15),
+                          Center(
+                            child: Text('Không có kệ kho nào.\nVuốt xuống để làm mới dữ liệu', textAlign: TextAlign.center, style: TextStyle(color: c.textMuted)),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        itemCount: filteredLocations.length,
+                        itemBuilder: (ctx, idx) {
+                          final loc = filteredLocations[idx];
+                          final isSelected = activeSelectedLocation?.locationId == loc.locationId ||
+                                             activeSelectedLocation?.locationCode == loc.locationCode;
+                          return _buildShelfListItem(loc, isSelected, c);
+                        },
+                      ),
+              ),
             ),
           ],
         ),

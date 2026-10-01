@@ -28,6 +28,7 @@ class DatabaseService {
   final Map<String, Customer> _customers = {};
   final Map<String, DeliveryNote> _deliveryNotes = {};
   final Map<String, InventorySession> _inventorySessions = {};
+  final Map<String, LocateOrder> _locateOrders = {};
   final Map<String, InventoryTransaction> _transactions = {};
   final Map<String, String> _systemConfig = {};
   final List<Map<String, dynamic>> _syncQueue = [];
@@ -587,6 +588,28 @@ class DatabaseService {
     int count = 0;
     _inventorySessions.removeWhere((id, s) {
       if (id == clean || s.sessionCode == clean) {
+        count++;
+        return true;
+      }
+      return false;
+    });
+    return count;
+  }
+
+  // --- LOCATE ORDERS (ĐƠN TÌM KIẾM) ---
+  Future<List<LocateOrder>> getLocateOrders() async {
+    return _locateOrders.values.toList();
+  }
+
+  Future<void> insertLocateOrder(LocateOrder order) async {
+    _locateOrders[order.orderId] = order;
+  }
+
+  Future<int> deleteLocateOrder(String orderId) async {
+    final clean = orderId.trim();
+    int count = 0;
+    _locateOrders.removeWhere((id, o) {
+      if (id == clean || o.orderNo == clean) {
         count++;
         return true;
       }

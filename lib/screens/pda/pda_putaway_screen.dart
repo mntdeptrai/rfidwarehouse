@@ -41,6 +41,10 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
   bool _isProcessing = false;
   final TextEditingController _barcodeInputController = TextEditingController();
   final FocusNode _barcodeFocusNode = FocusNode();
+  final TextEditingController _palletInputController = TextEditingController();
+  final FocusNode _palletFocusNode = FocusNode();
+  final TextEditingController _locationInputController = TextEditingController();
+  final FocusNode _locationFocusNode = FocusNode();
   Timer? _repoThrottleTimer;
 
   @override
@@ -155,6 +159,10 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     _triggerSub?.cancel();
     _barcodeInputController.dispose();
     _barcodeFocusNode.dispose();
+    _palletInputController.dispose();
+    _palletFocusNode.dispose();
+    _locationInputController.dispose();
+    _locationFocusNode.dispose();
     _uhf.setScanMode(PdaScanMode.rfid);
     _eyeCare.removeListener(_onThemeChange);
     _repo.removeListener(_onRepoChange);
@@ -206,12 +214,25 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     };
     if (ignoredCommands.contains(clean)) return;
 
-    // 1. Kiểm tra mã vị trí kệ (chỉ qua Barcode, hoặc mã bắt đầu bằng LOC-)
-    final loc = _repo.locations.where((l) =>
-      l.locationCode.toUpperCase() == clean ||
-      l.locationId.toUpperCase() == clean ||
-      clean.startsWith('LOC-')
-    ).firstOrNull;
+    // 1. Kiểm tra mã vị trí kệ (qua Barcode/QR code: hỗ trợ mã thuần, tiền tố LOCATION:/LOC:/SHELF:, hoặc có/không có LOC-)
+    String normLoc = clean;
+    if (normLoc.startsWith('LOCATION:')) normLoc = normLoc.substring(9).trim();
+    if (normLoc.startsWith('LOC:')) normLoc = normLoc.substring(4).trim();
+    if (normLoc.startsWith('SHELF:')) normLoc = normLoc.substring(6).trim();
+    final normStripped = normLoc.startsWith('LOC-') ? normLoc.substring(4) : normLoc;
+    final normWithLoc = normLoc.startsWith('LOC-') ? normLoc : 'LOC-$normLoc';
+
+    final loc = _repo.locations.where((l) {
+      final locCode = l.locationCode.trim().toUpperCase();
+      final locId = l.locationId.trim().toUpperCase();
+      return locCode == normLoc ||
+          locId == normLoc ||
+          locCode == normStripped ||
+          locId == normStripped ||
+          locCode == normWithLoc ||
+          locId == normWithLoc ||
+          locCode.replaceAll('-', '') == normLoc.replaceAll('-', '');
+    }).firstOrNull;
 
     if (loc != null) {
       HapticFeedback.mediumImpact();
@@ -489,42 +510,9 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     );
   }
 
-  // ========== Ô 1: THANH CHỌN PALLET / XE HÀNG ==========
+  // ========== Ô 1: QUÉT BARCODE PALLET / KIỆN HÀNG CẦN CẤT ==========
   Widget _buildItemInfoCard(EyeCareColors c, Map<String, List<Item>> groups, List<Item> activeItems) {
     final hasPallet = _activePalletGroup != null && _activePalletGroup!.trim().isNotEmpty;
-
-    // Danh sách các Pallet để chọn trong Dropdown
-    final dropdownItems = <DropdownMenuItem<String>>[];
-    for (final entry in groups.entries) {
-      dropdownItems.add(
-        DropdownMenuItem(
-          value: entry.key,
-          child: Text(
-            '${entry.key} (${entry.value.length} sản phẩm)',
-            style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      );
-    }
-
-    // Nếu _activePalletGroup được quét barcode/RFID mà chưa có sẵn trong key của groups
-    if (hasPallet && !groups.containsKey(_activePalletGroup)) {
-      dropdownItems.add(
-        DropdownMenuItem(
-          value: _activePalletGroup!,
-          child: Text(
-            '$_activePalletGroup (${activeItems.length} sản phẩm)',
-            style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      );
-    }
-
-    final isValueValid = dropdownItems.any((it) => it.value == _activePalletGroup);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -532,8 +520,8 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         color: c.bgCard,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasPallet ? const Color(0xFFF59E0B).withValues(alpha: 0.6) : c.border,
-          width: 1.2,
+          color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+          width: hasPallet ? 1.5 : 1.2,
         ),
       ),
       child: Column(
@@ -542,14 +530,14 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           Row(
             children: [
               Icon(
-                hasPallet ? Icons.check_circle_rounded : Icons.inventory_2_rounded,
+                hasPallet ? Icons.check_circle_rounded : Icons.qr_code_scanner,
                 color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                 size: 20,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  hasPallet ? 'PALLET ĐÃ CHỌN: $_activePalletGroup' : 'CHỌN PALLET CẦN CẤT',
+                  hasPallet ? 'PALLET ĐÃ QUÉT: $_activePalletGroup' : 'QUÉT BARCODE PALLET CẦN CẤT',
                   style: TextStyle(
                     color: hasPallet ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                     fontWeight: FontWeight.bold,
@@ -571,7 +559,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                       border: Border.all(color: c.border),
                     ),
                     child: Text(
-                      'Bỏ chọn',
+                      'Quét lại',
                       style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -580,45 +568,121 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           ),
           const SizedBox(height: 10),
 
-          // THANH ĐỂ CHỌN PALLET (DROPDOWN)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-            decoration: BoxDecoration(
-              color: c.bgCardElevated,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: hasPallet ? const Color(0xFFF59E0B).withValues(alpha: 0.5) : c.border,
+          if (!hasPallet) ...[
+            // Khung quét Barcode Pallet nổi bật
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.qr_code_2, color: Color(0xFFF59E0B), size: 24),
+                      SizedBox(width: 8),
+                      Text(
+                        'BÓP CÒ PDA ĐỂ QUÉT BARCODE PALLET',
+                        style: TextStyle(
+                          color: Color(0xFFF59E0B),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Hướng máy quét vào mã vạch dán trên Pallet / Thùng hàng',
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Ô nhập tay / nhận diện quét mã Pallet
+                  TextField(
+                    controller: _palletInputController,
+                    focusNode: _palletFocusNode,
+                    style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      hintText: 'Bóp cò PDA hoặc nhập mã Pallet...',
+                      hintStyle: TextStyle(color: c.textMuted, fontSize: 11),
+                      filled: true,
+                      fillColor: c.bgDeep,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      prefixIcon: const Icon(Icons.qr_code, color: Color(0xFFF59E0B), size: 18),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.arrow_forward, color: Color(0xFFF59E0B), size: 18),
+                        onPressed: () {
+                          if (_palletInputController.text.trim().isNotEmpty) {
+                            _handleScannedCode(_palletInputController.text);
+                            _palletInputController.clear();
+                          }
+                        },
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFF59E0B), width: 1.5)),
+                    ),
+                    onSubmitted: (val) {
+                      if (val.trim().isNotEmpty) {
+                        _handleScannedCode(val);
+                        _palletInputController.clear();
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                dropdownColor: c.bgCardElevated,
-                value: isValueValid ? _activePalletGroup : null,
-                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFF59E0B)),
-                hint: Text(
-                  groups.isNotEmpty
-                      ? 'Bấm để chọn Pallet / Xe hàng (${groups.length} kiện)...'
-                      : 'Không có pallet chờ cất',
-                  style: TextStyle(color: c.textMuted, fontSize: 12.5),
-                ),
-                style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
-                items: dropdownItems,
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => _activePalletGroup = val);
-                    HapticFeedback.selectionClick();
-                  }
-                },
+          ] else ...[
+            // Đã quét nhận diện Pallet
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$_activePalletGroup (${activeItems.length} sản phẩm)',
+                          style: const TextStyle(
+                            color: Color(0xFF10B981),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Sẵn sàng cất lên kệ • Quét mã vị trí để hoàn tất',
+                          style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 
-  // ========== Ô 2: CHỌN VỊ TRÍ & QUÉT BARCODE CẤT HÀNG ==========
+  // ========== Ô 2: QUÉT BARCODE VỊ TRÍ KỆ ==========
   Widget _buildLocationAndScanCard(EyeCareColors c, Location? selectedLoc) {
     final hasLoc = selectedLoc != null;
 
@@ -629,13 +693,12 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: hasLoc ? const Color(0xFF10B981) : c.rfidCyan,
-          width: 1.2,
+          width: hasLoc ? 1.5 : 1.2,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // DÒNG 1: CHỌN VỊ TRÍ KỆ
           Row(
             children: [
               Icon(
@@ -646,7 +709,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  hasLoc ? 'KỆ ĐÃ CHỌN: ${selectedLoc.locationCode}' : 'CHỌN VỊ TRÍ KỆ',
+                  hasLoc ? 'KỆ ĐÃ QUÉT: ${selectedLoc.locationCode}' : 'QUÉT BARCODE VỊ TRÍ KỆ',
                   style: TextStyle(
                     color: hasLoc ? const Color(0xFF10B981) : c.rfidCyan,
                     fontWeight: FontWeight.bold,
@@ -672,68 +735,119 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
 
-          // Dropdown chọn vị trí
           if (!hasLoc) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              decoration: BoxDecoration(
-                color: c.bgCardElevated,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: c.rfidCyan.withValues(alpha: 0.5)),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  dropdownColor: c.bgCardElevated,
-                  value: _lockedLocationId,
-                  icon: Icon(Icons.arrow_drop_down, color: c.rfidCyan),
-                  hint: Text('Bấm để chọn vị trí kệ...', style: TextStyle(color: c.textMuted, fontSize: 12.5)),
-                  style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
-                  items: _repo.locations.map((loc) {
-                    return DropdownMenuItem(
-                      value: loc.locationId,
-                      child: Text(
-                        '${loc.locationCode} • ${loc.zone} - ${loc.shelf}',
-                        style: TextStyle(color: c.textPrimary, fontSize: 12.5),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _lockedLocationId = val);
-                      HapticFeedback.selectionClick();
-                    }
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Chọn vị trí ở trên hoặc bóp cò quét mã nhãn kệ (LOC-xxx)',
-              style: TextStyle(color: c.textMuted, fontSize: 11),
-            ),
-          ] else ...[
-            // Thông tin chi tiết vị trí kệ đã chọn
+            // Khung quét Barcode Kệ nổi bật
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              decoration: BoxDecoration(
+                color: c.rfidCyan.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shelves, color: c.rfidCyan, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        'BÓP CÒ PDA QUÉT MÃ NHÃN KỆ',
+                        style: TextStyle(
+                          color: c.rfidCyan,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Quét mã nhãn vị trí dán trên kệ (ví dụ: LOC-xxx, A-01...)',
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Ô nhập tay / nhận diện quét mã kệ
+                  TextField(
+                    controller: _locationInputController,
+                    focusNode: _locationFocusNode,
+                    style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      hintText: 'Bóp cò PDA hoặc nhập mã nhãn kệ (LOC-xxx)...',
+                      hintStyle: TextStyle(color: c.textMuted, fontSize: 11),
+                      filled: true,
+                      fillColor: c.bgDeep,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      prefixIcon: Icon(Icons.qr_code, color: c.rfidCyan, size: 18),
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.arrow_forward, color: c.rfidCyan, size: 18),
+                        onPressed: () {
+                          if (_locationInputController.text.trim().isNotEmpty) {
+                            _handleScannedCode(_locationInputController.text);
+                            _locationInputController.clear();
+                          }
+                        },
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.rfidCyan, width: 1.5)),
+                    ),
+                    onSubmitted: (val) {
+                      if (val.trim().isNotEmpty) {
+                        _handleScannedCode(val);
+                        _locationInputController.clear();
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Đã chọn/quét vị trí kệ
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFF10B981).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
               ),
-              child: Text(
-                '${selectedLoc.locationCode} • Khu vực: ${selectedLoc.zone} • Tầng: ${selectedLoc.shelf}',
-                style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          selectedLoc.locationCode,
+                          style: const TextStyle(
+                            color: Color(0xFF10B981),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Khu vực: ${selectedLoc.zone} • Tầng: ${selectedLoc.shelf}',
+                          style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
 
-            // DÒNG THỨ 2: QUÉT BARCODE CẤT HÀNG
+            // Khối DÒNG 2: QUÉT BARCODE ĐỂ CẤT HÀNG
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -757,7 +871,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                   ),
                   const SizedBox(height: 10),
 
-                  // TextField nhận mã quét
                   TextField(
                     controller: _barcodeInputController,
                     focusNode: _barcodeFocusNode,
@@ -800,10 +913,10 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF10B981),
-                        side: const BorderSide(color: Color(0xFF10B981), width: 1),
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: (_isProcessing || _activePalletGroup == null) ? c.border : const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         padding: const EdgeInsets.symmetric(vertical: 10),
                       ),

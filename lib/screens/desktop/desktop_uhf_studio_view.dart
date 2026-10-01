@@ -1644,9 +1644,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                                 ? () async {
                                     final offset = int.tryParse(_rwOffsetController.text) ?? 2;
                                     await _uhfService.writeMemoryBank(bank: _rwBank, offset: offset, hexData: _rwDataController.text.trim(), matchEpc: _rwMatchEpcController.text);
-                                    if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
- ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          duration: Duration(seconds: 2),content: Text('Đã gửi lệnh ghi thẻ thành công!')));
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                      duration: Duration(seconds: 2), content: Text('Đã gửi lệnh ghi thẻ thành công!')));
                                   }
                                 : () => _showPermissionDeniedDialog(context, 'Ghi dữ liệu vùng nhớ RFID'),
                             icon: Icon(canConfigure ? Icons.upload : Icons.lock, size: 15),
@@ -1739,9 +1740,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                               ? () async {
                                   if (_fastNewEpcController.text.isEmpty) return;
                                   await _uhfService.fastWriteEpc(_fastNewEpcController.text.trim(), oldEpc: _fastTargetEpcController.text.trim());
-                                  if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
- ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          duration: Duration(seconds: 2),content: Text('Đã ghi đè EPC mới thành công!')));
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                    duration: Duration(seconds: 2), content: Text('Đã ghi đè EPC mới thành công!')));
                                 }
                               : () => _showPermissionDeniedDialog(context, 'Ghi đè mã EPC chip RFID'),
                           icon: Icon(canConfigure ? Icons.bolt : Icons.lock, size: 16),
@@ -1872,9 +1874,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                         onPressed: canConfigure
                             ? () async {
                                 await _uhfService.lockTag(area: _lockArea, lockType: _lockType, password: _lockPasswordController.text, matchEpc: _lockTargetEpcController.text);
-                                if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
- ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          duration: Duration(seconds: 2),content: Text('Đã thiết lập khóa thẻ thành công!')));
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                  duration: Duration(seconds: 2), content: Text('Đã thiết lập khóa thẻ thành công!')));
                               }
                             : () => _showPermissionDeniedDialog(context, 'Khóa vùng nhớ chip RFID'),
                         icon: Icon(canConfigure ? Icons.lock : Icons.lock_outline, size: 15),
@@ -1960,9 +1963,10 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                                 );
                                 if (ok == true) {
                                   await _uhfService.killTag(killPassword: _killPasswordController.text, matchEpc: _killTargetEpcController.text);
-                                  if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
- ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          duration: Duration(seconds: 2),content: Text('Đã hủy thẻ vĩnh viễn!')));
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                    duration: Duration(seconds: 2), content: Text('Đã hủy thẻ vĩnh viễn!')));
                                 }
                               }
                             : () => _showPermissionDeniedDialog(context, 'Hủy thẻ chip RFID vĩnh viễn (Kill)'),

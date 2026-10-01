@@ -147,12 +147,22 @@ class UhfService extends ChangeNotifier {
   void enableScanning(String module) {
     _isScanAllowed = true;
     _activeScanModule = module;
+    if (module == 'radar_locate') {
+      _filterDuplicates = false;
+      setScanMode(PdaScanMode.rfid);
+      if (Platform.isAndroid) {
+        try {
+          _methodChannel.invokeMethod('setFilterDuplicates', {'filter': false});
+          _methodChannel.invokeMethod('clearScannedSession');
+        } catch (_) {}
+      }
+    }
     if (Platform.isAndroid) {
       try {
         _methodChannel.invokeMethod('setScanAllowed', {'allowed': true});
       } catch (_) {}
     }
-    debugPrint('UhfService: Scanning ENABLED for module: $module');
+    debugPrint('UhfService: Scanning ENABLED for module: $module (filterDuplicates: $_filterDuplicates)');
     notifyListeners();
   }
 
@@ -160,12 +170,14 @@ class UhfService extends ChangeNotifier {
   void disableScanning() {
     _isScanAllowed = false;
     _activeScanModule = '';
-    stopInventory();
+    _filterDuplicates = true;
     if (Platform.isAndroid) {
       try {
+        _methodChannel.invokeMethod('setFilterDuplicates', {'filter': true});
         _methodChannel.invokeMethod('setScanAllowed', {'allowed': false});
       } catch (_) {}
     }
+    stopInventory();
     debugPrint('UhfService: Scanning BLOCKED & DISABLED');
     scheduleMicrotask(() {
       notifyListeners();
@@ -313,8 +325,14 @@ class UhfService extends ChangeNotifier {
           final existing = _tagsMap[epc]!;
           existing.count += (item['count'] as num?)?.toInt() ?? 1;
           existing.lastSeen = DateTime.now();
+          final rawRssi = item['rssi']?.toString();
+          if (rawRssi != null && rawRssi.isNotEmpty) {
+            existing.rssi = rawRssi;
+          }
           _tagsCacheDirty = true;
-          _tagStreamController.add(existing);
+          if (!_filterDuplicates || _activeScanModule == 'radar_locate') {
+            _tagStreamController.add(existing);
+          }
         } else {
           final newTag = TagInfo(
             epc: epc,
@@ -357,8 +375,12 @@ class UhfService extends ChangeNotifier {
         final existing = _tagsMap[epc]!;
         existing.count += (map['count'] as num?)?.toInt() ?? 1;
         existing.lastSeen = DateTime.now();
+        final rawRssi = map['rssi']?.toString();
+        if (rawRssi != null && rawRssi.isNotEmpty) {
+          existing.rssi = rawRssi;
+        }
         _tagsCacheDirty = true;
-        if (!_filterDuplicates) {
+        if (!_filterDuplicates || _activeScanModule == 'radar_locate') {
           _tagStreamController.add(existing);
         }
       } else {

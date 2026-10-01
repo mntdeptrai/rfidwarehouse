@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/splash/splash_screen.dart';
@@ -8,8 +9,13 @@ import 'services/warehouse_repository.dart';
 import 'services/auth_service.dart';
 import 'theme/eye_care_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.isAndroid || Platform.isIOS) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
   // Kích hoạt giải mã Logo Nhật Minh sớm trong ImageCache, tránh chớp nháy trắng ở frame đầu
   const AssetImage('assets/images/nhat_minh_logo.png').resolve(ImageConfiguration.empty);
 

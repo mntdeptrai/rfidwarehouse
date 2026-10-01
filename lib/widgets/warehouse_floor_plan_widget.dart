@@ -264,7 +264,7 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
               ),
               const SizedBox(width: 8),
               Text(
-                isOutbound ? 'LỘ TRÌNH LẤY HÀNG XUẤT:' : 'CHỈ DẪN XE PALLET VÀO KHO:',
+                isOutbound ? 'LỘ TRÌNH LẤY HÀNG XUẤT:' : 'CHỈ DẪN PALLET VÀO KHO:',
                 style: TextStyle(color: themeColor, fontSize: 11.5, fontWeight: FontWeight.bold),
               ),
             ],

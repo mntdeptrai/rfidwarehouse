@@ -1879,10 +1879,17 @@ class _InboundScreenState extends State<InboundScreen> {
 
                           // Table Rows (bao gồm hàng dự kiến và chip lạ)
                           Expanded(
-                            child: ListView.builder(
-                              physics: const ClampingScrollPhysics(),
-                              cacheExtent: 600,
-                              itemCount: allDetailedItems.length + unexpList.length,
+                            child: RefreshIndicator(
+                              color: c.rfidCyan,
+                              backgroundColor: c.bgCardElevated,
+                              onRefresh: () async {
+                                await SupabaseSyncService().syncNow();
+                                await _repo.reloadFromDatabase();
+                                if (mounted) setState(() {});
+                              },
+                              child: ListView.builder(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                itemCount: allDetailedItems.length + unexpList.length,
                               itemBuilder: (context, index) {
                                 if (index < allDetailedItems.length) {
                                   final item = allDetailedItems[index];
@@ -2046,7 +2053,8 @@ class _InboundScreenState extends State<InboundScreen> {
                               },
                             ),
                           ),
-                        ],
+                        ),
+                      ],
                       ),
                     ),
                   ),
@@ -2251,7 +2259,7 @@ class _InboundScreenState extends State<InboundScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      'Số xe: ${_palletOrder.isNotEmpty ? _palletOrder.length : 1} xe (${_selectedEpcs.length} SP + ${validPalletEpcs.length} pallet)',
+                      'Số pallet: ${_palletOrder.isNotEmpty ? _palletOrder.length : 1} pallet (${_selectedEpcs.length} SP + ${validPalletEpcs.length} pallet)',
                       style: const TextStyle(color: Color(0xFF10B981), fontSize: 10.5, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -2469,7 +2477,7 @@ class _InboundScreenState extends State<InboundScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '✓ XE $_lastPassedPallet ĐÃ ĐỐI SOÁT ĐỦ ($_lastPassedCount SP)',
+                  '✓ PALLET $_lastPassedPallet ĐÃ ĐỐI SOÁT ĐỦ ($_lastPassedCount SP)',
                   style: const TextStyle(
                     color: Color(0xFF10B981),
                     fontWeight: FontWeight.bold,
@@ -2481,7 +2489,7 @@ class _InboundScreenState extends State<InboundScreen> {
                 const SizedBox(height: 1),
                 Text(
                   hasNext
-                      ? '⚡ Tự động chuyển xe $_lastNextPallet • Bóp cò để quét tiếp'
+                      ? '⚡ Tự động chuyển pallet $_lastNextPallet • Bóp cò để quét tiếp'
                       : '✓ Đã hoàn tất toàn bộ • Sẵn sàng cất lên kệ',
                   style: TextStyle(
                     color: c.textPrimary,
@@ -3429,38 +3437,51 @@ class _InboundScreenState extends State<InboundScreen> {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     if (pendingOrders.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
+      return RefreshIndicator(
+        color: c.rfidCyan,
+        backgroundColor: c.bgCardElevated,
+        onRefresh: () async {
+          await SupabaseSyncService().syncNow();
+          await _repo.reloadFromDatabase();
+          if (mounted) setState(() {});
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.inbox_outlined, size: 50, color: c.textSecondary.withValues(alpha: 0.5)),
-              const SizedBox(height: 12),
-              Text(
-                'Chưa có dữ liệu hàng nhập',
-                style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.1),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.inbox_outlined, size: 50, color: c.textSecondary.withValues(alpha: 0.5)),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Chưa có dữ liệu hàng nhập',
+                    style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Không có đơn nhập kho nào đang chờ xử lý.\nVuốt xuống để làm mới từ Cloud hoặc bấm [NHẬP HÀNG ▾] để tạo đơn.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: c.textSecondary, fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: c.rfidCyan,
+                      side: BorderSide(color: c.rfidCyan),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Icons.sync, size: 16),
+                    label: const Text('ĐỒNG BỘ TỪ CLOUD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    onPressed: _handleSyncReload,
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Không có đơn nhập kho nào đang chờ xử lý.\nVui lòng bấm [LÀM MỚI] để đồng bộ hoặc bấm [NHẬP HÀNG ▾] để tạo đơn.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: c.textSecondary, fontSize: 12),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: c.rfidCyan,
-                  side: BorderSide(color: c.rfidCyan),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Icons.sync, size: 16),
-                label: const Text('ĐỒNG BỘ TỪ CLOUD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                onPressed: _handleSyncReload,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
@@ -3498,8 +3519,16 @@ class _InboundScreenState extends State<InboundScreen> {
           ),
         ),
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: RefreshIndicator(
+            color: c.rfidCyan,
+            backgroundColor: c.bgCardElevated,
+            onRefresh: () async {
+              await SupabaseSyncService().syncNow();
+              await _repo.reloadFromDatabase();
+            },
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             itemCount: pendingOrders.length,
             separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -3626,8 +3655,9 @@ class _InboundScreenState extends State<InboundScreen> {
             },
           ),
         ),
-      ],
-    );
+      ),
+    ],
+  );
   }
 }
 
