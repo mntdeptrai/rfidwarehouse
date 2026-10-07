@@ -2562,60 +2562,83 @@ class WarehouseRepository extends ChangeNotifier {
     final cleanEpc = epc.trim().toUpperCase();
     final logs = _tagLifecycleLogs
         .where((l) => l.epc.toUpperCase() == cleanEpc)
-        .toList()
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        .toList();
 
-    // Nếu đã có log được ghi nhận cụ thể trong CSDL, trả về danh sách đó
-    if (logs.isNotEmpty) return logs;
-
-    // Tôn trọng dữ liệu thực tế: Nếu chưa có log trong bảng mới nhưng item đã tồn tại trong CSDL,
-    // tái cấu trúc lại các mốc lịch sử thực tế của item dựa trên các trường hiện có (inboundTime, locationId, palletId, status)
     final item = _items.where((it) => it.epc.toUpperCase() == cleanEpc || it.itemId.toUpperCase() == cleanEpc).firstOrNull;
-    if (item == null) return const [];
 
-    final fallbackLogs = <TagLifecycleLog>[];
-    final baseTime = item.inboundTime ?? DateTime.now().subtract(const Duration(hours: 2));
+    // Nếu không có item trong kho và không có logs, trả về rỗng
+    if (item == null && logs.isEmpty) return const [];
+    if (item == null) return logs..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-    // Mốc 1: Khởi tạo & Gán mã chip RFID
-    fallbackLogs.add(TagLifecycleLog(
-      logId: 'INIT-${item.itemId}',
-      epc: item.epc,
-      itemId: item.itemId,
-      sku: item.sku,
-      productName: item.productName,
-      serialNumber: item.serialNumber,
-      action: TagLifecycleAction.encoded,
-      newStatus: ItemStatus.pendingInbound.label,
-      documentNo: item.orderNo,
-      performedBy: 'Hệ thống khởi tạo',
-      device: 'RFID Station',
-      timestamp: baseTime.subtract(const Duration(minutes: 30)),
-      notes: 'Gán mã chip RFID cho sản phẩm ${item.sku}',
-    ));
+    // Kiểm tra xem các mốc cơ bản đã tồn tại trong logs chưa
+    final hasEncoded = logs.any((l) => l.action == TagLifecycleAction.encoded);
+    final hasInbound = logs.any((l) => l.action == TagLifecycleAction.inboundGate || l.action == TagLifecycleAction.inboundPda);
+    final hasPalletize = logs.any((l) => l.action == TagLifecycleAction.palletize);
+    final hasPutaway = logs.any((l) => l.action == TagLifecycleAction.putaway);
+    final hasOut = logs.any((l) => l.action == TagLifecycleAction.outboundGate || l.action == TagLifecycleAction.outboundPda);
 
-    // Mốc 2: Nhập kho
-    fallbackLogs.add(TagLifecycleLog(
-      logId: 'INBOUND-${item.itemId}',
-      epc: item.epc,
-      itemId: item.itemId,
-      sku: item.sku,
-      productName: item.productName,
-      serialNumber: item.serialNumber,
-      action: TagLifecycleAction.inboundGate,
-      previousStatus: ItemStatus.pendingInbound.label,
-      newStatus: (item.palletId != null && item.palletId!.isNotEmpty) ? ItemStatus.waitingPalletize.label : ItemStatus.waitingPutaway.label,
-      fromPallet: null,
-      toPallet: item.palletId,
-      documentNo: item.orderNo,
-      performedBy: item.inboundByDisplay,
-      device: 'Cổng RFID Gate / PDA',
-      timestamp: baseTime,
-      notes: 'Xác nhận nhập kho theo đơn ${item.orderNo ?? "PO"}',
-    ));
+    final combinedLogs = List<TagLifecycleLog>.from(logs);
+    final baseTime = item.inboundTime ?? (logs.isNotEmpty ? logs.last.timestamp.subtract(const Duration(hours: 1)) : DateTime.now().subtract(const Duration(hours: 2)));
 
-    // Mốc 3: Xếp vào Pallet (nếu có pallet)
-    if (item.palletId != null && item.palletId!.isNotEmpty) {
-      fallbackLogs.add(TagLifecycleLog(
+    // Xác định Kệ và Pallet ban đầu (trước khi phát sinh các đợt điều chuyển vị trí)
+    final transferLogs = logs
+        .where((l) => (l.action == TagLifecycleAction.transferLocation || l.action == TagLifecycleAction.mergePallet) &&
+                      l.fromLocation != null && l.fromLocation!.trim().isNotEmpty)
+        .toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    String? initialLoc = transferLogs.isNotEmpty ? transferLogs.first.fromLocation : item.locationId;
+    String? initialPal = transferLogs.isNotEmpty ? (transferLogs.first.fromPallet ?? item.palletId) : item.palletId;
+    if ((initialLoc == null || initialLoc.isEmpty) && initialPal != null && initialPal.isNotEmpty) {
+      final p = _pallets.where((pal) => pal.palletId == initialPal || pal.palletCode == initialPal).firstOrNull;
+      initialLoc = p?.locationId;
+    }
+
+    // Mốc 1: Khởi tạo & Gán mã chip RFID (nếu chưa có log gán mã)
+    if (!hasEncoded) {
+      combinedLogs.add(TagLifecycleLog(
+        logId: 'INIT-${item.itemId}',
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.encoded,
+        newStatus: ItemStatus.pendingInbound.label,
+        documentNo: item.orderNo,
+        performedBy: 'Hệ thống khởi tạo',
+        device: 'RFID Station',
+        timestamp: baseTime.subtract(const Duration(minutes: 30)),
+        notes: 'Gán mã chip RFID cho sản phẩm ${item.sku}',
+      ));
+    }
+
+    // Mốc 2: Nhập kho (nếu chưa có log nhập kho)
+    if (!hasInbound) {
+      combinedLogs.add(TagLifecycleLog(
+        logId: 'INBOUND-${item.itemId}',
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.inboundGate,
+        previousStatus: ItemStatus.pendingInbound.label,
+        newStatus: (initialPal != null && initialPal.isNotEmpty) ? ItemStatus.waitingPalletize.label : ItemStatus.waitingPutaway.label,
+        fromPallet: null,
+        toPallet: initialPal,
+        toLocation: initialLoc,
+        documentNo: item.orderNo,
+        performedBy: item.inboundByDisplay,
+        device: 'Cổng RFID Gate / PDA',
+        timestamp: baseTime,
+        notes: 'Xác nhận nhập kho theo đơn ${item.orderNo ?? "PO"}',
+      ));
+    }
+
+    // Mốc 3: Xếp vào Pallet (nếu có pallet và chưa có log pallet)
+    if (!hasPalletize && initialPal != null && initialPal.isNotEmpty) {
+      combinedLogs.add(TagLifecycleLog(
         logId: 'PALLET-${item.itemId}',
         epc: item.epc,
         itemId: item.itemId,
@@ -2625,16 +2648,17 @@ class WarehouseRepository extends ChangeNotifier {
         action: TagLifecycleAction.palletize,
         previousStatus: ItemStatus.waitingPalletize.label,
         newStatus: ItemStatus.waitingPutaway.label,
-        toPallet: item.palletId,
+        toPallet: initialPal,
+        toLocation: initialLoc,
         performedBy: item.inboundByDisplay,
         timestamp: baseTime.add(const Duration(minutes: 5)),
-        notes: 'Xếp sản phẩm vào Pallet ${item.palletId}',
+        notes: 'Xếp sản phẩm vào Pallet $initialPal',
       ));
     }
 
-    // Mốc 4: Cất kệ / Lưu vào vị trí (nếu đã inStock hoặc có locationId)
-    if (item.status == ItemStatus.inStock || (item.locationId != null && item.locationId!.isNotEmpty)) {
-      fallbackLogs.add(TagLifecycleLog(
+    // Mốc 4: Cất kệ / Lưu vào vị trí (nếu đã inStock hoặc có locationId và chưa có log cất kệ)
+    if (!hasPutaway && (item.status == ItemStatus.inStock || (initialLoc != null && initialLoc.isNotEmpty))) {
+      combinedLogs.add(TagLifecycleLog(
         logId: 'PUTAWAY-${item.itemId}',
         epc: item.epc,
         itemId: item.itemId,
@@ -2644,18 +2668,18 @@ class WarehouseRepository extends ChangeNotifier {
         action: TagLifecycleAction.putaway,
         previousStatus: ItemStatus.waitingPutaway.label,
         newStatus: ItemStatus.inStock.label,
-        toLocation: item.locationId,
-        toPallet: item.palletId,
+        toLocation: initialLoc ?? item.locationId,
+        toPallet: initialPal ?? item.palletId,
         performedBy: item.putawayByDisplay,
         device: 'SEUIC UTouch 2 PDA',
         timestamp: baseTime.add(const Duration(minutes: 20)),
-        notes: 'Cất hàng lên vị trí kệ ${item.locationId ?? ""}',
+        notes: 'Cất hàng lên vị trí kệ ${initialLoc ?? item.locationId ?? ""}',
       ));
     }
 
-    // Mốc 5: Xuất kho (nếu đã out)
-    if (item.status == ItemStatus.out) {
-      fallbackLogs.add(TagLifecycleLog(
+    // Mốc 5: Xuất kho (nếu đã out và chưa có log xuất)
+    if (!hasOut && item.status == ItemStatus.out) {
+      combinedLogs.add(TagLifecycleLog(
         logId: 'OUT-${item.itemId}',
         epc: item.epc,
         itemId: item.itemId,
@@ -2666,6 +2690,7 @@ class WarehouseRepository extends ChangeNotifier {
         previousStatus: ItemStatus.inStock.label,
         newStatus: ItemStatus.out.label,
         fromLocation: item.locationId,
+        fromPallet: item.palletId,
         performedBy: 'Thủ kho xuất',
         device: 'Cổng RFID Gate Outbound',
         timestamp: DateTime.now().subtract(const Duration(minutes: 10)),
@@ -2673,7 +2698,446 @@ class WarehouseRepository extends ChangeNotifier {
       ));
     }
 
-    return fallbackLogs..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return combinedLogs..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  /// Tạo chuỗi tóm tắt tiến trình vòng đời thẻ RFID (Tag Lifecycle Summary) phục vụ xuất báo cáo và tra cứu
+  /// Bao gồm đầy đủ ngày giờ, chi tiết kệ nào, pallet nào, vị trí chuyển đi/đến, thu hồi, sửa chữa...
+  /// [multiline]: Nếu true, mỗi mốc sự kiện sẽ xuống một dòng riêng phục vụ xuất file Excel / CSV.
+  String getTagLifecycleSummary(String epc, {bool multiline = false}) {
+    final logs = getTagLifecycle(epc);
+    if (logs.isEmpty) return 'Chưa có lịch sử';
+
+    final cleanEpc = epc.trim().toUpperCase();
+    final item = _items.where((it) => it.epc.toUpperCase() == cleanEpc || it.itemId.toUpperCase() == cleanEpc).firstOrNull;
+
+    // Sắp xếp theo trình tự thời gian từ cũ tới mới (chronological)
+    final sorted = logs.toList()..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    String resolveLoc(String? locId) {
+      if (locId == null || locId.trim().isEmpty) return '';
+      final clean = locId.trim();
+      final loc = findLocationFast(clean) ??
+          _locations.where((l) => l.locationId.toUpperCase() == clean.toUpperCase() ||
+                                  l.locationCode.toUpperCase() == clean.toUpperCase() ||
+                                  l.displayName.toUpperCase() == clean.toUpperCase()).firstOrNull;
+      if (loc == null) return clean;
+
+      final disp = loc.displayName;
+      final z = loc.zone.trim();
+      if (z.isNotEmpty && z != '0' && z.toUpperCase() != 'GATE' && z.toUpperCase() != 'DEFAULT') {
+        final cleanZ = z.replaceAll(RegExp(r'^(KHU|KHO)\s*', caseSensitive: false), '').trim();
+        final isLetterZone = cleanZ.length == 1 && RegExp(r'^[A-Za-z]$').hasMatch(cleanZ);
+        final hasZoneInName = isLetterZone
+            ? disp.toUpperCase().contains(cleanZ.toUpperCase())
+            : disp.toUpperCase().contains(z.toUpperCase());
+        if (!hasZoneInName) {
+          final prefix = z.toUpperCase().startsWith('KHU') || z.toUpperCase().startsWith('KHO') ? z : 'Kho $z';
+          return '$disp ($prefix)';
+        }
+      }
+      return disp;
+    }
+
+    String resolvePal(String? palId) {
+      if (palId == null || palId.trim().isEmpty) return '';
+      final clean = palId.trim();
+      final pal = _pallets.where((p) => p.palletId == clean || p.palletCode == clean).firstOrNull;
+      return pal?.displayName ?? clean;
+    }
+
+    final stages = <String>[];
+    for (final l in sorted) {
+      final dt = l.timestamp;
+      final d = dt.day.toString().padLeft(2, '0');
+      final m = dt.month.toString().padLeft(2, '0');
+      final y = dt.year.toString();
+      final h = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      final timePrefix = '[$d/$m/$y $h:$min]';
+
+      // Tra cứu Pallet và Kệ bổ trợ nếu log chưa có sẵn
+      final rawPal = (l.toPallet != null && l.toPallet!.isNotEmpty)
+          ? l.toPallet
+          : ((l.fromPallet != null && l.fromPallet!.isNotEmpty) ? l.fromPallet : item?.palletId);
+      final palName = resolvePal(rawPal);
+
+      String rawLoc = (l.toLocation != null && l.toLocation!.isNotEmpty)
+          ? l.toLocation!
+          : ((l.fromLocation != null && l.fromLocation!.isNotEmpty) ? l.fromLocation! : '');
+      if (rawLoc.isEmpty && rawPal != null && rawPal.isNotEmpty) {
+        final palObj = _pallets.where((p) => p.palletId == rawPal || p.palletCode == rawPal).firstOrNull;
+        if (palObj != null && palObj.locationId != null && palObj.locationId!.isNotEmpty) {
+          rawLoc = palObj.locationId!;
+        }
+      }
+      if (rawLoc.isEmpty && item?.locationId != null && item!.locationId!.isNotEmpty) {
+        rawLoc = item.locationId!;
+      }
+      final locName = resolveLoc(rawLoc);
+
+      String desc;
+      switch (l.action) {
+        case TagLifecycleAction.encoded:
+          desc = '$timePrefix Khởi tạo mã';
+          break;
+        case TagLifecycleAction.inboundGate:
+          if (locName.isNotEmpty && palName.isNotEmpty) {
+            desc = '$timePrefix Nhập kho (Cổng RFID) [Kệ: $locName | Pallet: $palName]';
+          } else if (palName.isNotEmpty) {
+            desc = '$timePrefix Nhập kho (Cổng RFID) [Pallet: $palName]';
+          } else if (locName.isNotEmpty) {
+            desc = '$timePrefix Nhập kho (Cổng RFID) [Kệ: $locName]';
+          } else {
+            desc = '$timePrefix Nhập kho (Cổng RFID)';
+          }
+          break;
+        case TagLifecycleAction.inboundPda:
+          if (locName.isNotEmpty && palName.isNotEmpty) {
+            desc = '$timePrefix Nhập kho (PDA) [Kệ: $locName | Pallet: $palName]';
+          } else if (palName.isNotEmpty) {
+            desc = '$timePrefix Nhập kho (PDA) [Pallet: $palName]';
+          } else if (locName.isNotEmpty) {
+            desc = '$timePrefix Nhập kho (PDA) [Kệ: $locName]';
+          } else {
+            desc = '$timePrefix Nhập kho (PDA)';
+          }
+          break;
+        case TagLifecycleAction.palletize:
+          final p = resolvePal(l.toPallet).isNotEmpty ? resolvePal(l.toPallet) : palName;
+          final lLoc = resolveLoc(l.toLocation).isNotEmpty ? resolveLoc(l.toLocation) : locName;
+          if (lLoc.isNotEmpty && p.isNotEmpty) {
+            desc = '$timePrefix Xếp Pallet [$p] (Kệ: $lLoc)';
+          } else if (p.isNotEmpty) {
+            desc = '$timePrefix Xếp Pallet [$p]';
+          } else {
+            desc = '$timePrefix Xếp Pallet';
+          }
+          break;
+        case TagLifecycleAction.putaway:
+          final toLoc = resolveLoc(l.toLocation).isNotEmpty
+              ? resolveLoc(l.toLocation)
+              : (resolveLoc(item?.locationId).isNotEmpty ? resolveLoc(item?.locationId) : locName);
+          final toPal = resolvePal(l.toPallet).isNotEmpty
+              ? resolvePal(l.toPallet)
+              : (resolvePal(item?.palletId).isNotEmpty ? resolvePal(item?.palletId) : palName);
+          if (toLoc.isNotEmpty && toPal.isNotEmpty) {
+            desc = '$timePrefix Cất vào Kệ [$toLoc] (Pallet: $toPal)';
+          } else if (toLoc.isNotEmpty) {
+            desc = '$timePrefix Cất vào Kệ [$toLoc]';
+          } else if (toPal.isNotEmpty) {
+            desc = '$timePrefix Cất kệ (Pallet: $toPal)';
+          } else {
+            desc = '$timePrefix Cất kệ';
+          }
+          break;
+        case TagLifecycleAction.transferLocation:
+          final fromLoc = resolveLoc(l.fromLocation);
+          final toLoc = resolveLoc(l.toLocation);
+          final fromP = resolvePal(l.fromPallet);
+          final toP = resolvePal(l.toPallet).isNotEmpty ? resolvePal(l.toPallet) : palName;
+          String palSuffix = '';
+          if (fromP.isNotEmpty && toP.isNotEmpty && fromP != toP) {
+            palSuffix = ' (Pallet: $fromP → $toP)';
+          } else if (toP.isNotEmpty) {
+            palSuffix = ' (Pallet: $toP)';
+          } else if (fromP.isNotEmpty) {
+            palSuffix = ' (Pallet: $fromP)';
+          }
+          if (fromLoc.isNotEmpty && toLoc.isNotEmpty) {
+            desc = '$timePrefix Chuyển vị trí [$fromLoc → $toLoc]$palSuffix';
+          } else if (toLoc.isNotEmpty) {
+            desc = '$timePrefix Chuyển vị trí [→ $toLoc]$palSuffix';
+          } else {
+            desc = '$timePrefix Chuyển vị trí kệ$palSuffix';
+          }
+          break;
+        case TagLifecycleAction.transferPallet:
+          final fromP = resolvePal(l.fromPallet);
+          final toP = resolvePal(l.toPallet).isNotEmpty ? resolvePal(l.toPallet) : palName;
+          final locSuffix = locName.isNotEmpty ? ' (Kệ: $locName)' : '';
+          if (fromP.isNotEmpty && toP.isNotEmpty) {
+            desc = '$timePrefix Đổi Pallet [$fromP → $toP]$locSuffix';
+          } else if (toP.isNotEmpty) {
+            desc = '$timePrefix Đổi Pallet [→ $toP]$locSuffix';
+          } else {
+            desc = '$timePrefix Đổi Pallet$locSuffix';
+          }
+          break;
+        case TagLifecycleAction.mergePallet:
+          final fromP = resolvePal(l.fromPallet);
+          final toP = resolvePal(l.toPallet).isNotEmpty ? resolvePal(l.toPallet) : palName;
+          final locSuffix = locName.isNotEmpty ? ' (Kệ: $locName)' : '';
+          if (fromP.isNotEmpty && toP.isNotEmpty) {
+            desc = '$timePrefix Gộp Pallet [$fromP → $toP]$locSuffix';
+          } else {
+            desc = '$timePrefix Gộp Pallet$locSuffix';
+          }
+          break;
+        case TagLifecycleAction.auditMatch:
+          if (locName.isNotEmpty && palName.isNotEmpty) {
+            desc = '$timePrefix Kiểm kê khớp [Kệ: $locName | Pallet: $palName]';
+          } else if (locName.isNotEmpty) {
+            desc = '$timePrefix Kiểm kê khớp [Kệ: $locName]';
+          } else {
+            desc = '$timePrefix Kiểm kê khớp';
+          }
+          break;
+        case TagLifecycleAction.auditMisplaced:
+          final aLoc = resolveLoc(l.toLocation).isNotEmpty ? resolveLoc(l.toLocation) : locName;
+          final aPal = resolvePal(l.toPallet).isNotEmpty ? resolvePal(l.toPallet) : palName;
+          if (aLoc.isNotEmpty && aPal.isNotEmpty) {
+            desc = '$timePrefix Kiểm kê sai vị trí [Kệ: $aLoc | Pallet: $aPal]';
+          } else if (aLoc.isNotEmpty) {
+            desc = '$timePrefix Kiểm kê sai vị trí [$aLoc]';
+          } else {
+            desc = '$timePrefix Kiểm kê sai vị trí';
+          }
+          break;
+        case TagLifecycleAction.auditMissing:
+          if (locName.isNotEmpty && palName.isNotEmpty) {
+            desc = '$timePrefix Báo thiếu kiểm kê [Kệ: $locName | Pallet: $palName]';
+          } else if (locName.isNotEmpty) {
+            desc = '$timePrefix Báo thiếu kiểm kê [Kệ: $locName]';
+          } else {
+            desc = '$timePrefix Báo thiếu kiểm kê';
+          }
+          break;
+        case TagLifecycleAction.auditFound:
+          if (locName.isNotEmpty && palName.isNotEmpty) {
+            desc = '$timePrefix Tìm lại kiểm kê [Kệ: $locName | Pallet: $palName]';
+          } else if (locName.isNotEmpty) {
+            desc = '$timePrefix Tìm lại kiểm kê [Kệ: $locName]';
+          } else {
+            desc = '$timePrefix Tìm lại kiểm kê';
+          }
+          break;
+        case TagLifecycleAction.locateFound:
+          if (locName.isNotEmpty && palName.isNotEmpty) {
+            desc = '$timePrefix Radar tìm thấy [Kệ: $locName | Pallet: $palName]';
+          } else if (locName.isNotEmpty) {
+            desc = '$timePrefix Radar tìm thấy [Kệ: $locName]';
+          } else {
+            desc = '$timePrefix Radar tìm thấy';
+          }
+          break;
+        case TagLifecycleAction.allocatePo:
+          final locPalSuffix = (locName.isNotEmpty && palName.isNotEmpty)
+              ? ' (Kệ: $locName | Pallet: $palName)'
+              : (locName.isNotEmpty ? ' (Kệ: $locName)' : '');
+          desc = (l.documentNo != null && l.documentNo!.trim().isNotEmpty)
+              ? '$timePrefix Giữ chỗ xuất [${l.documentNo}]$locPalSuffix'
+              : '$timePrefix Giữ chỗ xuất$locPalSuffix';
+          break;
+        case TagLifecycleAction.picked:
+          final fromLoc = resolveLoc(l.fromLocation).isNotEmpty ? resolveLoc(l.fromLocation) : locName;
+          final fromP = resolvePal(l.fromPallet).isNotEmpty ? resolvePal(l.fromPallet) : palName;
+          if (fromLoc.isNotEmpty && fromP.isNotEmpty) {
+            desc = '$timePrefix Đã lấy hàng [Từ Kệ: $fromLoc | Pallet: $fromP]';
+          } else if (fromLoc.isNotEmpty) {
+            desc = '$timePrefix Đã lấy hàng [Từ Kệ: $fromLoc]';
+          } else {
+            desc = '$timePrefix Đã lấy hàng';
+          }
+          break;
+        case TagLifecycleAction.recall:
+          final noteSuffix = (l.notes != null && l.notes!.trim().isNotEmpty && l.notes != 'Thu hồi sản phẩm')
+              ? ' [${l.notes}]'
+              : '';
+          final placeSuffix = (locName.isNotEmpty && palName.isNotEmpty)
+              ? ' (Kệ: $locName | Pallet: $palName)'
+              : (locName.isNotEmpty ? ' (Kệ: $locName)' : (palName.isNotEmpty ? ' (Pallet: $palName)' : ''));
+          desc = '$timePrefix Thu hồi sản phẩm$noteSuffix$placeSuffix';
+          break;
+        case TagLifecycleAction.repair:
+          final noteSuffix = (l.notes != null && l.notes!.trim().isNotEmpty && l.notes != 'Gửi sửa chữa / bảo hành')
+              ? ' [${l.notes}]'
+              : '';
+          final placeSuffix = (locName.isNotEmpty && palName.isNotEmpty)
+              ? ' (Kệ: $locName | Pallet: $palName)'
+              : (locName.isNotEmpty ? ' (Kệ: $locName)' : (palName.isNotEmpty ? ' (Pallet: $palName)' : ''));
+          desc = '$timePrefix Gửi sửa chữa / Bảo hành$noteSuffix$placeSuffix';
+          break;
+        case TagLifecycleAction.repairDone:
+          final toLoc = resolveLoc(l.toLocation).isNotEmpty ? resolveLoc(l.toLocation) : locName;
+          final toPal = resolvePal(l.toPallet).isNotEmpty ? resolvePal(l.toPallet) : palName;
+          if (toLoc.isNotEmpty && toPal.isNotEmpty) {
+            desc = '$timePrefix Hoàn trả kho sau sửa chữa [Kệ: $toLoc | Pallet: $toPal]';
+          } else if (toLoc.isNotEmpty) {
+            desc = '$timePrefix Hoàn trả kho sau sửa chữa [$toLoc]';
+          } else {
+            desc = '$timePrefix Hoàn trả kho sau sửa chữa';
+          }
+          break;
+        case TagLifecycleAction.outboundGate:
+          final outLoc = resolveLoc(l.fromLocation).isNotEmpty ? resolveLoc(l.fromLocation) : locName;
+          final outPal = resolvePal(l.fromPallet).isNotEmpty ? resolvePal(l.fromPallet) : palName;
+          final placeSuffix = (outLoc.isNotEmpty && outPal.isNotEmpty)
+              ? ' [Từ Kệ: $outLoc | Pallet: $outPal]'
+              : (outLoc.isNotEmpty ? ' [Từ Kệ: $outLoc]' : (outPal.isNotEmpty ? ' [Pallet: $outPal]' : ''));
+          desc = '$timePrefix Xuất kho (Cổng RFID)$placeSuffix';
+          break;
+        case TagLifecycleAction.outboundPda:
+          final outLoc = resolveLoc(l.fromLocation).isNotEmpty ? resolveLoc(l.fromLocation) : locName;
+          final outPal = resolvePal(l.fromPallet).isNotEmpty ? resolvePal(l.fromPallet) : palName;
+          final placeSuffix = (outLoc.isNotEmpty && outPal.isNotEmpty)
+              ? ' [Từ Kệ: $outLoc | Pallet: $outPal]'
+              : (outLoc.isNotEmpty ? ' [Từ Kệ: $outLoc]' : (outPal.isNotEmpty ? ' [Pallet: $outPal]' : ''));
+          desc = '$timePrefix Xuất kho (PDA)$placeSuffix';
+          break;
+        case TagLifecycleAction.unauthorizedExit:
+          desc = '$timePrefix Cảnh báo ra trái phép';
+          break;
+        case TagLifecycleAction.statusChange:
+          desc = l.newStatus.trim().isNotEmpty ? '$timePrefix Đổi trạng thái [${l.newStatus}]' : '$timePrefix Đổi trạng thái';
+          break;
+      }
+
+      // Tránh lặp lại giai đoạn giống hệt nhau liên tiếp
+      if (stages.isNotEmpty && stages.last == desc) {
+        continue;
+      }
+      stages.add(desc);
+    }
+
+    if (stages.isEmpty) return 'Chưa có lịch sử';
+    if (!multiline) {
+      return stages.join(' → ');
+    }
+    // Chế độ xuống dòng tự động cho xuất file Excel / CSV:
+    final buffer = StringBuffer();
+    for (int i = 0; i < stages.length; i++) {
+      if (i == 0) {
+        buffer.write(stages[i]);
+      } else {
+        buffer.write('\r\n→ ${stages[i]}');
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// Ghi nhận biến động: Thu hồi sản phẩm (Recall)
+  Future<bool> recordItemRecall({
+    required String epc,
+    required String reason,
+    required String performedBy,
+  }) async {
+    final cleanEpc = epc.trim().toUpperCase();
+    final item = _items.where((it) => it.epc.toUpperCase() == cleanEpc).firstOrNull;
+    if (item == null) return false;
+
+    item.status = ItemStatus.recalled;
+    await _dbService.updateItemStatus(item.epc, ItemStatus.recalled);
+    await _syncDirectOrQueue(
+      tableName: 'items',
+      recordId: item.itemId,
+      action: 'UPDATE',
+      payload: {
+        'status': ItemStatus.recalled.code,
+      },
+    );
+
+    await recordTagLifecycle(
+      epc: item.epc,
+      itemId: item.itemId,
+      sku: item.sku,
+      productName: item.productName,
+      serialNumber: item.serialNumber,
+      action: TagLifecycleAction.recall,
+      previousStatus: ItemStatus.inStock.label,
+      newStatus: ItemStatus.recalled.label,
+      fromLocation: item.locationId,
+      fromPallet: item.palletId,
+      performedBy: performedBy,
+      notes: reason.isNotEmpty ? reason : 'Thu hồi sản phẩm',
+    );
+    notifyListeners();
+    return true;
+  }
+
+  /// Ghi nhận biến động: Gửi đi sửa chữa / bảo hành (Repair)
+  Future<bool> recordItemRepair({
+    required String epc,
+    required String reason,
+    required String performedBy,
+  }) async {
+    final cleanEpc = epc.trim().toUpperCase();
+    final item = _items.where((it) => it.epc.toUpperCase() == cleanEpc).firstOrNull;
+    if (item == null) return false;
+
+    item.status = ItemStatus.underRepair;
+    await _dbService.updateItemStatus(item.epc, ItemStatus.underRepair);
+    await _syncDirectOrQueue(
+      tableName: 'items',
+      recordId: item.itemId,
+      action: 'UPDATE',
+      payload: {
+        'status': ItemStatus.underRepair.code,
+      },
+    );
+
+    await recordTagLifecycle(
+      epc: item.epc,
+      itemId: item.itemId,
+      sku: item.sku,
+      productName: item.productName,
+      serialNumber: item.serialNumber,
+      action: TagLifecycleAction.repair,
+      previousStatus: ItemStatus.inStock.label,
+      newStatus: ItemStatus.underRepair.label,
+      fromLocation: item.locationId,
+      fromPallet: item.palletId,
+      performedBy: performedBy,
+      notes: reason.isNotEmpty ? reason : 'Gửi sửa chữa / bảo hành',
+    );
+    notifyListeners();
+    return true;
+  }
+
+  /// Ghi nhận biến động: Hoàn trả lại kho sau khi sửa chữa xong (Repair Done)
+  Future<bool> recordItemRepairReturn({
+    required String epc,
+    required String toLocationId,
+    String? toPalletId,
+    required String performedBy,
+  }) async {
+    final cleanEpc = epc.trim().toUpperCase();
+    final item = _items.where((it) => it.epc.toUpperCase() == cleanEpc).firstOrNull;
+    if (item == null) return false;
+
+    item.status = ItemStatus.inStock;
+    item.locationId = toLocationId;
+    item.palletId = toPalletId;
+    await _dbService.updateItemLocationAndPallet(item.epc, toLocationId, toPalletId ?? '');
+    await _dbService.updateItemStatus(item.epc, ItemStatus.inStock);
+    await _syncDirectOrQueue(
+      tableName: 'items',
+      recordId: item.itemId,
+      action: 'UPDATE',
+      payload: {
+        'location_id': toLocationId,
+        'pallet_id': toPalletId,
+        'status': ItemStatus.inStock.code,
+      },
+    );
+
+    final loc = _locations.where((l) => l.locationId == toLocationId || l.locationCode == toLocationId).firstOrNull;
+    await recordTagLifecycle(
+      epc: item.epc,
+      itemId: item.itemId,
+      sku: item.sku,
+      productName: item.productName,
+      serialNumber: item.serialNumber,
+      action: TagLifecycleAction.repairDone,
+      previousStatus: ItemStatus.underRepair.label,
+      newStatus: ItemStatus.inStock.label,
+      toLocation: loc?.displayName ?? toLocationId,
+      toPallet: toPalletId,
+      performedBy: performedBy,
+      notes: 'Hoàn tất sửa chữa, nhập lại vào vị trí ${loc?.displayName ?? toLocationId}',
+    );
+    notifyListeners();
+    return true;
   }
 
   Future<void> addCustomer(Customer customer) async {
@@ -3904,6 +4368,22 @@ class WarehouseRepository extends ChangeNotifier {
       item.locationId = locationId;
       _dbService.updateItemLocationAndPallet(item.epc, locationId, pallet.palletId);
       _dbService.updateItemStatus(item.epc, ItemStatus.inStock);
+
+      recordTagLifecycle(
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.putaway,
+        previousStatus: ItemStatus.waitingPutaway.label,
+        newStatus: ItemStatus.inStock.label,
+        toLocation: location?.displayName ?? locationId,
+        toPallet: pallet.displayName,
+        performedBy: performedBy,
+        device: 'Cổng RFID Gate Inbound',
+        notes: 'Cất vào vị trí kệ ${location?.displayName ?? locationId} (Pallet: ${pallet.displayName})',
+      );
     }
 
     order.status = InboundOrderStatus.completed;
@@ -4454,6 +4934,47 @@ class WarehouseRepository extends ChangeNotifier {
           notes: 'Xác nhận cất thùng hàng $cleanBarcode lên kệ ${loc.locationCode} bằng PDA Barcode',
         ),
       );
+
+      final oldLocObj = findLocationFast(oldLoc);
+      final oldLocDisplay = oldLocObj?.displayName ?? oldLoc;
+      final newLocDisplay = loc.displayName;
+      final palDisplay = it.palletId != null ? (findPalletFast(it.palletId)?.displayName ?? it.palletId) : null;
+
+      if (oldLoc == 'LOC-GATE-IN' || oldLoc == 'CỔNG GATE (IN)' || oldLoc.isEmpty) {
+        await recordTagLifecycle(
+          epc: it.epc,
+          itemId: it.itemId,
+          sku: it.sku,
+          productName: it.productName,
+          serialNumber: it.serialNumber,
+          action: TagLifecycleAction.putaway,
+          previousStatus: ItemStatus.waitingPutaway.label,
+          newStatus: ItemStatus.inStock.label,
+          toLocation: newLocDisplay,
+          toPallet: palDisplay,
+          performedBy: actualPerformer,
+          device: 'SEUIC UTouch 2 PDA',
+          notes: 'Cất vào vị trí kệ $newLocDisplay bằng PDA Barcode${palDisplay != null ? " (Pallet: $palDisplay)" : ""}',
+        );
+      } else {
+        await recordTagLifecycle(
+          epc: it.epc,
+          itemId: it.itemId,
+          sku: it.sku,
+          productName: it.productName,
+          serialNumber: it.serialNumber,
+          action: TagLifecycleAction.transferLocation,
+          previousStatus: ItemStatus.inStock.label,
+          newStatus: ItemStatus.inStock.label,
+          fromLocation: oldLocDisplay,
+          toLocation: newLocDisplay,
+          fromPallet: palDisplay,
+          toPallet: palDisplay,
+          performedBy: actualPerformer,
+          device: 'SEUIC UTouch 2 PDA',
+          notes: 'Điều chuyển vị trí từ $oldLocDisplay sang $newLocDisplay bằng PDA Barcode',
+        );
+      }
     }
 
     final affectedPalletIds = matchedItems.map((i) => i.palletId).whereType<String>().toSet();
@@ -6328,6 +6849,24 @@ class WarehouseRepository extends ChangeNotifier {
       final item = _items.firstWhere((it) => it.itemId == itemId);
       item.locationId = newLocationId;
       _dbService.updateItemLocationAndPallet(item.epc, newLocationId, palletId);
+
+      recordTagLifecycle(
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.transferLocation,
+        previousStatus: ItemStatus.inStock.label,
+        newStatus: ItemStatus.inStock.label,
+        fromLocation: oldLocation.displayName,
+        toLocation: newLocation?.displayName ?? newLocationId,
+        fromPallet: pallet.displayName,
+        toPallet: pallet.displayName,
+        performedBy: performedBy,
+        device: 'Desktop WMS / PDA',
+        notes: 'Di chuyển Pallet ${pallet.displayName} từ ${oldLocation.displayName} sang ${newLocation?.displayName ?? newLocationId}',
+      );
     }
 
     final tx = InventoryTransaction(
@@ -6426,6 +6965,9 @@ class WarehouseRepository extends ChangeNotifier {
         .where((it) => it.palletId == pallet.palletId || it.palletId == pallet.palletCode)
         .toList();
 
+    final oldLocDisplay = oldLocation?.displayName ?? (oldLocation?.locationCode ?? (oldLocationId ?? ''));
+    final newLocDisplay = newLocation?.displayName ?? (newLocation?.locationCode ?? newLocationId);
+
     for (final item in palletItems) {
       item.locationId = effectiveNewLocId;
       item.status = ItemStatus.inStock;
@@ -6440,6 +6982,23 @@ class WarehouseRepository extends ChangeNotifier {
           'location_id': effectiveNewLocId,
           'status': ItemStatus.inStock.code,
         },
+      );
+      await recordTagLifecycle(
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.transferLocation,
+        previousStatus: ItemStatus.inStock.label,
+        newStatus: ItemStatus.inStock.label,
+        fromLocation: oldLocDisplay.isNotEmpty ? oldLocDisplay : null,
+        toLocation: newLocDisplay,
+        fromPallet: pallet.palletCode,
+        toPallet: pallet.palletCode,
+        performedBy: actualPerformer,
+        device: 'SEUIC UTouch 2 PDA',
+        notes: 'Chuyển Pallet ${pallet.palletCode} từ ${oldLocDisplay.isNotEmpty ? oldLocDisplay : "kệ cũ"} sang $newLocDisplay',
       );
     }
 
@@ -6488,6 +7047,10 @@ class WarehouseRepository extends ChangeNotifier {
       final item = _items.where((it) => it.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
       if (item == null) continue;
 
+      final oldLocId = item.locationId ?? '';
+      final oldLoc = _locations.where((l) => l.locationId == oldLocId || l.locationCode == oldLocId).firstOrNull;
+      final oldLocDisplay = oldLoc?.displayName ?? (oldLocId.isNotEmpty ? oldLocId : null);
+
       item.locationId = effectiveNewLocId;
       item.status = ItemStatus.inStock;
       item.putawayBy = actualPerformer;
@@ -6511,12 +7074,13 @@ class WarehouseRepository extends ChangeNotifier {
         action: TagLifecycleAction.transferLocation,
         previousStatus: ItemStatus.inStock.label,
         newStatus: ItemStatus.inStock.label,
+        fromLocation: oldLocDisplay,
         toLocation: newLocation?.displayName ?? newLocationId,
         fromPallet: item.palletId,
         toPallet: item.palletId,
         performedBy: actualPerformer,
         device: 'SEUIC UTouch 2 PDA',
-        notes: 'Chuyển vị trí kho đến ${newLocation?.displayName ?? newLocationId}',
+        notes: 'Chuyển vị trí kho từ ${oldLocDisplay ?? "kệ cũ"} đến ${newLocation?.displayName ?? newLocationId}',
       );
       count++;
     }

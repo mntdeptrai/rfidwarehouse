@@ -61,6 +61,7 @@ void main() {
     expect(csvFile.existsSync(), isTrue);
     final csvContent = csvFile.readAsStringSync();
     expect(csvContent.contains('PEPSICO VIETNAM'), isTrue);
+    expect(csvContent.contains('Vòng Đời Thẻ'), isTrue);
 
     // Test XLSX export
     final xlsxFile = await exportService.exportInventoryReport(ReportFormat.xlsx, items: [item]);
@@ -69,15 +70,20 @@ void main() {
     final excel = Excel.decodeBytes(xlsxBytes);
     final sheet = excel['Ton_Kho_RFID'];
     bool foundSupplier = false;
+    bool foundLifecycleHeader = false;
     for (var row in sheet.rows) {
       for (var cell in row) {
-        if (cell?.value?.toString().contains('PEPSICO VIETNAM') == true) {
+        final val = cell?.value?.toString() ?? '';
+        if (val.contains('PEPSICO VIETNAM')) {
           foundSupplier = true;
-          break;
+        }
+        if (val.contains('Vòng Đời Thẻ')) {
+          foundLifecycleHeader = true;
         }
       }
     }
     expect(foundSupplier, isTrue);
+    expect(foundLifecycleHeader, isTrue);
   });
 
   test('Verify Stock Reconciliation Report generates 3 sheets with excess EPC listing in Sheet 3', () async {

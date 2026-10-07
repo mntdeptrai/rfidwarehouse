@@ -63,6 +63,10 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
         return const Color(0xFF3B82F6); // Xanh biển: Chờ xuất
       case ItemStatus.out:
         return const Color(0xFF64748B); // Xám: Đã xuất kho
+      case ItemStatus.underRepair:
+        return const Color(0xFFE11D48); // Đỏ hồng: Sửa chữa / Bảo hành
+      case ItemStatus.recalled:
+        return const Color(0xFFDC2626); // Đỏ sẫm: Đã thu hồi
     }
   }
 
@@ -84,6 +88,10 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
         return 'CHỜ XUẤT HÀNG';
       case ItemStatus.out:
         return 'ĐÃ XUẤT KHO';
+      case ItemStatus.underRepair:
+        return 'SỬA CHỮA / BẢO HÀNH';
+      case ItemStatus.recalled:
+        return 'ĐÃ THU HỒI';
     }
   }
 

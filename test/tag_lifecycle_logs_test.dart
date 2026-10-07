@@ -239,5 +239,71 @@ void main() {
       expect(paLog.performedBy, equals('Trần Văn Kệ'));
       expect(paLog.toLocation, equals('KỆ C1'));
     });
+
+    test('Tracking tag lifecycle through multiple shelves, warehouses, and pallets preserves initial putaway and all move transitions', () async {
+      final locA1 = Location(locationId: 'LOC-A1-MULTI', locationCode: 'KỆ A1', zone: 'KHO 1', shelf: 'Kệ A1', level: '1');
+      final locB2 = Location(locationId: 'LOC-B2-MULTI', locationCode: 'KỆ B2', zone: 'KHO 2', shelf: 'Kệ B2', level: '1');
+      final locC3 = Location(locationId: 'LOC-C3-MULTI', locationCode: 'KỆ C3', zone: 'KHO 2', shelf: 'Kệ C3', level: '1');
+      await repo.addLocation(locA1);
+      await repo.addLocation(locB2);
+      await repo.addLocation(locC3);
+
+      const epc = 'E2806894MULTIHOP001';
+      final item = Item(
+        itemId: 'ITEM-MULTI-01',
+        productId: 'P-MULTI-01',
+        sku: 'SKU-MULTI-01',
+        productName: 'Cảm biến rung công nghiệp',
+        serialNumber: 'SN-MULTI-01',
+        epc: epc,
+        status: ItemStatus.waitingPutaway,
+      );
+
+      final pallet1 = repo.createOrAssignPallet(
+        palletCode: 'PL-INIT-01',
+        locationId: 'LOC-A1-MULTI',
+        newItems: [item],
+      );
+
+      // 1. Cất vào Kệ ban đầu (KỆ A1, Pallet PL-INIT-01)
+      await repo.putawayPalletToLocation(
+        palletCodeOrId: pallet1.palletCode,
+        locationId: 'LOC-A1-MULTI',
+        performedBy: 'Thủ kho A',
+      );
+
+      // 2. Chuyển sang Kệ B2 (Kho 2) và đổi sang Pallet PL-HOP-02
+      final pallet2 = repo.createOrAssignPallet(
+        palletCode: 'PL-HOP-02',
+        locationId: 'LOC-B2-MULTI',
+        newItems: [],
+      );
+      await repo.moveItemIndividual(
+        epc: epc,
+        newLocationId: 'LOC-B2-MULTI',
+        newPalletId: pallet2.palletId,
+        performedBy: 'Kỹ thuật viên B',
+      );
+
+      // 3. Chuyển tiếp cả Pallet PL-HOP-02 sang Kệ C3 (Kho 2)
+      await repo.transferPalletToLocation(
+        palletEpc: pallet2.palletCode,
+        newLocationId: 'LOC-C3-MULTI',
+        performedBy: 'Thủ kho C',
+      );
+
+      // Kiểm tra chuỗi tóm tắt vòng đời
+      final summary = repo.getTagLifecycleSummary(epc, multiline: true);
+
+      // Bước 1 phải ghi rõ cất vào kệ A1
+      expect(summary.contains('Cất vào Kệ [KỆ A1 (KHO 1)] (Pallet: PL-INIT-01)'), isTrue, reason: 'Phải ghi rõ cất vào Kệ A1');
+      // Bước 2 ghi rõ chuyển vị trí và đổi Pallet
+      expect(summary.contains('Chuyển vị trí [KỆ A1 (KHO 1) → KỆ B2 (KHO 2)] (Pallet: PL-INIT-01 → PL-HOP-02)'), isTrue, reason: 'Phải thể hiện chi tiết vị trí cũ sang mới và pallet');
+      // Bước 3 ghi rõ chuyển Pallet sang Kệ C3
+      expect(summary.contains('Chuyển vị trí [KỆ B2 (KHO 2) → KỆ C3 (KHO 2)] (Pallet: PL-HOP-02)'), isTrue, reason: 'Phải ghi nhận bước chuyển pallet sang kệ C3');
+      // Kiểm tra xuống dòng cho từng mốc
+      final lines = summary.split('\n');
+      expect(lines.length, greaterThanOrEqualTo(3));
+    });
   });
 }

@@ -9,6 +9,7 @@ import '../../services/warehouse_repository.dart';
 import '../../theme/eye_care_theme.dart';
 import 'desktop_stock_reconciliation_view.dart';
 import 'desktop_audit_ticket_detail_view.dart';
+import '../../widgets/tag_lifecycle_timeline_dialog.dart';
 
 /// Màn hình Báo Cáo Tồn Kho RFID — Tra cứu và trích xuất danh sách tồn kho theo Số Seri (SN)
 class DesktopReportView extends StatefulWidget {
@@ -303,7 +304,8 @@ class _DesktopReportViewState extends State<DesktopReportView> {
         final locMatch = (it.locationId ?? '').toLowerCase().contains(q);
         final palMatch = (it.palletId ?? '').toLowerCase().contains(q);
         final supMatch = it.supplierDisplay.toLowerCase().contains(q);
-        return snMatch || skuMatch || nameMatch || epcMatch || locMatch || palMatch || supMatch;
+        final lcMatch = _repo.getTagLifecycleSummary(it.epc).toLowerCase().contains(q);
+        return snMatch || skuMatch || nameMatch || epcMatch || locMatch || palMatch || supMatch || lcMatch;
       }).toList();
     }
 
@@ -806,7 +808,7 @@ class _DesktopReportViewState extends State<DesktopReportView> {
         borderRadius: BorderRadius.circular(10),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            const minTableWidth = 1168.0;
+            const minTableWidth = 1548.0;
             final tableWidth = math.max(constraints.maxWidth, minTableWidth);
 
             return SingleChildScrollView(
@@ -833,6 +835,7 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                           _headerCell('NGÀY NHẬP KHO', 105, Alignment.center, c),
                           _headerCell('NHÀ CUNG CẤP', 120, Alignment.centerLeft, c),
                           _headerCell('TRẠNG THÁI', 100, Alignment.center, c),
+                          _headerCell('VÒNG ĐỜI THẺ', 380, Alignment.centerLeft, c),
                         ],
                       ),
                     ),
@@ -1073,6 +1076,47 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                                                 fontSize: 10.5,
                                                 fontWeight: FontWeight.bold,
                                                 color: Color(0xFF10B981),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+
+                                      // 11. VÒNG ĐỜI THẺ (Nhấn để xem timeline chi tiết)
+                                      SizedBox(
+                                        width: 380,
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Tooltip(
+                                            message: 'Nhấn để xem chi tiết lịch sử vòng đời thẻ RFID',
+                                            child: InkWell(
+                                              onTap: () => TagLifecycleTimelineDialog.show(context, epc: it.epc, item: it),
+                                              borderRadius: BorderRadius.circular(4),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: c.bgDeep,
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: c.border),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.history_rounded, size: 13, color: Color(0xFF10B981)),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        _repo.getTagLifecycleSummary(it.epc),
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: c.textPrimary,
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1896,6 +1940,7 @@ class _DesktopReportViewState extends State<DesktopReportView> {
               const TableColumn(title: 'MÃ PALLET', width: 110),
               const TableColumn(title: 'NGÀY NHẬP', width: 140),
               const TableColumn(title: 'MÃ CHIP RFID (EPC)', width: 180),
+              const TableColumn(title: 'VÒNG ĐỜI THẺ', flex: 2),
             ],
           ),
           Expanded(
@@ -1929,6 +1974,14 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                         child: Text(
                           it.epc,
                           style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: c.textSecondary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          _repo.getTagLifecycleSummary(it.epc),
+                          style: TextStyle(fontSize: 11.5, color: c.textSecondary),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
