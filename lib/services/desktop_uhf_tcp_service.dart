@@ -178,6 +178,10 @@ class DesktopUhfTcpService extends ChangeNotifier {
     if (!Platform.isWindows || Platform.environment.containsKey('FLUTTER_TEST')) return;
 
     try {
+      try {
+        _bridgeSocket?.destroy();
+        _bridgeSocket = null;
+      } catch (_) {}
       // Thử kết nối nếu Bridge đã chạy sẵn
       _bridgeSocket = await Socket.connect('127.0.0.1', 9099, timeout: const Duration(milliseconds: 800));
       _isBridgeConnected = true;
@@ -195,6 +199,10 @@ class DesktopUhfTcpService extends ChangeNotifier {
     if (_isBridgeConnected && _bridgeSocket != null) return true;
 
     try {
+      try {
+        _bridgeSocket?.destroy();
+        _bridgeSocket = null;
+      } catch (_) {}
       _bridgeSocket = await Socket.connect('127.0.0.1', 9099, timeout: const Duration(milliseconds: 1000));
       _isBridgeConnected = true;
       _log('✅ C# Hardware Bridge đã kết nối thành công (127.0.0.1:9099)! Đã nạp driver HF340.');
@@ -242,6 +250,10 @@ class DesktopUhfTcpService extends ChangeNotifier {
       for (int i = 0; i < 30; i++) {
         await Future.delayed(const Duration(milliseconds: 60));
         try {
+          try {
+            _bridgeSocket?.destroy();
+            _bridgeSocket = null;
+          } catch (_) {}
           _bridgeSocket = await Socket.connect('127.0.0.1', 9099, timeout: const Duration(milliseconds: 100));
           _isBridgeConnected = true;
           _log('✅ C# Hardware Bridge đã sẵn sàng (127.0.0.1:9099)!');
@@ -1063,6 +1075,22 @@ class DesktopUhfTcpService extends ChangeNotifier {
         'cmd': 'set_gpo',
         'index': index,
         'state': state,
+      });
+    }
+  }
+
+  Future<void> setAllGpo(Map<int, bool> states) async {
+    final summary = states.entries.map((e) => 'GPO${e.key}:${e.value ? "BẬT" : "TẮT"}').join(', ');
+    _log('Điều khiển đồng bộ GPO: [$summary]');
+    if (_isBridgeConnected) {
+      _sendBridgeCommand({
+        'cmd': 'set_gpo',
+        'states': {
+          '1': states[1] ?? false,
+          '2': states[2] ?? false,
+          '3': states[3] ?? false,
+          '4': states[4] ?? false,
+        },
       });
     }
   }

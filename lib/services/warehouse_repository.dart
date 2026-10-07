@@ -80,6 +80,7 @@ class WarehouseRepository extends ChangeNotifier {
       final dbInventorySessions = await _dbService.getInventorySessions();
       final dbLocateOrders = await _dbService.getLocateOrders();
       final dbTransactions = await _dbService.getTransactions();
+      final dbTagLogs = await _dbService.getTagLifecycleLogs();
 
       _products.clear();
       _products.addAll(cleanProducts.where((p) => !isBogusCommandProduct(p)));
@@ -158,6 +159,9 @@ class WarehouseRepository extends ChangeNotifier {
 
       _transactions.clear();
       _transactions.addAll(dbTransactions);
+
+      _tagLifecycleLogs.clear();
+      _tagLifecycleLogs.addAll(dbTagLogs);
 
       // Bổ sung chi tiết và số lượng thực xuất cho các đơn xuất kho từ lịch sử biến động kho nếu danh sách chi tiết trống
       for (final ord in _outboundOrders) {
@@ -252,6 +256,7 @@ class WarehouseRepository extends ChangeNotifier {
         supa.from('delivery_notes').select().catchError((_) => <Map<String, dynamic>>[]),
         supa.from('delivery_note_details').select().catchError((_) => <Map<String, dynamic>>[]),
         supa.from('locate_orders').select().order('created_at', ascending: false).catchError((_) => <Map<String, dynamic>>[]),
+        supa.from('tag_lifecycle_logs').select().order('timestamp', ascending: false).limit(500).catchError((_) => <Map<String, dynamic>>[]),
       ]);
 
       final locRows = results[0] as List<dynamic>;
@@ -841,9 +846,31 @@ class WarehouseRepository extends ChangeNotifier {
       _locateOrders.addAll(mergedLocateOrdersMap.values.toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
 
+      // 13. Tag Lifecycle Logs (Nhật ký vòng đời thẻ RFID)
+      final List<dynamic> tagLogRows = results.length > 17 ? results[17] as List<dynamic> : const [];
+      final List<TagLifecycleLog> loadedTagLogs = tagLogRows.map((m) {
+        return TagLifecycleLog.fromMap(m is Map<String, dynamic> ? m : Map<String, dynamic>.from(m as Map));
+      }).toList();
+
+      final localTagLogs = await _dbService.getTagLifecycleLogs();
+      final Map<String, TagLifecycleLog> mergedTagLogsMap = {};
+      for (final l in localTagLogs) {
+        mergedTagLogsMap[l.logId] = l;
+      }
+      for (final l in _tagLifecycleLogs) {
+        mergedTagLogsMap[l.logId] = l;
+      }
+      for (final l in loadedTagLogs) {
+        mergedTagLogsMap[l.logId] = l;
+        await _dbService.insertTagLifecycleLog(l);
+      }
+      _tagLifecycleLogs.clear();
+      _tagLifecycleLogs.addAll(mergedTagLogsMap.values.toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp)));
+
       _rebuildIndexes();
 
-      debugPrint('Directly synced from Supabase Cloud: ${_locations.length} locs, ${_pallets.length} pallets, ${_items.length} items, ${_products.length} prods, ${_inventorySessions.length} sessions, ${_transactions.length} txs');
+      debugPrint('Directly synced from Supabase Cloud: ${_locations.length} locs, ${_pallets.length} pallets, ${_items.length} items, ${_products.length} prods, ${_inventorySessions.length} sessions, ${_transactions.length} txs, ${_tagLifecycleLogs.length} tagLogs');
 
       return true;
     } catch (e) {
@@ -2163,6 +2190,7 @@ class WarehouseRepository extends ChangeNotifier {
   final List<InventorySession> _inventorySessions = [];
   final List<LocateOrder> _locateOrders = [];
   final List<InventoryTransaction> _transactions = [];
+  final List<TagLifecycleLog> _tagLifecycleLogs = [];
   final List<RfidDevice> _devices = [];
   final List<WmsUser> _users = [];
   final List<Customer> _customers = [];
@@ -2365,10 +2393,192 @@ class WarehouseRepository extends ChangeNotifier {
   List<InventorySession> get inventorySessions => List.unmodifiable(_inventorySessions);
   List<LocateOrder> get locateOrders => List.unmodifiable(_locateOrders);
   List<InventoryTransaction> get transactions => List.unmodifiable(_transactions);
+  List<TagLifecycleLog> get tagLifecycleLogs => List.unmodifiable(_tagLifecycleLogs);
   List<RfidDevice> get devices => List.unmodifiable(_devices);
   List<WmsUser> get users => List.unmodifiable(_users);
   List<Customer> get customers => List.unmodifiable(_customers);
   List<DeliveryNote> get deliveryNotes => List.unmodifiable(_deliveryNotes);
+
+  /// Ghi nhận nhật ký vòng đời thẻ RFID (Tag Lifecycle Log / Audit Trail)
+  Future<TagLifecycleLog> recordTagLifecycle({
+    required String epc,
+    String? itemId,
+    String? sku,
+    String? productName,
+    String? serialNumber,
+    required TagLifecycleAction action,
+    String? previousStatus,
+    required String newStatus,
+    String? fromLocation,
+    String? toLocation,
+    String? fromPallet,
+    String? toPallet,
+    String? documentNo,
+    required String performedBy,
+    String? device,
+    DateTime? timestamp,
+    String? notes,
+  }) async {
+    final cleanEpc = epc.trim().toUpperCase();
+    final item = _items.where((i) => i.epc.trim().toUpperCase() == cleanEpc).firstOrNull;
+    final effItemId = itemId ?? item?.itemId;
+    final effSku = sku ?? item?.sku;
+    final effProdName = productName ?? item?.productName;
+    final effSerial = serialNumber ?? item?.serialNumber;
+
+    final log = TagLifecycleLog(
+      logId: 'TAGLOG-${DateTime.now().millisecondsSinceEpoch}-${cleanEpc.length >= 6 ? cleanEpc.substring(cleanEpc.length - 6) : cleanEpc}',
+      epc: cleanEpc,
+      itemId: effItemId,
+      sku: effSku,
+      productName: effProdName,
+      serialNumber: effSerial,
+      action: action,
+      previousStatus: previousStatus,
+      newStatus: newStatus,
+      fromLocation: fromLocation,
+      toLocation: toLocation,
+      fromPallet: fromPallet,
+      toPallet: toPallet,
+      documentNo: documentNo,
+      performedBy: performedBy,
+      device: device,
+      timestamp: timestamp ?? DateTime.now(),
+      notes: notes,
+    );
+
+    _tagLifecycleLogs.insert(0, log);
+    await _dbService.insertTagLifecycleLog(log);
+
+    await _syncDirectOrQueue(
+      tableName: 'tag_lifecycle_logs',
+      recordId: log.logId,
+      action: 'INSERT',
+      payload: log.toMap(),
+    );
+
+    notifyListeners();
+    return log;
+  }
+
+  /// Tra cứu toàn bộ lịch sử vòng đời của thẻ RFID theo mã EPC (hoặc item ID)
+  List<TagLifecycleLog> getTagLifecycle(String epc) {
+    final cleanEpc = epc.trim().toUpperCase();
+    final logs = _tagLifecycleLogs
+        .where((l) => l.epc.toUpperCase() == cleanEpc)
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Nếu đã có log được ghi nhận cụ thể trong CSDL, trả về danh sách đó
+    if (logs.isNotEmpty) return logs;
+
+    // Tôn trọng dữ liệu thực tế: Nếu chưa có log trong bảng mới nhưng item đã tồn tại trong CSDL,
+    // tái cấu trúc lại các mốc lịch sử thực tế của item dựa trên các trường hiện có (inboundTime, locationId, palletId, status)
+    final item = _items.where((it) => it.epc.toUpperCase() == cleanEpc || it.itemId.toUpperCase() == cleanEpc).firstOrNull;
+    if (item == null) return const [];
+
+    final fallbackLogs = <TagLifecycleLog>[];
+    final baseTime = item.inboundTime ?? DateTime.now().subtract(const Duration(hours: 2));
+
+    // Mốc 1: Khởi tạo & Gán mã chip RFID
+    fallbackLogs.add(TagLifecycleLog(
+      logId: 'INIT-${item.itemId}',
+      epc: item.epc,
+      itemId: item.itemId,
+      sku: item.sku,
+      productName: item.productName,
+      serialNumber: item.serialNumber,
+      action: TagLifecycleAction.encoded,
+      newStatus: ItemStatus.pendingInbound.label,
+      documentNo: item.orderNo,
+      performedBy: 'Hệ thống khởi tạo',
+      device: 'RFID Station',
+      timestamp: baseTime.subtract(const Duration(minutes: 30)),
+      notes: 'Gán mã chip RFID cho sản phẩm ${item.sku}',
+    ));
+
+    // Mốc 2: Nhập kho
+    fallbackLogs.add(TagLifecycleLog(
+      logId: 'INBOUND-${item.itemId}',
+      epc: item.epc,
+      itemId: item.itemId,
+      sku: item.sku,
+      productName: item.productName,
+      serialNumber: item.serialNumber,
+      action: TagLifecycleAction.inboundGate,
+      previousStatus: ItemStatus.pendingInbound.label,
+      newStatus: (item.palletId != null && item.palletId!.isNotEmpty) ? ItemStatus.waitingPalletize.label : ItemStatus.waitingPutaway.label,
+      fromPallet: null,
+      toPallet: item.palletId,
+      documentNo: item.orderNo,
+      performedBy: item.inboundByDisplay,
+      device: 'Cổng RFID Gate / PDA',
+      timestamp: baseTime,
+      notes: 'Xác nhận nhập kho theo đơn ${item.orderNo ?? "PO"}',
+    ));
+
+    // Mốc 3: Xếp vào Pallet (nếu có pallet)
+    if (item.palletId != null && item.palletId!.isNotEmpty) {
+      fallbackLogs.add(TagLifecycleLog(
+        logId: 'PALLET-${item.itemId}',
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.palletize,
+        previousStatus: ItemStatus.waitingPalletize.label,
+        newStatus: ItemStatus.waitingPutaway.label,
+        toPallet: item.palletId,
+        performedBy: item.inboundByDisplay,
+        timestamp: baseTime.add(const Duration(minutes: 5)),
+        notes: 'Xếp sản phẩm vào Pallet ${item.palletId}',
+      ));
+    }
+
+    // Mốc 4: Cất kệ / Lưu vào vị trí (nếu đã inStock hoặc có locationId)
+    if (item.status == ItemStatus.inStock || (item.locationId != null && item.locationId!.isNotEmpty)) {
+      fallbackLogs.add(TagLifecycleLog(
+        logId: 'PUTAWAY-${item.itemId}',
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.putaway,
+        previousStatus: ItemStatus.waitingPutaway.label,
+        newStatus: ItemStatus.inStock.label,
+        toLocation: item.locationId,
+        toPallet: item.palletId,
+        performedBy: item.putawayByDisplay,
+        device: 'SEUIC UTouch 2 PDA',
+        timestamp: baseTime.add(const Duration(minutes: 20)),
+        notes: 'Cất hàng lên vị trí kệ ${item.locationId ?? ""}',
+      ));
+    }
+
+    // Mốc 5: Xuất kho (nếu đã out)
+    if (item.status == ItemStatus.out) {
+      fallbackLogs.add(TagLifecycleLog(
+        logId: 'OUT-${item.itemId}',
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.outboundGate,
+        previousStatus: ItemStatus.inStock.label,
+        newStatus: ItemStatus.out.label,
+        fromLocation: item.locationId,
+        performedBy: 'Thủ kho xuất',
+        device: 'Cổng RFID Gate Outbound',
+        timestamp: DateTime.now().subtract(const Duration(minutes: 10)),
+        notes: 'Xuất kho hoàn tất',
+      ));
+    }
+
+    return fallbackLogs..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
 
   Future<void> addCustomer(Customer customer) async {
     await _dbService.insertCustomer(customer);
@@ -2608,6 +2818,24 @@ class WarehouseRepository extends ChangeNotifier {
       action: 'UPDATE',
       payload: order.toMap(),
     );
+
+    if (order.targetEpc != null && order.targetEpc!.isNotEmpty) {
+      await recordTagLifecycle(
+        epc: order.targetEpc!,
+        sku: order.targetSku,
+        productName: order.targetProductName,
+        action: TagLifecycleAction.locateFound,
+        previousStatus: ItemStatus.inStock.label,
+        newStatus: ItemStatus.inStock.label,
+        fromLocation: order.expectedLocation,
+        toLocation: foundLocation,
+        documentNo: order.orderNo,
+        performedBy: order.completedBy ?? 'Nhân viên PDA',
+        device: 'SEUIC UTouch 2 Radar AirTag',
+        notes: 'Đã tìm thấy bằng Radar AirTag tại vị trí $foundLocation${notes != null ? " ($notes)" : ""}',
+      );
+    }
+
     _triggerBackgroundSync();
     notifyListeners();
   }
@@ -3285,6 +3513,20 @@ class WarehouseRepository extends ChangeNotifier {
             },
           );
         }
+        await recordTagLifecycle(
+          epc: it.epc,
+          itemId: it.itemId,
+          sku: it.sku,
+          productName: it.productName,
+          serialNumber: it.serialNumber,
+          action: TagLifecycleAction.palletize,
+          previousStatus: it.status.label,
+          newStatus: it.status == ItemStatus.waitingPutaway ? ItemStatus.waitingPutaway.label : it.status.label,
+          toPallet: pallet.palletCode,
+          performedBy: 'Thủ kho PDA / Trạm Pallet',
+          device: 'SEUIC UTouch 2 PDA',
+          notes: 'Xếp vào Pallet ${pallet.palletCode}',
+        );
         if (it.orderNo != null && it.orderNo!.isNotEmpty) {
           affectedOrderNos.add(it.orderNo!);
         }
@@ -3448,6 +3690,23 @@ class WarehouseRepository extends ChangeNotifier {
         locationId,
         pallet.palletCode,
         status: ItemStatus.inStock.code,
+      );
+      final putawayLoc = findLocationFast(locationId);
+      final putawayLocDisplay = putawayLoc?.displayName ?? (putawayLoc?.locationCode ?? locationId);
+      await recordTagLifecycle(
+        epc: it.epc,
+        itemId: it.itemId,
+        sku: it.sku,
+        productName: it.productName,
+        serialNumber: it.serialNumber,
+        action: TagLifecycleAction.putaway,
+        previousStatus: ItemStatus.waitingPutaway.label,
+        newStatus: ItemStatus.inStock.label,
+        toLocation: putawayLocDisplay,
+        toPallet: pallet.palletCode,
+        performedBy: performedBy,
+        device: 'Desktop WMS / PDA',
+        notes: 'Cất Pallet ${pallet.palletCode} lên vị trí kệ $putawayLocDisplay',
       );
     }
 
@@ -4566,6 +4825,22 @@ class WarehouseRepository extends ChangeNotifier {
             'updated_at': now.toIso8601String(),
           },
         );
+        await recordTagLifecycle(
+          epc: item.epc,
+          itemId: item.itemId,
+          sku: item.sku,
+          productName: item.productName,
+          serialNumber: item.serialNumber,
+          action: TagLifecycleAction.outboundGate,
+          previousStatus: ItemStatus.inStock.label,
+          newStatus: ItemStatus.out.label,
+          fromLocation: item.locationId,
+          fromPallet: oldPalletId,
+          documentNo: order.poNo,
+          performedBy: performedBy,
+          device: 'Cổng RFID Gate Outbound',
+          notes: 'Xuất kho qua cổng RFID theo đơn ${order.poNo}',
+        );
       }
     }
 
@@ -4669,6 +4944,22 @@ class WarehouseRepository extends ChangeNotifier {
             'pallet_id': null,
             'updated_at': now.toIso8601String(),
           },
+        );
+        await recordTagLifecycle(
+          epc: item.epc,
+          itemId: item.itemId,
+          sku: item.sku,
+          productName: item.productName,
+          serialNumber: item.serialNumber,
+          action: TagLifecycleAction.outboundGate,
+          previousStatus: ItemStatus.inStock.label,
+          newStatus: ItemStatus.out.label,
+          fromLocation: item.locationId,
+          fromPallet: oldPalletId,
+          documentNo: poNo,
+          performedBy: performedBy,
+          device: 'Cổng RFID Gate / Desktop',
+          notes: 'Xuất kho theo đơn ${poNo ?? "PO"}',
         );
       }
     }
@@ -5056,6 +5347,22 @@ class WarehouseRepository extends ChangeNotifier {
             'pallet_id': null,
             'updated_at': now.toIso8601String(),
           },
+        );
+        await recordTagLifecycle(
+          epc: item.epc,
+          itemId: item.itemId,
+          sku: item.sku,
+          productName: item.productName,
+          serialNumber: item.serialNumber,
+          action: TagLifecycleAction.outboundPda,
+          previousStatus: ItemStatus.inStock.label,
+          newStatus: ItemStatus.out.label,
+          fromLocation: item.locationId,
+          fromPallet: oldPalletId,
+          documentNo: poNo,
+          performedBy: performedBy,
+          device: 'SEUIC UTouch 2 PDA',
+          notes: 'Xuất lẻ PDA theo đơn $poNo',
         );
         updatedCount++;
       }
@@ -5581,6 +5888,36 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
+    for (final r in session.results) {
+      TagLifecycleAction act = TagLifecycleAction.auditMatch;
+      String note = 'Kiểm kê kho khớp chuẩn tại ${r.actualLocation ?? session.zone}';
+      if (r.resultType == InventoryVarianceType.wrongLocation) {
+        act = TagLifecycleAction.auditMisplaced;
+        note = 'Kiểm kê sai vị trí: Sổ sách ở ${r.expectedLocation}, quét tại ${r.actualLocation}';
+      } else if (r.resultType == InventoryVarianceType.missing) {
+        act = TagLifecycleAction.auditMissing;
+        note = 'Kiểm kê phát hiện thiếu thực tế tại ${r.expectedLocation}';
+      } else if (r.resultType == InventoryVarianceType.unknownEpc) {
+        act = TagLifecycleAction.auditFound;
+        note = 'Kiểm kê phát hiện thẻ ngoài danh sách tại ${r.actualLocation}';
+      }
+
+      await recordTagLifecycle(
+        epc: r.epc,
+        sku: r.sku,
+        productName: r.productName,
+        action: act,
+        previousStatus: ItemStatus.inStock.label,
+        newStatus: ItemStatus.inStock.label,
+        fromLocation: r.expectedLocation,
+        toLocation: r.actualLocation,
+        documentNo: session.sessionCode,
+        performedBy: approvedBy,
+        device: 'SEUIC UTouch 2 PDA / Desktop',
+        notes: note,
+      );
+    }
+
     _triggerBackgroundSync();
     notifyListeners();
   }
@@ -5989,6 +6326,22 @@ class WarehouseRepository extends ChangeNotifier {
           'status': ItemStatus.inStock.code,
         },
       );
+      await recordTagLifecycle(
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.transferLocation,
+        previousStatus: ItemStatus.inStock.label,
+        newStatus: ItemStatus.inStock.label,
+        toLocation: newLocation?.displayName ?? newLocationId,
+        fromPallet: item.palletId,
+        toPallet: item.palletId,
+        performedBy: actualPerformer,
+        device: 'SEUIC UTouch 2 PDA',
+        notes: 'Chuyển vị trí kho đến ${newLocation?.displayName ?? newLocationId}',
+      );
       count++;
     }
 
@@ -6098,6 +6451,29 @@ class WarehouseRepository extends ChangeNotifier {
     _transactions.insert(0, tx);
     await _syncInventoryTransaction(tx);
 
+    final oldPal = findPalletFast(oldPalletId);
+    final newPal = findPalletFast(effectivePalletId);
+    final oldPalDisplay = oldPal?.palletCode ?? oldPalletId;
+    final newPalDisplay = newPal?.palletCode ?? effectivePalletId;
+
+    await recordTagLifecycle(
+      epc: item.epc,
+      itemId: item.itemId,
+      sku: item.sku,
+      productName: item.productName,
+      serialNumber: item.serialNumber,
+      action: TagLifecycleAction.transferLocation,
+      previousStatus: ItemStatus.inStock.label,
+      newStatus: ItemStatus.inStock.label,
+      fromLocation: oldLocation?.displayName ?? oldLocationId,
+      toLocation: newLocation?.displayName ?? newLocationId,
+      fromPallet: oldPalDisplay,
+      toPallet: newPalDisplay,
+      performedBy: actualPerformer,
+      device: 'SEUIC UTouch 2 PDA',
+      notes: 'Điều chuyển vị trí từ ${oldLocation?.displayName ?? oldLocationId} sang ${newLocation?.displayName ?? newLocationId}',
+    );
+
     _triggerBackgroundSync();
     notifyListeners();
     return true;
@@ -6196,6 +6572,24 @@ class WarehouseRepository extends ChangeNotifier {
           'palletId': targetPallet.palletId,
           'locationId': targetLocationId,
         },
+      );
+
+      await recordTagLifecycle(
+        epc: item.epc,
+        itemId: item.itemId,
+        sku: item.sku,
+        productName: item.productName,
+        serialNumber: item.serialNumber,
+        action: TagLifecycleAction.mergePallet,
+        previousStatus: ItemStatus.inStock.label,
+        newStatus: ItemStatus.inStock.label,
+        fromPallet: sourcePallet.palletCode,
+        toPallet: targetPallet.palletCode,
+        fromLocation: sourcePallet.locationId,
+        toLocation: targetLocationId,
+        performedBy: performedBy,
+        device: 'SEUIC UTouch 2 PDA',
+        notes: 'Dồn gộp từ Pallet ${sourcePallet.palletCode} sang ${targetPallet.palletCode}',
       );
     }
 

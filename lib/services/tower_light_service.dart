@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'desktop_uhf_tcp_service.dart';
 
 /// Màu tín hiệu của tháp đèn CTP50-3T-D-J
@@ -51,13 +55,31 @@ class TowerLightPinConfig {
     this.buzzerPin = 1,
     this.pulseDurationSeconds = 4,
   });
+
+  Map<String, dynamic> toMap() => {
+    'redPin': redPin,
+    'greenPin': greenPin,
+    'yellowPin': yellowPin,
+    'buzzerPin': buzzerPin,
+    'pulseDurationSeconds': pulseDurationSeconds,
+  };
+
+  factory TowerLightPinConfig.fromMap(Map<String, dynamic> map) => TowerLightPinConfig(
+    redPin: (map['redPin'] as num?)?.toInt() ?? 4,
+    greenPin: (map['greenPin'] as num?)?.toInt() ?? 3,
+    yellowPin: (map['yellowPin'] as num?)?.toInt() ?? 2,
+    buzzerPin: (map['buzzerPin'] as num?)?.toInt() ?? 1,
+    pulseDurationSeconds: (map['pulseDurationSeconds'] as num?)?.toInt() ?? 4,
+  );
 }
 
 /// Dịch vụ quản lý và điều khiển Tháp đèn tín hiệu công nghiệp CTP50-3T-D-J
 class TowerLightService extends ChangeNotifier {
   static final TowerLightService _instance = TowerLightService._internal();
   factory TowerLightService() => _instance;
-  TowerLightService._internal();
+  TowerLightService._internal() {
+    loadConfig();
+  }
 
   final DesktopUhfTcpService _uhfTcp = DesktopUhfTcpService();
 
@@ -65,6 +87,59 @@ class TowerLightService extends ChangeNotifier {
 
   TowerLightStatus _currentStatus = TowerLightStatus(timestamp: DateTime.now());
   TowerLightStatus get currentStatus => _currentStatus;
+
+  Future<File?> _getConfigFile() async {
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final target = File(p.join(dir.path, 'tower_light_config.json'));
+      if (!target.parent.existsSync()) {
+        target.parent.createSync(recursive: true);
+      }
+      return target;
+    } catch (_) {
+      try {
+        final appData = Platform.environment['APPDATA'] ?? '.';
+        final dir = Directory(p.join(appData, 'RFIDWarehouse'));
+        if (!dir.existsSync()) dir.createSync(recursive: true);
+        return File(p.join(dir.path, 'tower_light_config.json'));
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  Future<void> loadConfig() async {
+    try {
+      final file = await _getConfigFile();
+      if (file != null && await file.exists()) {
+        final content = await file.readAsString();
+        final map = jsonDecode(content) as Map<String, dynamic>;
+        config = TowerLightPinConfig.fromMap(map);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error loading tower_light_config: $e');
+    }
+  }
+
+  Future<bool> saveConfig(TowerLightPinConfig newConfig) async {
+    config = newConfig;
+    notifyListeners();
+    try {
+      final file = await _getConfigFile();
+      if (file != null) {
+        await file.writeAsString(jsonEncode(newConfig.toMap()));
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Error saving tower_light_config: $e');
+      return false;
+    }
+  }
+
+  Future<void> testIndividualPin(int pin, bool state) async {
+    await _uhfTcp.setGpo(pin, state);
+  }
 
   Timer? _pulseTimer;
   bool _hardwareControlEnabled = true;
@@ -106,6 +181,7 @@ class TowerLightService extends ChangeNotifier {
   Future<void> triggerWarningRed({
     bool withBuzzer = true,
     String reason = 'Cảnh báo: Sai hàng / Thiếu hàng / Thừa hàng',
+    bool persistent = false,
   }) async {
     _pulseTimer?.cancel();
     _currentStatus = TowerLightStatus(
@@ -123,11 +199,30 @@ class TowerLightService extends ChangeNotifier {
       buzzer: withBuzzer,
     );
 
-    if (config.pulseDurationSeconds > 0) {
+    if (!persistent && config.pulseDurationSeconds > 0) {
       _pulseTimer = Timer(Duration(seconds: config.pulseDurationSeconds), () {
         turnOffAll(reason: 'Sẵn sàng chờ quét tiếp theo');
       });
     }
+  }
+
+  /// 🟡 ĐÈN VÀNG: Báo hiệu đang quét đối soát hàng qua cổng RFID
+  Future<void> triggerScanning({String reason = 'Đang quét đối soát qua cổng RFID'}) async {
+    _pulseTimer?.cancel();
+    _currentStatus = TowerLightStatus(
+      color: TowerLightColor.yellow,
+      isBuzzerOn: false,
+      reason: reason,
+      timestamp: DateTime.now(),
+    );
+    notifyListeners();
+
+    await _sendHardwareCommand(
+      red: false,
+      yellow: true,
+      green: false,
+      buzzer: false,
+    );
   }
 
   /// 🟡 ĐÈN VÀNG: Cảnh báo Lỗi hệ thống ở một bộ phận nào đó
@@ -158,6 +253,24 @@ class TowerLightService extends ChangeNotifier {
         turnOffAll(reason: 'Sẵn sàng (Standby)');
       });
     }
+  }
+
+  /// Tắt còi báo động nhưng vẫn duy trì màu đèn cảnh báo hiện tại
+  Future<void> silenceBuzzerOnly() async {
+    _currentStatus = TowerLightStatus(
+      color: _currentStatus.color,
+      isBuzzerOn: false,
+      reason: '${_currentStatus.reason} (Đã tắt còi)',
+      timestamp: DateTime.now(),
+    );
+    notifyListeners();
+
+    await _sendHardwareCommand(
+      red: _currentStatus.color == TowerLightColor.red,
+      yellow: _currentStatus.color == TowerLightColor.yellow,
+      green: _currentStatus.color == TowerLightColor.green,
+      buzzer: false,
+    );
   }
 
   /// Tắt toàn bộ đèn và còi về trạng thái chờ
@@ -226,11 +339,14 @@ class TowerLightService extends ChangeNotifier {
     if (!_hardwareControlEnabled) return;
 
     try {
-      // Điều khiển các chân GPO tương ứng trên đầu đọc RFID
-      await _uhfTcp.setGpo(config.redPin, red);
-      await _uhfTcp.setGpo(config.yellowPin, yellow);
-      await _uhfTcp.setGpo(config.greenPin, green);
-      await _uhfTcp.setGpo(config.buzzerPin, buzzer);
+      final pinStates = <int, bool>{1: false, 2: false, 3: false, 4: false};
+      if (red) pinStates[config.redPin] = true;
+      if (yellow) pinStates[config.yellowPin] = true;
+      if (green) pinStates[config.greenPin] = true;
+      if (buzzer) pinStates[config.buzzerPin] = true;
+
+      // Điều khiển đồng thời tất cả các chân GPO trong 1 lệnh duy nhất (tránh ghi đè/xung đột chân)
+      await _uhfTcp.setAllGpo(pinStates);
     } catch (e) {
       debugPrint('TowerLightService hardware command error: $e');
     }

@@ -1,8 +1,12 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-/// Widget mũi tên chỉ hướng lớn + khoảng cách — thay thế Radar Sonar trên PDA.
-/// Liên tục cập nhật hướng đi, khoảng cách, trạng thái khi quét tìm thẻ RFID.
+/// Widget định vị AirTag / Find My chỉ hướng và cự ly thời gian thực.
+/// Mô phỏng trải nghiệm Precision Finding của Apple AirTag:
+/// - Mũi tên chỉ hướng xoay mượt mà theo gradient tín hiệu RSSI.
+/// - Hiển thị cự ly (cm / m) rõ ràng, cập nhật liên tục.
+/// - Hiệu ứng sóng radar đồng tâm tỏa ra khi tìm kiếm và chevrons chuyển động khi tiếp cận.
+/// - Trạng thái "NGAY TẠI ĐÂY" (Here) hào quang xanh ngọc rực rỡ khi chạm đích.
 class DirectionArrowWidget extends StatefulWidget {
   final double rssi; // -90 to -25 dBm
   final bool isTracking;
@@ -12,6 +16,10 @@ class DirectionArrowWidget extends StatefulWidget {
   final String? locationDisplay;
   final double? previousRssi;
   final double? readsPerSecond;
+  final bool isPallet;
+  final double? targetAzimuthDeg;
+  final double? relativeAngleDeg;
+  final bool hasLockedTarget;
 
   const DirectionArrowWidget({
     super.key,
@@ -23,6 +31,10 @@ class DirectionArrowWidget extends StatefulWidget {
     this.locationDisplay,
     this.previousRssi,
     this.readsPerSecond,
+    this.isPallet = false,
+    this.targetAzimuthDeg,
+    this.relativeAngleDeg,
+    this.hasLockedTarget = false,
   });
 
   @override
@@ -33,23 +45,58 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
     with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late AnimationController _arrowBounceController;
+  late AnimationController _chevronFlowController;
+  late AnimationController _angleController;
+  late Animation<double> _angleAnimation;
+
+  double _currentAngle = 0.0;
+  double _targetAngle = 0.0;
 
   @override
   void initState() {
     super.initState();
+    // 1. Nhịp thở radar pulse (AirTag Sonar Rings)
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     );
+
+    // 2. Độ nảy nhấp nhô của mũi tên hướng tới mục tiêu
     _arrowBounceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
 
+    // 3. Luồng sóng chevrons di chuyển dọc thân mũi tên (Forward Ripple Wave)
+    _chevronFlowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+
+    // 4. Xoay góc mũi tên mượt mà theo cảm biến (Fast & Responsive Heading Rotation)
+    _angleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 60),
+    );
+    _angleAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(
+      CurvedAnimation(parent: _angleController, curve: Curves.easeOutQuad),
+    );
+
     if (widget.isTracking) {
-      _pulseController.repeat();
-      _arrowBounceController.repeat(reverse: true);
+      _startAnimations();
     }
+  }
+
+  void _startAnimations() {
+    _pulseController.repeat();
+    _arrowBounceController.repeat(reverse: true);
+    _chevronFlowController.repeat();
+  }
+
+  void _stopAnimations() {
+    _pulseController.stop();
+    _arrowBounceController.stop();
+    _chevronFlowController.stop();
   }
 
   @override
@@ -57,22 +104,67 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
     super.didUpdateWidget(oldWidget);
     if (widget.isTracking != oldWidget.isTracking) {
       if (widget.isTracking) {
-        _pulseController.repeat();
-        _arrowBounceController.repeat(reverse: true);
+        _startAnimations();
       } else {
-        _pulseController.stop();
-        _arrowBounceController.stop();
+        _stopAnimations();
       }
     }
 
     if (widget.isTracking) {
-      // Tốc độ nhịp pulse nhanh hơn khi gần hơn
+      // Nhịp pulse và luồng sóng tăng tốc khi càng đến gần
       final normalized = ((widget.rssi + 90) / 60).clamp(0.1, 1.0);
-      final newDuration =
+      final newPulseDuration =
           Duration(milliseconds: (1600 - (normalized * 1250)).toInt());
-      if (_pulseController.duration != newDuration) {
-        _pulseController.duration = newDuration;
+      if (_pulseController.duration != newPulseDuration) {
+        _pulseController.duration = newPulseDuration;
       }
+
+      final newFlowDuration =
+          Duration(milliseconds: (1100 - (normalized * 750)).toInt());
+      if (_chevronFlowController.duration != newFlowDuration) {
+        _chevronFlowController.duration = newFlowDuration;
+      }
+    }
+
+    // Tính góc xoay mục tiêu dựa trên độ chênh lệch tín hiệu hoặc cảm biến góc quay
+    double diff = 0.0;
+    if (widget.isTracking &&
+        widget.previousRssi != null &&
+        widget.rssi > -88.0) {
+      diff = widget.rssi - widget.previousRssi!;
+    }
+
+    final isVeryClose = widget.isTracking && widget.rssi >= -40.0;
+    final noSignal = !widget.isTracking || widget.rssi <= -88.0;
+
+    double nextTargetAngle = 0.0;
+    if (!widget.isTracking || isVeryClose) {
+      nextTargetAngle = 0.0;
+    } else if (widget.relativeAngleDeg != null) {
+      // Khi có góc tương đối của chip so với mũi súng PDA: Xoay mũi tên theo góc này
+      nextTargetAngle = widget.relativeAngleDeg! * (math.pi / 180.0);
+    } else {
+      // Chưa có góc: Giữ góc 0.0
+      nextTargetAngle = 0.0;
+    }
+
+    if ((nextTargetAngle - _targetAngle).abs() > 0.015) {
+      _targetAngle = nextTargetAngle;
+
+      // Xoay theo cung góc ngắn nhất để chuyển động cực mượt (Shortest Angular Path)
+      final current = _angleAnimation.value;
+      double delta = nextTargetAngle - current;
+      while (delta < -math.pi) delta += 2 * math.pi;
+      while (delta > math.pi) delta -= 2 * math.pi;
+      final target = current + delta;
+
+      _angleAnimation = Tween<double>(
+        begin: current,
+        end: target,
+      ).animate(
+        CurvedAnimation(parent: _angleController, curve: Curves.easeOutQuad),
+      );
+      _angleController.forward(from: 0.0);
     }
   }
 
@@ -80,26 +172,28 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
   void dispose() {
     _pulseController.dispose();
     _arrowBounceController.dispose();
+    _chevronFlowController.dispose();
+    _angleController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final strength = ((widget.rssi + 90) / 65).clamp(0.0, 1.0);
-    final isVeryClose = widget.isTracking && widget.rssi >= -35.0;
+    final isVeryClose = widget.isTracking && widget.rssi >= -40.0;
     final isClose = widget.isTracking && widget.rssi >= -48.0;
     final isModerate = widget.isTracking && widget.rssi >= -65.0;
     final noSignal = !widget.isTracking || widget.rssi <= -88.0;
 
     Color getSignalColor() {
       if (!widget.isTracking) return const Color(0xFF64748B);
-      if (isVeryClose) return const Color(0xFF10B981);
-      if (isClose) return const Color(0xFF06B6D4);
-      if (isModerate) return const Color(0xFF0284C7);
-      return const Color(0xFFF59E0B);
+      if (isVeryClose) return const Color(0xFF10B981); // Emerald Green
+      if (isClose) return const Color(0xFF06B6D4); // Cyan
+      if (isModerate) return const Color(0xFF0284C7); // Blue
+      return const Color(0xFFF59E0B); // Amber
     }
 
-    // Cự ly ước tính (Log-Distance Path Loss)
+    // Cự ly ước tính theo hàm suy hao tín hiệu (Log-Distance Path Loss)
     String getDistanceEstimate() {
       if (noSignal) return '---';
       final rawMeters =
@@ -121,34 +215,55 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
     _ArrowDirection direction;
     if (!widget.isTracking) {
       direction = _ArrowDirection.idle;
-    } else if (noSignal) {
-      direction = _ArrowDirection.searching;
     } else if (isVeryClose) {
       direction = _ArrowDirection.found;
-    } else if (diff <= -1.0) {
-      direction = _ArrowDirection.wrong;
-    } else if (diff >= 0.7) {
-      direction = _ArrowDirection.right;
+    } else if (widget.relativeAngleDeg != null) {
+      final rel = widget.relativeAngleDeg!;
+      if (rel.abs() <= 25.0) {
+        direction = _ArrowDirection.right; // ⬆️ ĐÚNG HƯỚNG · TIẾN LÊN
+      } else if (rel.abs() >= 115.0) {
+        direction = _ArrowDirection.wrong; // 🔄 QUAY ĐẰNG SAU
+      } else {
+        direction = _ArrowDirection.stable; // ➡️ / ⬅️ BÊN PHẢI HOẶC TRÁI
+      }
+    } else if (noSignal) {
+      direction = _ArrowDirection.searching;
     } else {
-      direction = _ArrowDirection.stable;
+      // Đang bắt được sóng nhưng chưa có góc: Xoay máy chậm qua lại
+      direction = _ArrowDirection.searching;
     }
 
     final signalColor = getSignalColor();
+    final distanceText = getDistanceEstimate();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // === MŨI TÊN LỚN Ở GIỮA ===
-        _buildArrowZone(signalColor, direction, diff, strength, isVeryClose,
-            noSignal, getDistanceEstimate()),
+        // === VÙNG ĐỊNH VỊ AIRTAG (PRECISION FINDING ZONE) ===
+        _buildAirTagPrecisionZone(
+          signalColor: signalColor,
+          direction: direction,
+          diff: diff,
+          strength: strength,
+          isVeryClose: isVeryClose,
+          noSignal: noSignal,
+          distanceText: distanceText,
+        ),
 
         const SizedBox(height: 14),
 
-        // === THANH TRẠNG THÁI & HƯỚNG DẪN ===
-        _buildStatusCard(signalColor, direction, diff, strength, isVeryClose,
-            noSignal, getDistanceEstimate()),
+        // === THANH THÔNG SỐ & CHỈ HƯỚNG CHI TIẾT ===
+        _buildStatusCard(
+          signalColor: signalColor,
+          direction: direction,
+          diff: diff,
+          strength: strength,
+          isVeryClose: isVeryClose,
+          noSignal: noSignal,
+          distanceText: distanceText,
+        ),
 
-        // === BANNER THÀNH CÔNG ===
+        // === BANNER THÀNH CÔNG (KHI ĐẾN SÁT MỤC TIÊU) ===
         if (isVeryClose) ...[
           const SizedBox(height: 10),
           _buildSuccessBanner(),
@@ -157,72 +272,70 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
     );
   }
 
-  Widget _buildArrowZone(
-    Color signalColor,
-    _ArrowDirection direction,
-    double diff,
-    double strength,
-    bool isVeryClose,
-    bool noSignal,
-    String distanceText,
-  ) {
-    // Kích thước vùng mũi tên
-    const double zoneSize = 260.0;
+  /// Vùng radar tròn phong cách Apple AirTag với kim chỉ hướng năng động
+  Widget _buildAirTagPrecisionZone({
+    required Color signalColor,
+    required _ArrowDirection direction,
+    required double diff,
+    required double strength,
+    required bool isVeryClose,
+    required bool noSignal,
+    required String distanceText,
+  }) {
+    const double zoneSize = 270.0;
 
-    // Góc xoay mũi tên dựa trên hướng
-    double arrowAngle;
-    switch (direction) {
-      case _ArrowDirection.right:
-        arrowAngle = 0; // Lên (đúng hướng)
-        break;
-      case _ArrowDirection.wrong:
-        arrowAngle = math.pi; // Xuống (sai hướng)
-        break;
-      case _ArrowDirection.found:
-        arrowAngle = 0; // Lên (tìm thấy)
-        break;
-      default:
-        arrowAngle = 0;
-    }
-
-    // Màu mũi tên
-    Color arrowColor;
+    // Màu chủ đạo theo trạng thái
+    Color themeColor;
     switch (direction) {
       case _ArrowDirection.idle:
-        arrowColor = const Color(0xFF94A3B8);
+        themeColor = const Color(0xFF94A3B8);
         break;
       case _ArrowDirection.searching:
-        arrowColor = const Color(0xFFF59E0B);
+        themeColor = noSignal ? const Color(0xFFF59E0B) : const Color(0xFF0284C7);
         break;
       case _ArrowDirection.right:
-        arrowColor = const Color(0xFF10B981);
+        themeColor = const Color(0xFF10B981);
         break;
       case _ArrowDirection.wrong:
-        arrowColor = const Color(0xFFEF4444);
+        themeColor = const Color(0xFFEF4444);
         break;
       case _ArrowDirection.stable:
-        arrowColor = signalColor;
+        themeColor = signalColor;
         break;
       case _ArrowDirection.found:
-        arrowColor = const Color(0xFF10B981);
+        themeColor = const Color(0xFF10B981);
         break;
     }
 
-    return SizedBox(
+    return Container(
       width: zoneSize,
       height: zoneSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFF0F172A), // Deep Slate nền đen AirTag
+        boxShadow: [
+          BoxShadow(
+            color: themeColor.withValues(alpha: widget.isTracking ? 0.25 : 0.08),
+            blurRadius: 28,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Vòng tròn nền gradient nhẹ
-          Container(
+          // 1. Vòng tròn nền tỏa sáng (Radial Aura)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
             width: zoneSize,
             height: zoneSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  arrowColor.withValues(alpha: widget.isTracking ? 0.15 : 0.05),
+                  themeColor.withValues(
+                    alpha: isVeryClose ? 0.35 : (widget.isTracking ? 0.20 : 0.05),
+                  ),
                   Colors.transparent,
                 ],
                 stops: const [0.0, 1.0],
@@ -230,46 +343,56 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
             ),
           ),
 
-          // Vòng tròn viền ngoài cùng
+          // 2. Các vòng tròn radar đồng tâm mờ
           Container(
-            width: zoneSize - 10,
-            height: zoneSize - 10,
+            width: zoneSize - 16,
+            height: zoneSize - 16,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: arrowColor.withValues(alpha: 0.25),
-                width: 2,
-              ),
-            ),
-          ),
-
-          // Vòng tròn viền giữa
-          Container(
-            width: zoneSize - 60,
-            height: zoneSize - 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: arrowColor.withValues(alpha: 0.15),
+                color: themeColor.withValues(alpha: 0.20),
                 width: 1.5,
               ),
             ),
           ),
+          Container(
+            width: zoneSize - 70,
+            height: zoneSize - 70,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: themeColor.withValues(alpha: 0.15),
+                width: 1.2,
+              ),
+            ),
+          ),
+          Container(
+            width: zoneSize - 130,
+            height: zoneSize - 130,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: themeColor.withValues(alpha: 0.12),
+                width: 1.0,
+              ),
+            ),
+          ),
 
-          // Pulse animation khi tracking
+          // 3. Sóng radar mở rộng khi đang quét (Pulsing Sonar Rings)
           if (widget.isTracking)
             AnimatedBuilder(
               animation: _pulseController,
               builder: (context, _) {
                 final t = _pulseController.value;
                 return Container(
-                  width: 80 + (t * 140),
-                  height: 80 + (t * 140),
+                  width: 80 + (t * 160),
+                  height: 80 + (t * 160),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: arrowColor
-                          .withValues(alpha: (1.0 - t).clamp(0.0, 0.6)),
+                      color: themeColor.withValues(
+                        alpha: (1.0 - t).clamp(0.0, 0.55),
+                      ),
                       width: isVeryClose ? 3.0 : 2.0,
                     ),
                   ),
@@ -277,55 +400,86 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
               },
             ),
 
-          // === MŨI TÊN TO ĐÙNG ===
+          // 4. TRUNG TÂM AIRTAG: MŨI TÊN CHỈ HƯỚNG HOẶC TRẠNG THÁI "HERE"
           if (direction == _ArrowDirection.searching)
-            // Đang dò tín hiệu: hiển thị icon radar nhấp nháy
+            // Đang dò sóng hoặc quét tìm góc khóa: biểu tượng radar quét xoay tròn
             AnimatedBuilder(
               animation: _pulseController,
               builder: (context, _) {
-                return Opacity(
-                  opacity: 0.4 + (_pulseController.value * 0.6),
-                  child: Icon(
-                    Icons.sensors_rounded,
-                    size: 80,
-                    color: arrowColor,
-                  ),
+                final rot = _pulseController.value * 2 * math.pi;
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Transform.rotate(
+                      angle: rot,
+                      child: Icon(
+                        Icons.radar_rounded,
+                        size: 76,
+                        color: themeColor,
+                      ),
+                    ),
+                    if (!noSignal) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: themeColor.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: themeColor, width: 1),
+                        ),
+                        child: Text(
+                          'LIA MÁY QUA LẠI',
+                          style: TextStyle(
+                            color: themeColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 );
               },
             )
-          else if (direction == _ArrowDirection.found)
-            // Tìm thấy: icon check lớn
-            Icon(
-              Icons.check_circle_rounded,
-              size: 90,
-              color: arrowColor,
-            )
+          else if (direction == _ArrowDirection.found || isVeryClose)
+            // Đã tìm thấy sát nút: Vòng hào quang xanh lá Apple AirTag "HERE"
+            _buildHereCelebrationCircle(themeColor)
           else if (direction == _ArrowDirection.idle)
-            // Chưa bật
+            // Chưa bật dò: Mũi tên chờ
             Icon(
               Icons.navigation_rounded,
               size: 80,
-              color: arrowColor.withValues(alpha: 0.5),
+              color: themeColor.withValues(alpha: 0.4),
             )
           else
-            // Đang dò: MŨI TÊN LỚN xoay theo hướng
+            // Đang dò mục tiêu: Kim chỉ hướng AirTag xoay mượt mà + luồng sóng chevrons
             AnimatedBuilder(
-              animation: _arrowBounceController,
+              animation: Listenable.merge([
+                _arrowBounceController,
+                _angleController,
+                _chevronFlowController,
+              ]),
               builder: (context, _) {
                 final bounce = direction == _ArrowDirection.right
                     ? -_arrowBounceController.value * 8
                     : (direction == _ArrowDirection.wrong
                         ? _arrowBounceController.value * 6
                         : 0.0);
+
+                final currentAngle = _angleAnimation.value;
+
                 return Transform.translate(
                   offset: Offset(0, bounce),
                   child: Transform.rotate(
-                    angle: arrowAngle,
+                    angle: currentAngle,
                     child: CustomPaint(
-                      size: const Size(100, 120),
-                      painter: _BigArrowPainter(
-                        color: arrowColor,
+                      size: const Size(110, 130),
+                      painter: _AirTagPointerPainter(
+                        color: themeColor,
                         glowIntensity: strength,
+                        flowValue: _chevronFlowController.value,
+                        isWrongDirection: direction == _ArrowDirection.wrong,
                       ),
                     ),
                   ),
@@ -333,37 +487,52 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
               },
             ),
 
-          // === KHOẢNG CÁCH HIỂN THỊ DƯỚI MŨI TÊN ===
+          // 5. CHỈ SỐ KHOẢNG CÁCH (HERO DISTANCE) HIỂN THỊ TRỰC QUAN
           if (!noSignal && direction != _ArrowDirection.idle)
             Positioned(
-              bottom: 16,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              bottom: 18,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B).withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(20),
+                  color: const Color(0xFF1E293B).withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(22),
                   border: Border.all(
-                    color: arrowColor.withValues(alpha: 0.6),
+                    color: themeColor.withValues(alpha: 0.8),
                     width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: arrowColor.withValues(alpha: 0.3),
-                      blurRadius: 12,
+                      color: themeColor.withValues(alpha: 0.35),
+                      blurRadius: 14,
                       spreadRadius: 1,
                     ),
                   ],
                 ),
-                child: Text(
-                  distanceText,
-                  style: TextStyle(
-                    color: arrowColor,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    fontFamily: 'monospace',
-                    letterSpacing: -0.5,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isVeryClose
+                          ? Icons.check_circle_rounded
+                          : (direction == _ArrowDirection.wrong
+                              ? Icons.near_me_disabled_rounded
+                              : Icons.near_me_rounded),
+                      size: 18,
+                      color: themeColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      distanceText,
+                      style: TextStyle(
+                        color: themeColor,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'monospace',
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -372,16 +541,64 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
     );
   }
 
-  Widget _buildStatusCard(
-    Color signalColor,
-    _ArrowDirection direction,
-    double diff,
-    double strength,
-    bool isVeryClose,
-    bool noSignal,
-    String distanceText,
-  ) {
-    // Trạng thái text
+  /// Trạng thái hào quang khi tới cự ly cực gần (< 35cm) của Apple AirTag
+  Widget _buildHereCelebrationCircle(Color color) {
+    return AnimatedBuilder(
+      animation: _arrowBounceController,
+      builder: (context, _) {
+        final scale = 1.0 + (_arrowBounceController.value * 0.08);
+        return Transform.scale(
+          scale: scale,
+          child: Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.55),
+                  blurRadius: 28,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.check_circle_rounded,
+                  size: 58,
+                  color: Colors.white,
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'NGAY TẠI ĐÂY',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 10,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Thẻ trạng thái hướng đi và cường độ dBm
+  Widget _buildStatusCard({
+    required Color signalColor,
+    required _ArrowDirection direction,
+    required double diff,
+    required double strength,
+    required bool isVeryClose,
+    required bool noSignal,
+    required String distanceText,
+  }) {
     String statusText;
     IconData statusIcon;
     Color statusColor;
@@ -393,9 +610,15 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
         statusColor = const Color(0xFF94A3B8);
         break;
       case _ArrowDirection.searching:
-        statusText = 'ĐANG DÒ TÍN HIỆU...';
-        statusIcon = Icons.wifi_find_rounded;
-        statusColor = const Color(0xFFF59E0B);
+        if (noSignal) {
+          statusText = 'ĐANG DÒ TÍN HIỆU...';
+          statusIcon = Icons.wifi_find_rounded;
+          statusColor = const Color(0xFFF59E0B);
+        } else {
+          statusText = '🔄 XOAY MÁY CHẬM QUA LẠI ĐỂ KHÓA HƯỚNG';
+          statusIcon = Icons.radar_rounded;
+          statusColor = const Color(0xFF0284C7);
+        }
         break;
       case _ArrowDirection.right:
         statusText = '⬆️ ĐÚNG HƯỚNG · TIẾN LÊN';
@@ -403,14 +626,34 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
         statusColor = const Color(0xFF10B981);
         break;
       case _ArrowDirection.wrong:
-        statusText = '🔄 LỆCH HƯỚNG · QUAY LẠI';
-        statusIcon = Icons.trending_down_rounded;
-        statusColor = const Color(0xFFEF4444);
+        if (widget.relativeAngleDeg != null &&
+            widget.relativeAngleDeg!.abs() >= 115.0) {
+          statusText = '🔄 CHIP Ở PHÍA SAU · QUAY NGƯỜI LẠI';
+          statusIcon = Icons.trending_down_rounded;
+          statusColor = const Color(0xFFEF4444);
+        } else {
+          statusText = '🔄 LỆCH HƯỚNG · XOAY LẠI';
+          statusIcon = Icons.trending_down_rounded;
+          statusColor = const Color(0xFFEF4444);
+        }
         break;
       case _ArrowDirection.stable:
-        statusText = '➡️ GIỮ HƯỚNG · QUÉT ỔN ĐỊNH';
-        statusIcon = Icons.swap_horiz_rounded;
-        statusColor = signalColor;
+        if (widget.relativeAngleDeg != null) {
+          if (widget.relativeAngleDeg! > 0) {
+            statusText =
+                '➡️ CHIP Ở BÊN PHẢI (${widget.relativeAngleDeg!.round()}°)';
+            statusIcon = Icons.turn_right_rounded;
+          } else {
+            statusText =
+                '⬅️ CHIP Ở BÊN TRÁI (${widget.relativeAngleDeg!.abs().round()}°)';
+            statusIcon = Icons.turn_left_rounded;
+          }
+          statusColor = const Color(0xFF0284C7);
+        } else {
+          statusText = '🔄 XOAY MÁY CHẬM QUA LẠI ĐỂ KHÓA HƯỚNG';
+          statusIcon = Icons.radar_rounded;
+          statusColor = const Color(0xFF0284C7);
+        }
         break;
       case _ArrowDirection.found:
         statusText = '🎯 ĐÃ TÌM THẤY! NGAY TRƯỚC MẶT';
@@ -419,7 +662,6 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
         break;
     }
 
-    // Xu hướng
     String getTrendText() {
       if (noSignal) return '---';
       if (diff > 1.0) return '🔥 NÓNG DẦN';
@@ -486,7 +728,9 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Sóng: ${widget.rssi.toStringAsFixed(0)} dBm',
+                noSignal
+                    ? 'Sóng: --- dBm'
+                    : 'Sóng: ${widget.rssi.toStringAsFixed(0)} dBm',
                 style: const TextStyle(
                   color: Color(0xFF6B5D4D),
                   fontSize: 11.5,
@@ -550,9 +794,9 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'ĐÃ TÌM THẤY MỤC TIÊU!',
-                  style: TextStyle(
+                Text(
+                  widget.isPallet ? 'ĐÃ TÌM THẤY PALLET!' : 'ĐÃ TÌM THẤY MỤC TIÊU!',
+                  style: const TextStyle(
                     color: Color(0xFF047857),
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
@@ -577,12 +821,19 @@ class _DirectionArrowWidgetState extends State<DirectionArrowWidget>
 
 enum _ArrowDirection { idle, searching, right, wrong, stable, found }
 
-/// Custom painter vẽ mũi tên lớn chỉ hướng
-class _BigArrowPainter extends CustomPainter {
+/// Custom painter vẽ mũi tên chỉ hướng phong cách Apple AirTag với luồng sóng di chuyển
+class _AirTagPointerPainter extends CustomPainter {
   final Color color;
   final double glowIntensity;
+  final double flowValue;
+  final bool isWrongDirection;
 
-  _BigArrowPainter({required this.color, required this.glowIntensity});
+  _AirTagPointerPainter({
+    required this.color,
+    required this.glowIntensity,
+    required this.flowValue,
+    required this.isWrongDirection,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -590,40 +841,66 @@ class _BigArrowPainter extends CustomPainter {
     final h = size.height;
     final cx = w / 2;
 
-    // Vẽ mũi tên tam giác lớn hướng lên
+    // Đường viền mũi tên vát nhọn hình học phong cách Apple Industrial
     final arrowPath = Path()
-      ..moveTo(cx, 0) // Đỉnh mũi tên
-      ..lineTo(w, h * 0.45) // Góc phải
-      ..lineTo(w * 0.65, h * 0.45) // Vai phải
-      ..lineTo(w * 0.65, h) // Chân phải
-      ..lineTo(w * 0.35, h) // Chân trái
-      ..lineTo(w * 0.35, h * 0.45) // Vai trái
-      ..lineTo(0, h * 0.45) // Góc trái
+      ..moveTo(cx, 0) // Đỉnh nhọn
+      ..lineTo(w * 0.95, h * 0.44) // Cánh phải
+      ..lineTo(w * 0.64, h * 0.44) // Khớp phải
+      ..lineTo(w * 0.64, h * 0.96) // Chân phải
+      ..lineTo(w * 0.36, h * 0.96) // Chân trái
+      ..lineTo(w * 0.36, h * 0.44) // Khớp trái
+      ..lineTo(w * 0.05, h * 0.44) // Cánh trái
       ..close();
 
-    // Glow effect
-    if (glowIntensity > 0.2) {
+    // Hào quang tỏa sáng (Outer Glow)
+    if (glowIntensity > 0.15) {
       final glowPaint = Paint()
-        ..color = color.withValues(alpha: glowIntensity * 0.35)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+        ..color = color.withValues(alpha: (glowIntensity * 0.45).clamp(0.1, 0.7))
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
       canvas.drawPath(arrowPath, glowPaint);
     }
 
-    // Fill chính
+    // Đổ bóng thân mũi tên
     final fillPaint = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
     canvas.drawPath(arrowPath, fillPaint);
 
-    // Viền sáng
+    // Viền trắng phản chiếu sắc nét
     final borderPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.3)
+      ..color = Colors.white.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawPath(arrowPath, borderPaint);
+
+    // Vẽ luồng mũi tên chevrons chuyển động dọc thân (^ ^ ^)
+    final chevronPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 2.5;
+
+    for (int i = 0; i < 3; i++) {
+      final baseProgress = (flowValue + (i * 0.33)) % 1.0;
+      final chevronY = (h * 0.88) - (baseProgress * (h * 0.50));
+      final chevronAlpha = (1.0 - (baseProgress - 0.5).abs() * 2.0).clamp(0.0, 0.8);
+
+      chevronPaint.color = Colors.white.withValues(alpha: chevronAlpha);
+
+      final chevronPath = Path()
+        ..moveTo(cx - 10, chevronY + 6)
+        ..lineTo(cx, chevronY)
+        ..lineTo(cx + 10, chevronY + 6);
+
+      canvas.drawPath(chevronPath, chevronPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _BigArrowPainter oldDelegate) =>
-      color != oldDelegate.color || glowIntensity != oldDelegate.glowIntensity;
+  bool shouldRepaint(covariant _AirTagPointerPainter oldDelegate) =>
+      color != oldDelegate.color ||
+      glowIntensity != oldDelegate.glowIntensity ||
+      flowValue != oldDelegate.flowValue ||
+      isWrongDirection != oldDelegate.isWrongDirection;
 }

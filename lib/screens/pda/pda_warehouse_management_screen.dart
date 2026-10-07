@@ -11,6 +11,7 @@ import '../../widgets/hardware_status_appbar.dart';
 import 'pda_transfer_screen.dart';
 import '../../widgets/app_notification_bar.dart';
 import '../radar_locate_screen.dart';
+import '../../widgets/tag_lifecycle_timeline_dialog.dart';
 
 /// Màn hình Quản Lý Kho tối ưu chuyên biệt cho tay cầm PDA (Handheld Terminal)
 /// Đồng bộ 4 Tabs nghiệp vụ với app Desktop:
@@ -333,47 +334,69 @@ class _PalletManagementTabState extends State<_PalletManagementTab>
             const SizedBox(height: 8),
             Row(
               children: [
+                Icon(Icons.location_on, size: 13, color: hasLocation ? const Color(0xFFEF4444) : c.textMuted),
+                const SizedBox(width: 4),
+                Text('Vị trí: ', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
                 Expanded(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.location_on, size: 14, color: hasLocation ? const Color(0xFFEF4444) : c.textMuted),
-                      const SizedBox(width: 4),
-                      Text('Vị trí: ', style: TextStyle(color: c.textMuted, fontSize: 12)),
-                      Flexible(
-                        child: Text(
-                          locText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: hasLocation ? c.textPrimary : c.textMuted,
-                            fontWeight: hasLocation ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    locText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: hasLocation ? c.textPrimary : c.textMuted,
+                      fontWeight: hasLocation ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 11.5,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 4),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0284C7),
+                    side: const BorderSide(color: Color(0xFF0284C7)),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  icon: const Icon(Icons.track_changes_rounded, size: 13),
+                  label: const Text('Định vị', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RadarLocateScreen(
+                          initialPallet: p,
+                          initialEpc: p.rfidEpc,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 6),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: c.rfidCyan,
                     side: BorderSide(color: c.rfidCyan),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
                   icon: const Icon(Icons.edit_location_alt, size: 13),
-                  label: Text(hasLocation ? 'Đổi kệ' : 'Gán kệ', style: const TextStyle(fontSize: 10.5)),
+                  label: Text(hasLocation ? 'Đổi kệ' : 'Gán kệ', style: const TextStyle(fontSize: 11)),
                   onPressed: () => _showAssignPalletLocationDialog(p, c),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 18),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                   tooltip: 'Xóa Pallet',
                   onPressed: () => _confirmDeletePallet(p, c),
                 ),
@@ -2292,14 +2315,26 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
               Text('S/N: ${it.serialNumber}', style: TextStyle(color: c.textSecondary, fontSize: 11, fontFamily: 'monospace')),
             Text('EPC: ${it.epc}', style: TextStyle(color: c.rfidCyan, fontSize: 10.5, fontFamily: 'monospace')),
 
-            // Nút định vị và chuyển vị trí kệ nếu hàng còn trong kho
-            if (!isOut) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 6,
-                children: [
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF10B981),
+                    side: const BorderSide(color: Color(0xFF10B981)),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  icon: const Icon(Icons.history_rounded, size: 14),
+                  label: const Text('Lịch sử thẻ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    TagLifecycleTimelineDialog.show(context, epc: it.epc, item: it);
+                  },
+                ),
+                if (!isOut) ...[
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF0284C7),
@@ -2318,8 +2353,8 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
                   ),
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF10B981),
-                      side: const BorderSide(color: Color(0xFF10B981)),
+                      foregroundColor: const Color(0xFFF59E0B),
+                      side: const BorderSide(color: Color(0xFFF59E0B)),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                     ),
@@ -2333,8 +2368,8 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
                     },
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),

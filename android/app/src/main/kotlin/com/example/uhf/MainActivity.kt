@@ -14,6 +14,10 @@ import android.os.Vibrator
 import android.util.Log
 import android.view.KeyEvent
 import androidx.annotation.NonNull
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -28,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MainActivity : FlutterActivity() {
     private val METHOD_CHANNEL = "com.example.uhf/methods"
     private val EVENT_CHANNEL = "com.example.uhf/events"
+    private val HEADING_EVENT_CHANNEL = "com.example.uhf/heading"
     private val TAG = "UHF_MainActivity"
 
     // SEUIC UHF via reflection (system framework class)
@@ -37,6 +42,13 @@ class MainActivity : FlutterActivity() {
     private var mListenerProxy: Any? = null
 
     private var eventSink: EventChannel.EventSink? = null
+    private var headingEventSink: EventChannel.EventSink? = null
+    private var sensorManager: SensorManager? = null
+    private var rotationSensor: Sensor? = null
+    private var sensorEventListener: SensorEventListener? = null
+    private var lastHeadingTime = 0L
+    private val HEADING_UPDATE_INTERVAL_MS = 25L // ~40Hz smooth 60fps tracking
+
     private var mMethodChannel: MethodChannel? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -357,8 +369,13 @@ class MainActivity : FlutterActivity() {
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 85)
             vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            sensorManager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+            rotationSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+                ?: sensorManager?.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
+                ?: sensorManager?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+                ?: sensorManager?.getDefaultSensor(Sensor.TYPE_ORIENTATION)
         } catch (e: Exception) {
-            Log.w(TAG, "Could not initialize ToneGenerator/Vibrator: ${e.message}")
+            Log.w(TAG, "Could not initialize ToneGenerator/Vibrator/Sensor: ${e.message}")
         }
 
         try {
@@ -409,6 +426,20 @@ class MainActivity : FlutterActivity() {
                 }
                 override fun onCancel(arguments: Any?) {
                     eventSink = null; Log.d(TAG, "EventChannel canceled")
+                }
+            }
+        )
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, HEADING_EVENT_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    headingEventSink = events
+                    startHeadingSensor()
+                    Log.d(TAG, "Heading EventChannel listening")
+                }
+                override fun onCancel(arguments: Any?) {
+                    headingEventSink = null
+                    stopHeadingSensor()
+                    Log.d(TAG, "Heading EventChannel canceled")
                 }
             }
         )
@@ -1119,7 +1150,63 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun startHeadingSensor() {
+        if (sensorManager == null || rotationSensor == null) return
+        if (sensorEventListener != null) return
+
+        sensorEventListener = object : SensorEventListener {
+            private val rotationMatrix = FloatArray(9)
+            private val orientationValues = FloatArray(3)
+
+            override fun onSensorChanged(event: SensorEvent?) {
+                if (event == null) return
+                val now = System.currentTimeMillis()
+                if (now - lastHeadingTime < HEADING_UPDATE_INTERVAL_MS) return
+                lastHeadingTime = now
+
+                var headingDegrees = 0.0
+                if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR ||
+                    event.sensor.type == Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR ||
+                    event.sensor.type == Sensor.TYPE_GAME_ROTATION_VECTOR) {
+                    SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                    SensorManager.getOrientation(rotationMatrix, orientationValues)
+                    var deg = Math.toDegrees(orientationValues[0].toDouble())
+                    if (deg < 0) deg += 360.0
+                    headingDegrees = deg
+                } else if (event.sensor.type == Sensor.TYPE_ORIENTATION) {
+                    headingDegrees = (event.values[0].toDouble() + 360.0) % 360.0
+                }
+
+                mainHandler.post {
+                    headingEventSink?.success(headingDegrees)
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+
+        try {
+            sensorManager?.registerListener(
+                sensorEventListener,
+                rotationSensor,
+                SensorManager.SENSOR_DELAY_GAME
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "registerListener error: ${e.message}")
+        }
+    }
+
+    private fun stopHeadingSensor() {
+        sensorEventListener?.let {
+            try {
+                sensorManager?.unregisterListener(it)
+            } catch (_: Exception) {}
+            sensorEventListener = null
+        }
+    }
+
     override fun onDestroy() {
+        stopHeadingSensor()
         try { unregisterReceiver(keyReceiver) } catch (_: Exception) {}
         toneGenerator?.release(); toneGenerator = null
         bgThread.quitSafely()

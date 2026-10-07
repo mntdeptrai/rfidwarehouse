@@ -3,6 +3,7 @@ import '../../services/warehouse_repository.dart';
 import '../../models/wms_models.dart';
 import '../../theme/eye_care_theme.dart';
 import '../radar_locate_screen.dart';
+import '../../widgets/tag_lifecycle_timeline_dialog.dart';
 
 enum LookupDisplayMode {
   groupBySku,  // 1 mặt hàng (SKU) có nhiều mã RFID
@@ -1102,17 +1103,35 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
 
                       // THAO TÁC
                       DataCell(
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF0284C7),
-                            side: BorderSide(color: const Color(0xFF0284C7).withValues(alpha: 0.5)),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            minimumSize: const Size(0, 26),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
-                          icon: const Icon(Icons.share_location_rounded, size: 12),
-                          label: const Text('Giao đơn tìm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                          onPressed: () => _showCreateLocateOrderDialog(context, c, prefillItem: item),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF10B981),
+                                side: BorderSide(color: const Color(0xFF10B981).withValues(alpha: 0.5)),
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                minimumSize: const Size(0, 26),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              icon: const Icon(Icons.history_rounded, size: 13),
+                              label: const Text('Lịch sử', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              onPressed: () => TagLifecycleTimelineDialog.show(context, epc: item.epc, item: item),
+                            ),
+                            const SizedBox(width: 5),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF0284C7),
+                                side: BorderSide(color: const Color(0xFF0284C7).withValues(alpha: 0.5)),
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                minimumSize: const Size(0, 26),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              ),
+                              icon: const Icon(Icons.share_location_rounded, size: 12),
+                              label: const Text('Giao đơn tìm', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                              onPressed: () => _showCreateLocateOrderDialog(context, c, prefillItem: item),
+                            ),
+                          ],
                         ),
                       ),
                     ],

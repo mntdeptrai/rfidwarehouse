@@ -578,3 +578,127 @@ class LocateOrder {
   );
 }
 
+/// Loại sự kiện vòng đời thẻ RFID
+enum TagLifecycleAction {
+  encoded('ENCODED', 'Khởi tạo & Gán mã RFID', 0xFF3B82F6),
+  inboundGate('INBOUND_GATE', 'Nhập kho qua cổng RFID', 0xFF10B981),
+  inboundPda('INBOUND_PDA', 'Nhập kho trên PDA', 0xFF059669),
+  palletize('PALLETIZE', 'Xếp vào Pallet', 0xFF0284C7),
+  putaway('PUTAWAY', 'Cất lên vị trí kệ', 0xFF0D9488),
+  transferLocation('TRANSFER_LOC', 'Điều chuyển vị trí kệ', 0xFFF59E0B),
+  transferPallet('TRANSFER_PALLET', 'Chuyển sang Pallet khác', 0xFFD97706),
+  mergePallet('MERGE_PALLET', 'Dồn gộp Pallet', 0xFFEA580C),
+  auditMatch('AUDIT_MATCH', 'Kiểm kê khớp chuẩn', 0xFF10B981),
+  auditMisplaced('AUDIT_MISPLACED', 'Kiểm kê sai vị trí', 0xFFF59E0B),
+  auditMissing('AUDIT_MISSING', 'Kiểm kê phát hiện thiếu', 0xFFEF4444),
+  auditFound('AUDIT_FOUND', 'Kiểm kê tìm lại được', 0xFF8B5CF6),
+  locateFound('LOCATE_FOUND', 'Tìm thấy bằng Radar AirTag', 0xFF06B6D4),
+  allocatePo('ALLOCATE_PO', 'Giữ chỗ cho đơn xuất', 0xFF8B5CF6),
+  picked('PICKED', 'Đã lấy hàng từ kệ', 0xFFEC4899),
+  outboundGate('OUTBOUND_GATE', 'Xuất kho qua cổng RFID', 0xFF64748B),
+  outboundPda('OUTBOUND_PDA', 'Xuất kho trên PDA', 0xFF475569),
+  unauthorizedExit('UNAUTHORIZED_EXIT', 'Cảnh báo qua cổng trái phép', 0xFFEF4444),
+  statusChange('STATUS_CHANGE', 'Thay đổi trạng thái', 0xFF6366F1);
+
+  final String code;
+  final String label;
+  final int colorValue;
+  const TagLifecycleAction(this.code, this.label, this.colorValue);
+
+  static TagLifecycleAction fromCode(String? code) {
+    if (code == null) return TagLifecycleAction.statusChange;
+    final upper = code.trim().toUpperCase();
+    return TagLifecycleAction.values.firstWhere(
+      (a) => a.code == upper,
+      orElse: () => TagLifecycleAction.statusChange,
+    );
+  }
+}
+
+/// Bản ghi nhật ký vòng đời thẻ RFID (Tag Lifecycle Log / Audit Trail)
+class TagLifecycleLog {
+  final String logId;
+  final String epc;
+  final String? itemId;
+  final String? sku;
+  final String? productName;
+  final String? serialNumber;
+  final TagLifecycleAction action;
+  final String? previousStatus;
+  final String newStatus;
+  final String? fromLocation;
+  final String? toLocation;
+  final String? fromPallet;
+  final String? toPallet;
+  final String? documentNo;
+  final String performedBy;
+  final String? device;
+  final DateTime timestamp;
+  final String? notes;
+
+  TagLifecycleLog({
+    required this.logId,
+    required this.epc,
+    this.itemId,
+    this.sku,
+    this.productName,
+    this.serialNumber,
+    required this.action,
+    this.previousStatus,
+    required this.newStatus,
+    this.fromLocation,
+    this.toLocation,
+    this.fromPallet,
+    this.toPallet,
+    this.documentNo,
+    required this.performedBy,
+    this.device,
+    required this.timestamp,
+    this.notes,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'log_id': logId,
+    'epc': epc,
+    'item_id': itemId,
+    'sku': sku,
+    'product_name': productName,
+    'serial_number': serialNumber,
+    'action': action.code,
+    'action_label': action.label,
+    'previous_status': previousStatus,
+    'new_status': newStatus,
+    'from_location': fromLocation,
+    'to_location': toLocation,
+    'from_pallet': fromPallet,
+    'to_pallet': toPallet,
+    'document_no': documentNo,
+    'performed_by': performedBy,
+    'device': device,
+    'timestamp': timestamp.toIso8601String(),
+    'notes': notes,
+  };
+
+  factory TagLifecycleLog.fromMap(Map<String, dynamic> map) => TagLifecycleLog(
+    logId: (map['log_id'] ?? '').toString(),
+    epc: (map['epc'] ?? '').toString(),
+    itemId: map['item_id']?.toString(),
+    sku: map['sku']?.toString(),
+    productName: map['product_name']?.toString(),
+    serialNumber: map['serial_number']?.toString(),
+    action: TagLifecycleAction.fromCode(map['action']?.toString()),
+    previousStatus: map['previous_status']?.toString(),
+    newStatus: (map['new_status'] ?? '').toString(),
+    fromLocation: map['from_location']?.toString(),
+    toLocation: map['to_location']?.toString(),
+    fromPallet: map['from_pallet']?.toString(),
+    toPallet: map['to_pallet']?.toString(),
+    documentNo: map['document_no']?.toString(),
+    performedBy: (map['performed_by'] ?? 'Hệ thống').toString(),
+    device: map['device']?.toString(),
+    timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
+    notes: map['notes']?.toString(),
+  );
+}
+
+

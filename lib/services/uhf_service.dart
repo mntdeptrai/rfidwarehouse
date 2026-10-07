@@ -24,6 +24,7 @@ class UhfService extends ChangeNotifier {
 
   static const MethodChannel _methodChannel = MethodChannel('com.example.uhf/methods');
   static const EventChannel _eventChannel = EventChannel('com.example.uhf/events');
+  static const EventChannel _headingEventChannel = EventChannel('com.example.uhf/heading');
 
   bool _isInitialized = false;
   bool _isScanning = false;
@@ -122,6 +123,39 @@ class UhfService extends ChangeNotifier {
 
   final StreamController<String> _barcodeStreamController = StreamController<String>.broadcast();
   Stream<String> get onBarcodeRead => _barcodeStreamController.stream;
+
+  // Stream góc la bàn / con quay hồi chuyển thời gian thực (0..360 độ)
+  final StreamController<double> _headingStreamController = StreamController<double>.broadcast();
+  Stream<double> get onHeadingChanged => _headingStreamController.stream;
+  StreamSubscription? _headingSubscription;
+  double _currentHeading = 0.0;
+  double get currentHeading => _currentHeading;
+
+  void startHeadingUpdates() {
+    if (!Platform.isAndroid || _headingSubscription != null) return;
+    try {
+      _headingSubscription = _headingEventChannel.receiveBroadcastStream().listen((dynamic event) {
+        if (event is num) {
+          _currentHeading = event.toDouble();
+          _headingStreamController.add(_currentHeading);
+        }
+      }, onError: (err) {
+        debugPrint('UhfService heading error: $err');
+      });
+    } catch (e) {
+      debugPrint('UhfService startHeadingUpdates error: $e');
+    }
+  }
+
+  void stopHeadingUpdates() {
+    _headingSubscription?.cancel();
+    _headingSubscription = null;
+  }
+
+  void simulateHeading(double headingDeg) {
+    _currentHeading = headingDeg;
+    _headingStreamController.add(headingDeg);
+  }
 
   void simulateTag(String epc) {
     _tagStreamController.add(TagInfo(epc: epc, rssi: '-50', ant: '1', timestamp: DateTime.now()));

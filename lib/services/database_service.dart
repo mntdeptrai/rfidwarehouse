@@ -30,6 +30,7 @@ class DatabaseService {
   final Map<String, InventorySession> _inventorySessions = {};
   final Map<String, LocateOrder> _locateOrders = {};
   final Map<String, InventoryTransaction> _transactions = {};
+  final Map<String, TagLifecycleLog> _tagLifecycleLogs = {};
   final Map<String, String> _systemConfig = {};
   final List<Map<String, dynamic>> _syncQueue = [];
   int _nextQueueId = 1;
@@ -629,5 +630,31 @@ class DatabaseService {
 
   Future<void> deleteTransaction(String transactionId) async {
     _transactions.remove(transactionId);
+  }
+
+  // --- TAG LIFECYCLE LOGS (NHẬT KÝ VÒNG ĐỜI THẺ RFID) ---
+  Future<List<TagLifecycleLog>> getTagLifecycleLogs() async {
+    return _tagLifecycleLogs.values.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  Future<List<TagLifecycleLog>> getTagLifecycleLogsByEpc(String epc) async {
+    final cleanEpc = epc.trim().toUpperCase();
+    return _tagLifecycleLogs.values
+        .where((log) => log.epc.trim().toUpperCase() == cleanEpc)
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  Future<void> insertTagLifecycleLog(TagLifecycleLog log) async {
+    _tagLifecycleLogs[log.logId] = log;
+  }
+
+  Future<void> deleteTagLifecycleLog(String logId) async {
+    _tagLifecycleLogs.remove(logId);
+  }
+
+  Future<void> clearTagLifecycleLogs() async {
+    _tagLifecycleLogs.clear();
   }
 }

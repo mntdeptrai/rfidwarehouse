@@ -52,6 +52,16 @@ void main() {
       expect(service.currentStatus.reason, contains('Lỗi hệ thống'));
     });
 
+    test('🟡 triggerScanning sets YELLOW signal during outbound gate scanning', () async {
+      await service.triggerScanning(reason: 'Đang quét đối soát qua cổng RFID');
+      expect(service.currentStatus.color, TowerLightColor.yellow);
+      expect(service.currentStatus.isYellow, true);
+      expect(service.currentStatus.isRed, false);
+      expect(service.currentStatus.isGreen, false);
+      expect(service.currentStatus.isBuzzerOn, false);
+      expect(service.currentStatus.reason, contains('Đang quét đối soát qua cổng RFID'));
+    });
+
     test('turnOffAll returns tower to standby state', () async {
       await service.triggerPass();
       expect(service.currentStatus.color, TowerLightColor.green);

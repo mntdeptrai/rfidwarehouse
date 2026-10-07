@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/inventory_models.dart';
 import '../../models/order_models.dart';
@@ -97,8 +98,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   // Danh sách chip RFID đã quét tại trạm/cổng
   final Map<String, TagInfo> _gateScannedTags = {};
+  final Set<String> _securityAlertLoggedEpcs = {};
   bool _isScanning = false;
   bool _isConnectingUhf = false;
+  bool _isBuzzerManuallySilenced = false;
   int _scanDurationSeconds = 0; // 0 = liên tục (mặc định), 5s, 10s
   int _scanCountdown = 0;
   Timer? _countdownTimer;
@@ -120,6 +123,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _repo.addListener(_onThemeChanged);
     _auth.addListener(_onThemeChanged);
     _desktopUhf.addListener(_onDesktopUhfUpdate);
+    _towerLight.addListener(_onThemeChanged);
 
     _initTagListeners();
 
@@ -134,14 +138,17 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   void _onDesktopUhfUpdate() {
     if (!mounted || !widget.isActive) return;
-    setState(() {
-      if (_desktopUhf.isScanning) {
+    if (_desktopUhf.isScanning && !_isScanning) {
+      setState(() {
         _isScanning = true;
+      });
+    }
+    for (final tag in _desktopUhf.tags) {
+      final epc = tag.epc.trim().toUpperCase();
+      if (!_gateScannedTags.containsKey(epc)) {
+        _handleIncomingGateTag(tag);
       }
-      for (final tag in _desktopUhf.tags) {
-        _gateScannedTags[tag.epc.toUpperCase()] = tag;
-      }
-    });
+    }
   }
 
   void _initTagListeners() {
@@ -157,45 +164,138 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   }
 
   void _handleIncomingGateTag(TagInfo tag) {
-    if (_pendingOutboundOrder == null) return;
-
     final epc = tag.epc.trim().toUpperCase();
-    if (_uhf.filterDuplicates && _gateScannedTags.containsKey(epc)) return;
+    final isNewTag = !_gateScannedTags.containsKey(epc);
+    if (!isNewTag && _uhf.filterDuplicates) return;
+
+    if (isNewTag) {
+      _isBuzzerManuallySilenced = false;
+    }
 
     _gateScannedTags[epc] = tag;
 
-    final order = _pendingOutboundOrder!;
+    if (_pendingOutboundOrder != null) {
+      final order = _pendingOutboundOrder!;
 
-    // 1. Kiểm tra xem thẻ quét có phải là Pallet RFID Tag (xuất cả Pallet qua RFID gate)
-    final matchingPalletInOrder = order.pallets.entries.where(
-      (e) => (e.value != null && e.value!.trim().toUpperCase() == epc) || e.key.trim().toUpperCase() == epc,
-    ).firstOrNull;
-    final matchedPalletCode = matchingPalletInOrder?.key ?? _repo.pallets.where(
-      (p) => (p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == epc) || p.palletCode.trim().toUpperCase() == epc || p.palletId.trim().toUpperCase() == epc,
-    ).firstOrNull?.palletCode;
+      // 1. Kiểm tra xem thẻ quét có phải là Pallet RFID Tag (xuất cả Pallet qua RFID gate)
+      final matchingPalletInOrder = order.pallets.entries.where(
+        (e) => (e.value != null && e.value!.trim().toUpperCase() == epc) || e.key.trim().toUpperCase() == epc,
+      ).firstOrNull;
+      final matchedPalletCode = matchingPalletInOrder?.key ?? _repo.pallets.where(
+        (p) => (p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == epc) || p.palletCode.trim().toUpperCase() == epc || p.palletId.trim().toUpperCase() == epc,
+      ).firstOrNull?.palletCode;
 
-    List<_PendingOutboundItem> autoMatchedPalletItems = [];
-    if (matchedPalletCode != null || matchingPalletInOrder != null) {
-      final pCode = (matchedPalletCode ?? matchingPalletInOrder!.key).trim().toUpperCase();
-      autoMatchedPalletItems = order.items.where((i) =>
-        i.palletCode.trim().toUpperCase() == pCode ||
-        (i.palletEpc.isNotEmpty && i.palletEpc.trim().toUpperCase() == epc)
-      ).toList();
+      if (matchedPalletCode != null || matchingPalletInOrder != null) {
+        final pCode = (matchedPalletCode ?? matchingPalletInOrder!.key).trim().toUpperCase();
+        final autoMatchedPalletItems = order.items.where((i) =>
+          i.palletCode.trim().toUpperCase() == pCode ||
+          (i.palletEpc.isNotEmpty && i.palletEpc.trim().toUpperCase() == epc)
+        ).toList();
 
-      for (final it in autoMatchedPalletItems) {
-        final itemEpc = it.epc.trim().toUpperCase();
-        if (itemEpc.isNotEmpty && itemEpc != '--') {
-          _gateScannedTags[itemEpc] = TagInfo(
-            epc: it.epc,
-            rssi: tag.rssi,
-            count: tag.count,
-            timestamp: tag.timestamp,
-            ant: tag.ant,
-          );
+        for (final it in autoMatchedPalletItems) {
+          final itemEpc = it.epc.trim().toUpperCase();
+          if (itemEpc.isNotEmpty && itemEpc != '--') {
+            _gateScannedTags[itemEpc] = TagInfo(
+              epc: it.epc,
+              rssi: tag.rssi,
+              count: tag.count,
+              timestamp: tag.timestamp,
+              ant: tag.ant,
+            );
+          }
         }
       }
     }
 
+    _evaluateGateSecurityAndTowerLight(latestTag: tag);
+  }
+
+  void _evaluateGateSecurityAndTowerLight({TagInfo? latestTag}) {
+    if (_pendingOutboundOrder == null) {
+      // ===== 1. CHẾ ĐỘ GIÁM SÁT AN NINH CỔNG TỰ DO (CHƯA NẠP ĐƠN XUẤT) =====
+      final unauthorizedItems = _gateScannedTags.keys
+          .map((e) => _repo.items.where((i) => i.epc.toUpperCase() == e).firstOrNull)
+          .whereType<Item>()
+          .toList();
+
+      final strangerEpcs = _gateScannedTags.keys
+          .where((e) => !_repo.items.any((i) => i.epc.toUpperCase() == e))
+          .toList();
+
+      final hasSecurityViolation = unauthorizedItems.isNotEmpty || strangerEpcs.isNotEmpty;
+
+      if (hasSecurityViolation) {
+        final String reasonText;
+        if (unauthorizedItems.isNotEmpty) {
+          final first = unauthorizedItems.first;
+          final extra = unauthorizedItems.length + strangerEpcs.length - 1;
+          final extraStr = extra > 0 ? ' và $extra hàng/chip khác' : '';
+          reasonText = '🚨 BÁO ĐỘNG AN NINH: [${first.productName}] (Kệ ${first.locationId ?? "--"})$extraStr qua cổng khi CHƯA CÓ ĐƠN XUẤT!';
+        } else {
+          final firstEpc = strangerEpcs.first;
+          final shortEpc = firstEpc.length > 8 ? '...${firstEpc.substring(firstEpc.length - 8)}' : firstEpc;
+          reasonText = '🚨 CẢNH BÁO AN NINH: Phát hiện ${strangerEpcs.length} chip lạ ($shortEpc) qua cổng khi CHƯA CÓ ĐƠN XUẤT!';
+        }
+
+        SystemSound.play(SystemSoundType.alert);
+        _towerLight.triggerWarningRed(
+          withBuzzer: !_isBuzzerManuallySilenced,
+          reason: reasonText,
+          persistent: true,
+        );
+
+        for (final it in unauthorizedItems) {
+          final epc = it.epc.toUpperCase();
+          if (!_securityAlertLoggedEpcs.contains(epc)) {
+            _securityAlertLoggedEpcs.add(epc);
+            _repo.recordTagLifecycle(
+              epc: epc,
+              itemId: it.itemId,
+              sku: it.sku,
+              productName: it.productName,
+              serialNumber: it.serialNumber,
+              action: TagLifecycleAction.unauthorizedExit,
+              previousStatus: it.status.code,
+              newStatus: it.status.code,
+              fromLocation: it.locationId,
+              fromPallet: it.palletId,
+              performedBy: _auth.currentUser?.fullName ?? 'Hệ thống Cổng RFID Gate An Ninh',
+              device: 'Cổng RFID Desktop Hopeland',
+              notes: '🚨 PHÁT HIỆN QUA CỔNG TRÁI PHÉP: Hàng hóa trong kho đi qua cổng khi chưa có lệnh/đơn xuất kho!',
+            );
+          }
+        }
+
+        for (final epc in strangerEpcs) {
+          final upper = epc.toUpperCase();
+          if (!_securityAlertLoggedEpcs.contains(upper)) {
+            _securityAlertLoggedEpcs.add(upper);
+            _repo.recordTagLifecycle(
+              epc: upper,
+              productName: 'Chip RFID Lạ (Chưa đăng ký)',
+              action: TagLifecycleAction.unauthorizedExit,
+              newStatus: 'UNAUTHORIZED_STRANGER',
+              performedBy: _auth.currentUser?.fullName ?? 'Hệ thống Cổng RFID Gate An Ninh',
+              device: 'Cổng RFID Desktop Hopeland',
+              notes: '🚨 PHÁT HIỆN QUA CỔNG TRÁI PHÉP: Mã chip lạ không có trong dữ liệu kho đi qua cổng kiểm soát!',
+            );
+          }
+        }
+      } else {
+        if (_isScanning) {
+          _towerLight.triggerScanning(
+            reason: 'GIÁM SÁT AN NINH CỔNG: Đang quét kiểm soát thất thoát...',
+          );
+        } else {
+          _towerLight.turnOffAll(reason: 'Sẵn sàng tiếp nhận hàng xuất');
+        }
+      }
+      _scheduleUiRefresh();
+      return;
+    }
+
+    // ===== 2. CHẾ ĐỘ ĐỐI SOÁT ĐƠN XUẤT KHO (_pendingOutboundOrder != null) =====
+    final order = _pendingOutboundOrder!;
     final expectedEpcs = order.items.map((i) => i.epc.toUpperCase()).where((e) => e.isNotEmpty && e != '--').toSet();
     final validPalletEpcs = <String>{};
     for (final e in order.pallets.values) {
@@ -218,27 +318,67 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     final unexpected = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
     if (unexpected.isNotEmpty) {
-      _towerLight.triggerWarningRed(
-        withBuzzer: true,
-        reason: 'CẢNH BÁO: Phát hiện ${unexpected.length} chip lạ ngoài danh sách xuất kho!',
-      );
-    } else {
-      if (autoMatchedPalletItems.isNotEmpty) {
-        final palName = matchedPalletCode ?? matchingPalletInOrder?.key ?? epc;
-        _towerLight.triggerPass(
-          reason: 'NHẬN DIỆN NGUYÊN PALLET [$palName]: Tự động đối soát trọn gói ${autoMatchedPalletItems.length} sản phẩm!',
-        );
+      final matchedInRepo = unexpected
+          .map((u) => _repo.items.where((i) => i.epc.toUpperCase() == u).firstOrNull)
+          .whereType<Item>()
+          .toList();
+      final String reasonText;
+      if (matchedInRepo.isNotEmpty) {
+        final firstItem = matchedInRepo.first;
+        final extraCount = unexpected.length - 1;
+        final extraStr = extraCount > 0 ? ' và $extraCount hàng khác' : '';
+        reasonText = 'CẢNH BÁO AN NINH: Hàng không nằm trong đơn xuất! [${firstItem.productName}] (SKU: ${firstItem.sku}, Kệ: ${firstItem.locationId ?? "--"})$extraStr';
       } else {
-        // Đối soát tồn kho và thứ tự FIFO cho chip vừa quét
-        final item = order.items.where((i) => i.epc.toUpperCase() == epc).firstOrNull;
+        final firstEpc = unexpected.first;
+        final shortEpc = firstEpc.length > 8 ? '...${firstEpc.substring(firstEpc.length - 8)}' : firstEpc;
+        reasonText = 'CẢNH BÁO: Phát hiện ${unexpected.length} chip lạ ($shortEpc) ngoài danh sách xuất kho!';
+      }
+
+      SystemSound.play(SystemSoundType.alert);
+      _towerLight.triggerWarningRed(
+        withBuzzer: !_isBuzzerManuallySilenced,
+        reason: reasonText,
+        persistent: true,
+      );
+
+      for (final unexpEpc in unexpected) {
+        final upper = unexpEpc.toUpperCase();
+        if (!_securityAlertLoggedEpcs.contains(upper)) {
+          _securityAlertLoggedEpcs.add(upper);
+          final it = _repo.items.where((i) => i.epc.toUpperCase() == upper).firstOrNull;
+          _repo.recordTagLifecycle(
+            epc: upper,
+            itemId: it?.itemId,
+            sku: it?.sku,
+            productName: it?.productName ?? 'Chip RFID Lạ (Chưa đăng ký)',
+            serialNumber: it?.serialNumber,
+            action: TagLifecycleAction.unauthorizedExit,
+            previousStatus: it?.status.code,
+            newStatus: it?.status.code ?? 'UNAUTHORIZED_STRANGER',
+            fromLocation: it?.locationId,
+            fromPallet: it?.palletId,
+            documentNo: order.orderNo,
+            performedBy: _auth.currentUser?.fullName ?? 'Hệ thống Cổng RFID Gate An Ninh',
+            device: 'Cổng RFID Desktop Hopeland',
+            notes: it != null
+                ? '🚨 HÀNG KHÔNG THUỘC ĐƠN XUẤT: Hàng đi kèm xe qua cổng nhưng không nằm trong PO ${order.orderNo}!'
+                : '🚨 PHÁT HIỆN CHIP LẠ: Chip không tồn tại trong hệ thống đi qua cổng cùng đơn xuất PO ${order.orderNo}!',
+          );
+        }
+      }
+    } else {
+      if (latestTag != null) {
+        final latestEpc = latestTag.epc.trim().toUpperCase();
+        final item = order.items.where((i) => i.epc.toUpperCase() == latestEpc).firstOrNull;
         if (item != null) {
           if (!item.isInStock) {
             _towerLight.triggerWarningRed(
               withBuzzer: true,
-              reason: 'CẢNH BÁO TỒN KHO: Mã chip $epc (SKU: ${item.sku}) không có trong kho!',
+              reason: 'CẢNH BÁO TỒN KHO: Mã chip $latestEpc (SKU: ${item.sku}) không có trong kho!',
             );
+            _scheduleUiRefresh();
+            return;
           } else {
-            // Kiểm tra xem có lô cũ hơn cùng SKU chưa quét không
             final olderUnscanned = order.items.where((i) =>
                 i.sku.toUpperCase() == item.sku.toUpperCase() &&
                 i.isInStock &&
@@ -261,10 +401,47 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
         _towerLight.triggerPass(
           reason: 'ĐỦ HÀNG XUẤT KHO: $scannedMatching/$totalExpected sản phẩm đã thông qua cổng RFID!',
         );
+      } else if (_isScanning) {
+        _towerLight.triggerScanning(
+          reason: 'ĐANG ĐỐI SOÁT XUẤT KHO: Cổng RFID đang tiếp nhận dữ liệu ($scannedMatching/$totalExpected)...',
+        );
+      } else {
+        _towerLight.turnOffAll(reason: 'Sẵn sàng đối soát cổng xuất kho');
       }
     }
 
     _scheduleUiRefresh();
+  }
+
+  void _silenceBuzzer() {
+    setState(() {
+      _isBuzzerManuallySilenced = true;
+    });
+    _towerLight.turnOffAll(reason: 'Bảo vệ đã tắt còi cảnh báo');
+  }
+
+  bool _hasUnresolvedSecurityViolation() {
+    if (_pendingOutboundOrder == null) {
+      return _gateScannedTags.isNotEmpty;
+    }
+    final order = _pendingOutboundOrder!;
+    final expectedEpcs = order.items.map((i) => i.epc.toUpperCase()).where((e) => e.isNotEmpty && e != '--').toSet();
+    final validPalletEpcs = <String>{};
+    for (final e in order.pallets.values) {
+      if (e != null && e.isNotEmpty && e != '--') validPalletEpcs.add(e.toUpperCase());
+    }
+    for (final code in order.pallets.keys) {
+      validPalletEpcs.add(code.toUpperCase());
+      final pal = _repo.pallets.where((p) => p.palletCode.toUpperCase() == code.toUpperCase() || p.palletId.toUpperCase() == code.toUpperCase()).firstOrNull;
+      if (pal?.rfidEpc != null && pal!.rfidEpc!.isNotEmpty) {
+        validPalletEpcs.add(pal.rfidEpc!.toUpperCase());
+      }
+    }
+    for (final it in order.items) {
+      if (it.palletEpc.isNotEmpty && it.palletEpc != '--') validPalletEpcs.add(it.palletEpc.toUpperCase());
+      if (it.palletCode.isNotEmpty && it.palletCode != '--') validPalletEpcs.add(it.palletCode.toUpperCase());
+    }
+    return _gateScannedTags.keys.any((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e));
   }
 
   void _scheduleUiRefresh() {
@@ -288,6 +465,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _repo.removeListener(_onThemeChanged);
     _eyeCare.removeListener(_onThemeChanged);
     _desktopUhf.removeListener(_onDesktopUhfUpdate);
+    _towerLight.removeListener(_onThemeChanged);
     _uiRefreshTimer?.cancel();
     _countdownTimer?.cancel();
     _successBannerTimer?.cancel();
@@ -354,9 +532,12 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     if (mounted) {
       setState(() {
         _isScanning = true;
+        _isBuzzerManuallySilenced = false;
         _scanCountdown = durationSeconds > 0 ? durationSeconds : 0;
       });
     }
+
+    _evaluateGateSecurityAndTowerLight();
 
     if (durationSeconds > 0) {
       _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -379,6 +560,18 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _uhf.disableScanning();
     await _desktopUhf.stopInventory();
 
+    final hasViolation = _hasUnresolvedSecurityViolation();
+
+    if (hasViolation) {
+      _towerLight.triggerWarningRed(
+        withBuzzer: false,
+        reason: 'CẢNH BÁO AN NINH: Phát hiện hàng trong kho / chip lạ qua cổng (Chờ xử lý)!',
+        persistent: true,
+      );
+    } else {
+      _towerLight.turnOffAll(reason: 'Đã dừng quét cổng xuất kho');
+    }
+
     if (mounted) {
       setState(() {
         _isScanning = false;
@@ -391,6 +584,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     _stopGateScan();
     setState(() {
       _gateScannedTags.clear();
+      _securityAlertLoggedEpcs.clear();
+      _isBuzzerManuallySilenced = false;
     });
     _uhf.clearTags();
     _desktopUhf.clearTags();
@@ -1146,6 +1341,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               Expanded(
                 child: _buildOutboundGateMonitor(c),
               ),
+              const SizedBox(height: 10),
+
+              // Thanh điều khiển dưới cùng: Nút Quét, Thời lượng, Trạng thái Đầu đọc (LUÔN CỐ ĐỊNH Ở ĐÁY)
+              _buildBottomControlBarWrapper(c),
             ],
           ),
         );
@@ -1459,38 +1658,449 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   // ---------- 2. MÀN HÌNH CHỜ QUÉT KHI CHƯA NẠP FILE ----------
   Widget _buildIdleGateMonitor(EyeCareColors c) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 36),
-        decoration: BoxDecoration(
-          color: c.bgCard,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.border),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+    final pendingOrders = _repo.outboundOrders
+        .where((o) => o.status != OutboundOrderStatus.shipped)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    final scannedTagsList = _gateScannedTags.values.toList();
+    final unauthorizedItems = _gateScannedTags.keys
+        .map((e) => _repo.items.where((i) => i.epc.toUpperCase() == e).firstOrNull)
+        .whereType<Item>()
+        .toList();
+    final strangerEpcs = _gateScannedTags.keys
+        .where((e) => !_repo.items.any((i) => i.epc.toUpperCase() == e))
+        .toList();
+    final hasSecurityViolation = unauthorizedItems.isNotEmpty || strangerEpcs.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Banner Cổng RFID sẵn sàng tiếp nhận hàng xuất
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            decoration: BoxDecoration(
+              color: c.bgCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.sensors, size: 28, color: c.rfidCyan),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT',
+                        style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Bấm nút [BẮT ĐẦU QUÉT] ở thanh điều khiển bên dưới để kiểm tra cổng & chống thất thoát, hoặc chọn đơn xuất kho để tự động đối soát.',
+                        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF10B981),
+                    side: const BorderSide(color: Color(0xFF10B981)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.table_chart, size: 15),
+                  label: const Text('NẠP EXCEL / CSV', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  onPressed: _pickAndLoadOutboundFile,
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.rfidCyan,
+                    side: BorderSide(color: c.rfidCyan),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.receipt_long, size: 15),
+                  label: const Text('NẠP FILE PO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  onPressed: _pickAndLoadOutboundPoFile,
+                ),
+              ],
+            ),
+          ),
+
+          // Banner Báo Động An Ninh: Phát hiện hàng hóa trong kho qua cổng khi chưa có đơn xuất hoặc chip lạ
+          if (hasSecurityViolation) ...[
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: c.rfidCyan.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+                color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
               ),
-              child: Icon(Icons.sensors, size: 48, color: c.rfidCyan),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT',
-              style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Vui lòng bấm nút [XUẤT HÀNG] ở góc trên để tải file danh sách xuất kho vào hệ thống.\nSau khi nạp file, hệ thống sẽ tự động quét và đối soát mã chip RFID khi xe qua cổng.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.textSecondary, fontSize: 12.5, height: 1.5),
+              child: Row(
+                children: [
+                  const Icon(Icons.emergency_rounded, color: Color(0xFFEF4444), size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          unauthorizedItems.isNotEmpty
+                              ? '🚨 BÁO ĐỘNG AN NINH: PHÁT HIỆN ${unauthorizedItems.length} HÀNG HÓA TRONG KHO${strangerEpcs.isNotEmpty ? " VÀ ${strangerEpcs.length} CHIP LẠ" : ""} QUA CỔNG KHI CHƯA CÓ LỆNH XUẤT!'
+                              : '🚨 BÁO ĐỘNG AN NINH: PHÁT HIỆN ${strangerEpcs.length} CHIP LẠ QUA CỔNG KHI CHƯA CÓ LỆNH XUẤT!',
+                          style: const TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          unauthorizedItems.isNotEmpty
+                              ? 'Đèn tháp Đỏ & Còi báo động đang hú. Mặt hàng: ${unauthorizedItems.map((u) => "${u.productName} (Kệ: ${u.locationId ?? '--'})").take(3).join(", ")}${unauthorizedItems.length > 3 ? "..." : ""}. Yêu cầu dừng xe/người để kiểm tra chống thất thoát!'
+                              : 'Đèn tháp Đỏ & Còi báo động đang hú. Phát hiện mã chip lạ: ${strangerEpcs.take(3).join(", ")}${strangerEpcs.length > 3 ? "..." : ""}. Yêu cầu kiểm tra người/xe qua cổng!',
+                          style: TextStyle(color: c.textPrimary, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFEF4444),
+                      side: const BorderSide(color: Color(0xFFEF4444)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                    ),
+                    icon: const Icon(Icons.volume_off, size: 15),
+                    label: const Text('TẮT CÒI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                    onPressed: _silenceBuzzer,
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFEF4444),
+                      side: const BorderSide(color: Color(0xFFEF4444)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                    ),
+                    icon: const Icon(Icons.delete_sweep, size: 15),
+                    label: const Text('XÓA QUÉT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                    onPressed: _clearGateScan,
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
+          const SizedBox(height: 10),
+
+          // Nội dung bên dưới: Chia 2 cột nếu có thẻ quét tự do tại cổng, hoặc 1 bảng danh sách đơn xuất
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Khối danh sách đơn xuất chờ quét
+                Expanded(
+                  flex: scannedTagsList.isNotEmpty ? 6 : 10,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: c.bgCard,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: c.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header khối đơn xuất
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: c.bgDeep,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                            border: Border(bottom: BorderSide(color: c.border)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.inventory_2_outlined, size: 16, color: c.rfidCyan),
+                              const SizedBox(width: 8),
+                              Text(
+                                'DANH SÁCH ĐƠN XUẤT CHỜ QUÉT (${pendingOrders.length})',
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Bấm chọn đơn để nạp đối soát qua cổng RFID',
+                                  style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                  textAlign: TextAlign.end,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Danh sách đơn xuất
+                        Expanded(
+                          child: pendingOrders.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.inbox_outlined, size: 42, color: c.textSecondary.withValues(alpha: 0.35)),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        'Chưa có đơn xuất nào trong hệ thống',
+                                        style: TextStyle(color: c.textSecondary, fontSize: 12.5, fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Vui lòng bấm [NẠP EXCEL / CSV] hoặc [NẠP FILE PO] ở trên để tải đơn vào hệ thống.',
+                                        style: TextStyle(color: c.textMuted, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding: const EdgeInsets.all(10),
+                                  itemCount: pendingOrders.length,
+                                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                  itemBuilder: (ctx, idx) {
+                                    final o = pendingOrders[idx];
+                                    final totalQty = o.details.fold(0, (s, d) => s + d.requiredQty);
+                                    final pickedQty = o.details.fold(0, (s, d) => s + d.pickedQty);
+                                    final isPartial = pickedQty > 0 && pickedQty < totalQty;
+
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: c.bgDeep,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: isPartial ? const Color(0xFFF59E0B).withValues(alpha: 0.5) : c.border,
+                                          width: isPartial ? 1.4 : 1.0,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(7),
+                                            decoration: BoxDecoration(
+                                              color: (isPartial ? const Color(0xFFF59E0B) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Icon(
+                                              isPartial ? Icons.shopping_basket_outlined : Icons.receipt_long,
+                                              color: isPartial ? const Color(0xFFF59E0B) : const Color(0xFF0284C7),
+                                              size: 18,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      o.poNo,
+                                                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12.5),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: (isPartial ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withValues(alpha: 0.15),
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        isPartial ? 'Đang xuất ($pickedQty/$totalQty)' : 'Mới tạo ($totalQty SP)',
+                                                        style: TextStyle(
+                                                          color: isPartial ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 3),
+                                                Text(
+                                                  'Khách hàng: ${o.customer} • ${o.details.length} loại SKU • Tạo lúc: ${DateFormat('dd/MM/yyyy HH:mm').format(o.createdAt)}',
+                                                  style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: c.rfidCyan,
+                                              foregroundColor: const Color(0xFF2C251E),
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                                              elevation: 0,
+                                            ),
+                                            icon: const Icon(Icons.play_arrow_rounded, size: 15),
+                                            label: const Text(
+                                              'CHỌN ĐƠN NÀY ĐỂ XUẤT',
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                            onPressed: () => _loadOutboundOrderFromDb(o),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Nếu có chip quét tự do tại cổng: hiển thị cột bên phải
+                if (scannedTagsList.isNotEmpty) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 4,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: c.bgCard,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: c.bgDeep,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+                              border: Border(bottom: BorderSide(color: c.border)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.sensors, size: 16, color: c.rfidCyan),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'CHIP QUA CỔNG (${scannedTagsList.length})',
+                                  style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                                const Spacer(),
+                                InkWell(
+                                  onTap: _clearGateScan,
+                                  child: const Text('Xóa', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView.separated(
+                              padding: const EdgeInsets.all(8),
+                              itemCount: scannedTagsList.length,
+                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              itemBuilder: (ctx, idx) {
+                                final tag = scannedTagsList[idx];
+                                final itemInRepo = _repo.items.where((i) => i.epc.toUpperCase() == tag.epc.toUpperCase()).firstOrNull;
+                                final isItemInStock = itemInRepo != null;
+                                final alertColor = isItemInStock ? const Color(0xFFEF4444) : const Color(0xFFF59E0B);
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                                  margin: const EdgeInsets.only(bottom: 2),
+                                  decoration: BoxDecoration(
+                                    color: alertColor.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: alertColor.withValues(alpha: 0.6)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Text('${idx + 1}', style: TextStyle(color: alertColor, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(isItemInStock ? Icons.warning_rounded : Icons.help_outline_rounded, color: alertColor, size: 13),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    tag.epc,
+                                                    style: TextStyle(fontFamily: 'monospace', fontSize: 10.5, fontWeight: FontWeight.bold, color: alertColor),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              isItemInStock
+                                                  ? '🚨 [TRONG KHO] ${itemInRepo.productName} (Kệ: ${itemInRepo.locationId ?? "--"})'
+                                                  : '⚠️ [CHIP LẠ] Chưa đăng ký trong danh mục kho',
+                                              style: TextStyle(fontSize: 10, color: alertColor, fontWeight: FontWeight.bold),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: alertColor.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '${tag.rssi} dBm',
+                                          style: TextStyle(color: isItemInStock ? const Color(0xFFEF4444) : c.textSecondary, fontSize: 9.5, fontWeight: isItemInStock ? FontWeight.bold : FontWeight.normal),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1584,6 +2194,78 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                       'KHÓA XUẤT',
                       style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // 0. THANH TRẠNG THÁI & CẢNH BÁO ĐÈN THÁP TÍN HIỆU (TOWER LIGHT)
+          _buildTowerLightAlertBar(c),
+
+          // Banner Cảnh Báo An Ninh: Khi có hàng lạ không thuộc đơn xuất
+          if (hasUnexpectedTags) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.emergency_rounded, color: Color(0xFFEF4444), size: 26),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '🚨 CẢNH BÁO AN NINH: CÓ $unexpCount HÀNG HÓA / CHIP LẠ KHÔNG THUỘC ĐƠN XUẤT ĐI QUA CỔNG!',
+                          style: const TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Đèn đỏ và còi báo động đang hú liên tục. Dừng xe kiểm tra và đưa hàng không thuộc đơn ra khỏi cổng để thông xe.',
+                          style: TextStyle(color: c.textPrimary, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFEF4444),
+                      side: const BorderSide(color: Color(0xFFEF4444)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    icon: const Icon(Icons.volume_off, size: 16),
+                    label: const Text('TẮT CÒI', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    onPressed: _silenceBuzzer,
+                  ),
+                  const SizedBox(width: 6),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFEF4444),
+                      side: const BorderSide(color: Color(0xFFEF4444)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    icon: const Icon(Icons.delete_sweep, size: 16),
+                    label: const Text('XÓA CHIP LẠ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      setState(() {
+                        _gateScannedTags.removeWhere((k, v) => !expectedEpcs.contains(k) && !validPalletEpcs.contains(k));
+                        _isBuzzerManuallySilenced = false;
+                      });
+                      _evaluateGateSecurityAndTowerLight();
+                    },
                   ),
                 ],
               ),
@@ -2014,7 +2696,20 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                 } else {
                                   // Chip lạ ngoài danh sách
                                   final unexp = unexpList[idx - order.items.length];
+                                  final unexpEpc = unexp.epc.trim().toUpperCase();
+                                  final foundInDb = _repo.items.where((i) => i.epc.toUpperCase() == unexpEpc).firstOrNull;
                                   final antenStr = unexp.ant.isNotEmpty ? 'Anten ${unexp.ant}' : 'Anten 1';
+
+                                  final skuText = foundInDb?.sku ?? 'CHIP LẠ';
+                                  final cartonText = foundInDb?.cartonCode ?? '--';
+                                  final palletText = foundInDb?.palletId ?? '--';
+                                  final locText = foundInDb?.locationId ?? '--';
+                                  final dateText = foundInDb?.inboundTime != null ? DateFormat('dd/MM/yyyy').format(foundInDb!.inboundTime!) : '--';
+                                  final suppText = foundInDb?.supplier ?? '--';
+                                  final nameText = foundInDb != null
+                                      ? '⚠️ [NGOÀI ĐƠN XUẤT] ${foundInDb.productName}'
+                                      : 'Chip lạ không thuộc danh sách xuất kho!';
+                                  final palletEpcText = '--';
 
                                   return Container(
                                     color: const Color(0xFFEF4444).withValues(alpha: 0.08),
@@ -2023,24 +2718,24 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                       children: [
                                         SizedBox(width: 45, child: Text('${idx + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12))),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 110, child: Text('CHIP LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12))),
+                                        SizedBox(width: 110, child: Text(skuText, style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12))),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 100, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                        SizedBox(width: 100, child: Text(cartonText, style: const TextStyle(color: Color(0xFFEF4444)))),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 100, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                        SizedBox(width: 100, child: Text(palletText, style: const TextStyle(color: Color(0xFFEF4444)))),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                        SizedBox(width: 110, child: Text(locText, style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold))),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 120, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                        SizedBox(width: 120, child: Text(dateText, style: const TextStyle(color: Color(0xFFEF4444)))),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 130, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                        SizedBox(width: 130, child: Text(suppText, style: const TextStyle(color: Color(0xFFEF4444)))),
                                         const SizedBox(width: 8),
-                                        const Expanded(
+                                        Expanded(
                                           flex: 3,
-                                          child: Text('Chip không thuộc danh sách xuất kho!', style: TextStyle(color: Color(0xFFEF4444), fontSize: 12)),
+                                          child: Text(nameText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12, fontWeight: FontWeight.bold)),
                                         ),
                                         const SizedBox(width: 8),
-                                        const SizedBox(width: 150, child: Text('--', style: TextStyle(color: Color(0xFFEF4444)))),
+                                        SizedBox(width: 150, child: Text(palletEpcText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
                                         const SizedBox(width: 8),
                                         SizedBox(
                                           width: 150,
@@ -2059,19 +2754,42 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                         const SizedBox(width: 8),
                                         SizedBox(
                                           width: 110,
-                                          child: Center(
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFEF4444).withValues(alpha: 0.15),
-                                                borderRadius: BorderRadius.circular(6),
-                                                border: Border.all(color: const Color(0xFFEF4444)),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: const Color(0xFFEF4444)),
+                                                ),
+                                                child: Text(
+                                                  antenStr,
+                                                  style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
+                                                ),
                                               ),
-                                              child: Text(
-                                                antenStr,
-                                                style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
+                                              const SizedBox(width: 4),
+                                              IconButton(
+                                                icon: const Icon(Icons.close, size: 14, color: Color(0xFFEF4444)),
+                                                tooltip: 'Bỏ chip này khỏi cổng',
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _gateScannedTags.remove(unexp.epc.toUpperCase());
+                                                  });
+                                                  final remaining = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
+                                                  if (remaining.isEmpty) {
+                                                    if (_isScanning) {
+                                                      _towerLight.triggerScanning(reason: 'Đã loại bỏ chip lạ. Tiếp tục đối soát cổng...');
+                                                    } else {
+                                                      _towerLight.turnOffAll();
+                                                    }
+                                                  }
+                                                },
                                               ),
-                                            ),
+                                            ],
                                           ),
                                         ),
                                       ],
@@ -2089,23 +2807,58 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               ),
             ),
           ),
-          const SizedBox(height: 10),
-
-          // 3. THANH ĐIỀU KHIỂN DƯỚI CÙNG (DẠT CÁC NÚT THAO TÁC SANG PHẢI)
-          _buildBottomControlBar(
-            c,
-            scannedCount: scannedCount,
-            expectedCount: expectedCount,
-            isComplete: isComplete,
-            hasUnexpectedTags: hasUnexpectedTags,
-            isStockSufficient: order.isStockSufficient,
-          ),
         ],
       ),
     );
   }
 
-  // ---------- 4. THANH ĐIỀU KHIỂN DƯỚI CÙNG (DẠT CÁC NÚT THAO TÁC SANG PHẢI) ----------
+  // ---------- 4. BỘ ĐIỀU KHIỂN DƯỚI CÙNG (LUÔN CỐ ĐỊNH Ở ĐÁY MÀN HÌNH) ----------
+  Widget _buildBottomControlBarWrapper(EyeCareColors c) {
+    if (_pendingOutboundOrder != null) {
+      final order = _pendingOutboundOrder!;
+      final expectedEpcs = order.items.map((i) => i.epc.toUpperCase()).where((e) => e.isNotEmpty && e != '--').toSet();
+      final validPalletEpcs = <String>{};
+      for (final e in order.pallets.values) {
+        if (e != null && e.isNotEmpty && e != '--') validPalletEpcs.add(e.toUpperCase());
+      }
+      for (final code in order.pallets.keys) {
+        validPalletEpcs.add(code.toUpperCase());
+        final pal = _repo.pallets.where((p) => p.palletCode.toUpperCase() == code.toUpperCase() || p.palletId.toUpperCase() == code.toUpperCase()).firstOrNull;
+        if (pal?.rfidEpc != null && pal!.rfidEpc!.isNotEmpty) {
+          validPalletEpcs.add(pal.rfidEpc!.toUpperCase());
+        }
+      }
+      for (final it in order.items) {
+        if (it.palletEpc.isNotEmpty && it.palletEpc != '--') validPalletEpcs.add(it.palletEpc.toUpperCase());
+        if (it.palletCode.isNotEmpty && it.palletCode != '--') validPalletEpcs.add(it.palletCode.toUpperCase());
+      }
+
+      final expectedCount = expectedEpcs.length;
+      final scannedCount = order.items.where((i) => _gateScannedTags.containsKey(i.epc.toUpperCase())).length;
+      final unexpList = _gateScannedTags.values.where((t) => !expectedEpcs.contains(t.epc.toUpperCase()) && !validPalletEpcs.contains(t.epc.toUpperCase())).toList();
+      final isComplete = expectedCount > 0 && scannedCount >= expectedCount;
+      final hasUnexpectedTags = unexpList.isNotEmpty;
+
+      return _buildBottomControlBar(
+        c,
+        scannedCount: scannedCount,
+        expectedCount: expectedCount,
+        isComplete: isComplete,
+        hasUnexpectedTags: hasUnexpectedTags,
+        isStockSufficient: order.isStockSufficient,
+      );
+    } else {
+      return _buildBottomControlBar(
+        c,
+        scannedCount: _gateScannedTags.length,
+        expectedCount: 0,
+        isComplete: false,
+        hasUnexpectedTags: false,
+        isStockSufficient: true,
+      );
+    }
+  }
+
   Widget _buildBottomControlBar(
     EyeCareColors c, {
     required int scannedCount,
@@ -2132,8 +2885,15 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Trạng thái kết nối đầu đọc RFID
-                  _buildReaderStatusBadge(c),
+                  // Trạng thái kết nối đầu đọc RFID & Tháp Đèn Tín Hiệu
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildReaderStatusBadge(c),
+                      const SizedBox(width: 8),
+                      _buildTowerLightBadge(c),
+                    ],
+                  ),
 
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2271,6 +3031,650 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTowerLightBadge(EyeCareColors c) {
+    final status = _towerLight.currentStatus;
+    final isConnected = _desktopUhf.isConnected;
+    final Color badgeColor = switch (status.color) {
+      TowerLightColor.red => const Color(0xFFEF4444),
+      TowerLightColor.yellow => const Color(0xFFF59E0B),
+      TowerLightColor.green => const Color(0xFF10B981),
+      TowerLightColor.off => isConnected ? const Color(0xFF10B981) : c.textMuted,
+    };
+    final String label = switch (status.color) {
+      TowerLightColor.red => 'ĐÈN ĐỎ (BÁO ĐỘNG)',
+      TowerLightColor.yellow => 'ĐÈN VÀNG (ĐANG QUÉT)',
+      TowerLightColor.green => 'ĐÈN XANH (THÔNG QUA)',
+      TowerLightColor.off => isConnected ? 'SẴN SÀNG (GPO 1-4)' : 'CHƯA KẾT NỐI',
+    };
+
+    return PopupMenuButton<String>(
+      tooltip: 'Trạng thái & Kiểm tra Tháp Đèn Tín Hiệu (Bấm để thử đèn & cài đặt chân GPO)',
+      onSelected: (val) {
+        if (val == 'test_red') {
+          _towerLight.triggerWarningRed(withBuzzer: true, reason: 'Thử nghiệm thủ công: Đèn Đỏ + Còi Hú');
+        } else if (val == 'test_yellow') {
+          _towerLight.triggerScanning(reason: 'Thử nghiệm thủ công: Đèn Vàng');
+        } else if (val == 'test_green') {
+          _towerLight.triggerPass(reason: 'Thử nghiệm thủ công: Đèn Xanh');
+        } else if (val == 'turn_off') {
+          _towerLight.turnOffAll(reason: 'Tắt đèn về Standby');
+        } else if (val == 'config_gpo') {
+          _showTowerLightGpoDialog(c);
+        }
+      },
+      itemBuilder: (ctx) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Text(
+            'THÁP ĐÈN CTP50-3T-D-J (${isConnected ? "ĐÃ NỐI GPO" : "CHƯA NỐI ĐẦU ĐỌC"})',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: c.textSecondary),
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'test_red',
+          child: Row(
+            children: [
+              Icon(Icons.circle, color: Color(0xFFEF4444), size: 14),
+              SizedBox(width: 8),
+              Text('Thử Đèn Đỏ + Còi Báo Động (Chống Trộm)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFEF4444))),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'test_yellow',
+          child: Row(
+            children: [
+              Icon(Icons.circle, color: Color(0xFFF59E0B), size: 14),
+              SizedBox(width: 8),
+              Text('Thử Đèn Vàng (Đang Quét Đối Soát)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'test_green',
+          child: Row(
+            children: [
+              Icon(Icons.circle, color: Color(0xFF10B981), size: 14),
+              SizedBox(width: 8),
+              Text('Thử Đèn Xanh (Đủ Hàng Thông Cổng)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'turn_off',
+          child: Row(
+            children: [
+              Icon(Icons.power_settings_new, color: Colors.grey, size: 14),
+              SizedBox(width: 8),
+              Text('Tắt Tháp Đèn (Về Chế Độ Chờ)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'config_gpo',
+          child: Row(
+            children: [
+              Icon(Icons.settings, color: c.rfidCyan, size: 15),
+              const SizedBox(width: 8),
+              Text('Cài Đặt & Test Chân Relay GPO 1-4...', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: c.rfidCyan)),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: badgeColor.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: badgeColor,
+                boxShadow: [
+                  BoxShadow(color: badgeColor.withValues(alpha: 0.6), blurRadius: 4, spreadRadius: 1),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'THÁP ĐÈN: $label',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: badgeColor,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 14, color: badgeColor),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------- THANH TRẠNG THÁI & CẢNH BÁO ĐÈN THÁP XUẤT KHO (TOWER LIGHT) ----------
+  Widget _buildTowerLightAlertBar(EyeCareColors c) {
+    final status = _towerLight.currentStatus;
+    final (barColor, borderColor, statusTitle, statusIcon) = switch (status.color) {
+      TowerLightColor.red => (
+        const Color(0xFFEF4444),
+        const Color(0xFFEF4444),
+        'ĐÈN ĐỎ: CẢNH BÁO XUẤT KHO',
+        Icons.warning_rounded,
+      ),
+      TowerLightColor.yellow => (
+        const Color(0xFFF59E0B),
+        const Color(0xFFF59E0B),
+        'ĐÈN VÀNG: ĐANG ĐỐI SOÁT',
+        Icons.hourglass_top_rounded,
+      ),
+      TowerLightColor.green => (
+        const Color(0xFF10B981),
+        const Color(0xFF10B981),
+        'ĐÈN XANH: THÔNG QUA CỔNG',
+        Icons.check_circle_rounded,
+      ),
+      TowerLightColor.off => (
+        c.textMuted,
+        c.border,
+        'ĐÈN CHỜ (STANDBY)',
+        Icons.lightbulb_outline_rounded,
+      ),
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: status.isOff ? c.bgCard : barColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: status.isOff ? c.border : borderColor.withValues(alpha: 0.8),
+          width: status.isOff ? 1 : 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Mô phỏng 3 bóng đèn LED (Đỏ - Vàng - Xanh)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: c.bgDeep,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildLedBulb(
+                  color: const Color(0xFFEF4444),
+                  isActive: status.color == TowerLightColor.red,
+                  isBuzzer: status.isBuzzerOn,
+                ),
+                const SizedBox(width: 6),
+                _buildLedBulb(
+                  color: const Color(0xFFF59E0B),
+                  isActive: status.color == TowerLightColor.yellow,
+                ),
+                const SizedBox(width: 6),
+                _buildLedBulb(
+                  color: const Color(0xFF10B981),
+                  isActive: status.color == TowerLightColor.green,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Icon + Tiêu đề + Lý do cảnh báo
+          Icon(statusIcon, color: barColor, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      statusTitle,
+                      style: TextStyle(
+                        color: barColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    if (status.isBuzzerOn) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.volume_up_rounded, color: Colors.white, size: 10),
+                            SizedBox(width: 2),
+                            Text('CÒI BÁO', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  status.reason,
+                  style: TextStyle(
+                    color: status.isOff ? c.textSecondary : c.textPrimary,
+                    fontSize: 11.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+
+          // Menu thử đèn thủ công (Manual Test Controls)
+          PopupMenuButton<String>(
+            tooltip: 'Thử nghiệm tín hiệu đèn tháp',
+            onSelected: (val) {
+              if (val == 'test_green') {
+                _towerLight.triggerPass(reason: 'Kiểm tra thủ công: Đèn Xanh thông qua');
+              } else if (val == 'test_yellow') {
+                _towerLight.triggerScanning(reason: 'Kiểm tra thủ công: Đèn Vàng đang quét');
+              } else if (val == 'test_red') {
+                _towerLight.triggerWarningRed(withBuzzer: true, reason: 'Kiểm tra thủ công: Đèn Đỏ + Còi báo động');
+              } else if (val == 'turn_off') {
+                _towerLight.turnOffAll();
+              } else if (val == 'config_gpo') {
+                _showTowerLightGpoDialog(c);
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'test_green',
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFF10B981), size: 14),
+                    SizedBox(width: 8),
+                    Text('Thử Đèn Xanh (Thông qua)'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'test_yellow',
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFFF59E0B), size: 14),
+                    SizedBox(width: 8),
+                    Text('Thử Đèn Vàng (Đang quét)'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'test_red',
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFFEF4444), size: 14),
+                    SizedBox(width: 8),
+                    Text('Thử Đèn Đỏ + Còi (Cảnh báo)'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'turn_off',
+                child: Row(
+                  children: [
+                    Icon(Icons.power_settings_new, color: Colors.grey, size: 14),
+                    SizedBox(width: 8),
+                    Text('Tắt tháp đèn (Standby)'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'config_gpo',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings, color: c.rfidCyan, size: 14),
+                    const SizedBox(width: 8),
+                    Text('Cài đặt & Test chân GPO 1-4...', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: c.bgDeep,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: c.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.tune_rounded, size: 13, color: c.textSecondary),
+                  const SizedBox(width: 4),
+                  Text('Thử đèn', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTowerLightGpoDialog(EyeCareColors c) {
+    int redPin = _towerLight.config.redPin;
+    int yellowPin = _towerLight.config.yellowPin;
+    int greenPin = _towerLight.config.greenPin;
+    int buzzerPin = _towerLight.config.buzzerPin;
+    final Map<int, bool> pinStates = {1: false, 2: false, 3: false, 4: false};
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: c.bgCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: c.border),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.settings_input_composite, color: Color(0xFFEF4444), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'CẤU HÌNH & TEST CHÂN RELAY GPO THÁP ĐÈN',
+                          style: TextStyle(color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Đầu đọc Hopeland CL7206 / Tháp đèn CTP50-3T-D-J (Cổng COM/TCP)',
+                          style: TextStyle(color: c.textSecondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: c.bgDeep,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: c.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.bolt, size: 16, color: Color(0xFFF59E0B)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'BẬT / TẮT TRỰC TIẾP TỪNG CHÂN RELAY (TEST PHẦN CỨNG)',
+                                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Gạt công tắc để kiểm tra xem bóng đèn nào hoặc còi nào thực tế đang nối vào cổng GPO tương ứng:',
+                              style: TextStyle(color: c.textSecondary, fontSize: 11),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [1, 2, 3, 4].map((pin) {
+                                final isOn = pinStates[pin] ?? false;
+                                return Expanded(
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+                                    decoration: BoxDecoration(
+                                      color: isOn ? c.rfidCyan.withValues(alpha: 0.15) : c.bgCard,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: isOn ? c.rfidCyan : c.border),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Text('GPO $pin', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: isOn ? c.rfidCyan : c.textPrimary)),
+                                        const SizedBox(height: 6),
+                                        Switch(
+                                          value: isOn,
+                                          activeThumbColor: c.rfidCyan,
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          onChanged: (val) {
+                                            setDialogState(() {
+                                              pinStates[pin] = val;
+                                            });
+                                            _towerLight.testIndividualPin(pin, val);
+                                          },
+                                        ),
+                                        Text(isOn ? 'BẬT' : 'TẮT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isOn ? const Color(0xFF10B981) : c.textSecondary)),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      Text(
+                        'GÁN CHÂN CHO TỪNG TÍN HIỆU CẢNH BÁO:',
+                        style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
+                      const SizedBox(height: 8),
+
+                      _buildPinSelectorRow(
+                        title: 'Đèn Đỏ (Cảnh báo / Thất thoát)',
+                        color: const Color(0xFFEF4444),
+                        currentPin: redPin,
+                        c: c,
+                        onChanged: (p) => setDialogState(() => redPin = p),
+                      ),
+                      const SizedBox(height: 8),
+
+                      _buildPinSelectorRow(
+                        title: 'Đèn Vàng (Đang quét đối soát)',
+                        color: const Color(0xFFF59E0B),
+                        currentPin: yellowPin,
+                        c: c,
+                        onChanged: (p) => setDialogState(() => yellowPin = p),
+                      ),
+                      const SizedBox(height: 8),
+
+                      _buildPinSelectorRow(
+                        title: 'Đèn Xanh (Đủ hàng thông cổng)',
+                        color: const Color(0xFF10B981),
+                        currentPin: greenPin,
+                        c: c,
+                        onChanged: (p) => setDialogState(() => greenPin = p),
+                      ),
+                      const SizedBox(height: 8),
+
+                      _buildPinSelectorRow(
+                        title: 'Còi Hú Buzzer (Báo động trộm)',
+                        color: const Color(0xFF8B5CF6),
+                        currentPin: buzzerPin,
+                        c: c,
+                        onChanged: (p) => setDialogState(() => buzzerPin = p),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                OutlinedButton(
+                  onPressed: () {
+                    for (int p = 1; p <= 4; p++) {
+                      _towerLight.testIndividualPin(p, false);
+                    }
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('ĐÓNG'),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.save, size: 16),
+                  label: const Text('LƯU CẤU HÌNH GPO'),
+                  onPressed: () async {
+                    for (int p = 1; p <= 4; p++) {
+                      await _towerLight.testIndividualPin(p, false);
+                    }
+                    final newConfig = TowerLightPinConfig(
+                      redPin: redPin,
+                      yellowPin: yellowPin,
+                      greenPin: greenPin,
+                      buzzerPin: buzzerPin,
+                    );
+                    await _towerLight.saveConfig(newConfig);
+                    if (context.mounted) {
+                      Navigator.of(ctx).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          backgroundColor: Color(0xFF10B981),
+                          content: Text('✓ Đã lưu cấu hình chân GPO Tháp Đèn thành công!'),
+                        ),
+                      );
+                      setState(() {});
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPinSelectorRow({
+    required String title,
+    required Color color,
+    required int currentPin,
+    required EyeCareColors c,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: c.bgDeep,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: c.bgCard,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: c.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: currentPin,
+                isDense: true,
+                dropdownColor: c.bgCard,
+                items: [1, 2, 3, 4].map((pin) {
+                  return DropdownMenuItem<int>(
+                    value: pin,
+                    child: Text('GPO $pin', style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) onChanged(val);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLedBulb({required Color color, required bool isActive, bool isBuzzer = false}) {
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isActive ? color : color.withValues(alpha: 0.15),
+        border: Border.all(
+          color: isActive ? color : Colors.transparent,
+          width: 1.2,
+        ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.6),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
       ),
     );
   }

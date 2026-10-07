@@ -8,12 +8,24 @@ import '../services/warehouse_repository.dart';
 import '../theme/eye_care_theme.dart';
 import '../widgets/hardware_status_appbar.dart';
 import '../widgets/direction_arrow_widget.dart';
+import '../services/radar_spatial_tracker.dart';
 import 'pda/pda_locate_tasks_screen.dart';
+
+enum _SearchCategory { all, items, pallets }
 
 class RadarLocateScreen extends StatefulWidget {
   final String? initialEpc;
   final LocateOrder? locateTask;
-  const RadarLocateScreen({super.key, this.initialEpc, this.locateTask});
+  final Item? initialItem;
+  final Pallet? initialPallet;
+
+  const RadarLocateScreen({
+    super.key,
+    this.initialEpc,
+    this.locateTask,
+    this.initialItem,
+    this.initialPallet,
+  });
 
   @override
   State<RadarLocateScreen> createState() => _RadarLocateScreenState();
@@ -33,8 +45,15 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
   ItemStatus? _statusFilter;
+  _SearchCategory _categoryFilter = _SearchCategory.all;
 
   Item? _targetItem;
+  Pallet? _targetPallet;
+  String? _targetRawEpc;
+
+  bool get hasTarget =>
+      _targetItem != null || _targetPallet != null || _targetRawEpc != null;
+
   bool _isTracking = false;
   double _currentRssi = -90.0;
   double? _previousRssi;
@@ -47,7 +66,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   double _readsPerSec = 0.0;
   DateTime _lastRateReset = DateTime.now();
 
-  // Chế độ cò súng: Mặc định là Khóa dò liên tục (Toggle / Hands-Free) để không phải bóp giữ mỏi tay
+  // Chế độ cò súng: Mặc định là Khóa dò liên tục (Toggle / Hands-Free)
   bool _continuousLockMode = true;
 
   bool _soundHapticEnabled = true;
@@ -65,11 +84,28 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   // Danh sách các thẻ quét được gần đây khi ở chế độ tự do
   final Map<String, TagInfo> _nearbyTags = {};
 
+  // Bộ theo dõi không gian và hướng vector 360 độ của chip (Spatial RSSI Tracker)
+  final RadarSpatialTracker _spatialTracker = RadarSpatialTracker();
+  StreamSubscription<double>? _headingSub;
+
   @override
   void initState() {
     super.initState();
     _eyeCare.addListener(_onStateUpdate);
     _repo.addListener(_onStateUpdate);
+
+    // Kích hoạt nhận dữ liệu góc la bàn / con quay hồi chuyển từ máy PDA
+    _uhfService.startHeadingUpdates();
+    if (_uhfService.currentHeading != 0.0) {
+      _spatialTracker.updateHeading(_uhfService.currentHeading);
+    }
+    _headingSub = _uhfService.onHeadingChanged.listen((heading) {
+      if (!mounted) return;
+      _spatialTracker.updateHeading(heading);
+      if (_isTracking && hasTarget && mounted) {
+        setState(() {});
+      }
+    });
 
     // Bắt buộc cấu hình chế độ quét sang RFID UHF và cấp quyền quét sau khi dựng widget tree
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -79,27 +115,61 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       }
     });
 
-    // Nạp mặt hàng ban đầu nếu có initialEpc hoặc từ locateTask
-    final effectiveEpc = widget.initialEpc ?? widget.locateTask?.targetEpc;
-    if (effectiveEpc != null && effectiveEpc.isNotEmpty) {
-      final epcUpper = effectiveEpc.toUpperCase();
-      _targetItem = _repo.items.where(
-        (it) => it.epc.toUpperCase() == epcUpper,
-      ).firstOrNull;
-      if (_targetItem == null && widget.locateTask != null) {
-        _targetItem = Item(
-          itemId: 'LOCATE_${widget.locateTask!.orderId}',
-          productId: widget.locateTask!.targetSku ?? 'PROD_UNKNOWN',
-          sku: widget.locateTask!.targetSku ?? 'SKU_UNKNOWN',
-          productName: widget.locateTask!.targetProductName ?? widget.locateTask!.title,
-          serialNumber: '',
-          epc: effectiveEpc,
-          locationId: widget.locateTask!.expectedLocation,
-          status: ItemStatus.inStock,
-        );
+    // 1. Nạp mục tiêu ban đầu từ initialPallet hoặc initialItem
+    if (widget.initialPallet != null) {
+      _targetPallet = widget.initialPallet;
+    } else if (widget.initialItem != null) {
+      _targetItem = widget.initialItem;
+    } else {
+      final effectiveEpc = widget.initialEpc ?? widget.locateTask?.targetEpc;
+      if (effectiveEpc != null && effectiveEpc.isNotEmpty) {
+        final epcUpper = effectiveEpc.replaceAll(' ', '').trim().toUpperCase();
+
+        // Kiểm tra xem có khớp Item nào không
+        _targetItem = _repo.items.where(
+          (it) => it.epc.replaceAll(' ', '').trim().toUpperCase() == epcUpper,
+        ).firstOrNull;
+
+        // Nếu không khớp Item, kiểm tra xem có khớp Pallet không
+        if (_targetItem == null) {
+          _targetPallet = _repo.pallets.where((p) {
+            final pEpc = (p.rfidEpc ?? '').replaceAll(' ', '').trim().toUpperCase();
+            final pCode = p.palletCode.replaceAll(' ', '').trim().toUpperCase();
+            return pEpc == epcUpper || pCode == epcUpper;
+          }).firstOrNull;
+        }
+
+        // Nếu có đơn tìm kiếm locateTask
+        if (_targetItem == null && _targetPallet == null && widget.locateTask != null) {
+          if (widget.locateTask!.targetPalletCode != null) {
+            _targetPallet = _repo.pallets.where((p) =>
+                p.palletCode.equalsIgnoreCase(widget.locateTask!.targetPalletCode!)).firstOrNull;
+          }
+          if (_targetPallet == null) {
+            _targetItem = Item(
+              itemId: 'LOCATE_${widget.locateTask!.orderId}',
+              productId: widget.locateTask!.targetSku ?? 'PROD_UNKNOWN',
+              sku: widget.locateTask!.targetSku ?? 'SKU_UNKNOWN',
+              productName: widget.locateTask!.targetProductName ?? widget.locateTask!.title,
+              serialNumber: '',
+              epc: effectiveEpc,
+              locationId: widget.locateTask!.expectedLocation,
+              status: ItemStatus.inStock,
+            );
+          }
+        } else if (_targetItem == null && _targetPallet == null) {
+          _targetRawEpc = effectiveEpc;
+        }
+      } else if (widget.locateTask != null) {
+        if (widget.locateTask!.targetPalletCode != null) {
+          _targetPallet = _repo.pallets.where((p) =>
+              p.palletCode.equalsIgnoreCase(widget.locateTask!.targetPalletCode!)).firstOrNull;
+        }
+        if (_targetPallet == null && widget.locateTask!.targetSku != null) {
+          _targetItem = _repo.items.where((it) =>
+              it.sku.equalsIgnoreCase(widget.locateTask!.targetSku!)).firstOrNull;
+        }
       }
-    } else if (widget.locateTask != null && widget.locateTask!.targetSku != null) {
-      _targetItem = _repo.items.where((it) => it.sku.toUpperCase() == widget.locateTask!.targetSku!.toUpperCase()).firstOrNull;
     }
 
     if (widget.locateTask != null && widget.locateTask!.status == LocateOrderStatus.pending) {
@@ -121,21 +191,22 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       }
 
       // Xử lý Signal Decay khi súng lia lệch khỏi thẻ (không bắt được gói tin mới)
-      if (_targetItem != null && _lastSeenTime != null) {
+      if (hasTarget && _lastSeenTime != null) {
         final timeSinceLastSeen = now.difference(_lastSeenTime!).inMilliseconds;
 
-        // Nếu quá 650ms không có gói tin mới: tín hiệu đang giảm dần (Lia lệch hướng)
-        if (timeSinceLastSeen > 650) {
+        // Nếu quá 2200ms không có gói tin mới: tín hiệu giảm dần rất chậm (0.4 dBm / 100ms)
+        // Cho phép người dùng bước đi và lia súng ở cự ly xa mà không bị tụt mất sóng ngay
+        if (timeSinceLastSeen > 2200) {
+          _spatialTracker.decayWithoutSignal();
           if (_currentRssi > -90.0) {
-            final oldRssi = _currentRssi;
-            _currentRssi = (_currentRssi - 3.2).clamp(-90.0, -25.0);
-            _previousRssi = oldRssi; // diff âm -> Mũi tên báo LỆCH HƯỚNG ngay
+            _currentRssi = (_currentRssi - 0.4).clamp(-90.0, -25.0);
             if (mounted) setState(() {});
           }
         }
 
-        // Nếu quá 2200ms không nhận thêm tín hiệu: xem như mất dấu sóng
-        if (timeSinceLastSeen > 2200) {
+        // Nếu quá 6500ms không nhận thêm tín hiệu: xem như mất dấu sóng
+        if (timeSinceLastSeen > 6500) {
+          _spatialTracker.reset();
           if (_currentRssi != -90.0 || _previousRssi != null) {
             _currentRssi = -90.0;
             _previousRssi = null;
@@ -154,8 +225,10 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
         if (isPressed) {
           if (!_isTracking) {
             _startTracking();
+            HapticFeedback.mediumImpact();
           } else {
             _stopTracking();
+            HapticFeedback.selectionClick();
           }
         }
       } else {
@@ -176,13 +249,23 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
         _searchCtrl.text = clean;
         setState(() {
           _searchQuery = clean.toLowerCase();
-          // Tự động gán nếu tìm thấy đúng 1 item khớp mã Barcode / EPC / S/N / SKU
-          final match = _repo.items.where((it) =>
+
+          // 1. Thử khớp mã Pallet
+          final matchPallet = _repo.pallets.where((p) =>
+              p.palletCode.equalsIgnoreCase(clean) ||
+              (p.rfidEpc ?? '').equalsIgnoreCase(clean)).firstOrNull;
+          if (matchPallet != null) {
+            _selectTargetPallet(matchPallet);
+            return;
+          }
+
+          // 2. Thử khớp mã Item
+          final matchItem = _repo.items.where((it) =>
               it.epc.equalsIgnoreCase(clean) ||
               it.sku.equalsIgnoreCase(clean) ||
               it.serialNumber.equalsIgnoreCase(clean)).firstOrNull;
-          if (match != null) {
-            _selectTargetItem(match);
+          if (matchItem != null) {
+            _selectTargetItem(matchItem);
           }
         });
       }
@@ -196,16 +279,53 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       final parsedRssi = double.tryParse(tag.rssi) ?? -65.0;
       final now = DateTime.now();
 
-      // 1. Nếu đã chọn mục tiêu cụ thể: CHỈ LỌC DUY NHẤT MÃ EPC CỦA MỤC TIÊU (Precision Finding)
+      bool isMatched = false;
+
+      // 1. Kiểm tra khớp Mục Tiêu Item
       if (_targetItem != null) {
         final targetClean = _targetItem!.epc.replaceAll(' ', '').trim().toUpperCase();
-        final isMatched = epcUpper == targetClean ||
+        isMatched = epcUpper == targetClean ||
             (targetClean.length >= 8 && epcUpper.contains(targetClean)) ||
             (epcUpper.length >= 8 && targetClean.contains(epcUpper));
+      }
+      // 2. Kiểm tra khớp Mục Tiêu Pallet (Khớp mã thẻ Pallet HOẶC bất kỳ thẻ hàng nào trên Pallet)
+      else if (_targetPallet != null) {
+        final palletEpc = (_targetPallet!.rfidEpc ?? '').replaceAll(' ', '').trim().toUpperCase();
+        if (palletEpc.isNotEmpty &&
+            (epcUpper == palletEpc ||
+             (palletEpc.length >= 8 && epcUpper.contains(palletEpc)) ||
+             (epcUpper.length >= 8 && palletEpc.contains(epcUpper)))) {
+          isMatched = true;
+        } else {
+          // Kiểm tra xem chip đọc được có nằm trong danh sách hàng hóa của pallet này không
+          final itemsOnPallet = _repo.items.where(
+            (it) => it.palletId == _targetPallet!.palletId && it.status == ItemStatus.inStock,
+          );
+          for (final it in itemsOnPallet) {
+            final itClean = it.epc.replaceAll(' ', '').trim().toUpperCase();
+            if (itClean.isNotEmpty &&
+                (epcUpper == itClean ||
+                 (itClean.length >= 8 && epcUpper.contains(itClean)) ||
+                 (epcUpper.length >= 8 && itClean.contains(epcUpper)))) {
+              isMatched = true;
+              break;
+            }
+          }
+        }
+      }
+      // 3. Khớp mã EPC tự do
+      else if (_targetRawEpc != null) {
+        final rawClean = _targetRawEpc!.replaceAll(' ', '').trim().toUpperCase();
+        isMatched = epcUpper == rawClean ||
+            (rawClean.length >= 8 && epcUpper.contains(rawClean)) ||
+            (epcUpper.length >= 8 && rawClean.contains(epcUpper));
+      }
 
+      if (hasTarget) {
         if (isMatched) {
           _lastSeenTime = now;
           _packetCountInWindow++;
+          _spatialTracker.recordTagSample(parsedRssi, time: now);
 
           final rawRssi = parsedRssi.clamp(-90.0, -25.0);
 
@@ -213,7 +333,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           if (_currentRssi <= -88.0) {
             _currentRssi = rawRssi;
           } else {
-            _currentRssi = (_currentRssi * 0.60) + (rawRssi * 0.40);
+            _currentRssi = (_currentRssi * 0.55) + (rawRssi * 0.45);
           }
 
           // Cập nhật lịch sử mẫu cửa sổ trượt
@@ -240,11 +360,10 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           _lastOtherTagEpc = epcUpper;
           _lastOtherTagRssi = parsedRssi;
           _lastOtherTagTime = now;
-          debugPrint('RadarLocate: Đọc được chip RFID khác: $epcUpper ($parsedRssi dBm) - Mục tiêu: $targetClean');
           if (mounted) setState(() {});
         }
       } else {
-        // 2. Chế độ quét tự do dò tìm chip xung quanh
+        // Chế độ quét tự do dò tìm chip xung quanh
         _nearbyTags[epcUpper] = tag;
         _currentRssi = parsedRssi.clamp(-90.0, -25.0);
         if (mounted) setState(() {});
@@ -261,7 +380,6 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     if (!_soundHapticEnabled) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    // Chu kỳ phản hồi âm thanh / haptic theo cự ly
     int intervalMs = 1200;
     if (rssi >= -35.0) {
       intervalMs = 120; // Chạm đích (< 20 cm): nhịp cực dồn dập
@@ -291,6 +409,8 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     _triggerSub?.cancel();
     _tagSub?.cancel();
     _barcodeSub?.cancel();
+    _headingSub?.cancel();
+    _uhfService.stopHeadingUpdates();
     _searchCtrl.dispose();
     _eyeCare.removeListener(_onStateUpdate);
     _repo.removeListener(_onStateUpdate);
@@ -308,13 +428,14 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       _isTracking = true;
       _previousRssi = null;
       _rssiHistory.clear();
+      _spatialTracker.reset();
       _packetCountInWindow = 0;
       _readsPerSec = 0.0;
       _lastRateReset = DateTime.now();
       _lastOtherTagEpc = null;
       _lastOtherTagRssi = null;
       _lastOtherTagTime = null;
-      if (_targetItem != null) {
+      if (hasTarget) {
         _currentRssi = -90.0;
       }
     });
@@ -332,10 +453,13 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   void _selectTargetItem(Item item) {
     setState(() {
       _targetItem = item;
+      _targetPallet = null;
+      _targetRawEpc = null;
       _currentRssi = -90.0;
       _previousRssi = null;
       _lastSeenTime = null;
       _rssiHistory.clear();
+      _spatialTracker.reset();
       _lastOtherTagEpc = null;
       _lastOtherTagRssi = null;
       _lastOtherTagTime = null;
@@ -344,10 +468,30 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     });
   }
 
-  void _clearTargetItem() {
+  void _selectTargetPallet(Pallet pallet) {
+    setState(() {
+      _targetPallet = pallet;
+      _targetItem = null;
+      _targetRawEpc = null;
+      _currentRssi = -90.0;
+      _previousRssi = null;
+      _lastSeenTime = null;
+      _rssiHistory.clear();
+      _spatialTracker.reset();
+      _lastOtherTagEpc = null;
+      _lastOtherTagRssi = null;
+      _lastOtherTagTime = null;
+      _searchCtrl.clear();
+      _searchQuery = '';
+    });
+  }
+
+  void _clearTarget() {
     _stopTracking();
     setState(() {
       _targetItem = null;
+      _targetPallet = null;
+      _targetRawEpc = null;
       _currentRssi = -90.0;
       _previousRssi = null;
       _lastSeenTime = null;
@@ -363,9 +507,11 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
     final allItems = _repo.items;
+    final allPallets = _repo.pallets;
 
-    // Lọc danh sách theo từ khóa tìm kiếm & trạng thái
+    // Lọc danh sách Mặt Hàng theo từ khóa & trạng thái
     final filteredItems = allItems.where((it) {
+      if (_categoryFilter == _SearchCategory.pallets) return false;
       if (_statusFilter != null && it.status != _statusFilter) return false;
       if (_searchQuery.isEmpty) return true;
 
@@ -376,6 +522,18 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           it.serialNumber.toLowerCase().contains(q) ||
           (it.palletId ?? '').toLowerCase().contains(q) ||
           (it.locationId ?? '').toLowerCase().contains(q);
+    }).toList();
+
+    // Lọc danh sách Pallet theo từ khóa
+    final filteredPallets = allPallets.where((p) {
+      if (_categoryFilter == _SearchCategory.items) return false;
+      if (_searchQuery.isEmpty) return true;
+
+      final q = _searchQuery;
+      return p.palletCode.toLowerCase().contains(q) ||
+          (p.palletName ?? '').toLowerCase().contains(q) ||
+          (p.rfidEpc ?? '').toLowerCase().contains(q) ||
+          (p.locationId ?? '').toLowerCase().contains(q);
     }).toList();
 
     return Scaffold(
@@ -435,20 +593,24 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
               ],
 
               // 1. Thẻ mục tiêu đang định vị (Precision Target Card)
-              if (_targetItem != null) ...[
+              if (hasTarget) ...[
                 _buildActiveTargetCard(c),
                 const SizedBox(height: 14),
 
-                // Mũi tên chỉ hướng lớn + khoảng cách (thay thế Radar Sonar)
+                // Mũi tên chỉ hướng phong cách Apple AirTag + Cự ly cập nhật liên tục
                 DirectionArrowWidget(
                   rssi: _currentRssi,
                   isTracking: _isTracking,
-                  targetEpc: _targetItem!.epc,
-                  productName: _targetItem!.productName,
-                  sku: _targetItem!.sku,
-                  locationDisplay: _getLocationDisplay(_targetItem!),
+                  targetEpc: _getTargetEpcString(),
+                  productName: _getTargetDisplayName(),
+                  sku: _targetItem?.sku ?? _targetPallet?.palletCode,
+                  locationDisplay: _getTargetLocationDisplay(),
                   previousRssi: _previousRssi,
                   readsPerSecond: _readsPerSec,
+                  isPallet: _targetPallet != null,
+                  targetAzimuthDeg: _spatialTracker.targetAzimuthDeg,
+                  relativeAngleDeg: _spatialTracker.relativeAngleDeg,
+                  hasLockedTarget: _spatialTracker.hasLockedTarget,
                 ),
                 const SizedBox(height: 12),
 
@@ -467,18 +629,43 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                 _buildSearchGuideBanner(c),
                 const SizedBox(height: 12),
 
-                // Thanh tìm kiếm đa năng theo mã SKU, EPC, Serial, Tên
+                // Thanh tìm kiếm đa năng theo mã Pallet, SKU, EPC, Serial, Tên
                 _buildSearchInputCard(c),
                 const SizedBox(height: 12),
 
-                // Danh sách kết quả tìm kiếm hàng hóa thực tế
-                _buildSearchResultsSection(filteredItems, c),
+                // Danh sách kết quả tìm kiếm thực tế (Pallet & Mặt Hàng)
+                _buildSearchResultsSection(
+                  items: filteredItems,
+                  pallets: filteredPallets,
+                  colors: c,
+                ),
               ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _getTargetEpcString() {
+    if (_targetItem != null) return _targetItem!.epc;
+    if (_targetPallet != null) return _targetPallet!.rfidEpc ?? _targetPallet!.palletCode;
+    return _targetRawEpc ?? '';
+  }
+
+  String _getTargetDisplayName() {
+    if (_targetItem != null) return _targetItem!.productName;
+    if (_targetPallet != null) return _targetPallet!.displayName;
+    return 'Chip RFID: ${_targetRawEpc ?? ""}';
+  }
+
+  String _getTargetLocationDisplay() {
+    if (_targetItem != null) return _getLocationDisplay(_targetItem!);
+    if (_targetPallet != null) {
+      final loc = _repo.findLocationFast(_targetPallet!.locationId);
+      return loc?.displayName ?? (loc?.locationCode ?? (_targetPallet!.locationId ?? 'Chưa xếp kệ'));
+    }
+    return '---';
   }
 
   /// Banner thông tin đơn tìm kiếm được giao cho nhân viên
@@ -531,6 +718,13 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
             'Mục tiêu: ${task.title}',
             style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
           ),
+          if (task.targetPalletCode != null && task.targetPalletCode!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              '📦 Mã Pallet: ${task.targetPalletCode!}',
+              style: TextStyle(color: c.rfidCyan, fontSize: 11.5, fontWeight: FontWeight.bold),
+            ),
+          ],
           if (task.expectedLocation != null && task.expectedLocation!.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
@@ -550,7 +744,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     );
   }
 
-  /// Nút xác nhận đã tìm thấy thẻ theo đơn tìm kiếm
+  /// Nút xác nhận đã tìm thấy thẻ/pallet theo đơn tìm kiếm
   Widget _buildConfirmFoundButton(EyeCareColors c) {
     return SizedBox(
       width: double.infinity,
@@ -564,7 +758,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
         ),
         icon: const Icon(Icons.check_circle_rounded, size: 20),
         label: const Text(
-          'XÁC NHẬN ĐÃ TÌM THẤY THẺ',
+          'XÁC NHẬN ĐÃ TÌM THẤY',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
         ),
         onPressed: _showConfirmFoundDialog,
@@ -575,7 +769,10 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
   void _showConfirmFoundDialog() {
     final c = _eyeCare.colors;
     final allLocations = _repo.locations;
-    String selectedLocation = _targetItem?.locationId ?? widget.locateTask?.expectedLocation ?? (allLocations.isNotEmpty ? allLocations.first.locationCode : 'LOC-A01-01');
+    String selectedLocation = _targetItem?.locationId ??
+        _targetPallet?.locationId ??
+        widget.locateTask?.expectedLocation ??
+        (allLocations.isNotEmpty ? allLocations.first.locationCode : 'LOC-A01-01');
     final notesCtrl = TextEditingController();
 
     showDialog(
@@ -600,7 +797,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Ghi nhận vị trí thực tế tìm thấy mã ${widget.locateTask?.orderNo ?? ""}:',
+                  'Ghi nhận vị trí thực tế tìm thấy mã ${widget.locateTask?.orderNo ?? _getTargetDisplayName()}:',
                   style: TextStyle(color: c.textSecondary, fontSize: 12.5),
                 ),
                 const SizedBox(height: 12),
@@ -671,7 +868,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('✓ Đã xác nhận tìm thấy ${widget.locateTask?.orderNo ?? "thẻ"} tại $selectedLocation'),
+                      content: Text('✓ Đã xác nhận tìm thấy ${widget.locateTask?.orderNo ?? "mục tiêu"} tại $selectedLocation'),
                       backgroundColor: const Color(0xFF10B981),
                     ),
                   );
@@ -720,7 +917,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Nhập mã SKU, Serial hoặc EPC bên dưới để bắt đầu dò sóng định vị thẻ RFID.',
+                  'Tìm theo mã Pallet, SKU, Serial hoặc EPC để bật định vị chỉ hướng và khoảng cách liên tục.',
                   style: TextStyle(color: c.textSecondary, fontSize: 11),
                 ),
               ],
@@ -731,7 +928,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     );
   }
 
-  /// Ô tìm kiếm mã hàng hóa
+  /// Ô tìm kiếm mã hàng hóa & Pallet đa năng
   Widget _buildSearchInputCard(EyeCareColors c) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -748,7 +945,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
             onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
             style: TextStyle(color: c.textPrimary, fontSize: 13.5),
             decoration: InputDecoration(
-              hintText: 'Nhập SKU, S/N, EPC, vị trí kệ hoặc tên SP...',
+              hintText: 'Nhập mã Pallet, SKU, S/N, EPC hoặc tên...',
               hintStyle: TextStyle(color: c.textMuted, fontSize: 12.5),
               prefixIcon: Icon(Icons.search_rounded, color: c.rfidCyan, size: 20),
               suffixIcon: Row(
@@ -791,18 +988,22 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
           ),
           const SizedBox(height: 8),
 
-          // Bộ lọc trạng thái nhanh
+          // Bộ lọc phân loại & trạng thái nhanh
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildStatusFilterChip('Tất cả', null, c),
+                _buildCategoryFilterChip('Tất cả', _SearchCategory.all, c),
                 const SizedBox(width: 6),
+                _buildCategoryFilterChip('Sản phẩm', _SearchCategory.items, c),
+                const SizedBox(width: 6),
+                _buildCategoryFilterChip('Pallet', _SearchCategory.pallets, c),
+                const SizedBox(width: 10),
+                Container(width: 1, height: 16, color: c.border),
+                const SizedBox(width: 10),
                 _buildStatusFilterChip('Đang lưu kho', ItemStatus.inStock, c),
                 const SizedBox(width: 6),
                 _buildStatusFilterChip('Chờ cất kệ', ItemStatus.waitingPutaway, c),
-                const SizedBox(width: 6),
-                _buildStatusFilterChip('Đã xuất', ItemStatus.out, c),
               ],
             ),
           ),
@@ -811,13 +1012,13 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     );
   }
 
-  Widget _buildStatusFilterChip(String label, ItemStatus? status, EyeCareColors c) {
-    final isSelected = _statusFilter == status;
+  Widget _buildCategoryFilterChip(String label, _SearchCategory cat, EyeCareColors c) {
+    final isSelected = _categoryFilter == cat;
     return InkWell(
-      onTap: () => setState(() => _statusFilter = status),
+      onTap: () => setState(() => _categoryFilter = cat),
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected ? c.rfidCyan : c.bgDeep,
           borderRadius: BorderRadius.circular(6),
@@ -835,9 +1036,43 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     );
   }
 
-  /// Danh sách sản phẩm kết quả tìm kiếm thực tế
-  Widget _buildSearchResultsSection(List<Item> items, EyeCareColors c) {
-    if (items.isEmpty) {
+  Widget _buildStatusFilterChip(String label, ItemStatus? status, EyeCareColors c) {
+    final isSelected = _statusFilter == status;
+    return InkWell(
+      onTap: () => setState(() {
+        _statusFilter = isSelected ? null : status;
+      }),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF10B981) : c.bgDeep,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: isSelected ? const Color(0xFF10B981) : c.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : c.textSecondary,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 11,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Danh sách kết quả tìm kiếm thực tế: Hiển thị cả Pallet và Sản phẩm
+  Widget _buildSearchResultsSection({
+    required List<Item> items,
+    required List<Pallet> pallets,
+    required EyeCareColors colors,
+  }) {
+    final c = colors;
+    final hasItems = items.isNotEmpty;
+    final hasPallets = pallets.isNotEmpty;
+
+    if (!hasItems && !hasPallets) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
@@ -851,7 +1086,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
             Icon(Icons.search_off_rounded, color: c.textMuted, size: 36),
             const SizedBox(height: 8),
             Text(
-              'Không tìm thấy mặt hàng phù hợp với từ khóa.',
+              'Không tìm thấy thẻ hàng hoặc pallet phù hợp với từ khóa.',
               style: TextStyle(color: c.textMuted, fontSize: 13),
               textAlign: TextAlign.center,
             ),
@@ -860,137 +1095,353 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
       );
     }
 
-    final displayItems = items.take(30).toList();
+    final displayPallets = pallets.take(15).toList();
+    final displayItems = items.take(25).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                'KẾT QUẢ TÌM THẤY (${items.length})',
-                style: TextStyle(
-                  color: c.rfidCyan,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  letterSpacing: 0.4,
+        // 1. KẾT QUẢ PALLET (NẾU CÓ)
+        if (hasPallets) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'PALLET TÌM THẤY (${pallets.length})',
+                  style: const TextStyle(
+                    color: Color(0xFF0284C7),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    letterSpacing: 0.4,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Chạm để định vị',
-              style: TextStyle(color: c.textMuted, fontSize: 11),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: displayItems.length,
-          itemBuilder: (context, idx) {
-            final it = displayItems[idx];
-            final locStr = _getLocationDisplay(it);
-
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              color: c.bgCard,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: c.border),
+              const SizedBox(width: 8),
+              Text(
+                'Định vị Pallet',
+                style: TextStyle(color: c.textMuted, fontSize: 11),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            it.productName,
-                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: displayPallets.length,
+            itemBuilder: (context, idx) {
+              final p = displayPallets[idx];
+              final inStock = _repo.getInStockItemsForPallet(p.palletId, palletCode: p.palletCode, itemIds: p.itemIds);
+              final locStr = p.locationId != null && p.locationId!.isNotEmpty ? p.locationId! : 'Chưa xếp kệ';
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                color: c.bgCard,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: const Color(0xFF0284C7).withValues(alpha: 0.4)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: it.status == ItemStatus.out
-                                ? Colors.grey.withValues(alpha: 0.15)
-                                : c.successEmerald.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            it.status.label,
-                            style: TextStyle(
-                              color: it.status == ItemStatus.out ? Colors.grey : c.successEmerald,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                        child: const Icon(Icons.pallet, color: Color(0xFF0284C7), size: 22),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.displayName,
+                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '📍 $locStr · ${inStock.length} sản phẩm',
+                              style: TextStyle(color: c.textSecondary, fontSize: 11),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (p.rfidEpc != null && p.rfidEpc!.isNotEmpty)
+                              Text(
+                                'EPC: ${p.rfidEpc}',
+                                style: TextStyle(color: c.textMuted, fontSize: 10.5, fontFamily: 'monospace'),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0284C7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.near_me_rounded, size: 14),
+                        label: const Text('ĐỊNH VỊ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () => _selectTargetPallet(p),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // 2. KẾT QUẢ SẢN PHẨM / THẺ HÀNG
+        if (hasItems) ...[
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'KẾT QUẢ TÌM THẤY (${items.length})',
+                  style: TextStyle(
+                    color: c.rfidCyan,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    letterSpacing: 0.4,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Chạm để định vị',
+                style: TextStyle(color: c.textMuted, fontSize: 11),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: displayItems.length,
+            itemBuilder: (context, idx) {
+              final it = displayItems[idx];
+              final locStr = _getLocationDisplay(it);
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 8),
+                color: c.bgCard,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: c.border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              it.productName,
+                              style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        Text('SKU: ${it.sku}', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
-                        if (it.serialNumber.isNotEmpty)
-                          Text('S/N: ${it.serialNumber}', style: TextStyle(color: c.textSecondary, fontSize: 11, fontFamily: 'monospace')),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text('EPC: ${it.epc}', style: TextStyle(color: c.textMuted, fontSize: 10.5, fontFamily: 'monospace'), overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_rounded, size: 13, color: it.status == ItemStatus.out ? Colors.grey : c.warningAmber),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            locStr,
-                            style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w500),
-                            overflow: TextOverflow.ellipsis,
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: it.status == ItemStatus.out
+                                  ? Colors.grey.withValues(alpha: 0.15)
+                                  : c.successEmerald.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              it.status.label,
+                              style: TextStyle(
+                                color: it.status == ItemStatus.out ? Colors.grey : c.successEmerald,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: c.rfidCyan,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text('SKU: ${it.sku}', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
+                          if (it.serialNumber.isNotEmpty)
+                            Text('S/N: ${it.serialNumber}', style: TextStyle(color: c.textSecondary, fontSize: 11, fontFamily: 'monospace')),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('EPC: ${it.epc}', style: TextStyle(color: c.textMuted, fontSize: 10.5, fontFamily: 'monospace'), overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on_rounded, size: 13, color: it.status == ItemStatus.out ? Colors.grey : c.warningAmber),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              locStr,
+                              style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w500),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          icon: const Icon(Icons.near_me_rounded, size: 14, color: Colors.white),
-                          label: const Text('ĐỊNH VỊ', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                          onPressed: () => _selectTargetItem(it),
-                        ),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: c.rfidCyan,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.near_me_rounded, size: 14, color: Colors.white),
+                            label: const Text('ĐỊNH VỊ', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            onPressed: () => _selectTargetItem(it),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
-        ),
+              );
+            },
+          ),
+        ],
       ],
     );
   }
 
-  /// Thẻ thông tin mục tiêu đang định vị
+  /// Thẻ thông tin mục tiêu đang định vị (hỗ trợ cả Pallet và Sản phẩm)
   Widget _buildActiveTargetCard(EyeCareColors c) {
-    final it = _targetItem!;
+    if (_targetPallet != null) {
+      return _buildActivePalletTargetCard(_targetPallet!, c);
+    } else if (_targetItem != null) {
+      return _buildActiveItemTargetCard(_targetItem!, c);
+    } else {
+      return _buildActiveRawEpcCard(_targetRawEpc!, c);
+    }
+  }
+
+  Widget _buildActivePalletTargetCard(Pallet pallet, EyeCareColors c) {
+    final inStock = _repo.getInStockItemsForPallet(pallet.palletId, palletCode: pallet.palletCode, itemIds: pallet.itemIds);
+    final loc = _repo.findLocationFast(pallet.locationId);
+    final locStr = loc?.displayName ?? (loc?.locationCode ?? (pallet.locationId ?? 'Chưa xếp kệ'));
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF0284C7), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0284C7).withValues(alpha: 0.14),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.pallet, color: Color(0xFF0284C7), size: 18),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  pallet.displayName,
+                  style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 15),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF0284C7),
+                  side: const BorderSide(color: Color(0xFF0284C7)),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                icon: const Icon(Icons.swap_horiz_rounded, size: 14),
+                label: const Text('ĐỔI MÃ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                onPressed: _clearTarget,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          Wrap(
+            spacing: 8,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('MÃ: ${pallet.palletCode}', style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11, fontFamily: 'monospace')),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('${inStock.length} SẢN PHẨM', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+
+          if (pallet.rfidEpc != null && pallet.rfidEpc!.isNotEmpty)
+            Text(
+              'EPC Pallet: ${pallet.rfidEpc}',
+              style: TextStyle(color: c.textMuted, fontSize: 11, fontFamily: 'monospace'),
+              overflow: TextOverflow.ellipsis,
+            ),
+          const SizedBox(height: 6),
+          Divider(color: c.border, height: 1),
+          const SizedBox(height: 6),
+
+          Row(
+            children: [
+              Icon(Icons.location_on_rounded, size: 15, color: c.warningAmber),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Vị trí kệ: $locStr',
+                  style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveItemTargetCard(Item it, EyeCareColors c) {
     final locStr = _getLocationDisplay(it);
     final pallet = _repo.findPalletFast(it.palletId);
 
@@ -1030,7 +1481,7 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                 ),
                 icon: const Icon(Icons.swap_horiz_rounded, size: 14),
                 label: const Text('ĐỔI MÃ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                onPressed: _clearTargetItem,
+                onPressed: _clearTarget,
               ),
             ],
           ),
@@ -1089,18 +1540,52 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
     );
   }
 
+  Widget _buildActiveRawEpcCard(String epc, EyeCareColors c) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.rfidCyan, width: 1.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('ĐỊNH VỊ THEO MÃ EPC', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(epc, style: TextStyle(color: c.textPrimary, fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: _clearTarget,
+            child: const Text('ĐỔI MÃ'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildOtherTagAlertBanner(EyeCareColors c) {
-    if (!_isTracking || _targetItem == null || _currentRssi > -88.0 || _lastOtherTagEpc == null || _lastOtherTagTime == null) {
+    if (!_isTracking || !hasTarget || _currentRssi > -88.0 || _lastOtherTagEpc == null || _lastOtherTagTime == null) {
       return const SizedBox.shrink();
     }
-    if (DateTime.now().difference(_lastOtherTagTime!).inSeconds > 5) {
+    if (DateTime.now().difference(_lastOtherTagTime!).inSeconds > 8) {
       return const SizedBox.shrink();
     }
 
     final otherEpc = _lastOtherTagEpc!;
     final otherRssi = _lastOtherTagRssi?.toStringAsFixed(0) ?? '-45';
-    // Tìm xem tag này có trong danh mục sản phẩm CSDL hay không
-    final matchedInDb = _repo.items.where((it) => it.epc.replaceAll(' ', '').toUpperCase() == otherEpc).firstOrNull;
+
+    // Thử khớp mặt hàng hoặc pallet trong cơ sở dữ liệu
+    final matchedItem = _repo.items.where((it) => it.epc.replaceAll(' ', '').toUpperCase() == otherEpc).firstOrNull;
+    final matchedPallet = matchedItem == null
+        ? _repo.pallets.where((p) => (p.rfidEpc ?? '').replaceAll(' ', '').toUpperCase() == otherEpc).firstOrNull
+        : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1145,10 +1630,17 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
             'Mã EPC: $otherEpc',
             style: TextStyle(color: c.textPrimary, fontSize: 12, fontFamily: 'monospace', fontWeight: FontWeight.w600),
           ),
-          if (matchedInDb != null) ...[
+          if (matchedItem != null) ...[
             const SizedBox(height: 2),
             Text(
-              'Tên SP: ${matchedInDb.productName} (${matchedInDb.sku})',
+              'Tên SP: ${matchedItem.productName} (${matchedItem.sku})',
+              style: TextStyle(color: c.textSecondary, fontSize: 11),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ] else if (matchedPallet != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Pallet: ${matchedPallet.displayName} (${matchedPallet.palletCode})',
               style: TextStyle(color: c.textSecondary, fontSize: 11),
               overflow: TextOverflow.ellipsis,
             ),
@@ -1164,17 +1656,25 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
               ),
               icon: const Icon(Icons.touch_app_rounded, size: 16, color: Colors.black87),
               label: Text(
-                matchedInDb != null
-                    ? 'CHUYỂN SANG ĐỊNH VỊ: ${matchedInDb.productName}'
-                    : 'ĐỊNH VỊ THEO MÃ EPC NÀY',
+                matchedItem != null
+                    ? 'CHUYỂN SANG ĐỊNH VỊ: ${matchedItem.productName}'
+                    : (matchedPallet != null
+                        ? 'CHUYỂN SANG ĐỊNH VỊ PALLET: ${matchedPallet.displayName}'
+                        : 'ĐỊNH VỊ THEO MÃ EPC NÀY'),
                 style: const TextStyle(color: Colors.black87, fontSize: 11.5, fontWeight: FontWeight.bold),
                 overflow: TextOverflow.ellipsis,
               ),
               onPressed: () {
-                if (matchedInDb != null) {
-                  _selectTargetItem(matchedInDb);
+                if (matchedItem != null) {
+                  _selectTargetItem(matchedItem);
+                } else if (matchedPallet != null) {
+                  _selectTargetPallet(matchedPallet);
                 } else {
+                  final newRssi = _lastOtherTagRssi ?? -50.0;
+                  final now = DateTime.now();
                   setState(() {
+                    _targetPallet = null;
+                    _targetRawEpc = otherEpc;
                     _targetItem = Item(
                       itemId: 'TEMP_$otherEpc',
                       epc: otherEpc,
@@ -1184,9 +1684,11 @@ class _RadarLocateScreenState extends State<RadarLocateScreen> {
                       serialNumber: '',
                       status: ItemStatus.inStock,
                     );
-                    _currentRssi = _lastOtherTagRssi ?? -50.0;
+                    _currentRssi = newRssi;
                     _previousRssi = null;
-                    _lastSeenTime = DateTime.now();
+                    _lastSeenTime = now;
+                    _spatialTracker.reset();
+                    _spatialTracker.recordTagSample(newRssi, time: now);
                   });
                 }
               },

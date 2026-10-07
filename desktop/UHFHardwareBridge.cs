@@ -464,9 +464,10 @@ namespace UHFHardwareBridge
             {
                 int scanMode = obj.ContainsKey("mode") ? Convert.ToInt32(obj["mode"]) : 0;
                 eAntennaNo antMask = eAntennaNo._1;
+                System.Collections.ArrayList antList = null;
                 if (obj.ContainsKey("antennas"))
                 {
-                    var antList = obj["antennas"] as System.Collections.ArrayList;
+                    antList = obj["antennas"] as System.Collections.ArrayList;
                     if (antList != null)
                     {
                         int maskVal = 0;
@@ -484,36 +485,63 @@ namespace UHFHardwareBridge
                 {
                     // Đảm bảo dừng tiến trình quét cũ trước khi bắt đầu đợt quét mới
                     try { RFIDReader._Tag6C.Stop(_currentConnId); } catch { }
-                    Thread.Sleep(60);
+                    try { RFIDReader._RFIDConfig.Stop(_currentConnId); } catch { }
+                    Thread.Sleep(80);
 
-                    if (scanMode == 0) // EPC Only
+                    Func<eAntennaNo, int> tryStartInventory = (targetMask) =>
                     {
-                        ret = RFIDReader._Tag6C.GetEPC(_currentConnId, antMask, eReadType.Inventory);
-                        if (ret != 0 && antMask != eAntennaNo._1)
+                        if (scanMode == 0) // EPC Only
                         {
-                            BroadcastLog(string.Format("AntMask {0} trả về mã {1}. Tự động chuyển thử Anten 1...", (int)antMask, ret));
-                            ret = RFIDReader._Tag6C.GetEPC(_currentConnId, eAntennaNo._1, eReadType.Inventory);
-                            if (ret == 0) antMask = eAntennaNo._1;
+                            return RFIDReader._Tag6C.GetEPC(_currentConnId, targetMask, eReadType.Inventory);
+                        }
+                        else if (scanMode == 1) // EPC + TID
+                        {
+                            return RFIDReader._Tag6C.GetEPC_TID(_currentConnId, targetMask, eReadType.Inventory, 6, eMatchCode.None, "", 0);
+                        }
+                        else if (scanMode == 2) // EPC + TID + User
+                        {
+                            return RFIDReader._Tag6C.GetEPC_TID_UserData(_currentConnId, targetMask, eReadType.Inventory, 0, 4);
+                        }
+                        return RFIDReader._Tag6C.GetEPC(_currentConnId, targetMask, eReadType.Inventory);
+                    };
+
+                    ret = tryStartInventory(antMask);
+
+                    // Nếu quét nhóm nhiều anten thất bại (thường do có cổng anten không cắm cáp hoặc hở mạch),
+                    // tự động dò quét từng anten riêng lẻ có trong danh sách
+                    if (ret != 0 && antList != null && antList.Count > 1)
+                    {
+                        BroadcastLog(string.Format("Cấu hình AntMask {0} ({1} cổng) trả về mã {2}. Đang tự động kiểm tra từng cổng Ăng-ten kết nối...", (int)antMask, antList.Count, ret));
+                        foreach (var a in antList)
+                        {
+                            int singleAnt = Convert.ToInt32(a);
+                            eAntennaNo singleMask = (eAntennaNo)(1 << (singleAnt - 1));
+                            Thread.Sleep(50);
+                            int singleRet = tryStartInventory(singleMask);
+                            if (singleRet == 0)
+                            {
+                                ret = 0;
+                                antMask = singleMask;
+                                BroadcastLog(string.Format("✅ Đã tìm thấy và kích hoạt thành công trên Cổng Ăng-ten {0}!", singleAnt));
+                                break;
+                            }
+                            else
+                            {
+                                BroadcastLog(string.Format("Cổng Ăng-ten {0} không phản hồi (Mã lỗi {1} - kiểm tra cáp/anten).", singleAnt, singleRet));
+                            }
                         }
                     }
-                    else if (scanMode == 1) // EPC + TID
+
+                    // Chốt chặn cuối cùng: Thử Anten 1
+                    if (ret != 0 && antMask != eAntennaNo._1)
                     {
-                        ret = RFIDReader._Tag6C.GetEPC_TID(_currentConnId, antMask, eReadType.Inventory, 6, eMatchCode.None, "", 0);
-                        if (ret != 0 && antMask != eAntennaNo._1)
+                        Thread.Sleep(50);
+                        int ant1Ret = tryStartInventory(eAntennaNo._1);
+                        if (ant1Ret == 0)
                         {
-                            BroadcastLog(string.Format("AntMask {0} trả về mã {1}. Tự động chuyển thử Anten 1...", (int)antMask, ret));
-                            ret = RFIDReader._Tag6C.GetEPC_TID(_currentConnId, eAntennaNo._1, eReadType.Inventory, 6, eMatchCode.None, "", 0);
-                            if (ret == 0) antMask = eAntennaNo._1;
-                        }
-                    }
-                    else if (scanMode == 2) // EPC + TID + User
-                    {
-                        ret = RFIDReader._Tag6C.GetEPC_TID_UserData(_currentConnId, antMask, eReadType.Inventory, 0, 4);
-                        if (ret != 0 && antMask != eAntennaNo._1)
-                        {
-                            BroadcastLog(string.Format("AntMask {0} trả về mã {1}. Tự động chuyển thử Anten 1...", (int)antMask, ret));
-                            ret = RFIDReader._Tag6C.GetEPC_TID_UserData(_currentConnId, eAntennaNo._1, eReadType.Inventory, 0, 4);
-                            if (ret == 0) antMask = eAntennaNo._1;
+                            ret = 0;
+                            antMask = eAntennaNo._1;
+                            BroadcastLog("✅ Đã tự động kích hoạt thành công trên Cổng Ăng-ten 1 mặc định!");
                         }
                     }
 
@@ -524,7 +552,7 @@ namespace UHFHardwareBridge
                     }
                     else
                     {
-                        BroadcastLog(string.Format("Failed to start hardware inventory. Return Code: {0}", ret));
+                        BroadcastLog(string.Format("Failed to start hardware inventory. Return Code: {0} (Vui lòng kiểm tra jack cắm cáp Ăng-ten SMA hoặc chỉ chọn đúng cổng Ăng-ten đang cắm).", ret));
                     }
                 }
 
@@ -793,13 +821,34 @@ namespace UHFHardwareBridge
             if (!_isConnected) return;
             try
             {
-                int index = Convert.ToInt32(obj["index"]);
-                bool state = Convert.ToBoolean(obj["state"]);
                 Dictionary<eGPO, eGPOState> gpoDic = new Dictionary<eGPO, eGPOState>();
-                eGPO gpo = index == 1 ? eGPO._1 : (index == 2 ? eGPO._2 : (index == 3 ? eGPO._3 : eGPO._4));
-                gpoDic[gpo] = state ? eGPOState.High : eGPOState.Low;
-                int ret = RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, gpoDic);
-                BroadcastLog(string.Format("Set GPO {0} -> {1} (Result: {2})", index, state ? "HIGH" : "LOW", ret));
+                if (obj.ContainsKey("states"))
+                {
+                    var states = obj["states"] as Dictionary<string, object>;
+                    if (states != null)
+                    {
+                        foreach (var kvp in states)
+                        {
+                            int pin = int.Parse(kvp.Key);
+                            bool st = Convert.ToBoolean(kvp.Value);
+                            eGPO g = pin == 1 ? eGPO._1 : (pin == 2 ? eGPO._2 : (pin == 3 ? eGPO._3 : eGPO._4));
+                            gpoDic[g] = st ? eGPOState.High : eGPOState.Low;
+                        }
+                    }
+                }
+                else if (obj.ContainsKey("index"))
+                {
+                    int index = Convert.ToInt32(obj["index"]);
+                    bool state = Convert.ToBoolean(obj["state"]);
+                    eGPO gpo = index == 1 ? eGPO._1 : (index == 2 ? eGPO._2 : (index == 3 ? eGPO._3 : eGPO._4));
+                    gpoDic[gpo] = state ? eGPOState.High : eGPOState.Low;
+                }
+
+                if (gpoDic.Count > 0)
+                {
+                    int ret = RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, gpoDic);
+                    BroadcastLog(string.Format("Set GPO total={0} (Result: {1})", gpoDic.Count, ret));
+                }
             }
             catch (Exception ex)
             {

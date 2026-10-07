@@ -131,11 +131,33 @@ BEGIN
     CREATE INDEX IF NOT EXISTS idx_inventory_transactions_doc ON public.inventory_transactions (document_no);
     CREATE INDEX IF NOT EXISTS idx_inventory_transactions_pallet ON public.inventory_transactions (pallet_code);
     CREATE INDEX IF NOT EXISTS idx_inventory_transactions_timestamp ON public.inventory_transactions (timestamp DESC);
-    ALTER TABLE public.inventory_transactions DISABLE ROW LEVEL SECURITY;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.inventory_transactions'::regclass AND contype = 'p') THEN
-        ALTER TABLE public.inventory_transactions ALTER COLUMN transaction_id SET NOT NULL;
-        ALTER TABLE public.inventory_transactions ADD CONSTRAINT pk_inventory_transactions PRIMARY KEY (transaction_id);
-    END IF;
+    -- 1.18. Bảng tag_lifecycle_logs (log_id)
+    CREATE TABLE IF NOT EXISTS public.tag_lifecycle_logs (
+        log_id TEXT PRIMARY KEY,
+        epc TEXT NOT NULL,
+        item_id TEXT,
+        sku TEXT,
+        product_name TEXT,
+        serial_number TEXT,
+        action TEXT NOT NULL,
+        action_label TEXT NOT NULL,
+        previous_status TEXT,
+        new_status TEXT NOT NULL,
+        from_location TEXT,
+        to_location TEXT,
+        from_pallet TEXT,
+        to_pallet TEXT,
+        document_no TEXT,
+        performed_by TEXT NOT NULL,
+        device TEXT,
+        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_tag_lifecycle_epc ON public.tag_lifecycle_logs (epc);
+    CREATE INDEX IF NOT EXISTS idx_tag_lifecycle_timestamp ON public.tag_lifecycle_logs (timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_tag_lifecycle_sku ON public.tag_lifecycle_logs (sku);
+    ALTER TABLE public.tag_lifecycle_logs DISABLE ROW LEVEL SECURITY;
 END $$;
 
 

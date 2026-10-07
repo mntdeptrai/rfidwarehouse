@@ -339,6 +339,7 @@ class SupabaseSyncService extends ChangeNotifier {
         'inventory_session_details',
         'inventory_transactions',
         'locate_orders',
+        'tag_lifecycle_logs',
         'users',
       ];
 
@@ -466,6 +467,8 @@ class SupabaseSyncService extends ChangeNotifier {
         return 'transaction_id';
       case 'locate_orders':
         return 'order_id';
+      case 'tag_lifecycle_logs':
+        return 'log_id';
       default:
         return 'id';
     }

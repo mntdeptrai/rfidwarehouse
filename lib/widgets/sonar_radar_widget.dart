@@ -356,7 +356,9 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Cường độ: ${widget.rssi.toStringAsFixed(0)} dBm',
+                    (!widget.isTracking || widget.rssi <= -88.0)
+                        ? 'Cường độ: --- dBm'
+                        : 'Cường độ: ${widget.rssi.toStringAsFixed(0)} dBm',
                     style: const TextStyle(
                       color: Color(0xFF6B5D4D),
                       fontSize: 11.5,

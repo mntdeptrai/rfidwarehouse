@@ -79,14 +79,76 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
-    // 1.1 Trường hợp cự ly gần (< 1m): RSSI = -36 dBm, tín hiệu tăng (+4.0 dBm) -> Mũi tên chỉ đúng hướng & hiển thị đơn vị cm
+    // 1.1 Trường hợp đã khóa hướng chip thẳng phía trước (0 độ, RSSI = -45 dBm): Mũi tên chỉ đúng hướng & hiển thị đơn vị cm (71 cm)
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme,
+        home: const Scaffold(
+          body: DirectionArrowWidget(
+            rssi: -45.0,
+            previousRssi: -49.0,
+            isTracking: true,
+            targetEpc: 'E280119000000000000000AA',
+            hasLockedTarget: true,
+            relativeAngleDeg: 0.0,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Xác nhận hiển thị số đo cự ly theo đơn vị cm (71 cm)
+    expect(find.text('71 cm'), findsOneWidget);
+    // Xác nhận mũi tên chỉ đúng hướng
+    expect(find.byIcon(Icons.trending_up_rounded), findsWidgets);
+    expect(find.textContaining('ĐÚNG HƯỚNG'), findsOneWidget);
+
+    // 1.2 Trường hợp chip ở lệch sau (relativeAngleDeg = 150 độ) -> Biểu tượng cảnh báo quay người lại
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme,
+        home: const Scaffold(
+          body: DirectionArrowWidget(
+            rssi: -50.0,
+            previousRssi: -45.0,
+            isTracking: true,
+            targetEpc: 'E280119000000000000000AA',
+            hasLockedTarget: true,
+            relativeAngleDeg: 150.0,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byIcon(Icons.trending_down_rounded), findsWidgets);
+    expect(find.textContaining('CHIP Ở PHÍA SAU'), findsOneWidget);
+
+    // 1.2b Trường hợp bắt được sóng nhưng chưa đủ mẫu / confidence để khóa hướng: Báo lia máy qua lại để khóa hướng
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme,
+        home: const Scaffold(
+          body: DirectionArrowWidget(
+            rssi: -55.0,
+            isTracking: true,
+            targetEpc: 'E280119000000000000000AA',
+            hasLockedTarget: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('XOAY MÁY CHẬM QUA LẠI ĐỂ KHÓA HƯỚNG'), findsOneWidget);
+    expect(find.text('LIA MÁY QUA LẠI'), findsOneWidget);
+
+    // 1.2c Khi cự ly cực gần (RSSI >= -40 dBm): Chuyển sang chế độ NGAY TẠI ĐÂY
     await tester.pumpWidget(
       MaterialApp(
         theme: testTheme,
         home: const Scaffold(
           body: DirectionArrowWidget(
             rssi: -36.0,
-            previousRssi: -40.0,
             isTracking: true,
             targetEpc: 'E280119000000000000000AA',
           ),
@@ -94,21 +156,72 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
-
-    // Xác nhận hiển thị số đo cự ly theo đơn vị cm (25 cm)
+    expect(find.text('NGAY TẠI ĐÂY'), findsOneWidget);
     expect(find.text('25 cm'), findsOneWidget);
-    // Xác nhận mũi tên chỉ đúng hướng
-    expect(find.byIcon(Icons.trending_up_rounded), findsWidgets);
-    expect(find.textContaining('ĐÚNG HƯỚNG'), findsOneWidget);
 
-    // 1.2 Trường hợp lia súng lệch hướng: previousRssi = -36.0, rssi = -42.0 (-6.0 dBm) -> Biểu tượng cảnh báo lệch hướng
+    // 1.3 Trường hợp đã khóa hướng chip ở bên PHẢI (+60 độ) -> Mũi tên xoay sang phải và badge hướng dẫn
     await tester.pumpWidget(
       MaterialApp(
         theme: testTheme,
         home: const Scaffold(
           body: DirectionArrowWidget(
-            rssi: -42.0,
-            previousRssi: -36.0,
+            rssi: -45.0,
+            isTracking: true,
+            targetEpc: 'E280119000000000000000AA',
+            hasLockedTarget: true,
+            relativeAngleDeg: 60.0,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('CHIP Ở BÊN PHẢI (60°)'), findsOneWidget);
+    expect(find.byIcon(Icons.turn_right_rounded), findsOneWidget);
+
+    // 1.4 Trường hợp đã khóa hướng chip ở bên TRÁI (-45 độ) -> Mũi tên xoay sang trái
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme,
+        home: const Scaffold(
+          body: DirectionArrowWidget(
+            rssi: -45.0,
+            isTracking: true,
+            targetEpc: 'E280119000000000000000AA',
+            hasLockedTarget: true,
+            relativeAngleDeg: -45.0,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('CHIP Ở BÊN TRÁI (45°)'), findsOneWidget);
+    expect(find.byIcon(Icons.turn_left_rounded), findsOneWidget);
+
+    // 1.5 Trường hợp chip ở PHÍA SAU LƯNG (+160 độ) -> Mũi tên cảnh báo quay người lại
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme,
+        home: const Scaffold(
+          body: DirectionArrowWidget(
+            rssi: -55.0,
+            isTracking: true,
+            targetEpc: 'E280119000000000000000AA',
+            hasLockedTarget: true,
+            relativeAngleDeg: 160.0,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('CHIP Ở PHÍA SAU'), findsOneWidget);
+
+    // 1.6 Khi đang dò tìm (chưa bắt được sóng, RSSI <= -88 dBm) -> Hiển thị Sóng: --- dBm
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: testTheme,
+        home: const Scaffold(
+          body: DirectionArrowWidget(
+            rssi: -90.0,
             isTracking: true,
             targetEpc: 'E280119000000000000000AA',
           ),
@@ -116,10 +229,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.text('50 cm'), findsOneWidget);
-    expect(find.byIcon(Icons.trending_down_rounded), findsWidgets);
-    expect(find.textContaining('LỆCH HƯỚNG'), findsOneWidget);
+    expect(find.text('Sóng: --- dBm'), findsOneWidget);
   });
 
   testWidgets('2. RadarLocateScreen: Tìm kiếm theo mã SKU / Serial / EPC và hiển thị kết quả', (WidgetTester tester) async {

@@ -134,6 +134,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _eyeCare.addListener(_onStateChange);
     _repo.addListener(_onStateChange);
     _auth.addListener(_onStateChange);
+    _towerLight.addListener(_onStateChange);
 
     _uhf.enableScanning('xuat_kho');
     _uhf.setScanMode(PdaScanMode.rfid);
@@ -232,6 +233,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _eyeCare.removeListener(_onStateChange);
     _repo.removeListener(_onStateChange);
     _auth.removeListener(_onStateChange);
+    _towerLight.removeListener(_onStateChange);
     super.dispose();
   }
 
@@ -300,9 +302,28 @@ class _OutboundScreenState extends State<OutboundScreen> {
     final unexpected = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
     if (unexpected.isNotEmpty) {
+      final matchedInRepo = unexpected
+          .map((u) => _repo.items.where((i) => i.epc.toUpperCase() == u).firstOrNull)
+          .whereType<Item>()
+          .toList();
+      final String reasonText;
+      if (matchedInRepo.isNotEmpty) {
+        final firstItem = matchedInRepo.first;
+        final extraCount = unexpected.length - 1;
+        final extraStr = extraCount > 0 ? ' và $extraCount hàng khác' : '';
+        reasonText = 'CẢNH BÁO AN NINH: Hàng không nằm trong đơn xuất! [${firstItem.productName}] (SKU: ${firstItem.sku}, Kệ: ${firstItem.locationId ?? "--"})$extraStr';
+      } else {
+        final firstEpc = unexpected.first;
+        final shortEpc = firstEpc.length > 8 ? '...${firstEpc.substring(firstEpc.length - 8)}' : firstEpc;
+        reasonText = 'CẢNH BÁO: Phát hiện ${unexpected.length} chip lạ ($shortEpc) ngoài danh sách xuất!';
+      }
+
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.heavyImpact();
       _towerLight.triggerWarningRed(
         withBuzzer: true,
-        reason: 'CẢNH BÁO: Phát hiện ${unexpected.length} chip lạ ngoài danh sách xuất kho!',
+        reason: reasonText,
+        persistent: true,
       );
     } else {
       if (autoMatchedPalletItems.isNotEmpty) {
@@ -330,6 +351,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
             if (olderUnscanned.isNotEmpty) {
               final oldest = olderUnscanned.first;
+              HapticFeedback.heavyImpact();
               _towerLight.triggerWarningRed(
                 withBuzzer: false,
                 reason: 'LƯU Ý FIFO: Quét lô mới (FIFO #${item.fifoPriority}) của ${item.sku}. Cần lấy lô cũ trước: kệ ${oldest.locationCode} (FIFO #${oldest.fifoPriority})!',
@@ -340,6 +362,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       }
 
       if (totalExpected > 0 && scannedMatching >= totalExpected) {
+        HapticFeedback.mediumImpact();
         _towerLight.triggerPass(
           reason: 'ĐỦ HÀNG XUẤT KHO: $scannedMatching/$totalExpected sản phẩm đã thông qua tay cầm!',
         );
@@ -371,6 +394,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
   void _startGateScan() {
     if (_pendingOutboundOrder == null) return;
     _uhf.startInventory();
+    _towerLight.triggerScanning(reason: 'ĐANG QUÉT XUẤT KHO: Tay cầm PDA đang quét đối soát...');
     setState(() {
       _isScanning = true;
     });
@@ -378,6 +402,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   void _stopGateScan() {
     _uhf.stopInventory();
+    _towerLight.turnOffAll(reason: 'Đã dừng quét xuất kho trên PDA');
     if (mounted) {
       setState(() {
         _isScanning = false;
@@ -1578,6 +1603,69 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
         ],
 
+        // 0. THANH TRẠNG THÁI & CẢNH BÁO ĐÈN THÁP TÍN HIỆU (TOWER LIGHT)
+        _buildTowerLightAlertBar(c),
+
+        // Banner Cảnh Báo An Ninh: Hàng lạ không thuộc đơn
+        if (unexpCount > 0) ...[
+          Container(
+            margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.emergency_rounded, color: Color(0xFFEF4444), size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '🚨 CÓ $unexpCount HÀNG NGOÀI ĐƠN XUẤT!',
+                        style: const TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        'Đèn đỏ & còi hú liên tục. Dừng xuất và bỏ hàng lạ ra ngoài.',
+                        style: TextStyle(color: c.textPrimary, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _gateScannedTags.removeWhere((k, v) => !expectedEpcs.contains(k) && !validPalletEpcs.contains(k));
+                    });
+                    if (_isScanning) {
+                      _towerLight.triggerScanning(reason: 'Đã loại bỏ chip lạ. Tiếp tục đối soát...');
+                    } else {
+                      _towerLight.turnOffAll();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('XÓA LẠ', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         // 1. Ô TÊN KHÁCH HÀNG (TRÊN ĐẦU DANH SÁCH THEO YÊU CẦU)
         Container(
           margin: const EdgeInsets.fromLTRB(10, 6, 10, 4),
@@ -1937,6 +2025,19 @@ class _OutboundScreenState extends State<OutboundScreen> {
                               );
                             } else {
                               final unexp = unexpList[index - displayedItems.length];
+                              final unexpEpc = unexp.epc.trim().toUpperCase();
+                              final foundInDb = _repo.items.where((i) => i.epc.toUpperCase() == unexpEpc).firstOrNull;
+
+                              final skuText = foundInDb?.sku ?? 'CHIP LẠ';
+                              final cartonText = foundInDb?.cartonCode ?? '--';
+                              final palletText = foundInDb?.palletId ?? '--';
+                              final locText = foundInDb?.locationId ?? '--';
+                              final dateText = foundInDb?.inboundTime != null ? DateFormat('dd/MM/yyyy').format(foundInDb!.inboundTime!) : '--';
+                              final suppText = foundInDb?.supplier ?? '--';
+                              final nameText = foundInDb != null
+                                  ? '⚠️ [NGOÀI ĐƠN] ${foundInDb.productName}'
+                                  : 'Chip lạ không nằm trong danh sách xuất';
+                              final palletEpcText = '--';
 
                               return Container(
                                 color: const Color(0xFFEF4444).withValues(alpha: 0.08),
@@ -1945,23 +2046,56 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                   children: [
                                     SizedBox(width: 38, child: Text('${index + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
                                     const SizedBox(width: 6),
-                                    const SizedBox(width: 90, child: Text('CHIP LẠ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11))),
+                                    SizedBox(width: 90, child: Text(skuText, style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11))),
                                     const SizedBox(width: 6),
-                                    const SizedBox(width: 90, child: Text('--', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
+                                    SizedBox(width: 90, child: Text(cartonText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
                                     const SizedBox(width: 6),
-                                    const SizedBox(width: 90, child: Text('--', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
+                                    SizedBox(width: 90, child: Text(palletText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
                                     const SizedBox(width: 6),
-                                    const SizedBox(width: 95, child: Text('--', style: TextStyle(color: Color(0xFFEF4444), fontSize: 10.5))),
+                                    SizedBox(width: 95, child: Text(locText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold))),
                                     const SizedBox(width: 6),
-                                    const SizedBox(width: 90, child: Text('--', style: TextStyle(color: Color(0xFFEF4444), fontSize: 10.5))),
+                                    SizedBox(width: 90, child: Text(dateText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5))),
                                     const SizedBox(width: 6),
-                                    const SizedBox(width: 110, child: Text('--', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
+                                    SizedBox(width: 110, child: Text(suppText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
                                     const SizedBox(width: 6),
-                                    const Expanded(flex: 3, child: Text('Chip lạ không nằm trong danh sách xuất', style: TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
+                                    Expanded(flex: 3, child: Text(nameText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold))),
                                     const SizedBox(width: 6),
-                                    const SizedBox(width: 135, child: Text('--', style: TextStyle(color: Color(0xFFEF4444), fontSize: 10.5))),
+                                    SizedBox(width: 135, child: Text(palletEpcText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5))),
                                     const SizedBox(width: 6),
-                                    SizedBox(width: 135, child: Text(unexp.epc, style: const TextStyle(color: Color(0xFFEF4444), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 10.5))),
+                                    SizedBox(
+                                      width: 135,
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              unexp.epc,
+                                              style: const TextStyle(color: Color(0xFFEF4444), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 10.5),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                _gateScannedTags.remove(unexp.epc.toUpperCase());
+                                              });
+                                              final remaining = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
+                                              if (remaining.isEmpty) {
+                                                if (_isScanning) {
+                                                  _towerLight.triggerScanning(reason: 'Đã loại bỏ chip lạ. Tiếp tục đối soát...');
+                                                } else {
+                                                  _towerLight.turnOffAll();
+                                                }
+                                              }
+                                            },
+                                            child: const Padding(
+                                              padding: EdgeInsets.all(2),
+                                              child: Icon(Icons.close, size: 13, color: Color(0xFFEF4444)),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
                               );
@@ -2123,6 +2257,245 @@ class _OutboundScreenState extends State<OutboundScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ---------- THANH TRẠNG THÁI & CẢNH BÁO ĐÈN THÁP XUẤT KHO (TOWER LIGHT) ----------
+  Widget _buildTowerLightAlertBar(EyeCareColors c) {
+    final status = _towerLight.currentStatus;
+    Color barColor;
+    Color borderColor;
+    String statusTitle;
+    IconData statusIcon;
+
+    switch (status.color) {
+      case TowerLightColor.red:
+        barColor = const Color(0xFFEF4444);
+        borderColor = const Color(0xFFEF4444);
+        statusTitle = 'ĐÈN ĐỎ: CẢNH BÁO XUẤT KHO';
+        statusIcon = Icons.warning_rounded;
+        break;
+      case TowerLightColor.yellow:
+        barColor = const Color(0xFFF59E0B);
+        borderColor = const Color(0xFFF59E0B);
+        statusTitle = 'ĐÈN VÀNG: ĐANG ĐỐI SOÁT';
+        statusIcon = Icons.hourglass_top_rounded;
+        break;
+      case TowerLightColor.green:
+        barColor = const Color(0xFF10B981);
+        borderColor = const Color(0xFF10B981);
+        statusTitle = 'ĐÈN XANH: THÔNG QUA CỔNG';
+        statusIcon = Icons.check_circle_rounded;
+        break;
+      case TowerLightColor.off:
+        barColor = c.textMuted;
+        borderColor = c.border;
+        statusTitle = 'ĐÈN CHỜ (STANDBY)';
+        statusIcon = Icons.lightbulb_outline_rounded;
+        break;
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: status.isOff ? c.bgCard : barColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: status.isOff ? c.border : borderColor.withValues(alpha: 0.8),
+          width: status.isOff ? 1 : 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Mô phỏng 3 bóng đèn LED (Đỏ - Vàng - Xanh)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: c.bgDeep,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: c.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildLedBulb(
+                  color: const Color(0xFFEF4444),
+                  isActive: status.color == TowerLightColor.red,
+                  isBuzzer: status.isBuzzerOn,
+                ),
+                const SizedBox(width: 5),
+                _buildLedBulb(
+                  color: const Color(0xFFF59E0B),
+                  isActive: status.color == TowerLightColor.yellow,
+                ),
+                const SizedBox(width: 5),
+                _buildLedBulb(
+                  color: const Color(0xFF10B981),
+                  isActive: status.color == TowerLightColor.green,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Icon + Tiêu đề + Lý do cảnh báo
+          Icon(statusIcon, color: barColor, size: 18),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        statusTitle,
+                        style: TextStyle(
+                          color: barColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (status.isBuzzerOn) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.volume_up_rounded, color: Colors.white, size: 9),
+                            SizedBox(width: 2),
+                            Text('CÒI BÁO', style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  status.reason,
+                  style: TextStyle(
+                    color: status.isOff ? c.textSecondary : c.textPrimary,
+                    fontSize: 10.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+
+          // Menu thử đèn thủ công (Manual Test Controls)
+          PopupMenuButton<String>(
+            tooltip: 'Thử nghiệm tín hiệu đèn tháp',
+            onSelected: (val) {
+              if (val == 'test_green') {
+                _towerLight.triggerPass(reason: 'Kiểm tra thủ công: Đèn Xanh thông qua');
+              } else if (val == 'test_yellow') {
+                _towerLight.triggerScanning(reason: 'Kiểm tra thủ công: Đèn Vàng đang quét');
+              } else if (val == 'test_red') {
+                _towerLight.triggerWarningRed(withBuzzer: true, reason: 'Kiểm tra thủ công: Đèn Đỏ + Còi báo động');
+              } else if (val == 'turn_off') {
+                _towerLight.turnOffAll();
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'test_green',
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFF10B981), size: 14),
+                    SizedBox(width: 8),
+                    Text('Thử Đèn Xanh (Thông qua)'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'test_yellow',
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFFF59E0B), size: 14),
+                    SizedBox(width: 8),
+                    Text('Thử Đèn Vàng (Đang quét)'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'test_red',
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(0xFFEF4444), size: 14),
+                    SizedBox(width: 8),
+                    Text('Thử Đèn Đỏ + Còi (Cảnh báo)'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'turn_off',
+                child: Row(
+                  children: [
+                    Icon(Icons.power_settings_new, color: Colors.grey, size: 14),
+                    SizedBox(width: 8),
+                    Text('Tắt tháp đèn (Standby)'),
+                  ],
+                ),
+              ),
+            ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: c.bgDeep,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: c.border),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.tune_rounded, size: 12, color: c.textSecondary),
+                  const SizedBox(width: 3),
+                  Text('Thử đèn', style: TextStyle(color: c.textSecondary, fontSize: 10)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLedBulb({required Color color, required bool isActive, bool isBuzzer = false}) {
+    return Container(
+      width: 12,
+      height: 12,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isActive ? color : color.withValues(alpha: 0.15),
+        border: Border.all(
+          color: isActive ? color : Colors.transparent,
+          width: 1,
+        ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.6),
+                  blurRadius: 6,
+                  spreadRadius: 1.5,
+                ),
+              ]
+            : null,
       ),
     );
   }
