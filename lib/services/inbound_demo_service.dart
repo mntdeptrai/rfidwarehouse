@@ -96,7 +96,11 @@ class InboundDemoScenarioService {
     int boxQty = 10,
   }) {
     final cleanOrderNo = orderNo.trim().toUpperCase();
-    final cleanPallet = palletCode.trim().toUpperCase().isEmpty ? 'PL01' : palletCode.trim().toUpperCase();
+    final hasPallet = palletCode.trim().isNotEmpty;
+    final cleanPallet = hasPallet ? palletCode.trim().toUpperCase() : '';
+    final String? actualPalletId = hasPallet
+        ? (cleanPallet.startsWith('PAL-') ? cleanPallet : 'PAL-$cleanPallet')
+        : null;
     final products = <Product>[];
     final details = <InboundOrderDetail>[];
     final items = <Item>[];
@@ -135,7 +139,7 @@ class InboundDemoScenarioService {
           epc: epc,
           status: ItemStatus.pendingInbound,
           orderNo: cleanOrderNo,
-          palletId: cleanPallet,
+          palletId: actualPalletId,
           supplier: supplier,
           cartonCode: 'BOX-RACK-01',
         ));
@@ -175,7 +179,7 @@ class InboundDemoScenarioService {
           epc: epc,
           status: ItemStatus.pendingInbound,
           orderNo: cleanOrderNo,
-          palletId: cleanPallet,
+          palletId: actualPalletId,
           supplier: supplier,
           cartonCode: 'BOX-DOC-${(i ~/ 5) + 1}',
         ));

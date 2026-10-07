@@ -22,6 +22,27 @@ class PdaPutawayScreen extends StatefulWidget {
     this.initialCartonOrPalletBarcode,
   });
 
+  /// Chuẩn hóa mã Pallet để so khớp thông minh không phân biệt PAL-, PL, khoảng trắng hay dấu gạch nối '-'
+  static String normalizePalletCode(String raw) {
+    String s = raw.trim().toUpperCase();
+    if (s.startsWith('PAL-')) s = s.substring(4);
+    if (s.startsWith('PAL')) s = s.substring(3);
+    return s.replaceAll('-', '').replaceAll('_', '').replaceAll(' ', '');
+  }
+
+  /// Kiểm tra 2 mã Pallet/kiện hàng có tương đương nhau hay không (ví dụ PAL-PL-01 == PAL-PL01 == PL-01 == PL01)
+  static bool isSamePallet(String? a, String? b) {
+    if (a == null || b == null) return false;
+    final cleanA = a.trim().toUpperCase();
+    final cleanB = b.trim().toUpperCase();
+    if (cleanA.isEmpty || cleanB.isEmpty) return false;
+    if (cleanA == cleanB) return true;
+    if (cleanA.replaceAll('-', '') == cleanB.replaceAll('-', '')) return true;
+    final normA = normalizePalletCode(cleanA);
+    final normB = normalizePalletCode(cleanB);
+    return normA.isNotEmpty && normA == normB;
+  }
+
   @override
   State<PdaPutawayScreen> createState() => _PdaPutawayScreenState();
 }
@@ -67,6 +88,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       final input = widget.initialCartonOrPalletBarcode!.trim();
       final pending = _pendingGroups();
       final matchedKey = pending.keys.where((k) =>
+        isSamePallet(k, input) ||
         k.toUpperCase() == input.toUpperCase() ||
         k.toUpperCase() == 'PAL-${input.toUpperCase()}' ||
         'PAL-${k.toUpperCase()}' == input.toUpperCase() ||
@@ -186,18 +208,25 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     ).toList();
   }
 
+  static String normalizePalletCode(String raw) => PdaPutawayScreen.normalizePalletCode(raw);
+  static bool isSamePallet(String? a, String? b) => PdaPutawayScreen.isSamePallet(a, b);
+
   Map<String, List<Item>> _pendingGroups() {
     if (_cachedGroups != null) return _cachedGroups!;
     final groups = <String, List<Item>>{};
     for (var it in _pendingItems()) {
-      final key = (it.palletId != null && it.palletId!.trim().isNotEmpty)
+      final rawKey = (it.palletId != null && it.palletId!.trim().isNotEmpty)
           ? it.palletId!.trim()
           : (it.cartonCode != null && it.cartonCode!.trim().isNotEmpty)
               ? it.cartonCode!.trim()
               : (it.orderNo != null && it.orderNo!.trim().isNotEmpty)
                   ? it.orderNo!.trim()
                   : 'LÔ_CHỜ_KỆ';
-      groups.putIfAbsent(key, () => []).add(it);
+
+      // Tìm xem đã có nhóm nào cùng mã pallet chưa (so khớp thông minh bỏ qua dấu '-')
+      final matchedKey = groups.keys.where((k) => isSamePallet(k, rawKey)).firstOrNull;
+      final targetKey = matchedKey ?? rawKey;
+      groups.putIfAbsent(targetKey, () => []).add(it);
     }
     _cachedGroups = groups;
     return groups;
@@ -249,7 +278,10 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     // 2. Tìm xe pallet / thùng hàng / sản phẩm tương ứng với mã quét
     final groups = _pendingGroups();
     String? matchedPalletKey;
-    if (groups.containsKey(clean)) {
+    final directOrFuzzyKey = groups.keys.where((k) => isSamePallet(k, clean)).firstOrNull;
+    if (directOrFuzzyKey != null) {
+      matchedPalletKey = directOrFuzzyKey;
+    } else if (groups.containsKey(clean)) {
       matchedPalletKey = clean;
     } else if (groups.containsKey('PAL-$clean')) {
       matchedPalletKey = 'PAL-$clean';
@@ -257,27 +289,32 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
       matchedPalletKey = clean.replaceFirst('PAL-', '');
     } else {
       final pal = _repo.pallets.where((p) =>
+        isSamePallet(p.palletId, clean) ||
+        isSamePallet(p.palletCode, clean) ||
         p.palletId.toUpperCase() == clean ||
         p.palletCode.toUpperCase() == clean ||
         p.palletId.toUpperCase() == 'PAL-$clean' ||
         (p.rfidEpc != null && p.rfidEpc!.toUpperCase() == clean)
       ).firstOrNull;
 
-      if (pal != null && (groups.containsKey(pal.palletId) || groups.containsKey(pal.palletCode))) {
-        matchedPalletKey = groups.containsKey(pal.palletId) ? pal.palletId : pal.palletCode;
-      } else {
+      if (pal != null) {
+        matchedPalletKey = groups.keys.where((k) => isSamePallet(k, pal.palletId) || isSamePallet(k, pal.palletCode)).firstOrNull;
+      }
+
+      if (matchedPalletKey == null) {
         final matchedItem = _repo.items.where((i) =>
           i.cartonCode?.toUpperCase() == clean ||
           i.epc.toUpperCase() == clean ||
           i.serialNumber.toUpperCase() == clean ||
           i.sku.toUpperCase() == clean ||
-          (i.orderNo != null && i.orderNo!.toUpperCase() == clean)
+          (i.orderNo != null && i.orderNo!.toUpperCase() == clean) ||
+          isSamePallet(i.palletId, clean)
         ).firstOrNull;
 
         if (matchedItem != null) {
           final itemPal = matchedItem.palletId ?? matchedItem.cartonCode ?? matchedItem.orderNo;
-          if (itemPal != null && groups.containsKey(itemPal)) {
-            matchedPalletKey = itemPal;
+          if (itemPal != null) {
+            matchedPalletKey = groups.keys.where((k) => isSamePallet(k, itemPal)).firstOrNull ?? itemPal;
           }
         }
 
@@ -289,14 +326,18 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           ).firstOrNull;
           if (matchedByOrder != null) {
             final palKey = matchedByOrder.palletId ?? matchedByOrder.cartonCode ?? matchedByOrder.orderNo;
-            if (palKey != null && groups.containsKey(palKey)) {
-              matchedPalletKey = palKey;
+            if (palKey != null) {
+              matchedPalletKey = groups.keys.where((k) => isSamePallet(k, palKey)).firstOrNull ?? palKey;
             }
           }
         }
 
         if (matchedPalletKey == null) {
           for (final k in groups.keys) {
+            if (isSamePallet(k, clean)) {
+              matchedPalletKey = k;
+              break;
+            }
             final strippedK = k.replaceAll(RegExp(r'^PAL-', caseSensitive: false), '').trim().toUpperCase();
             final strippedClean = clean.replaceAll(RegExp(r'^PAL-', caseSensitive: false), '').trim().toUpperCase();
             if (strippedK == strippedClean || strippedK == clean || k.toUpperCase() == strippedClean) {
@@ -380,6 +421,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           _lastResult = result;
           _lockedLocationId = null; // Hoàn thành cất hàng, reset để chọn vị trí cho kiện tiếp theo
           final remaining = _pendingGroups();
+          remaining.removeWhere((k, _) => isSamePallet(k, palletOrCarton));
           remaining.remove(palletOrCarton);
           remaining.remove('PAL-$palletOrCarton');
           remaining.remove(palletOrCarton.replaceAll(RegExp(r'^PAL-', caseSensitive: false), ''));
@@ -434,7 +476,14 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     final selectedLoc = _repo.locations.where((l) =>
       l.locationId == _lockedLocationId || l.locationCode == _lockedLocationId
     ).firstOrNull;
-    final activeItems = _activePalletGroup != null ? (groups[_activePalletGroup] ?? _repo.items.where((i) => i.palletId == _activePalletGroup || i.palletId == 'PAL-$_activePalletGroup').toList()) : <Item>[];
+    final activeItems = _activePalletGroup != null
+        ? (groups[_activePalletGroup] ??
+            _repo.items.where((i) =>
+              isSamePallet(i.palletId, _activePalletGroup) ||
+              (i.palletId != null && i.palletId!.trim().toUpperCase() == _activePalletGroup?.toUpperCase()) ||
+              (i.orderNo != null && i.orderNo!.trim().toUpperCase() == _activePalletGroup?.toUpperCase())
+            ).toList())
+        : <Item>[];
 
     return Scaffold(
       backgroundColor: c.bgDeep,

@@ -53,7 +53,7 @@ class TowerLightPinConfig {
     this.greenPin = 3,
     this.yellowPin = 2,
     this.buzzerPin = 1,
-    this.pulseDurationSeconds = 4,
+    this.pulseDurationSeconds = 3,
   });
 
   Map<String, dynamic> toMap() => {
@@ -69,7 +69,7 @@ class TowerLightPinConfig {
     greenPin: (map['greenPin'] as num?)?.toInt() ?? 3,
     yellowPin: (map['yellowPin'] as num?)?.toInt() ?? 2,
     buzzerPin: (map['buzzerPin'] as num?)?.toInt() ?? 1,
-    pulseDurationSeconds: (map['pulseDurationSeconds'] as num?)?.toInt() ?? 4,
+    pulseDurationSeconds: (map['pulseDurationSeconds'] as num?)?.toInt() ?? 3,
   );
 }
 
@@ -177,11 +177,12 @@ class TowerLightService extends ChangeNotifier {
     }
   }
 
-  /// 🔴 ĐÈN ĐỎ: Cảnh báo Thiếu hàng / Sai hàng (mã lạ) / Thừa hàng
+  /// 🔴 ĐÈN ĐỎ: Cảnh báo Thiếu hàng / Sai hàng (mã lạ) / Thừa hàng (Giới hạn 2-3s rồi tự động tắt)
   Future<void> triggerWarningRed({
     bool withBuzzer = true,
     String reason = 'Cảnh báo: Sai hàng / Thiếu hàng / Thừa hàng',
     bool persistent = false,
+    int durationSeconds = 3,
   }) async {
     _pulseTimer?.cancel();
     _currentStatus = TowerLightStatus(
@@ -199,11 +200,11 @@ class TowerLightService extends ChangeNotifier {
       buzzer: withBuzzer,
     );
 
-    if (!persistent && config.pulseDurationSeconds > 0) {
-      _pulseTimer = Timer(Duration(seconds: config.pulseDurationSeconds), () {
-        turnOffAll(reason: 'Sẵn sàng chờ quét tiếp theo');
-      });
-    }
+    // Người dùng yêu cầu: giới hạn thời gian bật đèn đỏ khoảng 2-3 giây rồi tự tắt
+    final autoOffSec = durationSeconds > 0 ? durationSeconds : (config.pulseDurationSeconds > 0 ? config.pulseDurationSeconds : 3);
+    _pulseTimer = Timer(Duration(seconds: autoOffSec), () {
+      turnOffAll(reason: 'Tự động tắt cảnh báo sau ${autoOffSec}s');
+    });
   }
 
   /// 🟡 ĐÈN VÀNG: Báo hiệu đang quét đối soát hàng qua cổng RFID

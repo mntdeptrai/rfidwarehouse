@@ -1496,6 +1496,21 @@ class WarehouseRepository extends ChangeNotifier {
     }
     if (missingProducts.isNotEmpty) {
       await _dbService.insertProducts(missingProducts);
+      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+        try {
+          final pRows = missingProducts.map((p) => {
+            'product_id': p.productId,
+            'sku': p.sku,
+            'product_name': p.productName,
+            'unit': p.unit,
+            'category': p.category,
+            'description': p.description,
+          }).toList();
+          await Supabase.instance.client.from('products').upsert(pRows, onConflict: 'product_id');
+        } catch (e) {
+          debugPrint('insertDirectItems products Supabase direct error: $e');
+        }
+      }
     }
 
     final epcSet = items.map((i) => i.epc.toUpperCase()).toSet();
@@ -1528,28 +1543,109 @@ class WarehouseRepository extends ChangeNotifier {
     await _dbService.enqueueSyncBatch(syncRecords);
 
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      final supa = Supabase.instance.client;
+
+      // 1. Bảo đảm các Pallet liên quan đã có trên Cloud để không bị chặn bởi fk_items_pallet
+      final referencedPalletKeys = items
+          .where((i) => i.palletId != null && i.palletId!.trim().isNotEmpty)
+          .map((i) => i.palletId!.trim().toUpperCase())
+          .toSet();
+
+      if (referencedPalletKeys.isNotEmpty) {
+        final palRows = <Map<String, dynamic>>[];
+        for (final key in referencedPalletKeys) {
+          final p = _pallets.where((pal) =>
+            pal.palletId.toUpperCase() == key ||
+            pal.palletCode.toUpperCase() == key ||
+            pal.palletId.toUpperCase() == 'PAL-$key'
+          ).firstOrNull;
+          if (p != null) {
+            palRows.add({
+              'pallet_id': p.palletId,
+              'pallet_code': p.palletCode,
+              'rfid_epc': p.rfidEpc,
+              'location_id': p.locationId,
+              'inbound_time': p.inboundTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+              'is_multi_sku': p.isMultiSku ? 1 : 0,
+            });
+          } else {
+            final cleanCode = key.replaceAll('PAL-', '');
+            final palId = key.startsWith('PAL-') ? key : 'PAL-$key';
+            palRows.add({
+              'pallet_id': palId,
+              'pallet_code': cleanCode,
+              'rfid_epc': '',
+              'location_id': null,
+              'inbound_time': DateTime.now().toIso8601String(),
+              'is_multi_sku': 0,
+            });
+          }
+        }
+        if (palRows.isNotEmpty) {
+          try {
+            await supa.from('pallets').upsert(palRows, onConflict: 'pallet_id');
+          } catch (e) {
+            debugPrint('insertDirectItems ensure pallets Supabase error: $e');
+          }
+        }
+      }
+
+      // 2. Chuẩn bị payload chuẩn và map pallet_id sang PAL- format
       try {
-        final rows = items.map((item) => {
-          'item_id': item.itemId,
-          'product_id': item.productId,
-          'sku': item.sku,
-          'product_name': item.productName,
-          'serial_number': item.serialNumber,
-          'epc': item.epc,
-          'status': item.status.code,
-          'order_no': item.orderNo,
-          'pallet_id': item.palletId,
-          'location_id': item.locationId,
-          'inbound_time': item.inboundTime?.toIso8601String(),
-          'allocated_time': item.allocatedTime?.toIso8601String(),
-          'supplier': item.supplier,
-          'carton_code': item.cartonCode,
-          'inbound_by': item.inboundBy,
-          'putaway_by': item.putawayBy,
+        final rows = items.map((item) {
+          final rawPallet = item.palletId?.trim();
+          String? effectivePalletId;
+          if (rawPallet != null && rawPallet.isNotEmpty) {
+            final matchedPal = _pallets.where((p) =>
+              p.palletId.toUpperCase() == rawPallet.toUpperCase() ||
+              p.palletCode.toUpperCase() == rawPallet.toUpperCase() ||
+              p.palletId.toUpperCase() == 'PAL-${rawPallet.toUpperCase()}'
+            ).firstOrNull;
+            effectivePalletId = matchedPal?.palletId ?? (rawPallet.startsWith('PAL-') ? rawPallet : 'PAL-$rawPallet');
+          }
+
+          return {
+            'item_id': item.itemId,
+            'product_id': item.productId,
+            'sku': item.sku,
+            'product_name': item.productName,
+            'serial_number': item.serialNumber,
+            'epc': item.epc.toUpperCase(),
+            'status': item.status.code,
+            'order_no': item.orderNo,
+            'pallet_id': effectivePalletId,
+            'location_id': item.locationId,
+            'inbound_time': item.inboundTime?.toIso8601String(),
+            'allocated_time': item.allocatedTime?.toIso8601String(),
+            'supplier': item.supplier,
+          };
         }).toList();
-        await Supabase.instance.client.from('items').upsert(rows);
+
+        await supa.from('items').upsert(rows, onConflict: 'item_id');
+        debugPrint('✓ insertDirectItems: Đồng bộ thành công ${rows.length} items lên Supabase Cloud.');
       } catch (e) {
-        debugPrint('insertDirectItems Supabase direct error: $e');
+        debugPrint('insertDirectItems Supabase direct error: $e. Thử lại với fallback an toàn không có FK...');
+        try {
+          final fallbackRows = items.map((item) => {
+            'item_id': item.itemId,
+            'product_id': item.productId,
+            'sku': item.sku,
+            'product_name': item.productName,
+            'serial_number': item.serialNumber,
+            'epc': item.epc.toUpperCase(),
+            'status': item.status.code,
+            'order_no': item.orderNo,
+            'pallet_id': null,
+            'location_id': null,
+            'inbound_time': item.inboundTime?.toIso8601String(),
+            'allocated_time': item.allocatedTime?.toIso8601String(),
+            'supplier': item.supplier,
+          }).toList();
+          await supa.from('items').upsert(fallbackRows, onConflict: 'item_id');
+          debugPrint('✓ insertDirectItems: Fallback an toàn (null FK) thành công ${fallbackRows.length} items lên Supabase Cloud.');
+        } catch (err2) {
+          debugPrint('insertDirectItems Supabase fallback error: $err2');
+        }
       }
     }
 
@@ -3977,20 +4073,80 @@ class WarehouseRepository extends ChangeNotifier {
 
     if (!Platform.environment.containsKey('FLUTTER_TEST') && matchedItems.isNotEmpty) {
       try {
+        final supa = Supabase.instance.client;
         final matchedIds = matchedItems.map((i) => i.itemId).toList();
         final effectivePalletId = hasPallet
             ? (cleanPallet != null
                 ? (cleanPallet.startsWith('PAL-') ? cleanPallet : 'PAL-$cleanPallet')
                 : matchedItems.first.palletId)
             : null;
-        await Supabase.instance.client.from('items').update({
+
+        // Đảm bảo Pallet đã có trên Supabase Cloud
+        if (effectivePalletId != null) {
+          final matchedPal = _pallets.where((p) =>
+            p.palletId.toUpperCase() == effectivePalletId.toUpperCase() ||
+            p.palletCode.toUpperCase() == effectivePalletId.toUpperCase() ||
+            p.palletId.toUpperCase() == 'PAL-${effectivePalletId.toUpperCase()}'
+          ).firstOrNull;
+          if (matchedPal != null) {
+            try {
+              await supa.from('pallets').upsert({
+                'pallet_id': matchedPal.palletId,
+                'pallet_code': matchedPal.palletCode,
+                'rfid_epc': matchedPal.rfidEpc,
+                'location_id': matchedPal.locationId,
+                'inbound_time': matchedPal.inboundTime?.toIso8601String() ?? now.toIso8601String(),
+                'is_multi_sku': matchedPal.isMultiSku ? 1 : 0,
+              }, onConflict: 'pallet_id');
+            } catch (_) {}
+          }
+        }
+
+        // Upsert toàn diện từng item lên Supabase để đảm bảo nếu item chưa có thì được tạo mới ngay lập tức
+        final upsertRows = matchedItems.map((it) => {
+          'item_id': it.itemId,
+          'product_id': it.productId,
+          'sku': it.sku,
+          'product_name': it.productName,
+          'serial_number': it.serialNumber,
+          'epc': it.epc.toUpperCase(),
           'status': targetStatus.code,
-          'pallet_id': effectivePalletId,
           'order_no': cleanOrderNo,
+          'pallet_id': effectivePalletId ?? it.palletId,
+          'location_id': it.locationId,
           'inbound_time': now.toIso8601String(),
+          'allocated_time': it.allocatedTime?.toIso8601String(),
+          'supplier': it.supplier,
           'updated_at': now.toIso8601String(),
-          'inbound_by': effectivePerformer,
-        }).inFilter('item_id', matchedIds);
+        }).toList();
+
+        try {
+          await supa.from('items').upsert(upsertRows, onConflict: 'item_id');
+          debugPrint('✓ confirmGateReceive: Upsert thành công ${upsertRows.length} items (WAITING_PUTAWAY) lên Supabase.');
+        } catch (e) {
+          debugPrint('confirmGateReceive: upsert items error: $e. Thử fallback...');
+          try {
+            final fallbackRows = upsertRows.map((r) => Map<String, dynamic>.from(r)
+              ..['pallet_id'] = null
+              ..['location_id'] = null
+            ).toList();
+            await supa.from('items').upsert(fallbackRows, onConflict: 'item_id');
+            debugPrint('✓ confirmGateReceive: Fallback upsert thành công (null FK).');
+          } catch (err2) {
+            debugPrint('confirmGateReceive fallback error: $err2');
+          }
+        }
+
+        // Cập nhật bổ sung qua update filter để đồng bộ cache Supabase
+        try {
+          await supa.from('items').update({
+            'status': targetStatus.code,
+            'pallet_id': effectivePalletId,
+            'order_no': cleanOrderNo,
+            'inbound_time': now.toIso8601String(),
+            'updated_at': now.toIso8601String(),
+          }).inFilter('item_id', matchedIds);
+        } catch (_) {}
       } catch (e) {
         debugPrint('Direct update items status in confirmGateReceive error: $e');
       }
@@ -4111,11 +4267,14 @@ class WarehouseRepository extends ChangeNotifier {
       level: 'Tầng 1',
     );
 
+    final cleanPalletNormalized = cleanBarcode.replaceAll('-', '').replaceAll('PAL', '');
     final matchingPalletIds = _pallets
         .where((p) =>
             p.palletCode.trim().toUpperCase() == cleanBarcode ||
             p.palletId.trim().toUpperCase() == cleanBarcode ||
             p.palletId.trim().toUpperCase() == 'PAL-$cleanBarcode' ||
+            p.palletId.trim().toUpperCase().replaceAll('-', '') == cleanBarcode.replaceAll('-', '') ||
+            (cleanPalletNormalized.isNotEmpty && p.palletId.trim().toUpperCase().replaceAll('-', '').replaceAll('PAL', '') == cleanPalletNormalized) ||
             (p.rfidEpc != null && p.rfidEpc!.trim().toUpperCase() == cleanBarcode))
         .map((p) => p.palletId.trim().toUpperCase())
         .toSet();
@@ -4124,7 +4283,13 @@ class WarehouseRepository extends ChangeNotifier {
       if (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.palletId != null) {
         final itPal = it.palletId!.trim().toUpperCase();
-        if (itPal == cleanBarcode || itPal == 'PAL-$cleanBarcode' || matchingPalletIds.contains(itPal)) return true;
+        if (itPal == cleanBarcode ||
+            itPal == 'PAL-$cleanBarcode' ||
+            itPal.replaceAll('-', '') == cleanBarcode.replaceAll('-', '') ||
+            (cleanPalletNormalized.isNotEmpty && itPal.replaceAll('-', '').replaceAll('PAL', '') == cleanPalletNormalized) ||
+            matchingPalletIds.contains(itPal)) {
+          return true;
+        }
       }
       if (it.cartonCode != null && it.cartonCode!.trim().toUpperCase() == cleanBarcode) return true;
       if (it.sku.trim().toUpperCase() == cleanBarcode) return true;
@@ -4158,7 +4323,12 @@ class WarehouseRepository extends ChangeNotifier {
       final dbItems = await _dbService.getItems();
       final pulledFromDb = dbItems.where((it) =>
         (it.orderNo != null && it.orderNo!.trim().toUpperCase() == cleanBarcode) ||
-        (it.palletId != null && it.palletId!.trim().toUpperCase() == cleanBarcode) ||
+        (it.palletId != null && (
+          it.palletId!.trim().toUpperCase() == cleanBarcode ||
+          it.palletId!.trim().toUpperCase() == 'PAL-$cleanBarcode' ||
+          it.palletId!.trim().toUpperCase().replaceAll('-', '') == cleanBarcode.replaceAll('-', '') ||
+          (cleanPalletNormalized.isNotEmpty && it.palletId!.trim().toUpperCase().replaceAll('-', '').replaceAll('PAL', '') == cleanPalletNormalized)
+        )) ||
         it.sku.trim().toUpperCase() == cleanBarcode
       ).toList();
       if (pulledFromDb.isNotEmpty) {
@@ -4244,6 +4414,12 @@ class WarehouseRepository extends ChangeNotifier {
       it.locationId = loc.locationId;
       it.putawayBy = actualPerformer;
       it.inboundTime ??= now;
+      if (cleanBarcode.startsWith('PAL') || cleanBarcode.startsWith('PL')) {
+        final canonicalPal = cleanBarcode.startsWith('PAL-')
+            ? cleanBarcode
+            : (cleanBarcode.startsWith('PAL') ? 'PAL-${cleanBarcode.substring(3)}' : 'PAL-$cleanBarcode');
+        it.palletId = canonicalPal;
+      }
 
       await _dbService.insertItem(it);
       await _dbService.updateItemLocationAndPallet(it.epc, loc.locationId, it.palletId);

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -124,6 +125,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
   bool _isImporting = false;
   bool _isSaving = false;
 
+  // Tự động xác nhận xuất kho sau 1s khi quét đủ 100%
+  Timer? _autoConfirmTimer;
+  bool _isAutoConfirming = false;
+
   StreamSubscription<TagInfo>? _tagSubscription;
   StreamSubscription<bool>? _triggerSubscription;
   DateTime? _lastTriggerPressTime;
@@ -139,9 +144,12 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _uhf.enableScanning('xuat_kho');
     _uhf.setScanMode(PdaScanMode.rfid);
     _initHardwareListeners();
-    _initInitialData();
-    // Tự động kéo đơn xuất kho mới nhất từ Supabase Cloud khi vào màn hình
-    unawaited(_repo.reloadFromDatabase());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initInitialData();
+    });
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      unawaited(_repo.reloadFromDatabase());
+    }
   }
 
   void _onStateChange() {
@@ -225,6 +233,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   @override
   void dispose() {
+    _autoConfirmTimer?.cancel();
     _uhf.disableScanning();
     HardwareKeyboard.instance.removeHandler(_handleHardwareKeyEvent);
     _tagSubscription?.cancel();
@@ -235,6 +244,46 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _auth.removeListener(_onStateChange);
     _towerLight.removeListener(_onStateChange);
     super.dispose();
+  }
+
+  void _cancelAutoConfirm() {
+    if (_autoConfirmTimer != null) {
+      _autoConfirmTimer?.cancel();
+      _autoConfirmTimer = null;
+    }
+    if (_isAutoConfirming && mounted) {
+      setState(() => _isAutoConfirming = false);
+    }
+  }
+
+  void _triggerAutoConfirmIfReady({
+    required int totalExpected,
+    required int scannedMatching,
+    required List<String> unexp,
+  }) {
+    if (_isSaving || _pendingOutboundOrder == null) {
+      _cancelAutoConfirm();
+      return;
+    }
+    final order = _pendingOutboundOrder!;
+    if (!order.isStockSufficient || order.items.any((i) => !i.isInStock)) {
+      _cancelAutoConfirm();
+      return;
+    }
+    if (unexp.isNotEmpty || scannedMatching < totalExpected || totalExpected == 0) {
+      _cancelAutoConfirm();
+      return;
+    }
+
+    if (_autoConfirmTimer == null && !_isSaving) {
+      if (mounted) {
+        setState(() => _isAutoConfirming = true);
+      }
+      _autoConfirmTimer = Timer(const Duration(milliseconds: 1000), () async {
+        if (!mounted || _pendingOutboundOrder == null || _isSaving) return;
+        await _confirmOutboundDelivery(isAuto: true);
+      });
+    }
   }
 
   // ---------- XỬ LÝ QUÉT & ĐỐI SOÁT CHIP THỜI GIAN THỰC ----------
@@ -320,10 +369,12 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
       SystemSound.play(SystemSoundType.alert);
       HapticFeedback.heavyImpact();
+      _cancelAutoConfirm();
       _towerLight.triggerWarningRed(
         withBuzzer: true,
         reason: reasonText,
-        persistent: true,
+        persistent: false,
+        durationSeconds: 3,
       );
     } else {
       if (autoMatchedPalletItems.isNotEmpty) {
@@ -336,6 +387,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
         final item = _cachedItemByEpc![epc];
         if (item != null) {
           if (!item.isInStock) {
+            _cancelAutoConfirm();
             _towerLight.triggerWarningRed(
               withBuzzer: true,
               reason: 'CẢNH BÁO TỒN KHO: Mã chip $epc (SKU: ${item.sku}) không có trong kho!',
@@ -366,6 +418,13 @@ class _OutboundScreenState extends State<OutboundScreen> {
         _towerLight.triggerPass(
           reason: 'ĐỦ HÀNG XUẤT KHO: $scannedMatching/$totalExpected sản phẩm đã thông qua tay cầm!',
         );
+        _triggerAutoConfirmIfReady(
+          totalExpected: totalExpected,
+          scannedMatching: scannedMatching,
+          unexp: unexpected,
+        );
+      } else {
+        _cancelAutoConfirm();
       }
     }
 
@@ -411,6 +470,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
   }
 
   void _clearGateScan() {
+    _cancelAutoConfirm();
     HapticFeedback.selectionClick();
     _stopGateScan();
     _invalidateOutboundCache();
@@ -934,7 +994,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
   }
 
   // ---------- XÁC NHẬN XUẤT KHO HOÀN TẤT & CẬP NHẬT KHO (HỖ TRỢ XUẤT LẺ THEO VỊ TRÍ) ----------
-  Future<void> _confirmOutboundDelivery() async {
+  Future<void> _confirmOutboundDelivery({bool isAuto = false}) async {
+    _cancelAutoConfirm();
     if (_isSaving || _pendingOutboundOrder == null) return;
     final order = _pendingOutboundOrder!;
 
@@ -991,81 +1052,83 @@ class _OutboundScreenState extends State<OutboundScreen> {
     }
     final locSummary = locCounts.entries.map((e) => '${e.key}: ${e.value} SP').join(', ');
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _eyeCare.colors.bgCardElevated,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(
-              isPartial ? Icons.shopping_basket_outlined : Icons.check_circle_outline,
-              color: isPartial ? const Color(0xFF0284C7) : const Color(0xFF10B981),
-              size: 24,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                isPartial ? 'XÁC NHẬN XUẤT LẺ' : 'XÁC NHẬN XUẤT KHO ĐỦ',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+    if (!isAuto) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: _eyeCare.colors.bgCardElevated,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(
+                isPartial ? Icons.shopping_basket_outlined : Icons.check_circle_outline,
+                color: isPartial ? const Color(0xFF0284C7) : const Color(0xFF10B981),
+                size: 24,
               ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              isPartial
-                  ? 'Bạn đang thực hiện xuất lẻ ${scannedMatchingItems.length}/${order.items.length} sản phẩm theo vị trí kệ.'
-                  : 'Xác nhận xuất hoàn tất toàn bộ ${scannedMatchingItems.length} sản phẩm của đơn hàng ${order.orderNo}.',
-              style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: _eyeCare.colors.bgDeep,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: _eyeCare.colors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Vị trí kệ lấy hàng:', style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(locSummary, style: TextStyle(color: _eyeCare.colors.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-            if (isPartial) ...[
-              const SizedBox(height: 8),
-              Text(
-                '• Tồn kho tại các kệ trên sẽ được trừ ngay lập tức.\n• ${order.items.length - scannedMatchingItems.length} sản phẩm còn lại sẽ tiếp tục được giữ trong đơn để nhặt tiếp.',
-                style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 11.5, height: 1.4),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isPartial ? 'XÁC NHẬN XUẤT LẺ' : 'XÁC NHẬN XUẤT KHO ĐỦ',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
               ),
             ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isPartial
+                    ? 'Bạn đang thực hiện xuất lẻ ${scannedMatchingItems.length}/${order.items.length} sản phẩm theo vị trí kệ.'
+                    : 'Xác nhận xuất hoàn tất toàn bộ ${scannedMatchingItems.length} sản phẩm của đơn hàng ${order.orderNo}.',
+                style: TextStyle(color: _eyeCare.colors.textPrimary, fontSize: 13),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _eyeCare.colors.bgDeep,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _eyeCare.colors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Vị trí kệ lấy hàng:', style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 11, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(locSummary, style: TextStyle(color: _eyeCare.colors.rfidCyan, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              if (isPartial) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '• Tồn kho tại các kệ trên sẽ được trừ ngay lập tức.\n• ${order.items.length - scannedMatchingItems.length} sản phẩm còn lại sẽ tiếp tục được giữ trong đơn để nhặt tiếp.',
+                  style: TextStyle(color: _eyeCare.colors.textSecondary, fontSize: 11.5, height: 1.4),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('HỦY', style: TextStyle(color: _eyeCare.colors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isPartial ? const Color(0xFF0284C7) : const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(isPartial ? 'XUẤT LẺ' : 'XUẤT HOÀN TẤT'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('HỦY', style: TextStyle(color: _eyeCare.colors.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isPartial ? const Color(0xFF0284C7) : const Color(0xFF10B981),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isPartial ? 'XUẤT LẺ' : 'XUẤT HOÀN TẤT'),
-          ),
-        ],
-      ),
-    );
+      );
 
-    if (confirmed != true) return;
+      if (confirmed != true) return;
+    }
 
     setState(() => _isSaving = true);
     try {
@@ -1112,6 +1175,30 @@ class _OutboundScreenState extends State<OutboundScreen> {
         setState(() {
           _pendingOutboundOrder = null;
         });
+
+        if (isAuto) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 3),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '✓ ĐÃ TỰ ĐỘNG XUẤT KHO THÀNH CÔNG: $shippedCount SP cho đơn ${order.orderNo}!',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+          return;
+        }
 
         showDialog(
           context: context,
@@ -1478,8 +1565,14 @@ class _OutboundScreenState extends State<OutboundScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    Text(o.poNo, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                                    const Spacer(),
+                                    Expanded(
+                                      child: Text(
+                                        o.poNo,
+                                        style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
@@ -2151,11 +2244,11 @@ class _OutboundScreenState extends State<OutboundScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: c.textPrimary,
                 side: BorderSide(color: c.border),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.replay, size: 15, color: Color(0xFF0284C7)),
-              label: const Text('Làm Mới Quét', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              icon: const Icon(Icons.replay, size: 14, color: Color(0xFF0284C7)),
+              label: const Text('Làm mới', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               onPressed: _clearGateScan,
             ),
             const SizedBox(width: 6),
@@ -2165,11 +2258,11 @@ class _OutboundScreenState extends State<OutboundScreen> {
                 foregroundColor: _isScanning ? Colors.white : c.textPrimary,
                 backgroundColor: _isScanning ? const Color(0xFFEF4444) : null,
                 side: BorderSide(color: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7)),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              icon: Icon(_isScanning ? Icons.stop : Icons.play_arrow, size: 15, color: _isScanning ? Colors.white : const Color(0xFF0284C7)),
-              label: Text(_isScanning ? 'Dừng Quét' : 'Bắt Đầu Quét', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isScanning ? Colors.white : c.textPrimary)),
+              icon: Icon(_isScanning ? Icons.stop : Icons.play_arrow, size: 14, color: _isScanning ? Colors.white : const Color(0xFF0284C7)),
+              label: Text(_isScanning ? 'Dừng' : 'Quét', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isScanning ? Colors.white : c.textPrimary)),
               onPressed: _toggleGateScan,
             ),
             if (canConfirm) ...[
@@ -2188,7 +2281,9 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   icon: isStockSufficient
                       ? (_isSaving
                           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : Icon(isComplete ? Icons.check_circle : Icons.shopping_basket, size: 16))
+                          : Icon(_isAutoConfirming
+                              ? Icons.hourglass_top_rounded
+                              : (isComplete ? Icons.check_circle : Icons.shopping_basket), size: 16))
                       : const Icon(Icons.block, size: 16),
                   label: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -2197,13 +2292,15 @@ class _OutboundScreenState extends State<OutboundScreen> {
                           ? 'KHÓA XUẤT (THIẾU TỒN)'
                           : (_isSaving
                               ? 'ĐANG LƯU KHO...'
-                              : (isComplete
-                                  ? '✓ XÁC NHẬN XUẤT ĐỦ ($scannedCount/$expectedCount)'
-                                  : '✓ XÁC NHẬN XUẤT LẺ ($scannedCount/$expectedCount)')),
+                              : (_isAutoConfirming
+                                  ? '✓ ĐÃ ĐỦ ($scannedCount/$expectedCount) - TỰ ĐỘNG XUẤT SAU 1S...'
+                                  : (isComplete
+                                      ? '✓ XÁC NHẬN XUẤT ĐỦ ($scannedCount/$expectedCount)'
+                                      : '✓ XÁC NHẬN XUẤT LẺ ($scannedCount/$expectedCount)'))),
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),
-                  onPressed: (_isSaving || !isStockSufficient) ? null : _confirmOutboundDelivery,
+                  onPressed: (_isSaving || !isStockSufficient) ? null : () => _confirmOutboundDelivery(isAuto: false),
                 ),
               ),
             ],

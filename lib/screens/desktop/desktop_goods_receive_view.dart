@@ -36,7 +36,7 @@ class _PendingGateOrder {
   List<String> getPalletCodes() {
     final codes = <String>{};
     if (pallets.isNotEmpty) {
-      codes.addAll(pallets.keys);
+      codes.addAll(pallets.keys.where((k) => k.trim().isNotEmpty));
     }
     for (final it in items) {
       if (it.palletId != null && it.palletId!.isNotEmpty) {
@@ -745,7 +745,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _towerLight.triggerWarningRed(
         withBuzzer: !_isBuzzerManuallySilenced,
         reason: '🚨 CẢNH BÁO NHẬP KHO: Phát hiện chip ($cleanEpc) qua cổng khi CHƯA CÓ ĐƠN HÀNG!',
-        persistent: true,
+        persistent: false,
+        durationSeconds: 3,
       );
       if (!_securityAlertLoggedEpcs.contains(cleanEpc)) {
         _securityAlertLoggedEpcs.add(cleanEpc);
@@ -1076,7 +1077,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _towerLight.triggerWarningRed(
         withBuzzer: !_isBuzzerManuallySilenced,
         reason: '🚨 CẢNH BÁO NHẬP KHO: Phát hiện chip lạ ngoài đơn: $cleanEpc',
-        persistent: true,
+        persistent: false,
+        durationSeconds: 3,
       );
     }
 
@@ -1253,8 +1255,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
   /// Kích hoạt quét đối soát cho MỘT pallet cụ thể trong đơn hàng
   void _selectActivePendingPallet(String orderNo, String? palletCode) {
-    if (palletCode == null) {
-      // Không có palletCode -> fallback về chọn toàn bộ đơn
+    if (palletCode == null || palletCode.trim().isEmpty) {
+      // Không có palletCode -> fallback về chọn toàn bộ đơn (hàng lẻ không pallet)
       _selectActivePendingOrder(orderNo);
       return;
     }
@@ -1421,42 +1423,53 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         final palItems = entry['palItems'] as List<Item>;
         final scannedEpcs = entry['scannedEpcs'] as List<String>;
         final ordNo = entry['orderNo'] as String;
+        final isNoPallet = palCode.isEmpty || palCode == ordNo || palCode == 'NO_PALLET' || palCode == 'KHONG_PALLET';
 
-        final palObj = _repo.pallets.where((p) =>
-          p.palletCode.toUpperCase() == palCode.toUpperCase() ||
-          p.palletId.toUpperCase() == 'PAL-$palCode' ||
-          p.palletId.toUpperCase() == palCode.toUpperCase()
-        ).firstOrNull;
+        final palObj = isNoPallet
+            ? null
+            : _repo.pallets.where((p) =>
+                p.palletCode.toUpperCase() == palCode.toUpperCase() ||
+                p.palletId.toUpperCase() == 'PAL-$palCode' ||
+                p.palletId.toUpperCase() == palCode.toUpperCase()
+              ).firstOrNull;
 
-        final rfidEpc = palObj?.rfidEpc ??
-            _scannedPalletTagsByOrderNo[ordNo] ??
-            pending?.pallets[palCode] ??
-            pending?.pallets['PAL-$palCode'] ??
-            (_activePallet?.palletCode == palCode ? _activePalletTag : null);
+        final rfidEpc = isNoPallet
+            ? null
+            : (palObj?.rfidEpc ??
+                _scannedPalletTagsByOrderNo[ordNo] ??
+                pending?.pallets[palCode] ??
+                pending?.pallets['PAL-$palCode'] ??
+                (_activePallet?.palletCode == palCode ? _activePalletTag : null));
 
         try {
           if (pending != null && pending.products.isNotEmpty) {
             await _repo.addProductsBatch(pending.products);
           }
-          await _repo.registerOrUpdatePallet(palletCode: palCode, rfidEpc: rfidEpc ?? '');
+          if (!isNoPallet) {
+            await _repo.registerOrUpdatePallet(palletCode: palCode, rfidEpc: rfidEpc ?? '');
+          }
+          final targetPalId = isNoPallet ? null : (palCode.startsWith('PAL-') ? palCode : 'PAL-$palCode');
           if (pending != null) {
             await _repo.addInboundOrder(pending.order, autoGenerateEpcs: false);
             for (var it in palItems) {
               it.status = ItemStatus.waitingPutaway;
+              it.palletId = targetPalId;
             }
             await _repo.insertDirectItems(palItems);
           }
 
-          await _repo.assignItemsToPallet(
-            palletCode: palCode,
-            rfidEpc: rfidEpc,
-            itemEpcs: scannedEpcs,
-          );
+          if (!isNoPallet) {
+            await _repo.assignItemsToPallet(
+              palletCode: palCode,
+              rfidEpc: rfidEpc,
+              itemEpcs: scannedEpcs,
+            );
+          }
 
           await _repo.confirmGateReceiveToWaitingPutaway(
             orderNo: ordNo,
             scannedEpcs: scannedEpcs,
-            palletCode: palCode,
+            palletCode: isNoPallet ? null : palCode,
             performedBy: 'Cổng RFID Gate',
           );
           _passedGateEpcs.addAll(scannedEpcs);
@@ -1466,11 +1479,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
           _recentCompletedPasses.insert(0, {
             'orderNo': ordNo,
-            'palletCode': palCode,
+            'palletCode': isNoPallet ? 'Hàng lẻ (Không Pallet)' : palCode,
             'count': scannedEpcs.length,
             'total': palItems.length,
             'time': DateTime.now(),
-            'status': 'CHỜ XẾP KỆ',
+            'status': isNoPallet ? 'CHỜ CẤT KỆ' : 'CHỜ XẾP KỆ',
             'isSuccess': true,
           });
 
@@ -2786,7 +2799,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'KỊCH BẢN DEMO: TẠO PHIẾU NHẬP & TỰ SINH MÃ RFID',
+                                  'TẠO PHIẾU NHẬP LẺ',
                                   style: TextStyle(
                                     color: c.textPrimary,
                                     fontWeight: FontWeight.bold,
@@ -2796,7 +2809,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  'Tự động sinh mã EPC cố định theo tài sản và số lượng • Chuẩn bị hàng qua cổng RFID',
+                                  'Tạo đơn nhập lẻ và gán mã RFID theo số lượng tài sản • Sẵn sàng nạp vào cổng đối soát',
                                   style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                                 ),
                               ],
@@ -2826,7 +2839,10 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: c.border),
                               ),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
                                 children: [
                                   // Mã đơn nhập
                                   Expanded(
@@ -2862,16 +2878,33 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  // Pallet đích
+                                  // Pallet đích (cho phép để trống đối với đơn hàng lẻ không dùng pallet)
                                   Expanded(
-                                    flex: 2,
+                                    flex: 3,
                                     child: TextField(
                                       controller: palletController,
+                                      onChanged: (_) => setDialogState(() {}),
                                       style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                                       decoration: InputDecoration(
                                         labelText: 'Mã Pallet',
+                                        hintText: 'Để trống nếu là hàng lẻ',
+                                        hintStyle: TextStyle(color: c.textSecondary.withValues(alpha: 0.6), fontSize: 11),
                                         labelStyle: TextStyle(color: c.textSecondary, fontSize: 12),
-                                        prefixIcon: const Icon(Icons.grid_view_rounded, size: 18),
+                                        prefixIcon: Icon(
+                                          palletController.text.trim().isEmpty ? Icons.layers_clear_outlined : Icons.grid_view_rounded,
+                                          size: 18,
+                                          color: palletController.text.trim().isEmpty ? const Color(0xFFF59E0B) : const Color(0xFF0284C7),
+                                        ),
+                                        suffixIcon: palletController.text.trim().isNotEmpty
+                                            ? IconButton(
+                                                icon: const Icon(Icons.clear, size: 16),
+                                                tooltip: 'Xóa pallet (đổi sang hàng lẻ rời)',
+                                                onPressed: () {
+                                                  palletController.clear();
+                                                  setDialogState(() {});
+                                                },
+                                              )
+                                            : null,
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                         isDense: true,
@@ -2880,7 +2913,82 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                   ),
                                 ],
                               ),
-                            ),
+                              // Thanh hiển thị trực quan trạng thái Pallet vs Hàng lẻ
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  if (palletController.text.trim().isEmpty) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF3B82F6).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.inventory_2_outlined, size: 14, color: Color(0xFF3B82F6)),
+                                          SizedBox(width: 5),
+                                          Text(
+                                            '📦 Đơn hàng lẻ xếp rời • Không gắn Pallet (pallet_id = NULL)',
+                                            style: TextStyle(color: Color(0xFF3B82F6), fontSize: 11.5, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      ),
+                                      icon: const Icon(Icons.add_circle_outline, size: 14, color: Color(0xFF0284C7)),
+                                      label: const Text('Gán xe Pallet (PL01)', style: TextStyle(fontSize: 11.5, color: Color(0xFF0284C7))),
+                                      onPressed: () {
+                                        palletController.text = 'PL01';
+                                        setDialogState(() {});
+                                      },
+                                    ),
+                                  ] else ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.grid_view_rounded, size: 14, color: Color(0xFF10B981)),
+                                          const SizedBox(width: 5),
+                                          Text(
+                                            '🏷️ Đóng theo xe Pallet: ${palletController.text.trim().toUpperCase()}',
+                                            style: const TextStyle(color: Color(0xFF10B981), fontSize: 11.5, fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      ),
+                                      icon: const Icon(Icons.layers_clear_outlined, size: 14, color: Color(0xFFF59E0B)),
+                                      label: const Text('Bỏ Pallet (Hàng lẻ rời)', style: TextStyle(fontSize: 11.5, color: Color(0xFFF59E0B))),
+                                      onPressed: () {
+                                        palletController.clear();
+                                        setDialogState(() {});
+                                      },
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
 
                             const SizedBox(height: 16),
                             Text(
@@ -2947,9 +3055,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                       activeColor: const Color(0xFF0284C7),
                                       onChanged: (v) => setDialogState(() => enterGateImmediately = v ?? true),
                                     ),
-                                    Text(
-                                      'Kích hoạt và chuyển ngay vào màn hình cổng quét đối soát sau khi tạo',
-                                      style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                                    Expanded(
+                                      child: Text(
+                                        'Kích hoạt và chuyển ngay vào màn hình cổng quét đối soát sau khi tạo',
+                                        style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -2968,7 +3078,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
                         border: Border(top: BorderSide(color: c.border)),
                       ),
-                      child: Row(
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 12,
+                        runSpacing: 10,
                         children: [
                           // Thống kê tổng số lượng
                           Container(
@@ -2978,6 +3092,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 16),
                                 const SizedBox(width: 6),
@@ -2992,72 +3107,76 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               ],
                             ),
                           ),
-                          const Spacer(),
 
-                          // Nút In & Mã hóa tem RFID
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: c.textPrimary,
-                              side: BorderSide(color: c.border),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.qr_code_2, size: 18),
-                            label: const Text('IN & MÃ HÓA TEM RFID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                            onPressed: totalQty == 0 ? null : () {
-                              final pkg = InboundDemoScenarioService.buildDemoPackage(
-                                orderNo: orderNoController.text.trim().isEmpty ? defaultOrderNo : orderNoController.text.trim(),
-                                supplier: supplierController.text.trim(),
-                                palletCode: palletController.text.trim(),
-                                rackQty: includeRack ? rackQty : 0,
-                                boxQty: includeBox ? boxQty : 0,
-                              );
-                              _showPrintAndEncodeTagsDialog(dialogContext, pkg);
-                            },
-                          ),
-                          const SizedBox(width: 10),
-
-                          TextButton(
-                            onPressed: () => Navigator.pop(dialogContext),
-                            child: Text('HỦY', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 10),
-
-                          // Nút Tạo & Nạp vào cổng
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0284C7),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              elevation: 2,
-                            ),
-                            icon: const Icon(Icons.playlist_add_check, size: 18, color: Colors.white),
-                            label: const Text(
-                              'TẠO & NẠP VÀO CỔNG',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12.5,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Nút In & Mã hóa tem RFID
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: c.textPrimary,
+                                  side: BorderSide(color: c.border),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                icon: const Icon(Icons.qr_code_2, size: 18),
+                                label: const Text('IN & MÃ HÓA TEM RFID', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                onPressed: totalQty == 0 ? null : () {
+                                  final pkg = InboundDemoScenarioService.buildDemoPackage(
+                                    orderNo: orderNoController.text.trim().isEmpty ? defaultOrderNo : orderNoController.text.trim(),
+                                    supplier: supplierController.text.trim(),
+                                    palletCode: palletController.text.trim(),
+                                    rackQty: includeRack ? rackQty : 0,
+                                    boxQty: includeBox ? boxQty : 0,
+                                  );
+                                  _showPrintAndEncodeTagsDialog(dialogContext, pkg);
+                                },
                               ),
-                            ),
-                            onPressed: totalQty == 0 ? null : () async {
-                              final ordNo = orderNoController.text.trim().isEmpty ? defaultOrderNo : orderNoController.text.trim().toUpperCase();
-                              final supp = supplierController.text.trim();
-                              final palCode = palletController.text.trim().isEmpty ? 'PL01' : palletController.text.trim().toUpperCase();
+                              const SizedBox(width: 10),
 
-                              final pkg = InboundDemoScenarioService.buildDemoPackage(
-                                orderNo: ordNo,
-                                supplier: supp,
-                                palletCode: palCode,
-                                rackQty: includeRack ? rackQty : 0,
-                                boxQty: includeBox ? boxQty : 0,
-                              );
+                              TextButton(
+                                onPressed: () => Navigator.pop(dialogContext),
+                                child: Text('HỦY', style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(width: 10),
 
-                              Navigator.pop(dialogContext);
+                              // Nút Tạo & Nạp vào cổng
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0284C7),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  elevation: 2,
+                                ),
+                                icon: const Icon(Icons.playlist_add_check, size: 18, color: Colors.white),
+                                label: const Text(
+                                  'TẠO & NẠP VÀO CỔNG',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                                onPressed: totalQty == 0 ? null : () async {
+                                  final ordNo = orderNoController.text.trim().isEmpty ? defaultOrderNo : orderNoController.text.trim().toUpperCase();
+                                  final supp = supplierController.text.trim();
+                                  final palCode = palletController.text.trim().toUpperCase();
 
-                              await _applyDemoInboundPackage(pkg, enterGateImmediately: enterGateImmediately);
-                            },
+                                  final pkg = InboundDemoScenarioService.buildDemoPackage(
+                                    orderNo: ordNo,
+                                    supplier: supp,
+                                    palletCode: palCode,
+                                    rackQty: includeRack ? rackQty : 0,
+                                    boxQty: includeBox ? boxQty : 0,
+                                  );
+
+                                  Navigator.pop(dialogContext);
+
+                                  await _applyDemoInboundPackage(pkg, enterGateImmediately: enterGateImmediately);
+                                },
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -3082,13 +3201,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _pendingGateOrders.removeWhere((p) => p.order.orderNo == pkg.order.orderNo || p.order.inboundOrderId == pkg.order.inboundOrderId);
       _pendingLoadedOrderNos.removeWhere((no) => no == pkg.order.orderNo);
 
+      final hasPallet = pkg.palletCode.isNotEmpty;
       _pendingGateOrders.add(_PendingGateOrder(
         order: pkg.order,
         items: pkg.items,
         products: pkg.products,
-        pallets: {pkg.palletCode: null},
+        pallets: hasPallet ? {pkg.palletCode: null} : {},
         supplier: pkg.supplier,
-        fileName: 'Kịch bản Demo RFID (Tủ Rack & Hộp Sắt)',
+        fileName: hasPallet
+            ? 'Phiếu Nhập Lẻ (Pallet ${pkg.palletCode})'
+            : 'Phiếu Nhập Lẻ (Hàng lẻ không Pallet)',
       ));
       _pendingLoadedOrderNos.add(pkg.order.orderNo);
 
@@ -3106,7 +3228,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           SnackBar(
             duration: const Duration(seconds: 3),
             backgroundColor: const Color(0xFF10B981),
-            content: Text('✓ Đã tạo phiếu nhập ${pkg.order.orderNo} gồm ${pkg.items.length} thẻ RFID sẵn sàng qua cổng!'),
+            content: Text(hasPallet
+                ? '✓ Đã tạo phiếu nhập lẻ ${pkg.order.orderNo} (Pallet ${pkg.palletCode}) gồm ${pkg.items.length} thẻ RFID sẵn sàng qua cổng!'
+                : '✓ Đã tạo phiếu nhập lẻ ${pkg.order.orderNo} (Hàng lẻ không Pallet) gồm ${pkg.items.length} thẻ RFID sẵn sàng qua cổng!'),
           ),
         );
       }
@@ -3116,7 +3240,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           SnackBar(
             duration: const Duration(seconds: 3),
             backgroundColor: const Color(0xFFEF4444),
-            content: Text('Lỗi tạo phiếu nhập demo: $e'),
+            content: Text('Lỗi tạo phiếu nhập lẻ: $e'),
           ),
         );
       }
@@ -3217,45 +3341,58 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             ),
             const SizedBox(height: 12),
 
-            Row(
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 8,
+              runSpacing: 6,
               children: [
-                Text(
-                  'Số lượng nhập ($unit):',
-                  style: TextStyle(color: c.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Số lượng nhập ($unit):',
+                      style: TextStyle(color: c.textSecondary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, size: 20),
+                      color: currentQty > minQty ? c.rfidCyan : c.textSecondary.withValues(alpha: 0.4),
+                      onPressed: currentQty > minQty ? () => onQtyChanged(currentQty - 1) : null,
+                      tooltip: 'Giảm 1',
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: c.bgCard,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Text(
+                        '$currentQty / $maxQty $unit',
+                        style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline, size: 20),
+                      color: currentQty < maxQty ? c.rfidCyan : c.textSecondary.withValues(alpha: 0.4),
+                      onPressed: currentQty < maxQty ? () => onQtyChanged(currentQty + 1) : null,
+                      tooltip: 'Tăng 1',
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                IconButton(
-                  icon: const Icon(Icons.remove_circle_outline, size: 20),
-                  color: currentQty > minQty ? c.rfidCyan : c.textSecondary.withValues(alpha: 0.4),
-                  onPressed: currentQty > minQty ? () => onQtyChanged(currentQty - 1) : null,
-                  tooltip: 'Giảm 1',
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: c.bgCard,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: c.border),
-                  ),
-                  child: Text(
-                    '$currentQty / $maxQty $unit',
-                    style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                  color: currentQty < maxQty ? c.rfidCyan : c.textSecondary.withValues(alpha: 0.4),
-                  onPressed: currentQty < maxQty ? () => onQtyChanged(currentQty + 1) : null,
-                  tooltip: 'Tăng 1',
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => onQtyChanged(minQty),
-                  child: Text('Tối thiểu ($minQty)', style: TextStyle(fontSize: 11, color: c.textSecondary)),
-                ),
-                TextButton(
-                  onPressed: () => onQtyChanged(maxQty),
-                  child: Text('Tối đa ($maxQty)', style: TextStyle(fontSize: 11, color: iconColor, fontWeight: FontWeight.bold)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: () => onQtyChanged(minQty),
+                      child: Text('Tối thiểu ($minQty)', style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                    ),
+                    TextButton(
+                      onPressed: () => onQtyChanged(maxQty),
+                      child: Text('Tối đa ($maxQty)', style: TextStyle(fontSize: 11, color: iconColor, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -3570,7 +3707,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       _isBuzzerManuallySilenced = false;
     });
     if (_towerLight.currentStatus.color == TowerLightColor.red) {
-      _towerLight.triggerWarningRed(withBuzzer: true, reason: _towerLight.currentStatus.reason, persistent: true);
+      _towerLight.triggerWarningRed(withBuzzer: true, reason: _towerLight.currentStatus.reason, persistent: false, durationSeconds: 3);
     }
   }
 
@@ -4282,24 +4419,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                       // Badge Tháp Đèn Tín Hiệu CTP50-3T-D-J
                       _buildTowerLightBadge(c),
 
-                      // Nút Kịch Bản Demo: Tạo phiếu nhập kho và tự sinh các mã EPC cố định
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          elevation: 2,
-                        ),
-                        icon: const Icon(Icons.playlist_add_check_circle, size: 18),
-                        label: const Text(
-                          '+ TẠO PHIẾU NHẬP (DEMO RFID)',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
-                        onPressed: _showCreateDemoInboundDialog,
-                      ),
-
-                      // Nút Nhập Hàng với 2 lựa chọn (File Excel hoặc File nhập PO)
+                      // Nút Nhập Hàng với 3 lựa chọn (File Excel, File nhập PO hoặc Tạo phiếu nhập lẻ)
                       PopupMenuButton<String>(
                         enabled: !_isImporting,
                         tooltip: 'Chọn nguồn nhập hàng',
@@ -4317,6 +4437,8 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             _pickAndLoadLiveExcelFile();
                           } else if (value == 'po') {
                             _pickAndLoadPoFile();
+                          } else if (value == 'single_inbound') {
+                            _showCreateDemoInboundDialog();
                           } else if (value == 'clear_pending') {
                             _triggerClearAllPendingDialog();
                           }
@@ -4394,6 +4516,45 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                           const SizedBox(height: 2),
                                           Text(
                                             'Nạp file đơn PO mua hàng: Mã PO, Nhà cung cấp, SKU, Số lượng',
+                                            style: TextStyle(color: c.textSecondary, fontSize: 11),
+                                            softWrap: true,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const PopupMenuDivider(),
+                            PopupMenuItem<String>(
+                              value: 'single_inbound',
+                              enabled: !_isImporting,
+                              child: SizedBox(
+                                width: 360,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.playlist_add_circle_outlined, color: Color(0xFF8B5CF6), size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'Tạo Phiếu Nhập Lẻ',
+                                            style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Tạo đơn nhập lẻ và gán mã RFID theo số lượng tài sản',
                                             style: TextStyle(color: c.textSecondary, fontSize: 11),
                                             softWrap: true,
                                           ),
@@ -4812,7 +4973,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       String? firstUnpassedPalletCode;
       for (final p in effectiveOrders) {
         final pPalletCodes = p.getPalletCodes();
+        final hasRealPallets = p.pallets.isNotEmpty || p.items.any((it) => it.palletId != null && it.palletId!.isNotEmpty);
         for (final palCode in pPalletCodes) {
+          final isNoPallet = !hasRealPallets && palCode == p.order.orderNo;
           final palItems = p.getItemsForPallet(palCode);
           final isPassed = p.passedPalletCodes.contains(palCode);
           final palScanned = palItems.where((i) {
@@ -4823,6 +4986,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           }).length;
           palletTrackers.add({
             'code': palCode,
+            'isNoPallet': isNoPallet,
             'scanned': palScanned,
             'total': palItems.length,
             'isPassed': isPassed,
@@ -5156,39 +5320,43 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               final code = pal['code'] as String;
               final scanned = pal['scanned'] as int;
               final total = pal['total'] as int;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isPassed
-                      ? const Color(0xFF10B981).withValues(alpha: 0.12)
-                      : (scanned > 0 ? c.rfidCyan.withValues(alpha: 0.1) : c.bgDeep),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: isPassed
-                        ? const Color(0xFF10B981)
-                        : (scanned > 0 ? c.rfidCyan : c.border),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isPassed ? Icons.check_circle : (scanned > 0 ? Icons.sensors : Icons.inventory_2_outlined),
-                      size: 14,
-                      color: isPassed ? const Color(0xFF10B981) : (scanned > 0 ? c.rfidCyan : const Color(0xFFF59E0B)),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Pallet $code: $scanned/$total chip ${isPassed ? '(✓ ĐÃ QUA CỔNG)' : ''}',
-                      style: TextStyle(
-                        color: isPassed ? const Color(0xFF10B981) : (scanned > 0 ? c.rfidCyan : c.textPrimary),
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
+                    final isNoPallet = pal['isNoPallet'] as bool? ?? false;
+                    final prefix = isNoPallet ? '📦 Hàng lẻ (Không Pallet)' : 'Pallet $code';
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isPassed
+                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                            : (scanned > 0 ? c.rfidCyan.withValues(alpha: 0.1) : c.bgDeep),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: isPassed
+                              ? const Color(0xFF10B981)
+                              : (scanned > 0 ? c.rfidCyan : c.border),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isPassed
+                                ? Icons.check_circle
+                                : (scanned > 0 ? Icons.sensors : (isNoPallet ? Icons.inventory_2_outlined : Icons.grid_view_rounded)),
+                            size: 14,
+                            color: isPassed ? const Color(0xFF10B981) : (scanned > 0 ? c.rfidCyan : const Color(0xFFF59E0B)),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '$prefix: $scanned/$total chip ${isPassed ? '(✓ ĐÃ QUA CỔNG)' : ''}',
+                            style: TextStyle(
+                              color: isPassed ? const Color(0xFF10B981) : (scanned > 0 ? c.rfidCyan : c.textPrimary),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
             }).toList(),
           ),
         ],

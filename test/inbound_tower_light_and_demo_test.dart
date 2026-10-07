@@ -3,6 +3,7 @@ import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/services/warehouse_repository.dart';
 import 'package:uhf/services/inbound_demo_service.dart';
 import 'package:uhf/services/tower_light_service.dart';
+import 'package:uhf/screens/pda/pda_putaway_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -69,7 +70,7 @@ void main() {
       for (final item in pkg.items) {
         expect(item.status, ItemStatus.pendingInbound);
         expect(item.orderNo, 'NK-TEST-001');
-        expect(item.palletId, 'PL01');
+        expect(item.palletId, 'PAL-PL01');
       }
     });
 
@@ -102,6 +103,34 @@ void main() {
       expect(repo.pallets.any((p) => p.palletCode == 'PL99'), isTrue);
       expect(repo.products.any((p) => p.sku == InboundDemoScenarioService.rackUnit.sku), isTrue);
       expect(repo.products.any((p) => p.sku == InboundDemoScenarioService.metalBox.sku), isTrue);
+    });
+
+    test('buildDemoPackage and saveDemoPackageToRepository support NON-PALLET loose cargo', () async {
+      final repo = WarehouseRepository();
+      final pkg = InboundDemoScenarioService.buildDemoPackage(
+        orderNo: 'NK-NO-PALLET',
+        palletCode: '', // Người dùng để trống mã Pallet
+        rackQty: 2,
+        boxQty: 5,
+      );
+
+      expect(pkg.palletCode, '');
+      expect(pkg.items.length, 7);
+      // Toàn bộ item phải có palletId là NULL
+      for (final item in pkg.items) {
+        expect(item.palletId, isNull, reason: 'Item palletId must be null for non-pallet loose cargo');
+      }
+
+      await InboundDemoScenarioService.saveDemoPackageToRepository(repo, pkg);
+
+      // Đơn hàng và sản phẩm được lưu bình thường
+      expect(repo.inboundOrders.any((o) => o.orderNo == 'NK-NO-PALLET'), isTrue);
+      final savedItems = repo.items.where((i) => i.orderNo == 'NK-NO-PALLET').toList();
+      expect(savedItems.length, 7);
+      expect(savedItems.every((it) => it.palletId == null), isTrue);
+
+      // Không tự ý tạo pallet rác
+      expect(repo.pallets.any((p) => p.palletCode.isEmpty || p.palletCode == 'NK-NO-PALLET'), isFalse);
     });
   });
 
@@ -165,6 +194,92 @@ void main() {
       expect(towerLight.currentStatus.color, TowerLightColor.off);
       expect(towerLight.currentStatus.isBuzzerOn, isFalse);
       expect(towerLight.currentStatus.isOff, isTrue);
+    });
+
+    test('triggerWarningRed automatically turns off after durationSeconds (2-3s)', () async {
+      await towerLight.triggerWarningRed(
+        withBuzzer: true,
+        reason: 'Cảnh báo chip lạ tự tắt',
+        durationSeconds: 1,
+      );
+      expect(towerLight.currentStatus.color, TowerLightColor.red);
+      expect(towerLight.currentStatus.isBuzzerOn, isTrue);
+
+      await Future.delayed(const Duration(milliseconds: 1100));
+      expect(towerLight.currentStatus.color, TowerLightColor.off);
+      expect(towerLight.currentStatus.isBuzzerOn, isFalse);
+    });
+  });
+
+  group('PDA Pallet Matching and Putaway Tests', () {
+    test('isSamePallet normalizes variants PAL-PL-01, PAL-PL01, PL-01, PL01', () {
+      expect(PdaPutawayScreen.isSamePallet('PAL-PL-01', 'PAL-PL01'), isTrue);
+      expect(PdaPutawayScreen.isSamePallet('PAL-PL-01', 'PL-01'), isTrue);
+      expect(PdaPutawayScreen.isSamePallet('PAL-PL01', 'PL01'), isTrue);
+      expect(PdaPutawayScreen.isSamePallet('PAL-PL-01', 'PL01'), isTrue);
+      expect(PdaPutawayScreen.isSamePallet('PAL-PL-01', 'PAL-PL-02'), isFalse);
+    });
+
+    test('confirmPdaPutawayByCarton puts away all 10 items across PAL-PL-01 and PAL-PL01 without missing', () async {
+      final repo = WarehouseRepository();
+      await repo.ensureInitialized();
+      final newItems = <Item>[];
+      final epcs = <String>[];
+      for (int i = 0; i < 9; i++) {
+        final epc = 'E280TESTPAL01_$i';
+        epcs.add(epc);
+        newItems.add(Item(
+          itemId: 'ITM-TEST-$i',
+          productId: 'PROD-BOX-01',
+          sku: 'BOX-MET-01',
+          productName: 'Hộp sắt đựng chứng từ',
+          serialNumber: 'SN-TEST-$i',
+          epc: epc,
+          status: ItemStatus.waitingPutaway,
+          orderNo: 'NK-DEMO-TEST-PALLET',
+          palletId: 'PAL-PL-01',
+        ));
+      }
+      // Item thứ 10 mang mã PAL-PL01 (thiếu gạch ngang)
+      final oddEpc = 'E280TESTPAL01_9';
+      epcs.add(oddEpc);
+      newItems.add(Item(
+        itemId: 'ITM-TEST-9',
+        productId: 'PROD-BOX-01',
+        sku: 'BOX-MET-01',
+        productName: 'Hộp sắt đựng chứng từ',
+        serialNumber: 'SN-TEST-9',
+        epc: oddEpc,
+        status: ItemStatus.waitingPutaway,
+        orderNo: 'NK-DEMO-TEST-PALLET',
+        palletId: 'PAL-PL01',
+      ));
+
+      await repo.insertDirectItems(newItems);
+
+      // Tạo vị trí kệ
+      await repo.addLocation(Location(
+        locationId: 'LOC-TEST-A1',
+        locationCode: 'A1-01',
+        zone: 'Khu A',
+        shelf: 'Kệ 1',
+        level: 'Tầng 1',
+      ));
+
+      // Thực hiện cất hàng bằng mã PAL-PL-01
+      final savedCount = await repo.confirmPdaPutawayByCarton(
+        cartonOrOrderBarcode: 'PAL-PL-01',
+        locationId: 'LOC-TEST-A1',
+      );
+
+      // Phải cất đủ toàn bộ 10 sản phẩm (kể cả item có PAL-PL01)
+      expect(savedCount, 10);
+      final putawayItems = repo.items.where((it) => epcs.contains(it.epc)).toList();
+      expect(putawayItems.length, 10);
+      expect(putawayItems.every((it) => it.status == ItemStatus.inStock), isTrue);
+      expect(putawayItems.every((it) => it.locationId == 'LOC-TEST-A1'), isTrue);
+      // Toàn bộ items đã được đồng bộ hóa mã pallet chuẩn
+      expect(putawayItems.every((it) => it.palletId == 'PAL-PL-01'), isTrue);
     });
   });
 }

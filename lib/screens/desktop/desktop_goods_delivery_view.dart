@@ -116,6 +116,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   int _lastSuccessCount = 0;
   Timer? _successBannerTimer;
 
+  // Tự động xác nhận xuất kho sau 1s khi quét đủ 100%
+  Timer? _autoConfirmTimer;
+  bool _isAutoConfirming = false;
+
   @override
   void initState() {
     super.initState();
@@ -241,7 +245,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
         _towerLight.triggerWarningRed(
           withBuzzer: !_isBuzzerManuallySilenced,
           reason: reasonText,
-          persistent: true,
+          persistent: false,
+          durationSeconds: 3,
         );
 
         for (final it in unauthorizedItems) {
@@ -318,6 +323,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
     final unexpected = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
     if (unexpected.isNotEmpty) {
+      _cancelAutoConfirm();
       final matchedInRepo = unexpected
           .map((u) => _repo.items.where((i) => i.epc.toUpperCase() == u).firstOrNull)
           .whereType<Item>()
@@ -338,7 +344,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       _towerLight.triggerWarningRed(
         withBuzzer: !_isBuzzerManuallySilenced,
         reason: reasonText,
-        persistent: true,
+        persistent: false,
+        durationSeconds: 3,
       );
 
       for (final unexpEpc in unexpected) {
@@ -372,6 +379,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
         final item = order.items.where((i) => i.epc.toUpperCase() == latestEpc).firstOrNull;
         if (item != null) {
           if (!item.isInStock) {
+            _cancelAutoConfirm();
             _towerLight.triggerWarningRed(
               withBuzzer: true,
               reason: 'CẢNH BÁO TỒN KHO: Mã chip $latestEpc (SKU: ${item.sku}) không có trong kho!',
@@ -401,16 +409,64 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
         _towerLight.triggerPass(
           reason: 'ĐỦ HÀNG XUẤT KHO: $scannedMatching/$totalExpected sản phẩm đã thông qua cổng RFID!',
         );
-      } else if (_isScanning) {
-        _towerLight.triggerScanning(
-          reason: 'ĐANG ĐỐI SOÁT XUẤT KHO: Cổng RFID đang tiếp nhận dữ liệu ($scannedMatching/$totalExpected)...',
+        _triggerAutoConfirmIfReady(
+          totalExpected: totalExpected,
+          scannedMatching: scannedMatching,
+          unexp: unexpected,
         );
       } else {
-        _towerLight.turnOffAll(reason: 'Sẵn sàng đối soát cổng xuất kho');
+        _cancelAutoConfirm();
+        if (_isScanning) {
+          _towerLight.triggerScanning(
+            reason: 'ĐANG ĐỐI SOÁT XUẤT KHO: Cổng RFID đang tiếp nhận dữ liệu ($scannedMatching/$totalExpected)...',
+          );
+        } else {
+          _towerLight.turnOffAll(reason: 'Sẵn sàng đối soát cổng xuất kho');
+        }
       }
     }
 
     _scheduleUiRefresh();
+  }
+
+  void _cancelAutoConfirm() {
+    if (_autoConfirmTimer != null) {
+      _autoConfirmTimer?.cancel();
+      _autoConfirmTimer = null;
+    }
+    if (_isAutoConfirming && mounted) {
+      setState(() => _isAutoConfirming = false);
+    }
+  }
+
+  void _triggerAutoConfirmIfReady({
+    required int totalExpected,
+    required int scannedMatching,
+    required List<String> unexp,
+  }) {
+    if (_isSaving || _pendingOutboundOrder == null) {
+      _cancelAutoConfirm();
+      return;
+    }
+    final order = _pendingOutboundOrder!;
+    if (!order.isStockSufficient || order.items.any((i) => !i.isInStock)) {
+      _cancelAutoConfirm();
+      return;
+    }
+    if (unexp.isNotEmpty || _hasUnresolvedSecurityViolation() || scannedMatching < totalExpected || totalExpected == 0) {
+      _cancelAutoConfirm();
+      return;
+    }
+
+    if (_autoConfirmTimer == null && !_isSaving) {
+      if (mounted) {
+        setState(() => _isAutoConfirming = true);
+      }
+      _autoConfirmTimer = Timer(const Duration(milliseconds: 1000), () async {
+        if (!mounted || _pendingOutboundOrder == null || _isSaving) return;
+        await _confirmOutboundDelivery(isAuto: true);
+      });
+    }
   }
 
   void _silenceBuzzer() {
@@ -461,6 +517,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   @override
   void dispose() {
+    _autoConfirmTimer?.cancel();
     _auth.removeListener(_onThemeChanged);
     _repo.removeListener(_onThemeChanged);
     _eyeCare.removeListener(_onThemeChanged);
@@ -566,7 +623,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       _towerLight.triggerWarningRed(
         withBuzzer: false,
         reason: 'CẢNH BÁO AN NINH: Phát hiện hàng trong kho / chip lạ qua cổng (Chờ xử lý)!',
-        persistent: true,
+        persistent: false,
+        durationSeconds: 3,
       );
     } else {
       _towerLight.turnOffAll(reason: 'Đã dừng quét cổng xuất kho');
@@ -581,6 +639,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   }
 
   void _clearGateScan() {
+    _cancelAutoConfirm();
     _stopGateScan();
     setState(() {
       _gateScannedTags.clear();
@@ -594,6 +653,7 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
 
   // ---------- NẠP FILE XUẤT KHO (EXCEL / CSV / PO) ----------
   Future<void> _pickAndLoadOutboundFile() async {
+    _cancelAutoConfirm();
     if (_isImporting) return;
     setState(() => _isImporting = true);
     try {
@@ -1119,7 +1179,8 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   }
 
   // ---------- XÁC NHẬN XUẤT KHO & CẬP NHẬT CƠ SỞ DỮ LIỆU ----------
-  Future<void> _confirmOutboundDelivery() async {
+  Future<void> _confirmOutboundDelivery({bool isAuto = false}) async {
+    _cancelAutoConfirm();
     if (_isSaving || _pendingOutboundOrder == null) return;
     final order = _pendingOutboundOrder!;
 
@@ -1197,6 +1258,30 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
       _successBannerTimer = Timer(const Duration(seconds: 4), () {
         if (mounted) setState(() => _lastSuccessOrderNo = null);
       });
+
+      if (isAuto) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '✓ ĐÃ TỰ ĐỘNG XUẤT KHO HOÀN TẤT: $shippedCount sản phẩm cho đơn ${order.orderNo}! Tồn kho và vị trí đã được giải phóng.',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        return;
+      }
 
       showDialog(
         context: context,
@@ -2108,6 +2193,19 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
   // ---------- 3. MÀN HÌNH CỔNG XUẤT KHO RFID ĐỐI SOÁT THỜI GIAN THỰC ----------
   Widget _buildOutboundGateMonitor(EyeCareColors c) {
     if (_pendingOutboundOrder == null) {
+      if (_lastSuccessOrderNo != null) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildPassSuccessBanner(c),
+              const SizedBox(height: 10),
+              Expanded(child: _buildIdleGateMonitor(c)),
+            ],
+          ),
+        );
+      }
       return _buildIdleGateMonitor(c);
     }
 
@@ -2753,9 +2851,10 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                                         ),
                                         const SizedBox(width: 8),
                                         SizedBox(
-                                          width: 110,
+                                          width: 125,
                                           child: Row(
                                             mainAxisAlignment: MainAxisAlignment.center,
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -2975,14 +3074,23 @@ class _DesktopGoodsDeliveryViewState extends State<DesktopGoodsDeliveryView> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             elevation: isStockSufficient ? 3 : 0,
                           ),
-                          icon: Icon(isStockSufficient ? Icons.check_circle : Icons.block, size: 16),
+                          icon: Icon(
+                            isStockSufficient
+                                ? (_isAutoConfirming ? Icons.hourglass_top_rounded : Icons.check_circle)
+                                : Icons.block,
+                            size: 16,
+                          ),
                           label: Text(
                             !isStockSufficient
                                 ? 'KHÓA XUẤT (THIẾU TỒN KHO)'
-                                : (_isSaving ? 'ĐANG LƯU...' : 'ĐÃ ĐỌC ĐỦ $scannedCount/$expectedCount (XÁC NHẬN XUẤT KHO)'),
+                                : (_isSaving
+                                    ? 'ĐANG LƯU...'
+                                    : (_isAutoConfirming
+                                        ? 'ĐÃ ĐỦ $scannedCount/$expectedCount (TỰ ĐỘNG XUẤT SAU 1S...)'
+                                        : 'ĐÃ ĐỌC ĐỦ $scannedCount/$expectedCount (XÁC NHẬN XUẤT KHO)')),
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                           ),
-                          onPressed: (_isSaving || !isStockSufficient) ? null : _confirmOutboundDelivery,
+                          onPressed: (_isSaving || !isStockSufficient) ? null : () => _confirmOutboundDelivery(isAuto: false),
                         ),
                       ],
                     ],

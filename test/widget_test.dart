@@ -1657,6 +1657,47 @@ void main() {
     expect(find.text('KK-20260918-001'), findsOneWidget);
     expect(find.text('PAL-MOVE-888'), findsNothing);
   });
+
+  testWidgets('DesktopGoodsReceiveView integrates Tạo Phiếu Nhập Lẻ into NHẬP HÀNG dropdown', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
+          body: DesktopGoodsReceiveView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify standalone demo button is NOT present
+    expect(find.text('+ TẠO PHIẾU NHẬP (DEMO RFID)'), findsNothing);
+
+    // Find and tap NHẬP HÀNG dropdown
+    final inboundDropdown = find.text('NHẬP HÀNG');
+    expect(inboundDropdown, findsOneWidget);
+    await tester.tap(inboundDropdown);
+    await tester.pumpAndSettle();
+
+    // Verify all 3 options exist
+    expect(find.text('Nhập File Excel / CSV (.xlsx, .csv)'), findsOneWidget);
+    expect(find.text('Nhập Từ PO (File PO)'), findsOneWidget);
+    expect(find.text('Tạo Phiếu Nhập Lẻ'), findsOneWidget);
+
+    // Tap Tạo Phiếu Nhập Lẻ
+    await tester.tap(find.text('Tạo Phiếu Nhập Lẻ'));
+    await tester.pumpAndSettle();
+
+    // Dialog should be displayed
+    expect(find.text('TẠO PHIẾU NHẬP LẺ'), findsOneWidget);
+    expect(find.text('TẠO & NẠP VÀO CỔNG'), findsOneWidget);
+  });
 }
 
 
