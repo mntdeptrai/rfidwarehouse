@@ -273,4 +273,116 @@ void main() {
     await repo.deleteItem(testItem.epc);
     if (await xlsxFile.exists()) await xlsxFile.delete();
   });
+
+  test('ReportExportService exports Inventory Report with Vòng Đời Thẻ column in XLSX and CSV', () async {
+    final repo = WarehouseRepository();
+    final exportService = ReportExportService();
+    await repo.ensureInitialized();
+
+    const epc = 'E2806894TESTLIFECYCLECOL01';
+    final now = DateTime.now();
+
+    final testItem = Item(
+      itemId: 'ITEM-LIFECYCLE-COL-01',
+      productId: 'PROD-LC-COL-1',
+      sku: 'SKU-LIFECYCLE-COL',
+      productName: 'Mặt Hàng Thử Nghiệm Vòng Đời',
+      serialNumber: 'SN-LC-COL-001',
+      epc: epc,
+      status: ItemStatus.inStock,
+      inboundTime: now.subtract(const Duration(hours: 1)),
+      locationId: 'KỆ A1',
+      palletId: 'PL-TEST-01',
+      orderNo: 'PO-LC-COL-999',
+    );
+    await repo.addItem(testItem);
+
+    // Ghi nhận thêm 1 sự kiện kiểm kê
+    await repo.recordTagLifecycle(
+      epc: epc,
+      itemId: testItem.itemId,
+      sku: testItem.sku,
+      productName: testItem.productName,
+      serialNumber: testItem.serialNumber,
+      action: TagLifecycleAction.auditMatch,
+      newStatus: ItemStatus.inStock.label,
+      toLocation: 'KỆ A1',
+      performedBy: 'Thủ kho Kiểm Kê',
+    );
+
+    // 1. Kiểm tra chuỗi tóm tắt có ngày giờ đầy đủ
+    final summary1 = repo.getTagLifecycleSummary(epc);
+    expect(summary1.contains('Khởi tạo mã'), isTrue);
+    expect(summary1.contains('Nhập kho'), isTrue);
+    expect(summary1.contains('Kiểm kê khớp'), isTrue);
+    expect(RegExp(r'\[\d{2}/\d{2}/\d{4} \d{2}:\d{2}\]').hasMatch(summary1), isTrue, reason: 'Mọi mốc sự kiện phải có ngày giờ [dd/MM/yyyy HH:mm]');
+
+    // 2. Thao tác điều chuyển vị trí từ KỆ A1 sang KỆ B2
+    final locA = Location(locationId: 'LOC-A1', locationCode: 'KỆ A1', zone: 'A', shelf: '1', level: '1');
+    final locB = Location(locationId: 'LOC-B2', locationCode: 'KỆ B2', zone: 'B', shelf: '2', level: '1');
+    await repo.addLocation(locA);
+    await repo.addLocation(locB);
+
+    await repo.moveItemIndividual(
+      epc: epc,
+      newLocationId: 'LOC-B2',
+      performedBy: 'Thủ kho Điều Chuyển',
+    );
+
+    final summaryAfterMove = repo.getTagLifecycleSummary(epc);
+    expect(summaryAfterMove.contains('Chuyển vị trí [KỆ A1 → KỆ B2]'), isTrue, reason: 'Sau khi di chuyển phải thể hiện vị trí chuyển đi/đến có ngày giờ');
+    expect(summaryAfterMove.contains('PL-TEST-01'), isTrue, reason: 'Phải ghi nhận chi tiết Pallet');
+
+    // 3. Thao tác ghi nhận gửi đi sửa chữa / bảo hành
+    await repo.recordItemRepair(
+      epc: epc,
+      reason: 'Lỗi cảm biến nhiệt',
+      performedBy: 'Kỹ thuật viên',
+    );
+
+    final summaryAfterRepair = repo.getTagLifecycleSummary(epc);
+    expect(summaryAfterRepair.contains('Gửi sửa chữa / Bảo hành [Lỗi cảm biến nhiệt]'), isTrue, reason: 'Phải ghi nhận sự kiện sửa chữa/thu hồi có ngày giờ');
+    expect(summaryAfterRepair.contains('KỆ B2'), isTrue, reason: 'Phải ghi nhận chi tiết Kệ khi sửa chữa');
+    expect(summaryAfterRepair.contains('PL-TEST-01'), isTrue, reason: 'Phải ghi nhận chi tiết Pallet khi sửa chữa');
+
+    // 4. Xuất Báo Cáo Tồn Kho (CSV) và xác thực dữ liệu cập nhật
+    final csvFile = await exportService.exportInventoryReport(ReportFormat.csv, items: [testItem]);
+    expect(await csvFile.exists(), isTrue);
+    final csvContent = await csvFile.readAsString();
+    expect(csvContent.contains('Vòng Đời Thẻ'), isTrue);
+    expect(csvContent.contains('Chuyển vị trí [KỆ A1 → KỆ B2]'), isTrue);
+    expect(csvContent.contains('Gửi sửa chữa / Bảo hành'), isTrue);
+
+    // 5. Xuất Báo Cáo Tồn Kho (XLSX) và xác thực dữ liệu cập nhật
+    final xlsxFile = await exportService.exportInventoryReport(ReportFormat.xlsx, items: [testItem]);
+    expect(await xlsxFile.exists(), isTrue);
+    final xlsxBytes = await xlsxFile.readAsBytes();
+    final excel = Excel.decodeBytes(xlsxBytes);
+    final sheet = excel['Ton_Kho_RFID'];
+    bool foundHeader = false;
+    bool foundMove = false;
+    bool foundRepair = false;
+    for (var row in sheet.rows) {
+      for (var cell in row) {
+        final val = cell?.value?.toString() ?? '';
+        if (val.contains('Vòng Đời Thẻ')) foundHeader = true;
+        if (val.contains('Chuyển vị trí [KỆ A1 → KỆ B2]')) foundMove = true;
+        if (val.contains('Gửi sửa chữa / Bảo hành')) foundRepair = true;
+      }
+    }
+    expect(foundHeader, isTrue);
+    expect(foundMove, isTrue);
+    expect(foundRepair, isTrue);
+
+    // Xác thực tự động căn chỉnh độ cao dòng (Row Height) cho dữ liệu nhiều dòng
+    final heights = sheet.getRowHeights;
+    expect(heights.values.any((h) => h > 22.0), isTrue, reason: 'Hàng có vòng đời nhiều dòng phải được tự động tăng độ cao');
+
+    // Dọn dẹp
+    await repo.deleteItem(epc);
+    await repo.deleteLocation('LOC-A1');
+    await repo.deleteLocation('LOC-B2');
+    if (await csvFile.exists()) await csvFile.delete();
+    if (await xlsxFile.exists()) await xlsxFile.delete();
+  });
 }

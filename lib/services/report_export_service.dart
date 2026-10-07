@@ -1279,6 +1279,7 @@ class ReportExportService {
     final headers = [
       'STT', 'Số Seri (SN)', 'Mã SKU', 'Tên Sản Phẩm', 'Mã Chip RFID (EPC)',
       'Vị Trí Kệ', 'Mã Pallet', 'Nhà Cung Cấp', 'Ngày Nhập Kho', 'Trạng Thái',
+      'Vòng Đời Thẻ',
     ];
 
     final rows = <List<String>>[];
@@ -1289,6 +1290,8 @@ class ReportExportService {
         final pallet = _repo.pallets.where((p) => p.palletId == it.palletId || p.palletCode == it.palletId).toList();
         palletDisplay = pallet.isNotEmpty ? pallet.first.displayName : it.palletId!;
       }
+
+      final lifecycleSummary = _repo.getTagLifecycleSummary(it.epc, multiline: true);
 
       rows.add([
         '${i + 1}',
@@ -1301,6 +1304,7 @@ class ReportExportService {
         _repo.getItemSupplier(it),
         it.inboundTime != null ? _dtFmt.format(it.inboundTime!) : '--',
         it.status.label,
+        lifecycleSummary,
       ]);
     }
 
@@ -1315,7 +1319,7 @@ class ReportExportService {
         buffer.writeln(r.map((c) => '"$c"').join(','));
       }
       buffer.writeln();
-      buffer.writeln('TỔNG CỘNG,,,"Tổng sản phẩm tồn: ${inStockItems.length}",,,,,,');
+      buffer.writeln('TỔNG CỘNG,,,"Tổng sản phẩm tồn: ${inStockItems.length}",,,,,,,');
       buffer.writeln();
       buffer.writeln('NGƯỜI LẬP BÁO CÁO,THỦ KHO,KẾ TOÁN KHO');
       buffer.writeln('(Ký ghi rõ họ tên),(Ký ghi rõ họ tên),(Ký ghi rõ họ tên)');
@@ -1341,8 +1345,38 @@ class ReportExportService {
 
       int r = startRow + 1;
       for (final rowData in rows) {
+        double maxLinesInRow = 1;
         for (int c = 0; c < rowData.length; c++) {
-          _setCell(sheet, col: c, row: r, value: rowData[c], style: (c == 0 || c == 1 || c == 2 || c == 5 || c == 8 || c == 9) ? _dataCellCenterStyle : null);
+          final text = rowData[c];
+          CellStyle? s;
+          if (c == 0 || c == 1 || c == 2 || c == 5 || c == 8 || c == 9) {
+            s = _dataCellCenterStyle;
+          } else if (c == 10) {
+            // Cột Vòng Đời Thẻ: tự động căn chỉnh xuống dòng
+            s = _dataCellWrapStyle;
+          }
+          _setCell(sheet, col: c, row: r, value: text, style: s);
+
+          // Tính toán số dòng để tự động chỉnh độ cao hàng Excel
+          if (c == 10 && text.isNotEmpty) {
+            final lines = text.split(RegExp(r'\r?\n'));
+            double linesCount = 0;
+            for (final line in lines) {
+              final wrapFactor = (line.length / 55).ceil();
+              linesCount += wrapFactor > 0 ? wrapFactor : 1;
+            }
+            if (linesCount > maxLinesInRow) {
+              maxLinesInRow = linesCount;
+            }
+          }
+        }
+
+        // Tự động căn chỉnh độ cao dòng (Row Height) dựa trên số dòng hiển thị
+        if (maxLinesInRow > 1) {
+          final rowHeight = (20.0 + (maxLinesInRow - 1) * 16.0).clamp(24.0, 220.0);
+          sheet.setRowHeight(r, rowHeight);
+        } else {
+          sheet.setRowHeight(r, 22.0);
         }
         r++;
       }
@@ -1642,11 +1676,20 @@ class ReportExportService {
         final val = cell.value?.toString() ?? '';
         // Bỏ qua các dòng tiêu đề dài ở cột 0 khi tính chiều rộng cột
         if (col == 0 && row < 3) continue;
-        if (val.length > maxLen) {
-          maxLen = val.length.toDouble();
+        // Nếu ô có xuống dòng (như cột Vòng Đời Thẻ), tính chiều dài dòng dài nhất
+        final lines = val.split(RegExp(r'\r?\n'));
+        for (final line in lines) {
+          if (line.length > maxLen) {
+            maxLen = line.length.toDouble();
+          }
         }
       }
-      sheet.setColumnWidth(col, maxLen < 11 ? 13 : (maxLen > 45 ? 45 : maxLen + 3));
+      if (col == 10) {
+        // Cột Vòng Đời Thẻ: Giới hạn độ rộng tối ưu để hiển thị xuống dòng thoáng đãng, dễ đọc
+        sheet.setColumnWidth(col, maxLen < 45 ? 45 : (maxLen > 65 ? 65 : maxLen + 3));
+      } else {
+        sheet.setColumnWidth(col, maxLen < 11 ? 13 : (maxLen > 70 ? 70 : maxLen + 3));
+      }
     }
   }
 
@@ -1700,6 +1743,13 @@ class ReportExportService {
         fontSize: 10,
         horizontalAlign: HorizontalAlign.Center,
         verticalAlign: VerticalAlign.Center,
+      );
+
+  CellStyle get _dataCellWrapStyle => CellStyle(
+        fontSize: 9,
+        fontColorHex: ExcelColor.fromHexString('#0F172A'),
+        verticalAlign: VerticalAlign.Center,
+        textWrapping: TextWrapping.WrapText,
       );
 
   CellStyle get _totalRowStyle => CellStyle(

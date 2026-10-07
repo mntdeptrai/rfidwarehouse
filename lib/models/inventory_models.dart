@@ -7,7 +7,9 @@ enum ItemStatus {
   allocated('ALLOCATED', 'Đã giữ cho PO'),
   picked('PICKED', 'Đã lấy hàng'),
   waitingShipment('WAITING_SHIPMENT', 'Chờ giao hàng'),
-  out('OUT', 'Đã xuất kho');
+  out('OUT', 'Đã xuất kho'),
+  underRepair('UNDER_REPAIR', 'Sửa chữa / Bảo hành'),
+  recalled('RECALLED', 'Đã thu hồi');
 
   final String code;
   final String label;
@@ -595,6 +597,9 @@ enum TagLifecycleAction {
   locateFound('LOCATE_FOUND', 'Tìm thấy bằng Radar AirTag', 0xFF06B6D4),
   allocatePo('ALLOCATE_PO', 'Giữ chỗ cho đơn xuất', 0xFF8B5CF6),
   picked('PICKED', 'Đã lấy hàng từ kệ', 0xFFEC4899),
+  recall('RECALL', 'Thu hồi sản phẩm', 0xFFDC2626),
+  repair('REPAIR', 'Sửa chữa / Bảo hành', 0xFFE11D48),
+  repairDone('REPAIR_DONE', 'Hoàn trả kho sau sửa chữa', 0xFF10B981),
   outboundGate('OUTBOUND_GATE', 'Xuất kho qua cổng RFID', 0xFF64748B),
   outboundPda('OUTBOUND_PDA', 'Xuất kho trên PDA', 0xFF475569),
   unauthorizedExit('UNAUTHORIZED_EXIT', 'Cảnh báo qua cổng trái phép', 0xFFEF4444),

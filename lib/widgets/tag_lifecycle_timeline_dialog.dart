@@ -57,6 +57,12 @@ class TagLifecycleTimelineDialog extends StatelessWidget {
         return Icons.bookmark_added_rounded;
       case TagLifecycleAction.picked:
         return Icons.shopping_basket_outlined;
+      case TagLifecycleAction.recall:
+        return Icons.assignment_return_rounded;
+      case TagLifecycleAction.repair:
+        return Icons.build_circle_rounded;
+      case TagLifecycleAction.repairDone:
+        return Icons.task_alt_rounded;
       case TagLifecycleAction.outboundGate:
         return Icons.output_rounded;
       case TagLifecycleAction.outboundPda:
@@ -399,7 +405,9 @@ class TagLifecycleTimelineDialog extends StatelessWidget {
                                                     const Icon(Icons.location_on, size: 12, color: Color(0xFFEF4444)),
                                                     const SizedBox(width: 4),
                                                     Text(
-                                                      'Vị trí: ${log.fromLocation ?? "Chưa có"} ➔ ${log.toLocation ?? "Đã giải phóng"}',
+                                                      (log.fromLocation != null && log.toLocation != null && log.fromLocation != log.toLocation)
+                                                          ? 'Kệ: ${log.fromLocation} ➔ ${log.toLocation}'
+                                                          : 'Kệ lưu trữ: ${log.toLocation ?? log.fromLocation ?? "Chưa xác định"}',
                                                       style: TextStyle(color: c.textPrimary, fontSize: 11),
                                                     ),
                                                   ],
@@ -411,7 +419,9 @@ class TagLifecycleTimelineDialog extends StatelessWidget {
                                                     const Icon(Icons.pallet, size: 12, color: Color(0xFFF59E0B)),
                                                     const SizedBox(width: 4),
                                                     Text(
-                                                      'Pallet: ${log.fromPallet ?? "Không"} ➔ ${log.toPallet ?? "Tách Pallet"}',
+                                                      (log.fromPallet != null && log.toPallet != null && log.fromPallet != log.toPallet)
+                                                          ? 'Pallet: ${log.fromPallet} ➔ ${log.toPallet}'
+                                                          : 'Pallet: ${log.toPallet ?? log.fromPallet ?? "Không"}',
                                                       style: TextStyle(color: c.textPrimary, fontSize: 11),
                                                     ),
                                                   ],
