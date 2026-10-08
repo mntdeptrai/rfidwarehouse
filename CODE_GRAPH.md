@@ -39,7 +39,7 @@ graph TD
             PDA --> P_Merge["pda_merge_pallets_screen.dart (Dồn Gộp Pallet)"]
             PDA --> P_Audit["pda_inventory_screen.dart (Kiểm Kê Di Động & Phân Công Handheld)"]
             PDA --> P_Warehouse["pda_warehouse_management_screen.dart (Quản Lý Kho Di Động: Pallet, Vị Trí, Lịch Sử, Sản Phẩm)"]
-            PDA --> P_Locate["radar_locate_screen.dart (Tìm Kiếm Mã & Định Vị Sonar Radar AirTag)"]
+            PDA --> P_Locate["fifo_search_screen.dart (Tìm Kiếm Mã Hàng / SKU & Bản Đồ 2D Theo FIFO)"]
             PDA --> P_LocateTasks["pda_locate_tasks_screen.dart (Đơn Tìm Kiếm & Nhiệm Vụ Handheld)"]
         end
     end
@@ -838,7 +838,38 @@ Hệ thống tích hợp sẵn cấu trúc Agentic Workspace để tối ưu ho�
     1. Quét đủ 100% không chip lạ trên Desktop -> Delay 1s -> Tự động xuất kho thành công.
     2. Quét đủ 100% trên Desktop nhưng có chip lạ xuất hiện trước 1s -> Hủy tự động xuất kho, kích hoạt báo động.
     3. Quét đủ 100% trên PDA Android -> Delay 1s -> Tự động chốt đơn và xuất thông báo.
-  - Toàn bộ 279/279 test cases đều vượt qua 100% (All tests passed).
+  - Toàn bộ test cases đều vượt qua 100% (All tests passed).
+
+---
+
+## 32. Chuyển Đổi Hoàn Toàn Tìm Kiếm Từ Radar Sang Bản Đồ 2D Theo FIFO (Mã Hàng / SKU 2D Map)
+- **Bối cảnh & Yêu cầu nghiệp vụ**:
+  - Loại bỏ hoàn toàn phương pháp tìm kiếm định hướng theo dạng Radar / Sonar / AirTag precision finding.
+  - Thay thế bằng tìm kiếm trực tiếp theo **Mã hàng (Item ID)**, **Mã SKU**, S/N hoặc EPC.
+  - Tự động sắp xếp kết quả tồn kho theo nguyên tắc **FIFO** (hàng nhập kho trước nhất ưu tiên lấy trước).
+  - Trực quan hóa mặt bằng kho 2D (`WarehouseFloorPlanWidget`), vẽ nổi bật chính xác ô kệ cần lấy hàng bằng huy hiệu `⭐ CẦN LẤY (FIFO)` và chỉ dẫn lộ trình xe nâng di chuyển từ Cổng vào -> Lối chính -> Rẽ vào ô kệ -> Bốc hàng FIFO -> Ra Cổng xuất.
+  - Hỗ trợ đồng bộ trên cả **Desktop WMS** và **PDA Handheld** (co giãn layout linh hoạt, không bị lỗi tràn màn hình RenderFlex overflow ngay cả ở kích thước 360x640).
+- **Các thành phần được triển khai**:
+  1. [`lib/screens/fifo_search_screen.dart`](file:///c:/Users/MNT/Documents/uhf/lib/screens/fifo_search_screen.dart):
+     - Màn hình tìm kiếm đa năng: Ô tìm kiếm, chip gợi ý SKU nhanh, thẻ tóm tắt ô kệ cần lấy theo FIFO, bản đồ 2D mặt bằng kho, và danh sách chi tiết các mặt hàng trong kho theo thứ tự bốc hàng (#1, #2, #3...).
+  2. [`lib/widgets/warehouse_floor_plan_widget.dart`](file:///c:/Users/MNT/Documents/uhf/lib/widgets/warehouse_floor_plan_widget.dart):
+     - Bổ sung chế độ `WarehouseFloorPlanMode.fifoSearch`.
+     - Nhận các thuộc tính: `highlightLocationIds`, `fifoPickLocationId`, `fifoItem`, `matchingItemCounts`.
+     - Vẽ viền sáng màu hổ phách/vàng gold nổi bật cho ô kệ FIFO và gắn huy hiệu `⭐ CẦN LẤY (FIFO)`.
+     - Tối ưu layout co giãn đa thiết bị, dùng `Wrap` cho thanh tiêu đề và chỉ dẫn breadcrumb, đảm bảo 0 lỗi overflow trên mọi độ phân giải.
+  3. **Chuyển đổi giao diện Desktop & PDA**:
+     - `DesktopLookupView`: Nút `🗺️ VỊ TRÍ HÀNG 2D (FIFO)` mở popup bản đồ 2D trực quan.
+     - `PdaHomeScreen`: Tile `Vị trí 2D (FIFO)`.
+     - `PdaWarehouseManagementScreen`: Nút `Vị trí 2D (FIFO)`.
+     - `RadarLocateScreen`: Chuyển đổi thành backward-compatible wrapper ủy quyền trực tiếp sang `FifoSearchScreen`.
+  4. **Dọn dẹp mã nguồn cũ (Surgical Clean)**:
+     - Xóa bỏ `lib/widgets/direction_arrow_widget.dart` và các bộ test AirTag cũ (`radar_locate_airtag_test.dart`, `radar_locate_continuous_tracking_test.dart`, `radar_locate_pallet_and_continuous_test.dart`).
+     - Bổ sung bộ kiểm thử toàn diện [`test/fifo_location_search_test.dart`](file:///c:/Users/MNT/Documents/uhf/test/fifo_location_search_test.dart) kiểm thử:
+       1. Tìm kiếm theo SKU tự động xếp theo FIFO.
+       2. Tìm kiếm theo Mã Hàng định vị chính xác ô trên bản đồ 2D.
+       3. Hiển thị mượt mà trên Desktop (1200x800) không overflow.
+       4. Hiển thị mượt mà trên PDA (360x640) không tràn màn hình.
+  5. **Kết quả kiểm thử**: 100% test pass rate trên toàn dự án (276/276 tests passed).
 
 
 

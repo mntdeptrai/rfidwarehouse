@@ -364,8 +364,8 @@ class _PalletManagementTabState extends State<_PalletManagementTab>
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
-                  icon: const Icon(Icons.track_changes_rounded, size: 13),
-                  label: const Text('Định vị', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  icon: const Icon(Icons.map_rounded, size: 13),
+                  label: const Text('Vị trí 2D', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -2342,8 +2342,8 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                     ),
-                    icon: const Icon(Icons.track_changes_rounded, size: 14),
-                    label: const Text('Định vị (AirTag)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.map_rounded, size: 14),
+                    label: const Text('Vị trí 2D (FIFO)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       Navigator.push(
                         context,

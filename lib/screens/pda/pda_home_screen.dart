@@ -14,6 +14,7 @@ import 'pda_merge_pallets_screen.dart';
 import 'pda_putaway_screen.dart';
 import 'pda_warehouse_management_screen.dart';
 import '../radar_locate_screen.dart';
+import '../fifo_search_screen.dart';
 
 class PdaHomeScreen extends StatefulWidget {
   const PdaHomeScreen({super.key});
@@ -327,15 +328,15 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                         ),
                         _buildPdaActionTile(
                           context,
-                          title: 'Tìm & Định vị',
-                          icon: Icons.track_changes_rounded,
-                          accentColor: c.rfidCyan,
+                          title: 'Vị trí 2D (FIFO)',
+                          icon: Icons.map_rounded,
+                          accentColor: const Color(0xFFF59E0B),
                           badgeColor: c.successEmerald,
                           colors: c,
                           onTap: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const RadarLocateScreen()),
+                              MaterialPageRoute(builder: (_) => const FifoSearchScreen()),
                             );
                           },
                         ),

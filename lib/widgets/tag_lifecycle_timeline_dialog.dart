@@ -489,17 +489,17 @@ class TagLifecycleTimelineDialog extends StatelessWidget {
                     style: TextStyle(color: c.textMuted, fontSize: 11),
                   ),
                   const Spacer(),
-                  // Nút mở Radar AirTag định vị thẻ này ngay lập tức
+                  // Nút xem vị trí 2D & lấy hàng theo FIFO
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF0284C7),
-                      side: const BorderSide(color: Color(0xFF0284C7)),
+                      foregroundColor: const Color(0xFFF59E0B),
+                      side: const BorderSide(color: Color(0xFFF59E0B)),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       minimumSize: Size.zero,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.track_changes_rounded, size: 14),
-                    label: const Text('Dò sóng AirTag', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.map_rounded, size: 14),
+                    label: const Text('Vị trí 2D (FIFO)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       Navigator.pop(context);
                       Navigator.push(

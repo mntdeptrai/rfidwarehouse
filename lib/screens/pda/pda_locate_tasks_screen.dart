@@ -176,11 +176,11 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: const [
                               Text(
-                                'DÒ TÌM TỰ DO (MŨI TÊN & RADAR)',
+                                'TÌM VỊ TRÍ HÀNG 2D (FIFO)',
                                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12.5),
                               ),
                               Text(
-                                'Nhập EPC/SKU để dò tìm ngay không qua đơn',
+                                'Nhập mã hàng/SKU để xem vị trí 2D và ô cần lấy theo FIFO',
                                 style: TextStyle(color: Color(0xFFE0F2FE), fontSize: 10.5),
                               ),
                             ],

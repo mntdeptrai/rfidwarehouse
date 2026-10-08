@@ -3,6 +3,7 @@ import '../../services/warehouse_repository.dart';
 import '../../models/wms_models.dart';
 import '../../theme/eye_care_theme.dart';
 import '../radar_locate_screen.dart';
+import '../fifo_search_screen.dart';
 import '../../widgets/tag_lifecycle_timeline_dialog.dart';
 
 enum LookupDisplayMode {
@@ -300,16 +301,16 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                     ),
                   ),
 
-                  // Nút mở màn hình Định Vị RFID (Radar / AirTag)
+                  // Nút mở màn hình Tìm Vị Trí Hàng 2D (FIFO)
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: c.rfidCyan,
+                      backgroundColor: const Color(0xFFF59E0B),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.track_changes_rounded, size: 18),
-                    label: const Text('🎯 ĐỊNH VỊ RFID (RADAR)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    icon: const Icon(Icons.map_rounded, size: 18),
+                    label: const Text('🗺️ VỊ TRÍ HÀNG 2D (FIFO)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                     onPressed: () {
                       showDialog(
                         context: context,
@@ -319,9 +320,9 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: const SizedBox(
-                              width: 520,
-                              height: 680,
-                              child: RadarLocateScreen(),
+                              width: 980,
+                              height: 740,
+                              child: FifoSearchScreen(),
                             ),
                           ),
                         ),
@@ -1603,8 +1604,8 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                                             children: [
                                               // Nút radar tìm kiếm trên desktop
                                               IconButton(
-                                                icon: Icon(Icons.track_changes_rounded, size: 18, color: c.rfidCyan),
-                                                tooltip: 'Mở Radar định vị trên Desktop',
+                                                icon: Icon(Icons.map_rounded, size: 18, color: c.rfidCyan),
+                                                tooltip: 'Xem vị trí 2D & lấy theo FIFO',
                                                 onPressed: () {
                                                   showDialog(
                                                     context: context,
@@ -1614,9 +1615,9 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
                                                       child: ClipRRect(
                                                         borderRadius: BorderRadius.circular(16),
                                                         child: SizedBox(
-                                                          width: 520,
-                                                          height: 680,
-                                                          child: RadarLocateScreen(locateTask: order),
+                                                          width: 980,
+                                                          height: 740,
+                                                          child: FifoSearchScreen(locateTask: order),
                                                         ),
                                                       ),
                                                     ),
