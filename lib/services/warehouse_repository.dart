@@ -383,17 +383,44 @@ class WarehouseRepository extends ChangeNotifier {
       }).toList();
 
       // 5. Inbound Orders
-      final Map<String, List<InboundOrderDetail>> inbDetailsMap = {};
+      final Map<String, Map<String, InboundOrderDetail>> inbDetailsByOrderAndSku = {};
+      final Set<String> inbOrdersWithDuplicates = {};
       for (final d in inbDetailRows) {
         final orderId = (d['order_id'] ?? '').toString();
-        inbDetailsMap.putIfAbsent(orderId, () => []).add(InboundOrderDetail(
-          productId: (d['product_id'] ?? '').toString(),
-          sku: (d['sku'] ?? '').toString(),
-          productName: (d['product_name'] ?? '').toString(),
-          requiredQty: (d['required_qty'] as num?)?.toInt() ?? 0,
-          receivedQty: (d['received_qty'] as num?)?.toInt() ?? 0,
-        ));
+        if (orderId.isEmpty) continue;
+        final sku = (d['sku'] ?? '').toString().trim().toUpperCase();
+        final prodId = (d['product_id'] ?? '').toString();
+        final key = sku.isNotEmpty ? sku : prodId;
+        final req = (d['required_qty'] as num?)?.toInt() ?? 0;
+        final rec = (d['received_qty'] as num?)?.toInt() ?? 0;
+        final prodName = (d['product_name'] ?? '').toString();
+
+        final orderSkuMap = inbDetailsByOrderAndSku.putIfAbsent(orderId, () => {});
+        if (orderSkuMap.containsKey(key)) {
+          inbOrdersWithDuplicates.add(orderId);
+          final cur = orderSkuMap[key]!;
+          orderSkuMap[key] = InboundOrderDetail(
+            productId: cur.productId.isNotEmpty ? cur.productId : prodId,
+            sku: cur.sku.isNotEmpty ? cur.sku : (d['sku'] ?? '').toString(),
+            productName: cur.productName.isNotEmpty ? cur.productName : prodName,
+            requiredQty: cur.requiredQty > 0 ? cur.requiredQty : req,
+            receivedQty: cur.receivedQty > rec ? cur.receivedQty : rec,
+          );
+        } else {
+          orderSkuMap[key] = InboundOrderDetail(
+            productId: prodId,
+            sku: (d['sku'] ?? '').toString(),
+            productName: prodName,
+            requiredQty: req,
+            receivedQty: rec,
+          );
+        }
       }
+      final Map<String, List<InboundOrderDetail>> inbDetailsMap = {};
+      for (final entry in inbDetailsByOrderAndSku.entries) {
+        inbDetailsMap[entry.key] = entry.value.values.toList();
+      }
+
       final loadedInbOrders = inbRows.map((om) {
         final orderId = (om['inbound_order_id'] ?? '').toString();
         final statusStr = (om['status'] ?? '').toString();
@@ -412,16 +439,69 @@ class WarehouseRepository extends ChangeNotifier {
       }).toList();
 
       // 6. Outbound Orders
-      final Map<String, List<OutboundOrderDetail>> outDetailsMap = {};
+      final Map<String, Map<String, OutboundOrderDetail>> outDetailsByOrderAndSku = {};
+      final Set<String> outOrdersWithDuplicates = {};
       for (final d in outDetailRows) {
         final orderId = (d['order_id'] ?? '').toString();
-        outDetailsMap.putIfAbsent(orderId, () => []).add(OutboundOrderDetail(
-          productId: (d['product_id'] ?? '').toString(),
-          sku: (d['sku'] ?? '').toString(),
-          productName: (d['product_name'] ?? '').toString(),
-          requiredQty: (d['required_qty'] as num?)?.toInt() ?? 0,
-          pickedQty: (d['picked_qty'] as num?)?.toInt() ?? 0,
-        ));
+        if (orderId.isEmpty) continue;
+        final sku = (d['sku'] ?? '').toString().trim().toUpperCase();
+        final prodId = (d['product_id'] ?? '').toString();
+        final key = sku.isNotEmpty ? sku : prodId;
+        final req = (d['required_qty'] as num?)?.toInt() ?? 0;
+        final picked = (d['picked_qty'] as num?)?.toInt() ?? 0;
+        final prodName = (d['product_name'] ?? '').toString();
+
+        final orderSkuMap = outDetailsByOrderAndSku.putIfAbsent(orderId, () => {});
+        if (orderSkuMap.containsKey(key)) {
+          outOrdersWithDuplicates.add(orderId);
+          final cur = orderSkuMap[key]!;
+          orderSkuMap[key] = OutboundOrderDetail(
+            productId: cur.productId.isNotEmpty ? cur.productId : prodId,
+            sku: cur.sku.isNotEmpty ? cur.sku : (d['sku'] ?? '').toString(),
+            productName: cur.productName.isNotEmpty ? cur.productName : prodName,
+            requiredQty: cur.requiredQty > 0 ? cur.requiredQty : req,
+            pickedQty: cur.pickedQty > picked ? cur.pickedQty : picked,
+          );
+        } else {
+          orderSkuMap[key] = OutboundOrderDetail(
+            productId: prodId,
+            sku: (d['sku'] ?? '').toString(),
+            productName: prodName,
+            requiredQty: req,
+            pickedQty: picked,
+          );
+        }
+      }
+      final Map<String, List<OutboundOrderDetail>> outDetailsMap = {};
+      for (final entry in outDetailsByOrderAndSku.entries) {
+        outDetailsMap[entry.key] = entry.value.values.toList();
+      }
+
+      // Tự động làm sạch các dòng trùng lặp trong outbound_order_details trên Supabase Cloud
+      if (outOrdersWithDuplicates.isNotEmpty && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        Future.microtask(() async {
+          try {
+            final supa = Supabase.instance.client;
+            for (final dupOrderId in outOrdersWithDuplicates) {
+              final cleanList = outDetailsMap[dupOrderId] ?? [];
+              if (cleanList.isNotEmpty) {
+                await supa.from('outbound_order_details').delete().eq('order_id', dupOrderId);
+                final newRows = cleanList.map((d) => {
+                  'order_id': dupOrderId,
+                  'product_id': d.productId,
+                  'sku': d.sku,
+                  'product_name': d.productName,
+                  'required_qty': d.requiredQty,
+                  'picked_qty': d.pickedQty,
+                }).toList();
+                await supa.from('outbound_order_details').insert(newRows);
+                debugPrint('Tự động dọn sạch duplicate outbound_order_details cho đơn $dupOrderId');
+              }
+            }
+          } catch (e) {
+            debugPrint('Lỗi tự động dọn duplicate outbound_order_details: $e');
+          }
+        });
       }
       final List<OutboundOrder> loadedOutOrders = outRows.map((om) {
         final orderId = (om['outbound_order_id'] ?? '').toString();
@@ -1255,7 +1335,11 @@ class WarehouseRepository extends ChangeNotifier {
           'received_qty': d.receivedQty,
         }).toList();
         if (detailRows.isNotEmpty) {
-          await supa.from('inbound_order_details').upsert(detailRows);
+          await supa.from('inbound_order_details').delete().eq('order_id', order.inboundOrderId);
+          if (order.orderNo.isNotEmpty && order.orderNo != order.inboundOrderId) {
+            await supa.from('inbound_order_details').delete().eq('order_id', order.orderNo);
+          }
+          await supa.from('inbound_order_details').insert(detailRows);
         }
       } catch (e) {
         debugPrint('addInboundOrder Supabase direct error: $e');
@@ -5755,9 +5839,11 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // Nhóm các sản phẩm tồn kho theo SKU và Tên sản phẩm, sắp xếp theo FIFO (inboundTime tăng dần)
+    // Nhóm các sản phẩm tồn kho theo SKU, Tên, Product ID và Item ID, sắp xếp theo FIFO (inboundTime tăng dần)
     final Map<String, List<Item>> inStockBySku = {};
     final Map<String, List<Item>> inStockByName = {};
+    final Map<String, List<Item>> inStockByProductId = {};
+    final Map<String, List<Item>> inStockByItemId = {};
     for (var it in availableStockItems) {
       final skuKey = it.sku.trim().toUpperCase();
       if (skuKey.isNotEmpty && skuKey != '--') {
@@ -5766,6 +5852,14 @@ class WarehouseRepository extends ChangeNotifier {
       final nameKey = it.productName.trim().toUpperCase();
       if (nameKey.isNotEmpty && nameKey != '--') {
         inStockByName.putIfAbsent(nameKey, () => []).add(it);
+      }
+      final prodKey = it.productId.trim().toUpperCase();
+      if (prodKey.isNotEmpty && prodKey != '--') {
+        inStockByProductId.putIfAbsent(prodKey, () => []).add(it);
+      }
+      final itemKey = it.itemId.trim().toUpperCase();
+      if (itemKey.isNotEmpty && itemKey != '--') {
+        inStockByItemId.putIfAbsent(itemKey, () => []).add(it);
       }
     }
 
@@ -5778,6 +5872,20 @@ class WarehouseRepository extends ChangeNotifier {
       });
     }
     for (var list in inStockByName.values) {
+      list.sort((a, b) {
+        final timeA = getItemInboundTime(a);
+        final timeB = getItemInboundTime(b);
+        return timeA.compareTo(timeB);
+      });
+    }
+    for (var list in inStockByProductId.values) {
+      list.sort((a, b) {
+        final timeA = getItemInboundTime(a);
+        final timeB = getItemInboundTime(b);
+        return timeA.compareTo(timeB);
+      });
+    }
+    for (var list in inStockByItemId.values) {
       list.sort((a, b) {
         final timeA = getItemInboundTime(a);
         final timeB = getItemInboundTime(b);
@@ -5805,18 +5913,47 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     // Pha 2: Với các dòng chưa khớp EPC (xuất theo số lượng hoặc không có mã chip EPC cụ thể),
-    // tìm sản phẩm trong kho theo SKU hoặc theo Tên sản phẩm theo thứ tự FIFO
+    // tìm sản phẩm trong kho theo SKU, Mã Hàng (Product ID/Item ID) hoặc theo Tên sản phẩm theo thứ tự FIFO
     for (int i = 0; i < requestedItems.length; i++) {
       if (matchedByIndex.containsKey(i)) continue;
       final req = requestedItems[i];
       final skuKey = (req['sku'] ?? '').toString().trim().toUpperCase();
+      final prodKey = (req['productId'] ?? '').toString().trim().toUpperCase();
+      final itemKey = (req['itemId'] ?? '').toString().trim().toUpperCase();
       final nameKey = (req['productName'] ?? req['name'] ?? '').toString().trim().toUpperCase();
 
       Item? matched;
+      // 1. Thử khớp theo SKU
       if (skuKey.isNotEmpty && skuKey != '--') {
         final candidates = inStockBySku[skuKey] ?? [];
         matched = candidates.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
       }
+      // 2. Thử khớp theo Mã Hàng (Product ID)
+      if (matched == null && prodKey.isNotEmpty && prodKey != '--') {
+        final candidates = inStockByProductId[prodKey] ?? [];
+        matched = candidates.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
+      }
+      // 3. Thử khớp theo Mã Hàng cụ thể (Item ID)
+      if (matched == null && itemKey.isNotEmpty && itemKey != '--') {
+        final candidates = inStockByItemId[itemKey] ?? [];
+        matched = candidates.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
+      }
+      // 4. Thử khớp chéo qua danh mục sản phẩm (nếu SKU map sang Product ID hoặc ngược lại)
+      if (matched == null && (skuKey.isNotEmpty || prodKey.isNotEmpty)) {
+        final p = _products.where((p) =>
+          (skuKey.isNotEmpty && p.sku.toUpperCase() == skuKey) ||
+          (prodKey.isNotEmpty && p.productId.toUpperCase() == prodKey)
+        ).firstOrNull;
+        if (p != null) {
+          final candSku = inStockBySku[p.sku.toUpperCase()] ?? [];
+          matched = candSku.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
+          if (matched == null) {
+            final candProd = inStockByProductId[p.productId.toUpperCase()] ?? [];
+            matched = candProd.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
+          }
+        }
+      }
+      // 5. Thử khớp theo Tên sản phẩm
       if (matched == null && nameKey.isNotEmpty && nameKey != '--') {
         final candidates = inStockByName[nameKey] ?? [];
         matched = candidates.where((it) => !allocatedItemIds.contains(it.itemId)).firstOrNull;
@@ -5881,6 +6018,7 @@ class WarehouseRepository extends ChangeNotifier {
 
         validatedList.add(OutboundValidatedItem(
           sku: matchedItem.sku.isNotEmpty ? matchedItem.sku : sku,
+          productId: matchedItem.productId.isNotEmpty ? matchedItem.productId : (req['productId']?.toString() ?? sku),
           productName: matchedItem.productName.isNotEmpty ? matchedItem.productName : productName,
           cartonCode: (matchedItem.cartonCode != null && matchedItem.cartonCode!.isNotEmpty && matchedItem.cartonCode != '--')
               ? matchedItem.cartonCode!
@@ -5901,6 +6039,7 @@ class WarehouseRepository extends ChangeNotifier {
         // Hết hàng tồn kho cho món này
         validatedList.add(OutboundValidatedItem(
           sku: sku,
+          productId: (req['productId'] ?? sku).toString().trim(),
           productName: productName,
           cartonCode: cartonCode,
           palletCode: palletCode,
@@ -6188,7 +6327,11 @@ class WarehouseRepository extends ChangeNotifier {
           }
         }
         if (detailRows.isNotEmpty) {
-          await supa.from('outbound_order_details').upsert(detailRows);
+          await supa.from('outbound_order_details').delete().eq('order_id', targetOrder.outboundOrderId);
+          if (targetOrder.poNo.isNotEmpty && targetOrder.poNo != targetOrder.outboundOrderId) {
+            await supa.from('outbound_order_details').delete().eq('order_id', targetOrder.poNo);
+          }
+          await supa.from('outbound_order_details').insert(detailRows);
         }
       } catch (e) {
         debugPrint('confirmGateOutbound Supabase sync detail error: $e');

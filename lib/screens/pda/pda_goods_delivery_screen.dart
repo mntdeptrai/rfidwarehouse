@@ -20,6 +20,7 @@ typedef PdaOutboundScreen = OutboundScreen;
 /// Mô hình chi tiết từng sản phẩm cần xuất kho qua cổng / tay cầm RFID
 class _PendingOutboundItem {
   final String sku;
+  final String productId;
   final String cartonCode;
   final String palletCode;
   final String supplier;
@@ -35,6 +36,7 @@ class _PendingOutboundItem {
 
   _PendingOutboundItem({
     required this.sku,
+    this.productId = '',
     required this.cartonCode,
     required this.palletCode,
     this.supplier = '--',
@@ -48,6 +50,40 @@ class _PendingOutboundItem {
     this.fifoPriority = 1,
     this.fifoWarning,
   });
+
+  _PendingOutboundItem copyWith({
+    String? sku,
+    String? productId,
+    String? cartonCode,
+    String? palletCode,
+    String? supplier,
+    String? customer,
+    String? productName,
+    String? palletEpc,
+    String? epc,
+    bool? isInStock,
+    String? locationCode,
+    DateTime? inboundTime,
+    int? fifoPriority,
+    String? fifoWarning,
+  }) {
+    return _PendingOutboundItem(
+      sku: sku ?? this.sku,
+      productId: productId ?? this.productId,
+      cartonCode: cartonCode ?? this.cartonCode,
+      palletCode: palletCode ?? this.palletCode,
+      supplier: supplier ?? this.supplier,
+      customer: customer ?? this.customer,
+      productName: productName ?? this.productName,
+      palletEpc: palletEpc ?? this.palletEpc,
+      epc: epc ?? this.epc,
+      isInStock: isInStock ?? this.isInStock,
+      locationCode: locationCode ?? this.locationCode,
+      inboundTime: inboundTime ?? this.inboundTime,
+      fifoPriority: fifoPriority ?? this.fifoPriority,
+      fifoWarning: fifoWarning ?? this.fifoWarning,
+    );
+  }
 }
 
 /// Mô hình đơn xuất kho nạp từ file / CSDL chờ đối soát xuất kho
@@ -327,6 +363,45 @@ class _OutboundScreenState extends State<OutboundScreen> {
       }
     }
 
+    // 2. Tự động đối chiếu mã chip EPC trong CSDL tồn kho nếu chip chưa nằm trực tiếp trong đơn
+    final isAlreadyExpected = order.items.any((i) => i.epc.toUpperCase() == epc);
+    if (!isAlreadyExpected) {
+      final inStockItem = _repo.items.where((it) =>
+        it.epc.toUpperCase() == epc &&
+        (it.status == ItemStatus.inStock || it.status == ItemStatus.waitingPutaway || it.status == ItemStatus.allocated)
+      ).firstOrNull;
+
+      if (inStockItem != null) {
+        final itemSku = inStockItem.sku.trim().toUpperCase();
+        final itemProdId = inStockItem.productId.trim().toUpperCase();
+        final itemItemId = inStockItem.itemId.trim().toUpperCase();
+
+        // Tìm 1 slot chưa quét trong đơn có cùng SKU hoặc Mã Hàng
+        final slotIndex = order.items.indexWhere((it) {
+          final alreadyScannedThisSlot = _gateScannedTags.containsKey(it.epc.toUpperCase());
+          if (alreadyScannedThisSlot) return false;
+
+          final slotSku = it.sku.trim().toUpperCase();
+          final slotProdId = it.productId.trim().toUpperCase();
+          final matchSku = itemSku.isNotEmpty && (slotSku == itemSku || slotProdId == itemSku);
+          final matchProd = itemProdId.isNotEmpty && (slotProdId == itemProdId || slotSku == itemProdId);
+          final matchItem = itemItemId.isNotEmpty && (slotProdId == itemItemId || slotSku == itemItemId);
+          return matchSku || matchProd || matchItem;
+        });
+
+        if (slotIndex >= 0) {
+          final oldItem = order.items[slotIndex];
+          final resolvedLoc = _repo.resolveItemLocation(inStockItem)?.locationCode ?? oldItem.locationCode;
+          order.items[slotIndex] = oldItem.copyWith(
+            epc: epc,
+            locationCode: resolvedLoc,
+            inboundTime: _repo.getItemInboundTime(inStockItem),
+          );
+          _invalidateOutboundCache();
+        }
+      }
+    }
+
     final expectedEpcs = _cachedExpectedEpcs ??= order.items.map((i) => i.epc.toUpperCase()).where((e) => e.isNotEmpty && e != '--').toSet();
     final validPalletEpcs = _cachedValidPalletEpcs ??= () {
       final set = <String>{};
@@ -481,101 +556,59 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _towerLight.turnOffAll();
   }
 
-  // ---------- NẠP FILE XUẤT KHO THÙNG (.XLSX) ----------
+  // ---------- NẠP FILE XUẤT KHO (EXCEL: MÃ SKU, MÃ HÀNG, SỐ LƯỢNG) ----------
   Future<void> _pickAndLoadOutboundExcelFile() async {
     if (_isImporting) return;
     setState(() => _isImporting = true);
     try {
-      final result = await _excelService.pickAndParseGoodsReceiveExcel();
-      if (result == null) return;
+      final outboundResult = await _excelService.pickAndParseOutboundExcel();
+      if (outboundResult == null) return;
 
       final now = DateTime.now();
-      final orderNo = 'XK-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      final orderNo = outboundResult.orderNo.isNotEmpty
+          ? outboundResult.orderNo
+          : 'XK-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      final detectedCustomer = outboundResult.customer.isNotEmpty
+          ? outboundResult.customer
+          : 'Khách mua xuất kho';
 
       final Map<String, String?> pallets = {};
-      final List<_PendingOutboundItem> items = [];
+      final List<Map<String, dynamic>> rawRequests = [];
 
-      for (var c in result.cartons) {
-        final palletCode = c['palletCode']?.toString().trim();
-        final palletEpc = c['palletEpc']?.toString().trim();
-        if (palletCode != null && palletCode.isNotEmpty) {
-          pallets[palletCode] = (palletEpc != null && palletEpc.isNotEmpty) ? palletEpc : pallets[palletCode];
+      for (var r in outboundResult.rows) {
+        if (r.palletCode.isNotEmpty && r.palletCode != '--') {
+          pallets[r.palletCode] = r.palletCode;
         }
-
-        final cartonBox = c['cartonBox']?.toString().trim() ?? '--';
-        final serialItems = (c['serialItems'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-
-        if (serialItems != null && serialItems.isNotEmpty) {
-          for (var sItem in serialItems) {
-            final sPallet = (sItem['pallet']?.toString().trim() ?? palletCode ?? '--');
-            final sPalletEpc = (sItem['palletEpc']?.toString().trim() ?? palletEpc ?? '--');
-            final sSerial = sItem['serial'].toString().trim().toUpperCase();
-            final sBarcode = sItem['barcode']?.toString().trim() ?? c['productCode']?.toString().trim() ?? '--';
-            final sName = sItem['name']?.toString().trim() ?? c['productName']?.toString().trim() ?? '--';
-            final sSupplier = (sItem['supplier'] ?? c['supplier'] ?? '--').toString().trim();
-            final sCustomer = (sItem['customer'] ?? c['customer'] ?? result.customerName ?? 'Xuất Kho').toString().trim();
-
-            if (sPallet != '--' && sPalletEpc != '--') {
-              pallets[sPallet] = sPalletEpc;
-            }
-
-            items.add(_PendingOutboundItem(
-              sku: sBarcode,
-              cartonCode: cartonBox,
-              palletCode: sPallet,
-              supplier: sSupplier,
-              customer: sCustomer,
-              productName: sName,
-              palletEpc: sPalletEpc,
-              epc: sSerial,
-            ));
-          }
-        } else {
-          final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim().toUpperCase()).toList() ?? [];
-          final sBarcode = c['productCode']?.toString().trim() ?? '--';
-          final sName = c['productName']?.toString().trim() ?? '--';
-          final sSupplier = (c['supplier'] ?? '--').toString().trim();
-          final sCustomer = (c['customer'] ?? result.customerName ?? 'Xuất Kho').toString().trim();
-
-          for (var s in serials) {
-            items.add(_PendingOutboundItem(
-              sku: sBarcode,
-              cartonCode: cartonBox,
-              palletCode: palletCode ?? '--',
-              supplier: sSupplier,
-              customer: sCustomer,
-              productName: sName,
-              palletEpc: palletEpc ?? '--',
-              epc: s,
-            ));
-          }
+        for (int i = 0; i < r.quantity; i++) {
+          rawRequests.add({
+            'sku': r.sku,
+            'productId': r.productId,
+            'itemId': r.productId,
+            'cartonCode': r.cartonCode.isNotEmpty ? r.cartonCode : '--',
+            'palletCode': r.palletCode.isNotEmpty ? r.palletCode : '--',
+            'supplier': '--',
+            'customer': r.customer.isNotEmpty ? r.customer : detectedCustomer,
+            'productName': r.productName,
+            'palletEpc': '--',
+            'epc': (r.epc != null && r.epc!.isNotEmpty) ? r.epc! : '--',
+          });
         }
       }
 
-      if (items.isEmpty) {
-        throw Exception('Không tìm thấy danh sách mã hàng / chip hợp lệ trong tệp!');
+      if (rawRequests.isEmpty) {
+        throw Exception('Không tìm thấy danh sách mã hàng hợp lệ trong tệp!');
       }
 
       // Đối soát tồn kho thực tế và kiểm tra vị trí kệ & thứ tự FIFO
-      final requestedPayload = items.map((i) => {
-        'sku': i.sku,
-        'cartonCode': i.cartonCode,
-        'palletCode': i.palletCode,
-        'supplier': i.supplier,
-        'customer': i.customer,
-        'productName': i.productName,
-        'palletEpc': i.palletEpc,
-        'epc': i.epc,
-      }).toList();
-
-      final validation = _repo.validateOutboundInventoryAndFifo(requestedItems: requestedPayload);
+      final validation = _repo.validateOutboundInventoryAndFifo(requestedItems: rawRequests);
 
       final List<_PendingOutboundItem> validatedItems = validation.items.map((vi) => _PendingOutboundItem(
         sku: vi.sku,
+        productId: (vi.productId != null && vi.productId!.isNotEmpty) ? vi.productId! : vi.sku,
         cartonCode: vi.cartonCode,
         palletCode: vi.palletCode,
         supplier: vi.supplier,
-        customer: vi.customer,
+        customer: vi.customer.isNotEmpty && vi.customer != '--' ? vi.customer : detectedCustomer,
         productName: vi.productName,
         palletEpc: vi.palletEpc,
         epc: vi.epc,
@@ -586,12 +619,6 @@ class _OutboundScreenState extends State<OutboundScreen> {
         fifoWarning: vi.fifoWarning,
       )).toList();
 
-      final detectedCustomer = (result.customerName != null && result.customerName!.isNotEmpty)
-          ? result.customerName!
-          : (validatedItems.isNotEmpty && validatedItems.first.customer.isNotEmpty && validatedItems.first.customer != 'Xuất Kho' && validatedItems.first.customer != 'Khách mua xuất kho'
-              ? validatedItems.first.customer
-              : 'Xuất Kho');
-
       _clearGateScan();
       setState(() {
         _pendingOutboundOrder = _PendingOutboundOrder(
@@ -599,7 +626,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
           customer: detectedCustomer,
           items: validatedItems,
           pallets: pallets,
-          fileName: result.fileName,
+          fileName: outboundResult.fileName,
           isStockSufficient: validation.isStockSufficient,
           shortageCount: validation.shortageCount,
           shortageBySku: validation.shortageBySku,
@@ -613,16 +640,16 @@ class _OutboundScreenState extends State<OutboundScreen> {
             SnackBar(
               backgroundColor: const Color(0xFFEF4444),
               duration: const Duration(seconds: 2),
-              content: Text('⚠️ CẢNH BÁO TỒN KHO: Không đủ hàng tồn để xuất (Thiếu ${validation.shortageCount} món)! Đã khóa xác nhận xuất.'),
+              content: Text('⚠️ CẢNH BÁO TỒN KHO: Đơn $orderNo thiếu ${validation.shortageCount} sản phẩm! Đã khóa xác nhận xuất.'),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-          duration: const Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
               backgroundColor: const Color(0xFF10B981),
-              content: Text('✓ Đã nạp thành công ${validatedItems.length} chip xuất kho (Đủ tồn kho & đã định vị kệ)'),
+              content: Text('✓ Đã nạp thành công ${validatedItems.length} sản phẩm xuất kho (Đủ tồn kho & đã định vị kệ)'),
             ),
           );
         }
@@ -632,7 +659,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-          duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
             backgroundColor: const Color(0xFFEF4444),
             content: Text('Lỗi nạp file xuất hàng: $e'),
           ),
@@ -764,18 +791,47 @@ class _OutboundScreenState extends State<OutboundScreen> {
     }
   }
 
+  // ---------- TẢI FILE MẪU XUẤT KHO (MÃ SKU, MÃ HÀNG, SỐ LƯỢNG) ----------
+  Future<void> _downloadOutboundTemplate() async {
+    try {
+      final path = await _excelService.exportOutboundTemplate();
+      if (!mounted) return;
+      if (path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            content: Text('✓ Đã tải file mẫu xuất kho thành công: $path'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text('Lỗi tải file mẫu: $e'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   // ---------- CHỌN TỪ ĐƠN XUẤT CÓ SẴN TRONG CSDL ----------
   void _loadOutboundOrderFromDb(OutboundOrder order) {
     final Map<String, String?> pallets = {};
     final List<Map<String, dynamic>> rawRequests = [];
 
     for (final detail in order.details) {
+      final prodId = detail.productId.isNotEmpty ? detail.productId : detail.sku;
       if (detail.epcList != null && detail.epcList!.isNotEmpty) {
         for (final epc in detail.epcList!) {
           final st = _repo.items.where((s) => s.epc.toUpperCase() == epc.toUpperCase()).firstOrNull;
           if (st == null || st.status == ItemStatus.inStock) {
             rawRequests.add({
               'sku': detail.sku,
+              'productId': prodId,
+              'itemId': prodId,
               'cartonCode': '--',
               'palletCode': '--',
               'customer': order.customer,
@@ -790,6 +846,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
         for (int i = 0; i < (remainingQty > 0 ? remainingQty : 0); i++) {
           rawRequests.add({
             'sku': detail.sku,
+            'productId': prodId,
+            'itemId': prodId,
             'cartonCode': '--',
             'palletCode': '--',
             'customer': order.customer,
@@ -816,6 +874,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     final validation = _repo.validateOutboundInventoryAndFifo(requestedItems: rawRequests);
     final List<_PendingOutboundItem> validatedItems = validation.items.map((vi) => _PendingOutboundItem(
       sku: vi.sku,
+      productId: (vi.productId != null && vi.productId!.isNotEmpty) ? vi.productId! : vi.sku,
       cartonCode: vi.cartonCode,
       palletCode: vi.palletCode,
       supplier: vi.supplier,
@@ -1309,6 +1368,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
                 if (_isImporting) return;
                 if (value == 'excel') {
                   _pickAndLoadOutboundExcelFile();
+                } else if (value == 'template') {
+                  _downloadOutboundTemplate();
                 } else if (value == 'po') {
                   _showOutboundPoOptionsDialog();
                 } else if (value == 'clear') {
@@ -1329,6 +1390,24 @@ class _OutboundScreenState extends State<OutboundScreen> {
                       Expanded(
                         child: Text(
                           'Nhập File Excel / CSV (.xlsx, .csv)',
+                          style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem<String>(
+                  value: 'template',
+                  height: 40,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.download_rounded, color: Color(0xFF3B82F6), size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Tải Mẫu Excel (SKU, Số lượng)',
                           style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1922,7 +2001,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                 scrollDirection: Axis.horizontal,
                 physics: const ClampingScrollPhysics(),
                 child: SizedBox(
-                  width: 1080,
+                  width: 760,
                   child: Column(
                     children: [
                       // Header bảng PDA
@@ -1934,25 +2013,19 @@ class _OutboundScreenState extends State<OutboundScreen> {
                         ),
                         child: Row(
                           children: [
-                            SizedBox(width: 38, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            SizedBox(width: 42, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
-                            SizedBox(width: 90, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            SizedBox(width: 95, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
-                            SizedBox(width: 90, child: Text('MÃ THÙNG', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
-                            const SizedBox(width: 6),
-                            SizedBox(width: 90, child: Text('MÃ PALLET', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
-                            const SizedBox(width: 6),
-                            SizedBox(width: 95, child: Text('VỊ TRÍ KỆ', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
-                            const SizedBox(width: 6),
-                            SizedBox(width: 95, child: Text('NGÀY NHẬP', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
-                            const SizedBox(width: 6),
-                            SizedBox(width: 110, child: Text('NHÀ CUNG CẤP', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            SizedBox(width: 95, child: Text('MÃ THÙNG', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
                             Expanded(flex: 3, child: Text('TÊN SẢN PHẨM', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
-                            SizedBox(width: 135, child: Text('EPC PALLET', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            SizedBox(width: 90, child: Text('MÃ PALLET', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
-                            SizedBox(width: 135, child: Text('EPC HÀNG', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            SizedBox(width: 90, child: Text('VỊ TRÍ', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            const SizedBox(width: 6),
+                            SizedBox(width: 95, child: Text('NGÀY NHẬP', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                           ],
                         ),
                       ),
@@ -1974,20 +2047,47 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 child: Row(
                                   children: [
-                                    SizedBox(width: 38, child: Text('${index + 1}', style: TextStyle(color: c.textSecondary, fontSize: 11))),
-                                    const SizedBox(width: 6),
+                                    // 1. STT
                                     SizedBox(
-                                      width: 90,
+                                      width: 42,
+                                      child: Row(
+                                        children: [
+                                          if (isScanned) ...[
+                                            const Icon(Icons.check_circle, size: 12, color: Color(0xFF10B981)),
+                                            const SizedBox(width: 2),
+                                          ],
+                                          Text(
+                                            '${index + 1}',
+                                            style: TextStyle(
+                                              color: isScanned ? const Color(0xFF10B981) : c.textSecondary,
+                                              fontSize: 11,
+                                              fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+
+                                    // 2. MÃ SKU
+                                    SizedBox(
+                                      width: 95,
                                       child: Text(
                                         item.sku,
-                                        style: TextStyle(color: c.textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
+                                        style: TextStyle(
+                                          color: isScanned ? const Color(0xFF10B981) : c.textPrimary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                     const SizedBox(width: 6),
+
+                                    // 3. MÃ THÙNG
                                     SizedBox(
-                                      width: 90,
+                                      width: 95,
                                       child: Text(
                                         item.cartonCode,
                                         style: TextStyle(color: c.textPrimary, fontSize: 11),
@@ -1996,6 +2096,24 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
+
+                                    // 4. TÊN SẢN PHẨM
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        item.productName,
+                                        style: TextStyle(
+                                          color: isScanned ? const Color(0xFF10B981) : c.textPrimary,
+                                          fontSize: 11,
+                                          fontWeight: isScanned ? FontWeight.w500 : FontWeight.normal,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+
+                                    // 5. MÃ PALLET
                                     SizedBox(
                                       width: 90,
                                       child: Text(
@@ -2006,9 +2124,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    // VỊ TRÍ KỆ
+
+                                    // 6. VỊ TRÍ
                                     SizedBox(
-                                      width: 95,
+                                      width: 90,
                                       child: Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                         decoration: BoxDecoration(
@@ -2037,7 +2156,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    // NGÀY NHẬP (FIFO)
+
+                                    // 7. NGÀY NHẬP (FIFO)
                                     SizedBox(
                                       width: 95,
                                       child: Container(
@@ -2068,51 +2188,6 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    SizedBox(
-                                      width: 110,
-                                      child: Text(
-                                        item.supplier.isNotEmpty && item.supplier != '--' ? item.supplier : item.customer,
-                                        style: TextStyle(color: c.textSecondary, fontSize: 11),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                        item.productName,
-                                        style: TextStyle(color: c.textPrimary, fontSize: 11),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    SizedBox(
-                                      width: 135,
-                                      child: Text(
-                                        item.palletEpc,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(fontFamily: 'monospace', fontSize: 10.5, color: c.textSecondary),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    SizedBox(
-                                      width: 135,
-                                      child: Text(
-                                        epc,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontFamily: 'monospace',
-                                          fontSize: 10.5,
-                                          fontWeight: isScanned ? FontWeight.bold : FontWeight.normal,
-                                          color: isScanned ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                        ),
-                                      ),
-                                    ),
                                   ],
                                 ),
                               );
@@ -2126,47 +2201,20 @@ class _OutboundScreenState extends State<OutboundScreen> {
                               final palletText = foundInDb?.palletId ?? '--';
                               final locText = foundInDb?.locationId ?? '--';
                               final dateText = foundInDb?.inboundTime != null ? DateFormat('dd/MM/yyyy').format(foundInDb!.inboundTime!) : '--';
-                              final suppText = foundInDb?.supplier ?? '--';
                               final nameText = foundInDb != null
                                   ? '⚠️ [NGOÀI ĐƠN] ${foundInDb.productName}'
                                   : 'Chip lạ không nằm trong danh sách xuất';
-                              final palletEpcText = '--';
 
                               return Container(
                                 color: const Color(0xFFEF4444).withValues(alpha: 0.08),
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 child: Row(
                                   children: [
-                                    SizedBox(width: 38, child: Text('${index + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
-                                    const SizedBox(width: 6),
-                                    SizedBox(width: 90, child: Text(skuText, style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11))),
-                                    const SizedBox(width: 6),
-                                    SizedBox(width: 90, child: Text(cartonText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
-                                    const SizedBox(width: 6),
-                                    SizedBox(width: 90, child: Text(palletText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
-                                    const SizedBox(width: 6),
-                                    SizedBox(width: 95, child: Text(locText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold))),
-                                    const SizedBox(width: 6),
-                                    SizedBox(width: 90, child: Text(dateText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5))),
-                                    const SizedBox(width: 6),
-                                    SizedBox(width: 110, child: Text(suppText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11))),
-                                    const SizedBox(width: 6),
-                                    Expanded(flex: 3, child: Text(nameText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold))),
-                                    const SizedBox(width: 6),
-                                    SizedBox(width: 135, child: Text(palletEpcText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5))),
-                                    const SizedBox(width: 6),
+                                    // 1. STT + nút xóa chip lạ
                                     SizedBox(
-                                      width: 135,
+                                      width: 42,
                                       child: Row(
                                         children: [
-                                          Expanded(
-                                            child: Text(
-                                              unexp.epc,
-                                              style: const TextStyle(color: Color(0xFFEF4444), fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 10.5),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
                                           InkWell(
                                             onTap: () {
                                               setState(() {
@@ -2182,13 +2230,39 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                               }
                                             },
                                             child: const Padding(
-                                              padding: EdgeInsets.all(2),
-                                              child: Icon(Icons.close, size: 13, color: Color(0xFFEF4444)),
+                                              padding: EdgeInsets.all(1),
+                                              child: Icon(Icons.close, size: 12, color: Color(0xFFEF4444)),
                                             ),
                                           ),
+                                          const SizedBox(width: 1),
+                                          Text('${index + 1}', style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold)),
                                         ],
                                       ),
                                     ),
+                                    const SizedBox(width: 6),
+
+                                    // 2. MÃ SKU
+                                    SizedBox(width: 95, child: Text(skuText, style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(width: 6),
+
+                                    // 3. MÃ THÙNG
+                                    SizedBox(width: 95, child: Text(cartonText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(width: 6),
+
+                                    // 4. TÊN SẢN PHẨM
+                                    Expanded(flex: 3, child: Text(nameText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(width: 6),
+
+                                    // 5. MÃ PALLET
+                                    SizedBox(width: 90, child: Text(palletText, style: const TextStyle(color: Color(0xFFEF4444)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(width: 6),
+
+                                    // 6. VỊ TRÍ
+                                    SizedBox(width: 90, child: Text(locText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(width: 6),
+
+                                    // 7. NGÀY NHẬP
+                                    SizedBox(width: 95, child: Text(dateText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                   ],
                                 ),
                               );
