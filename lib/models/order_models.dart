@@ -288,6 +288,7 @@ class DeliveryNote {
 /// Kết quả đối soát chi tiết của từng dòng sản phẩm cần xuất kho với tồn kho và FIFO
 class OutboundValidatedItem {
   final String sku;
+  final String? productId;
   final String productName;
   final String cartonCode;
   final String palletCode;
@@ -305,6 +306,7 @@ class OutboundValidatedItem {
 
   OutboundValidatedItem({
     required this.sku,
+    this.productId,
     required this.productName,
     required this.cartonCode,
     required this.palletCode,

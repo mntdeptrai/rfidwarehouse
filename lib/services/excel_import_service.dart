@@ -24,6 +24,61 @@ class ExcelImportResult {
   });
 }
 
+/// Dòng sản phẩm cần xuất kho đọc từ file Excel/CSV (Mã SKU, Mã Hàng, Số lượng)
+class OutboundImportRow {
+  final String sku;
+  final String productId;
+  final int quantity;
+  final String productName;
+  final String customer;
+  final String orderNo;
+  final String cartonCode;
+  final String palletCode;
+  final String? epc;
+
+  OutboundImportRow({
+    required this.sku,
+    required this.productId,
+    required this.quantity,
+    this.productName = '',
+    this.customer = '',
+    this.orderNo = '',
+    this.cartonCode = '',
+    this.palletCode = '',
+    this.epc,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'sku': sku,
+    'productId': productId,
+    'itemId': productId,
+    'productName': productName,
+    'quantity': quantity,
+    'customer': customer,
+    'orderNo': orderNo,
+    'cartonCode': cartonCode,
+    'palletCode': palletCode,
+    'epc': epc ?? '',
+  };
+}
+
+/// Kết quả nạp file xuất kho từ Excel/CSV
+class OutboundExcelImportResult {
+  final String fileName;
+  final String orderNo;
+  final String customer;
+  final List<OutboundImportRow> rows;
+  final int totalRequestedQuantity;
+
+  OutboundExcelImportResult({
+    required this.fileName,
+    required this.orderNo,
+    required this.customer,
+    required this.rows,
+    required this.totalRequestedQuantity,
+  });
+}
+
 class ExcelImportService {
   static final ExcelImportService _instance = ExcelImportService._internal();
   factory ExcelImportService() => _instance;
@@ -679,6 +734,231 @@ class ExcelImportService {
     }
   }
 
+  /// Mở hộp thoại chọn file Excel / CSV nạp danh sách yêu cầu xuất kho:
+  /// Cấu trúc: Mã SKU, Mã Hàng (Product ID/Item ID), Số lượng.
+  /// KHÔNG cần khai báo mã EPC. Khi quét tại trạm/cổng RFID, hệ thống tự động
+  /// đối chiếu mã chip EPC trong CSDL tồn kho để xuất.
+  Future<OutboundExcelImportResult?> pickAndParseOutboundExcel() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx', 'xls', 'csv'],
+      );
+
+      if (files.isEmpty) return null;
+
+      final file = files.first;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) throw Exception('Tệp đã chọn rỗng.');
+
+      final isCsv = file.name.toLowerCase().endsWith('.csv');
+      return parseOutboundExcelBytes(bytes, isCsv: isCsv, fileName: file.name);
+    } catch (e) {
+      debugPrint('ExcelImportService Outbound error: $e');
+      rethrow;
+    }
+  }
+
+  /// Phân tích nội dung bytes file Excel/CSV xuất kho (hỗ trợ cả headless/unit test)
+  OutboundExcelImportResult parseOutboundExcelBytes(
+    Uint8List bytes, {
+    bool isCsv = false,
+    String? fileName,
+  }) {
+    final List<List<String>> rawGrid = [];
+
+    if (isCsv) {
+      String content;
+      try {
+        content = utf8.decode(bytes);
+      } catch (_) {
+        content = String.fromCharCodes(bytes);
+      }
+      final lines = content.split(RegExp(r'\r\n|\n|\r'));
+      for (final line in lines) {
+        if (line.trim().isEmpty) continue;
+        rawGrid.add(line.split(RegExp(r',|\t|;')).map((c) => c.trim()).toList());
+      }
+    } else {
+      final excel = Excel.decodeBytes(bytes);
+      if (excel.tables.isEmpty) throw Exception('Tệp Excel rỗng hoặc không có bảng dữ liệu.');
+      final sheetName = excel.tables.keys.first;
+      final sheet = excel.tables[sheetName]!;
+      for (final row in sheet.rows) {
+        rawGrid.add(row.map((c) => _cellToString(c?.value)).toList());
+      }
+    }
+
+    if (rawGrid.isEmpty) {
+      throw Exception('Không có dữ liệu trong tệp.');
+    }
+
+    int? skuCol;
+    int? productIdCol;
+    int? qtyCol;
+    int? nameCol;
+    int? orderNoCol;
+    int? customerCol;
+    int? epcCol;
+    int? cartonCol;
+    int? palletCol;
+    int startRow = 0;
+
+    // Tìm kiếm khách hàng hoặc số phiếu ở các dòng đầu tiên nếu có ghi chú
+    String detectedCustomer = '';
+    String detectedOrderNo = '';
+    for (int r = 0; r < rawGrid.length && r < 10; r++) {
+      for (int c = 0; c < rawGrid[r].length; c++) {
+        final cell = rawGrid[r][c];
+        final lower = _normalizeHeader(cell);
+        if (lower.startsWith('khach hang:') || lower.startsWith('customer:')) {
+          final parts = cell.split(RegExp(r'[:：]'));
+          if (parts.length > 1 && parts.sublist(1).join(':').trim().isNotEmpty) {
+            detectedCustomer = parts.sublist(1).join(':').trim();
+          }
+        } else if (lower.startsWith('so phieu:') || lower.startsWith('ma don:') || lower.startsWith('order:')) {
+          final parts = cell.split(RegExp(r'[:：]'));
+          if (parts.length > 1 && parts.sublist(1).join(':').trim().isNotEmpty) {
+            detectedOrderNo = parts.sublist(1).join(':').trim();
+          }
+        }
+      }
+    }
+
+    final firstRow = rawGrid.first;
+    final headers = firstRow.map((c) => _normalizeHeader(c)).toList();
+    bool hasHeader = false;
+
+    for (int i = 0; i < headers.length; i++) {
+      final h = headers[i];
+      if (h.isEmpty) continue;
+
+      if (h.contains('sku') || h.contains('barcode') || h.contains('ma vach')) {
+        skuCol = i;
+        hasHeader = true;
+      } else if (h.contains('ma hang') || h.contains('item id') || h.contains('item_id') ||
+                 h.contains('product id') || h.contains('product_id') || h.contains('ma sp') ||
+                 h.contains('ma san pham') || h.contains('item code') || h.contains('product code')) {
+        productIdCol = i;
+        hasHeader = true;
+      } else if (h.contains('so luong') || h.contains('quantity') || h.contains('qty') || h.contains('sl')) {
+        qtyCol = i;
+        hasHeader = true;
+      } else if (h.contains('ten') || h.contains('name') || h.contains('mo ta') || h.contains('description')) {
+        nameCol = i;
+        hasHeader = true;
+      } else if (h.contains('order') || h.contains('don hang') || h.contains('ma don') || h.contains('po') || h.contains('phieu') || h.contains('so phieu')) {
+        orderNoCol = i;
+        hasHeader = true;
+      } else if (h.contains('khach hang') || h.contains('customer') || h.contains('nguoi nhan') || h.contains('don vi nhan') || h.contains('nha cung cap') || h.contains('supplier') || h.contains('ncc')) {
+        customerCol = i;
+        hasHeader = true;
+      } else if (h.contains('epc') || h.contains('serial') || h.contains('chip') || h.contains('rfid') || h.contains('tag')) {
+        epcCol = i;
+        hasHeader = true;
+      } else if (h.contains('carton') || h.contains('thung') || h.contains('box') || h.contains('kien')) {
+        cartonCol = i;
+        hasHeader = true;
+      } else if (h.contains('pallet') || h.contains('palet')) {
+        palletCol = i;
+        hasHeader = true;
+      }
+    }
+
+    if (hasHeader) {
+      startRow = 1;
+    }
+
+    // Tự động gán vị trí cột nếu không tìm thấy tiêu đề rõ ràng
+    if (skuCol == null && productIdCol == null) {
+      skuCol = 0;
+      if (firstRow.length >= 3) {
+        productIdCol = 1;
+        qtyCol ??= 2;
+      } else if (firstRow.length == 2) {
+        productIdCol = 0;
+        qtyCol ??= 1;
+      }
+    } else if (skuCol == null && productIdCol != null) {
+      skuCol = productIdCol;
+    } else if (productIdCol == null && skuCol != null) {
+      productIdCol = skuCol;
+    }
+
+    final List<OutboundImportRow> rows = [];
+    final repoProducts = WarehouseRepository().products;
+
+    for (int r = startRow; r < rawGrid.length; r++) {
+      final row = rawGrid[r];
+      if (row.isEmpty) continue;
+
+      final sku = (skuCol != null && skuCol < row.length) ? row[skuCol].trim() : '';
+      final productId = (productIdCol != null && productIdCol < row.length) ? row[productIdCol].trim() : '';
+      final qtyStr = (qtyCol != null && qtyCol < row.length) ? row[qtyCol].trim() : '1';
+      final name = (nameCol != null && nameCol < row.length) ? row[nameCol].trim() : '';
+      final orderNo = (orderNoCol != null && orderNoCol < row.length) ? row[orderNoCol].trim() : '';
+      final customer = (customerCol != null && customerCol < row.length) ? row[customerCol].trim() : '';
+      final carton = (cartonCol != null && cartonCol < row.length) ? row[cartonCol].trim() : '';
+      final pallet = (palletCol != null && palletCol < row.length) ? row[palletCol].trim() : '';
+      final epc = (epcCol != null && epcCol < row.length) ? row[epcCol].trim().toUpperCase() : '';
+
+      if (sku.isEmpty && productId.isEmpty && name.isEmpty && epc.isEmpty) continue;
+
+      final effectiveSku = sku.isNotEmpty ? sku : productId;
+      final effectiveProdId = productId.isNotEmpty ? productId : effectiveSku;
+
+      // Tra cứu tên sản phẩm nếu file không cung cấp
+      String effectiveName = name;
+      if (effectiveName.isEmpty) {
+        final foundProd = repoProducts.where((p) =>
+          p.sku.toUpperCase() == effectiveSku.toUpperCase() ||
+          p.productId.toUpperCase() == effectiveProdId.toUpperCase()
+        ).firstOrNull;
+        effectiveName = foundProd?.productName ?? 'Sản phẩm $effectiveSku';
+      }
+
+      final parsedQty = int.tryParse(qtyStr) ?? 1;
+      final finalQty = parsedQty > 0 ? parsedQty : 1;
+
+      if (detectedCustomer.isEmpty && customer.isNotEmpty) {
+        detectedCustomer = customer;
+      }
+      if (detectedOrderNo.isEmpty && orderNo.isNotEmpty) {
+        detectedOrderNo = orderNo;
+      }
+
+      rows.add(OutboundImportRow(
+        sku: effectiveSku,
+        productId: effectiveProdId,
+        quantity: finalQty,
+        productName: effectiveName,
+        customer: customer.isNotEmpty ? customer : detectedCustomer,
+        orderNo: orderNo.isNotEmpty ? orderNo : detectedOrderNo,
+        cartonCode: carton,
+        palletCode: pallet,
+        epc: epc.isNotEmpty ? epc : null,
+      ));
+    }
+
+    if (rows.isEmpty) {
+      throw Exception('Không tìm thấy dòng mặt hàng xuất hợp lệ nào trong tệp!');
+    }
+
+    final totalQty = rows.fold<int>(0, (sum, r) => sum + r.quantity);
+    final now = DateTime.now();
+    final effectiveOrderNo = detectedOrderNo.isNotEmpty
+        ? detectedOrderNo
+        : 'XK-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+
+    return OutboundExcelImportResult(
+      fileName: fileName ?? 'Xuat_Kho.xlsx',
+      orderNo: effectiveOrderNo,
+      customer: detectedCustomer.isNotEmpty ? detectedCustomer : 'Khách mua xuất kho',
+      rows: rows,
+      totalRequestedQuantity: totalQty,
+    );
+  }
+
   /// Xuất file Excel mẫu chuẩn nhập kho RFID WMS: cùng 1 loại sản phẩm, số lượng nhiều, khác EPC
   Future<String> exportGoodsReceiveTemplate({String fileName = 'Mau_Nhap_Hang_Cung_Loai_Nhieu_EPC.xlsx'}) async {
     final excel = Excel.createExcel();
@@ -858,6 +1138,103 @@ class ExcelImportService {
     if (savePath == null || savePath.isEmpty) {
       final dir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
       savePath = '${dir.path}${Platform.pathSeparator}Template-Batch-Orders.xlsx';
+      final file = File(savePath);
+      await file.writeAsBytes(bytes);
+    }
+
+    return savePath;
+  }
+
+  /// Xuất file Excel mẫu chuẩn xuất kho WMS: MÃ SKU, MÃ HÀNG, SỐ LƯỢNG (Không cần cột EPC)
+  Future<String> exportOutboundTemplate({String fileName = 'Mau_Xuat_Kho_SKU_MaHang_SoLuong.xlsx'}) async {
+    final excel = Excel.createExcel();
+    final defaultSheet = excel.getDefaultSheet() ?? 'Sheet1';
+    excel.rename(defaultSheet, 'Xuat_Kho');
+    final sheet = excel['Xuat_Kho'];
+
+    final headers = [
+      'MÃ SKU',
+      'MÃ HÀNG',
+      'SỐ LƯỢNG',
+      'TÊN SẢN PHẨM',
+      'KHÁCH HÀNG',
+      'GHI CHÚ',
+    ];
+
+    final headerStyle = CellStyle(
+      bold: true,
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: ExcelColor.fromHexString('#0284C7'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    final codeStyle = CellStyle(
+      fontColorHex: ExcelColor.fromHexString('#0F172A'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    final textStyle = CellStyle(
+      fontColorHex: ExcelColor.fromHexString('#1E293B'),
+      horizontalAlign: HorizontalAlign.Left,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    for (int col = 0; col < headers.length; col++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0));
+      cell.value = TextCellValue(headers[col]);
+      cell.cellStyle = headerStyle;
+    }
+
+    final sampleData = [
+      ['SKU-POLO-COOLMAX-01', 'PROD-POLO-01', '10', 'Áo Polo Nam Thể Thao RFID Coolmax', 'Công ty Thời Trang An Nam', 'Xuất theo đơn đặt hàng'],
+      ['SKU-JEAN-SLIM-02', 'PROD-JEAN-02', '5', 'Quần Jean Nam Co Giãn Form Slimfit', 'Công ty Thời Trang An Nam', 'Xuất giao đại lý'],
+      ['SKU-SHIRT-OXFORD-03', 'PROD-SHIRT-03', '8', 'Áo Sơ Mi Nam Tay Dài Vải Oxford', 'Đại lý Thời Trang Phố Huế', 'Xuất kho giao ngay'],
+    ];
+
+    for (int r = 0; r < sampleData.length; r++) {
+      final rowData = sampleData[r];
+      for (int c = 0; c < rowData.length; c++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1));
+        cell.value = TextCellValue(rowData[c]);
+        cell.cellStyle = (c == 0 || c == 1 || c == 2) ? codeStyle : textStyle;
+      }
+    }
+
+    sheet.setColumnWidth(0, 26.0);
+    sheet.setColumnWidth(1, 22.0);
+    sheet.setColumnWidth(2, 14.0);
+    sheet.setColumnWidth(3, 40.0);
+    sheet.setColumnWidth(4, 32.0);
+    sheet.setColumnWidth(5, 28.0);
+
+    final bytes = Uint8List.fromList(excel.encode() ?? []);
+    if (bytes.isEmpty) throw Exception('Không thể tạo file Excel.');
+
+    String? savePath;
+    try {
+      final savedUri = await FilePicker.saveFile(
+        fileName: fileName,
+        bytes: bytes,
+      );
+      if (savedUri != null) {
+        savePath = savedUri.toFilePath();
+      }
+    } catch (e) {
+      debugPrint('Save outbound template via picker failed: $e');
+    }
+
+    if (savePath == null || savePath.isEmpty) {
+      Directory? dir;
+      try {
+        dir = await getDownloadsDirectory();
+      } catch (_) {}
+      try {
+        dir ??= await getApplicationDocumentsDirectory();
+      } catch (_) {}
+      dir ??= Directory.systemTemp;
+      savePath = '${dir.path}${Platform.pathSeparator}$fileName';
       final file = File(savePath);
       await file.writeAsBytes(bytes);
     }

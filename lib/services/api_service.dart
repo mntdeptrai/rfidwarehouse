@@ -349,13 +349,32 @@ class ApiService extends ChangeNotifier {
       final List<dynamic> res = await query;
       return res.map((m) {
         final detailsList = (m['inbound_order_details'] as List<dynamic>?) ?? [];
-        final details = detailsList.map((d) => InboundOrderDetail(
+        final Map<String, InboundOrderDetail> dedupMap = {};
+        for (final d in detailsList) {
+          final sku = (d['sku'] ?? '').toString().trim().toUpperCase();
+          final key = sku.isNotEmpty ? sku : (d['product_id']?.toString() ?? '');
+          final req = (d['required_qty'] as num?)?.toInt() ?? 0;
+          final rec = (d['received_qty'] as num?)?.toInt() ?? 0;
+          if (dedupMap.containsKey(key)) {
+            final cur = dedupMap[key]!;
+            dedupMap[key] = InboundOrderDetail(
+              productId: cur.productId.isNotEmpty ? cur.productId : (d['product_id']?.toString() ?? ''),
+              sku: cur.sku.isNotEmpty ? cur.sku : (d['sku']?.toString() ?? ''),
+              productName: cur.productName.isNotEmpty ? cur.productName : (d['product_name']?.toString() ?? ''),
+              requiredQty: cur.requiredQty > 0 ? cur.requiredQty : req,
+              receivedQty: cur.receivedQty > rec ? cur.receivedQty : rec,
+            );
+          } else {
+            dedupMap[key] = InboundOrderDetail(
               productId: d['product_id']?.toString() ?? '',
               sku: d['sku']?.toString() ?? '',
               productName: d['product_name']?.toString() ?? '',
-              requiredQty: (d['required_qty'] as num?)?.toInt() ?? 0,
-              receivedQty: (d['received_qty'] as num?)?.toInt() ?? 0,
-            )).toList();
+              requiredQty: req,
+              receivedQty: rec,
+            );
+          }
+        }
+        final details = dedupMap.values.toList();
 
         return InboundOrder(
           inboundOrderId: m['inbound_order_id']?.toString() ?? '',
@@ -391,13 +410,32 @@ class ApiService extends ChangeNotifier {
       final List<dynamic> res = await query;
       return res.map((m) {
         final detailsList = (m['outbound_order_details'] as List<dynamic>?) ?? [];
-        final details = detailsList.map((d) => OutboundOrderDetail(
+        final Map<String, OutboundOrderDetail> dedupMap = {};
+        for (final d in detailsList) {
+          final sku = (d['sku'] ?? '').toString().trim().toUpperCase();
+          final key = sku.isNotEmpty ? sku : (d['product_id']?.toString() ?? '');
+          final req = (d['required_qty'] as num?)?.toInt() ?? 0;
+          final picked = (d['picked_qty'] as num?)?.toInt() ?? 0;
+          if (dedupMap.containsKey(key)) {
+            final cur = dedupMap[key]!;
+            dedupMap[key] = OutboundOrderDetail(
+              productId: cur.productId.isNotEmpty ? cur.productId : (d['product_id']?.toString() ?? ''),
+              sku: cur.sku.isNotEmpty ? cur.sku : (d['sku'] ?? '').toString(),
+              productName: cur.productName.isNotEmpty ? cur.productName : (d['product_name'] ?? '').toString(),
+              requiredQty: cur.requiredQty > 0 ? cur.requiredQty : req,
+              pickedQty: cur.pickedQty > picked ? cur.pickedQty : picked,
+            );
+          } else {
+            dedupMap[key] = OutboundOrderDetail(
               productId: d['product_id']?.toString() ?? '',
               sku: d['sku']?.toString() ?? '',
               productName: d['product_name']?.toString() ?? '',
-              requiredQty: (d['required_qty'] as num?)?.toInt() ?? 0,
-              pickedQty: (d['picked_qty'] as num?)?.toInt() ?? 0,
-            )).toList();
+              requiredQty: req,
+              pickedQty: picked,
+            );
+          }
+        }
+        final details = dedupMap.values.toList();
 
         return OutboundOrder(
           outboundOrderId: m['outbound_order_id']?.toString() ?? '',

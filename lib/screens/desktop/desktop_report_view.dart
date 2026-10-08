@@ -1768,8 +1768,25 @@ class _DesktopReportViewState extends State<DesktopReportView> {
               separatorBuilder: (_, _) => Divider(height: 1, color: c.border),
               itemBuilder: (context, idx) {
                 final ord = orders[idx];
-                final reqQty = ord.details.fold<int>(0, (s, d) => s + d.requiredQty);
-                final recQty = ord.details.fold<int>(0, (s, d) => s + d.receivedQty);
+                final Map<String, InboundOrderDetail> dedupDetails = {};
+                for (final d in ord.details) {
+                  final key = d.sku.trim().isNotEmpty ? d.sku.trim().toUpperCase() : d.productId;
+                  if (!dedupDetails.containsKey(key)) {
+                    dedupDetails[key] = d;
+                  } else {
+                    final cur = dedupDetails[key]!;
+                    dedupDetails[key] = InboundOrderDetail(
+                      productId: cur.productId.isNotEmpty ? cur.productId : d.productId,
+                      sku: cur.sku.isNotEmpty ? cur.sku : d.sku,
+                      productName: cur.productName.isNotEmpty ? cur.productName : d.productName,
+                      requiredQty: cur.requiredQty > 0 ? cur.requiredQty : d.requiredQty,
+                      receivedQty: cur.receivedQty > d.receivedQty ? cur.receivedQty : d.receivedQty,
+                    );
+                  }
+                }
+                final cleanDetails = dedupDetails.values.toList();
+                final reqQty = cleanDetails.fold<int>(0, (s, d) => s + d.requiredQty);
+                final recQty = cleanDetails.fold<int>(0, (s, d) => s + d.receivedQty);
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1792,7 +1809,7 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                         ),
                       ),
                       SizedBox(width: 150, child: Text(_formatDateTime(ord.createdAt), style: TextStyle(fontSize: 12, color: c.textSecondary))),
-                      SizedBox(width: 90, child: Text('${ord.details.length} SKU', style: TextStyle(fontSize: 12, color: c.textPrimary))),
+                      SizedBox(width: 90, child: Text('${cleanDetails.length} SKU', style: TextStyle(fontSize: 12, color: c.textPrimary))),
                       SizedBox(width: 110, child: Text('$reqQty cái', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.textPrimary))),
                       SizedBox(
                         width: 100,
@@ -1858,8 +1875,25 @@ class _DesktopReportViewState extends State<DesktopReportView> {
               separatorBuilder: (_, _) => Divider(height: 1, color: c.border),
               itemBuilder: (context, idx) {
                 final ord = orders[idx];
-                final reqQty = ord.details.fold<int>(0, (s, d) => s + d.requiredQty);
-                final pickedQty = ord.details.fold<int>(0, (s, d) => s + d.pickedQty);
+                final Map<String, OutboundOrderDetail> dedupDetails = {};
+                for (final d in ord.details) {
+                  final key = d.sku.trim().isNotEmpty ? d.sku.trim().toUpperCase() : d.productId;
+                  if (!dedupDetails.containsKey(key)) {
+                    dedupDetails[key] = d;
+                  } else {
+                    final cur = dedupDetails[key]!;
+                    dedupDetails[key] = OutboundOrderDetail(
+                      productId: cur.productId.isNotEmpty ? cur.productId : d.productId,
+                      sku: cur.sku.isNotEmpty ? cur.sku : d.sku,
+                      productName: cur.productName.isNotEmpty ? cur.productName : d.productName,
+                      requiredQty: cur.requiredQty > 0 ? cur.requiredQty : d.requiredQty,
+                      pickedQty: cur.pickedQty > d.pickedQty ? cur.pickedQty : d.pickedQty,
+                    );
+                  }
+                }
+                final cleanDetails = dedupDetails.values.toList();
+                final reqQty = cleanDetails.fold<int>(0, (s, d) => s + d.requiredQty);
+                final pickedQty = cleanDetails.fold<int>(0, (s, d) => s + d.pickedQty);
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1882,7 +1916,7 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                         ),
                       ),
                       SizedBox(width: 150, child: Text(_formatDateTime(ord.createdAt), style: TextStyle(fontSize: 12, color: c.textSecondary))),
-                      SizedBox(width: 90, child: Text('${ord.details.length} SKU', style: TextStyle(fontSize: 12, color: c.textPrimary))),
+                      SizedBox(width: 90, child: Text('${cleanDetails.length} SKU', style: TextStyle(fontSize: 12, color: c.textPrimary))),
                       SizedBox(width: 110, child: Text('$reqQty cái', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.textPrimary))),
                       SizedBox(
                         width: 100,

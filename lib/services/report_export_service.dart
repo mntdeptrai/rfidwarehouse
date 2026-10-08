@@ -486,7 +486,24 @@ class ReportExportService {
   }
 
   void _buildSingleOutboundOrderSheet(Sheet sheet, OutboundOrder ord, List<DeliveryNote> deliveries) {
-    var effectiveDetails = ord.details;
+    final Map<String, OutboundOrderDetail> dedupDetails = {};
+    for (final d in ord.details) {
+      final key = d.sku.trim().isNotEmpty ? d.sku.trim().toUpperCase() : d.productId;
+      if (!dedupDetails.containsKey(key)) {
+        dedupDetails[key] = d;
+      } else {
+        final cur = dedupDetails[key]!;
+        dedupDetails[key] = OutboundOrderDetail(
+          productId: cur.productId.isNotEmpty ? cur.productId : d.productId,
+          sku: cur.sku.isNotEmpty ? cur.sku : d.sku,
+          productName: cur.productName.isNotEmpty ? cur.productName : d.productName,
+          requiredQty: cur.requiredQty > 0 ? cur.requiredQty : d.requiredQty,
+          pickedQty: cur.pickedQty > d.pickedQty ? cur.pickedQty : d.pickedQty,
+          epcList: [...?cur.epcList, ...?d.epcList],
+        );
+      }
+    }
+    var effectiveDetails = dedupDetails.values.toList();
     if (effectiveDetails.isEmpty) {
       final txs = _repo.transactions.where((t) =>
           t.type == TransactionType.outbound &&
@@ -566,7 +583,7 @@ class ReportExportService {
     }
 
     _setCell(sheet, col: 0, row: currentRow, value: 'TỔNG CỘNG', style: _totalRowStyle);
-    _setCell(sheet, col: 1, row: currentRow, value: 'Tổng SKU: ${ord.details.length}', style: _totalRowStyle);
+    _setCell(sheet, col: 1, row: currentRow, value: 'Tổng SKU: ${effectiveDetails.length}', style: _totalRowStyle);
     _setCell(sheet, col: 2, row: currentRow, value: '', style: _totalRowStyle);
     _setCell(sheet, col: 3, row: currentRow, value: 'Tổng YC: $totalReq', style: _totalRowStyle);
     _setCell(sheet, col: 4, row: currentRow, value: 'Tổng Xuất: $totalPicked', style: _totalRowStyle);
@@ -606,8 +623,25 @@ class ReportExportService {
 
     for (int i = 0; i < orders.length; i++) {
       final ord = orders[i];
-      final totalReq = ord.details.fold<int>(0, (s, d) => s + d.requiredQty);
-      final totalPicked = ord.details.fold<int>(0, (s, d) => s + d.pickedQty);
+      final Map<String, OutboundOrderDetail> dedupDetails = {};
+      for (final d in ord.details) {
+        final key = d.sku.trim().isNotEmpty ? d.sku.trim().toUpperCase() : d.productId;
+        if (!dedupDetails.containsKey(key)) {
+          dedupDetails[key] = d;
+        } else {
+          final cur = dedupDetails[key]!;
+          dedupDetails[key] = OutboundOrderDetail(
+            productId: cur.productId.isNotEmpty ? cur.productId : d.productId,
+            sku: cur.sku.isNotEmpty ? cur.sku : d.sku,
+            productName: cur.productName.isNotEmpty ? cur.productName : d.productName,
+            requiredQty: cur.requiredQty > 0 ? cur.requiredQty : d.requiredQty,
+            pickedQty: cur.pickedQty > d.pickedQty ? cur.pickedQty : d.pickedQty,
+          );
+        }
+      }
+      final cleanDetails = dedupDetails.values.toList();
+      final totalReq = cleanDetails.fold<int>(0, (s, d) => s + d.requiredQty);
+      final totalPicked = cleanDetails.fold<int>(0, (s, d) => s + d.pickedQty);
       final delivery = deliveries.where((d) => d.poNo == ord.poNo).toList();
       final deliveryNos = delivery.map((d) => d.deliveryNo).join(', ');
 
@@ -618,7 +652,7 @@ class ReportExportService {
       _setCell(sheet, col: 1, row: row, value: ord.poNo);
       _setCell(sheet, col: 2, row: row, value: ord.customer);
       _setCell(sheet, col: 3, row: row, value: _dtFmt.format(ord.createdAt), style: _dataCellCenterStyle);
-      _setCell(sheet, col: 4, row: row, value: '${ord.details.length}', style: _dataCellCenterStyle);
+      _setCell(sheet, col: 4, row: row, value: '${cleanDetails.length}', style: _dataCellCenterStyle);
       _setCell(sheet, col: 5, row: row, value: '$totalReq', style: _dataCellCenterStyle);
       _setCell(sheet, col: 6, row: row, value: '$totalPicked', style: _dataCellCenterStyle);
       _setCell(sheet, col: 7, row: row, value: deliveryNos.isEmpty ? '--' : deliveryNos, style: _dataCellCenterStyle);
