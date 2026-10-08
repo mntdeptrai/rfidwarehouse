@@ -109,48 +109,54 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
     final c = _eyeCare.colors;
     final query = _searchCtrl.text.trim().toLowerCase();
 
+    final isSearching = query.isNotEmpty;
+
     // 1. Lọc danh sách hàng hóa theo từ khóa (Mã hàng, SKU, S/N, EPC, hoặc Tên SP)
     final allAvailableItems = _repo.items.where((i) => i.status != ItemStatus.out).toList();
 
-    List<Item> matchingItems = allAvailableItems.where((it) {
-      if (query.isEmpty) return true;
-      final itemId = it.itemId.toLowerCase();
-      final sku = it.sku.toLowerCase();
-      final name = it.productName.toLowerCase();
-      final serial = it.serialNumber.toLowerCase();
-      final epc = it.epc.toLowerCase();
-      final loc = (it.locationId ?? '').toLowerCase();
-      final pallet = (it.palletId ?? '').toLowerCase();
-      return itemId.contains(query) ||
-          sku.contains(query) ||
-          name.contains(query) ||
-          serial.contains(query) ||
-          epc.contains(query) ||
-          loc.contains(query) ||
-          pallet.contains(query);
-    }).toList();
+    List<Item> matchingItems = [];
+    if (isSearching) {
+      matchingItems = allAvailableItems.where((it) {
+        final itemId = it.itemId.toLowerCase();
+        final sku = it.sku.toLowerCase();
+        final name = it.productName.toLowerCase();
+        final serial = it.serialNumber.toLowerCase();
+        final epc = it.epc.toLowerCase();
+        final loc = (it.locationId ?? '').toLowerCase();
+        final pallet = (it.palletId ?? '').toLowerCase();
+        return itemId.contains(query) ||
+            sku.contains(query) ||
+            name.contains(query) ||
+            serial.contains(query) ||
+            epc.contains(query) ||
+            loc.contains(query) ||
+            pallet.contains(query);
+      }).toList();
 
-    // 2. Sắp xếp danh sách hàng hóa theo nguyên tắc FIFO (Nhập kho trước nhất -> Cũ nhất lên đầu)
-    matchingItems.sort((a, b) {
-      final timeA = a.inboundTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final timeB = b.inboundTime ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final comp = timeA.compareTo(timeB);
-      if (comp != 0) return comp;
-      return a.itemId.compareTo(b.itemId);
-    });
+      // 2. Sắp xếp danh sách hàng hóa theo nguyên tắc FIFO (Nhập kho trước nhất -> Cũ nhất lên đầu)
+      matchingItems.sort((a, b) {
+        final timeA = a.inboundTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = b.inboundTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final comp = timeA.compareTo(timeB);
+        if (comp != 0) return comp;
+        return a.itemId.compareTo(b.itemId);
+      });
+    }
 
-    // 3. Xác định hàng cần lấy theo FIFO (Hàng nhập trước nhất)
-    final Item? fifoItem = matchingItems.isNotEmpty ? matchingItems.first : null;
+    // 3. Xác định hàng cần lấy theo FIFO (Hàng nhập trước nhất) - CHỈ KHI ĐANG TÌM KIẾM
+    final Item? fifoItem = isSearching && matchingItems.isNotEmpty ? matchingItems.first : null;
     final String? fifoLocationId = fifoItem?.locationId;
 
     // 4. Tập hợp danh sách các ô kệ chứa hàng khớp và số lượng từng ô
     final highlightLocationIds = <String>{};
     final matchingItemCounts = <String, int>{};
-    for (final it in matchingItems) {
-      if (it.locationId != null && it.locationId!.trim().isNotEmpty) {
-        final locId = it.locationId!.trim();
-        highlightLocationIds.add(locId);
-        matchingItemCounts[locId] = (matchingItemCounts[locId] ?? 0) + 1;
+    if (isSearching) {
+      for (final it in matchingItems) {
+        if (it.locationId != null && it.locationId!.trim().isNotEmpty) {
+          final locId = it.locationId!.trim();
+          highlightLocationIds.add(locId);
+          matchingItemCounts[locId] = (matchingItemCounts[locId] ?? 0) + 1;
+        }
       }
     }
 
@@ -222,20 +228,41 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
                   // 1. THANH TÌM KIẾM THEO MÃ HÀNG & MÃ SKU
                   _buildSearchBar(c),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
 
                   // 2. CHIPS GỢI Ý SKU NHANH
                   _buildQuickSkuChips(allAvailableItems, c),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
 
-                  // 3. THẺ THÔNG BÁO Ô CẦN LẤY THEO FIFO
-                  if (fifoItem != null)
+                  // 3. THẺ THÔNG BÁO Ô CẦN LẤY THEO FIFO (HOẶC HƯỚNG DẪN KHI CHƯA TÌM)
+                  if (!isSearching)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: c.bgCard,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: c.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.touch_app_outlined, size: 14, color: c.textSecondary),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Nhập mã hàng/SKU hoặc chạm gợi ý bên trên để định vị ô cần lấy theo FIFO',
+                              style: TextStyle(color: c.textSecondary, fontSize: 10.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (fifoItem != null)
                     _buildFifoSummaryBanner(fifoItem, fifoLocation, matchingItems.length, highlightLocationIds.length, c)
-                  else if (query.isNotEmpty)
+                  else
                     _buildEmptySearchCard(query, c),
 
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
 
                   // 4. BẢN ĐỒ MẶT BẰNG KHO 2D VỚI Ô HIGHLIGHT THEO FIFO
                   WarehouseFloorPlanWidget(
@@ -251,11 +278,6 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
                       });
                     },
                   ),
-
-                  const SizedBox(height: 14),
-
-                  // 5. BẢNG / DANH SÁCH CHI TIẾT CÁC MẶT HÀNG TRONG KHO THEO FIFO
-                  _buildFifoItemsListCard(matchingItems, fifoItem, c),
                 ],
               ),
             ),
@@ -370,7 +392,7 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
     );
   }
 
-  // ==================== THẺ THÔNG BÁO FIFO ====================
+  // ==================== THẺ THÔNG BÁO FIFO (TỐI GIẢN) ====================
   Widget _buildFifoSummaryBanner(
     Item fifoItem,
     Location? fifoLocation,
@@ -379,148 +401,61 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
     EyeCareColors c,
   ) {
     final locationName = fifoLocation?.displayName ?? fifoItem.locationId ?? 'Chưa xếp kệ';
-    final locationSub = fifoLocation?.displaySubtitle ?? 'Vị trí lưu kho';
+    final locationSub = fifoLocation?.displaySubtitle ?? '';
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF59E0B), width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 6,
+          Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF59E0B),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.star_rounded, color: Colors.white, size: 14),
-                    SizedBox(width: 4),
+                    Icon(Icons.star_rounded, color: Colors.white, size: 12),
+                    SizedBox(width: 3),
                     Text(
-                      '⭐ HÀNG CẦN LẤY THEO FIFO',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      '⭐ CẦN LẤY THEO FIFO',
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: c.bgCard,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: c.border),
-                ),
-                child: Text(
-                  'Tồn kho: $totalCount SP / $rackCount kệ',
-                  style: TextStyle(color: c.textPrimary, fontSize: 11, fontWeight: FontWeight.w600),
-                ),
+              const Spacer(),
+              Text(
+                'Tồn: $totalCount SP',
+                style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-
-          const SizedBox(height: 10),
-
-          Wrap(
-            spacing: 16,
-            runSpacing: 8,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          const SizedBox(height: 4),
+          Row(
             children: [
-              // Thông tin ô kệ
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.place_rounded, color: Color(0xFFF59E0B), size: 24),
+              const Icon(Icons.place_rounded, size: 14, color: Color(0xFFF59E0B)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Ô KỆ: $locationName ${locationSub.isNotEmpty ? "($locationSub)" : ""}',
+                  style: const TextStyle(
+                    color: Color(0xFFF59E0B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ô KỆ CẦN LẤY:',
-                          style: TextStyle(color: c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          locationName,
-                          style: const TextStyle(
-                            color: Color(0xFFF59E0B),
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          locationSub,
-                          style: TextStyle(color: c.textSecondary, fontSize: 10.5),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              // Thông tin sản phẩm cần lấy
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 290),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mã hàng: ${fifoItem.itemId}',
-                      style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
-                    ),
-                    if (fifoItem.sku.isNotEmpty)
-                      Text(
-                        'SKU: ${fifoItem.sku} • ${fifoItem.productName}',
-                        style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFFF59E0B)),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Nhập kho: ${fifoItem.formattedInboundDate} (Ưu tiên lấy trước)',
-                          style: const TextStyle(
-                            color: Color(0xFFF59E0B),
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -563,164 +498,5 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
     );
   }
 
-  // ==================== DANH SÁCH CHI TIẾT THEO THỨ TỰ FIFO ====================
-  Widget _buildFifoItemsListCard(List<Item> items, Item? fifoItem, EyeCareColors c) {
-    return Container(
-      decoration: BoxDecoration(
-        color: c.bgCard,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: c.border),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.format_list_numbered_rounded, color: Color(0xFFF59E0B), size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'DANH SÁCH HÀNG TRONG KHO XẾP THEO FIFO (${items.length} SẢN PHẨM)',
-                  style: TextStyle(color: c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Center(
-                child: Text('Không có sản phẩm nào phù hợp', style: TextStyle(color: c.textSecondary, fontSize: 12)),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: items.length > 20 ? 20 : items.length,
-              separatorBuilder: (context, index) => Divider(height: 1, color: c.border.withValues(alpha: 0.5)),
-              itemBuilder: (context, index) {
-                final it = items[index];
-                final isFifoTarget = index == 0;
 
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      _selectedLocationId = it.locationId;
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                    color: isFifoTarget ? const Color(0xFFF59E0B).withValues(alpha: 0.08) : Colors.transparent,
-                    child: Row(
-                      children: [
-                        // Thứ tự bốc hàng theo FIFO
-                        Container(
-                          width: 28,
-                          height: 28,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: isFifoTarget ? const Color(0xFFF59E0B) : c.bgDeep,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isFifoTarget ? const Color(0xFFF59E0B) : c.border,
-                            ),
-                          ),
-                          child: Text(
-                            '#${index + 1}',
-                            style: TextStyle(
-                              color: isFifoTarget ? Colors.white : c.textSecondary,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-
-                        // Thông tin sản phẩm
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 6,
-                                runSpacing: 2,
-                                children: [
-                                  Text(
-                                    it.itemId,
-                                    style: TextStyle(
-                                      color: isFifoTarget ? const Color(0xFFF59E0B) : c.textPrimary,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                  if (isFifoTarget)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF59E0B),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: const Text(
-                                        '⭐ LẤY TRƯỚC (FIFO)',
-                                        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                              Text(
-                                'SKU: ${it.sku} • ${it.productName}',
-                                style: TextStyle(color: c.textSecondary, fontSize: 11),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Kệ & Ngày nhập
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: (isFifoTarget ? const Color(0xFFF59E0B) : c.rfidCyan).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: (isFifoTarget ? const Color(0xFFF59E0B) : c.rfidCyan).withValues(alpha: 0.4),
-                                ),
-                              ),
-                              child: Text(
-                                it.locationId != null && it.locationId!.isNotEmpty
-                                    ? it.locationId!
-                                    : 'Chưa xếp kệ',
-                                style: TextStyle(
-                                  color: isFifoTarget ? const Color(0xFFF59E0B) : c.rfidCyan,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              it.formattedInboundDate,
-                              style: TextStyle(color: c.textSecondary, fontSize: 10),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-        ],
-      ),
-    );
-  }
 }

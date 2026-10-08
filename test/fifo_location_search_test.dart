@@ -109,7 +109,7 @@ void main() {
     await repo.clearAllData();
   });
 
-  testWidgets('1. Tìm kiếm bằng SKU: Tự động sắp xếp theo FIFO và xác định ô Kệ A1 cần lấy trước nhất', (WidgetTester tester) async {
+  testWidgets('1. Tìm kiếm bằng SKU: Tự động sắp xếp theo FIFO và làm sáng ô Kệ A1 cần lấy trước nhất', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
@@ -126,28 +126,21 @@ void main() {
     expect(find.text('TÌM VỊ TRÍ 2D (FIFO)'), findsOneWidget);
     expect(find.widgetWithText(TextField, 'SKU-TEST-FIFO'), findsOneWidget);
 
-    // 2. Kiểm tra thẻ tóm tắt FIFO: Ô cần lấy là Kệ A1, Mã ITEM-FIFO-001 (cũ nhất)
-    expect(find.text('⭐ HÀNG CẦN LẤY THEO FIFO'), findsOneWidget);
-    expect(find.textContaining('ITEM-FIFO-001'), findsAtLeastNWidgets(1));
+    // 2. Kiểm tra thẻ tóm tắt FIFO: Chỉ hiển thị ô cần lấy là Kệ A1 (không cần liệt kê danh sách mã item)
+    expect(find.text('⭐ CẦN LẤY THEO FIFO'), findsOneWidget);
     expect(find.textContaining('KỆ A1'), findsAtLeastNWidgets(1));
 
     // 3. Kiểm tra Bản đồ 2D được hiển thị
     expect(find.byType(WarehouseFloorPlanWidget), findsOneWidget);
 
-    // 4. Ô Kệ A1 trên bản đồ 2D được vẽ với huy hiệu ⭐ CẦN LẤY (FIFO)
+    // 4. Ô Kệ A1 trên bản đồ 2D được làm sáng với huy hiệu ⭐ CẦN LẤY (FIFO)
     expect(find.text('⭐ CẦN LẤY (FIFO)'), findsAtLeastNWidgets(1));
 
     // 5. Các ô kệ khác (B1, C1) được đánh dấu có hàng
     expect(find.textContaining('Có hàng'), findsAtLeastNWidgets(1));
-
-    // 6. Danh sách chi tiết hiển thị thứ tự bốc hàng #1, #2, #3
-    expect(find.text('#1'), findsOneWidget);
-    expect(find.text('#2'), findsOneWidget);
-    expect(find.text('#3'), findsOneWidget);
-    expect(find.text('⭐ LẤY TRƯỚC (FIFO)'), findsOneWidget);
   });
 
-  testWidgets('2. Tìm kiếm bằng Mã Hàng (Item ID): Định vị chính xác ô và hiển thị trên bản đồ 2D', (WidgetTester tester) async {
+  testWidgets('2. Khi chưa tìm kiếm thì không hiển thị sẵn ô cần lấy; khi nhập mã hàng/SKU mới làm sáng ô', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.resetPhysicalSize());
@@ -160,13 +153,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Nhập mã hàng ITEM-FIFO-002
+    // Khi chưa tìm kiếm: KHÔNG hiển thị thẻ FIFO hay huy hiệu CẦN LẤY (FIFO)
+    expect(find.text('⭐ CẦN LẤY THEO FIFO'), findsNothing);
+    expect(find.text('⭐ CẦN LẤY (FIFO)'), findsNothing);
+    expect(find.textContaining('Nhập mã hàng/SKU'), findsOneWidget);
+
+    // Nhập mã hàng ITEM-FIFO-002 để tìm kiếm
     await tester.enterText(find.byType(TextField), 'ITEM-FIFO-002');
     await tester.pumpAndSettle();
 
-    // Xác nhận ô cần lấy là Kệ B1
+    // Sau khi tìm kiếm: Làm sáng ô Kệ B1 cần lấy
+    expect(find.text('⭐ CẦN LẤY THEO FIFO'), findsOneWidget);
     expect(find.textContaining('KỆ B1'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('ITEM-FIFO-002'), findsAtLeastNWidgets(1));
     expect(find.text('⭐ CẦN LẤY (FIFO)'), findsAtLeastNWidgets(1));
   });
 
