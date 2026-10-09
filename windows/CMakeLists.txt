@@ -106,3 +106,13 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# Install the C# UHF Hardware Bridge and Native Driver DLLs so the app works standalone on other PCs.
+set(UHF_BRIDGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../desktop/bin/Release")
+if(EXISTS "${UHF_BRIDGE_DIR}")
+  install(DIRECTORY "${UHF_BRIDGE_DIR}/"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime
+    FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll")
+endif()
+

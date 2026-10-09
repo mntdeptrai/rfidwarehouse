@@ -388,5 +388,75 @@ void main() {
       await repo.deleteItem(item2.epc);
       await repo.deleteInboundOrder(testOrder.inboundOrderId);
     });
+
+    testWidgets('Xuất Kho hiển thị cột MÃ SN ĐÃ QUÉT và nút XUẤT PHIẾU cho từng đơn', (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final outItem = Item(
+        itemId: 'IT-OUT-W-1',
+        productId: 'P-OUT-01',
+        epc: 'EPC-OUT-WIDGET-01',
+        sku: 'SKU-OUT-WIDGET',
+        productName: 'Tủ rack mạng 42U xuất kho',
+        serialNumber: 'SN-OUT-WIDGET-999',
+        status: ItemStatus.out,
+        locationId: 'A1-01',
+      );
+      await repo.addItem(outItem);
+
+      final outboundOrder = OutboundOrder(
+        outboundOrderId: 'ORD-OUT-TEST-WIDGET',
+        poNo: 'PO-OUT-TEST-WIDGET',
+        customer: 'Khách hàng Thử Nghiệm Xuất',
+        createdAt: DateTime.now(),
+        status: OutboundOrderStatus.shipped,
+        details: [
+          OutboundOrderDetail(
+            productId: 'P-OUT-01',
+            sku: 'SKU-OUT-WIDGET',
+            productName: 'Tủ rack mạng 42U xuất kho',
+            requiredQty: 1,
+            pickedQty: 1,
+            epcList: ['EPC-OUT-WIDGET-01'],
+            snList: ['SN-OUT-WIDGET-999'],
+          ),
+        ],
+      );
+      await repo.addOutboundOrder(outboundOrder);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false),
+          home: const Scaffold(
+            body: DesktopReportView(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Chuyển sang Tab "Báo Cáo Nghiệp Vụ"
+      await tester.tap(find.text('Báo Cáo Nghiệp Vụ'));
+      await tester.pumpAndSettle();
+
+      // Chuyển sang nghiệp vụ "Xuất Kho"
+      await tester.tap(find.text('Xuất Kho').first);
+      await tester.pumpAndSettle();
+
+      // Kiểm tra sự hiện diện của cột "MÃ SN ĐÃ QUÉT" và "THAO TÁC"
+      expect(find.text('MÃ SN ĐÃ QUÉT'), findsOneWidget);
+      expect(find.text('THAO TÁC'), findsOneWidget);
+      expect(find.text('XUẤT PHIẾU'), findsWidgets);
+      expect(find.textContaining('SN-OUT-WIDGET-999'), findsWidgets);
+
+      // Clean up
+      await repo.deleteItem(outItem.epc);
+      await repo.deleteOutboundOrder(outboundOrder.outboundOrderId);
+    });
   });
 }
+

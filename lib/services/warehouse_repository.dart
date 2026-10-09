@@ -1933,6 +1933,7 @@ class WarehouseRepository extends ChangeNotifier {
           requiredQty: cur.requiredQty > d.requiredQty ? cur.requiredQty : d.requiredQty,
           pickedQty: cur.pickedQty > d.pickedQty ? cur.pickedQty : d.pickedQty,
           epcList: {...?cur.epcList, ...?d.epcList}.toList(),
+          snList: {...?cur.snList, ...?d.snList}.toList(),
         );
       } else {
         dedupMap[key] = OutboundOrderDetail(
@@ -1942,6 +1943,7 @@ class WarehouseRepository extends ChangeNotifier {
           requiredQty: d.requiredQty,
           pickedQty: d.pickedQty,
           epcList: d.epcList,
+          snList: d.snList,
         );
       }
     }
@@ -6562,6 +6564,7 @@ class WarehouseRepository extends ChangeNotifier {
       final sku = it.sku.isNotEmpty ? it.sku : 'MULTI';
       final pName = getSkuProductName(sku, it.productName.isNotEmpty ? it.productName : 'Sản phẩm xuất kho');
       final pId = it.productId.isNotEmpty ? it.productId : sku;
+      final cleanSn = (it.serialNumber.trim().isNotEmpty && it.serialNumber.trim() != '--') ? it.serialNumber.trim() : null;
       if (!detailsBySku.containsKey(sku)) {
         detailsBySku[sku] = OutboundOrderDetail(
           productId: pId,
@@ -6570,6 +6573,7 @@ class WarehouseRepository extends ChangeNotifier {
           requiredQty: 1,
           pickedQty: 1,
           epcList: [it.epc],
+          snList: cleanSn != null ? [cleanSn] : [],
         );
       } else {
         final cur = detailsBySku[sku]!;
@@ -6580,6 +6584,7 @@ class WarehouseRepository extends ChangeNotifier {
           requiredQty: cur.requiredQty + 1,
           pickedQty: cur.pickedQty + 1,
           epcList: [...?cur.epcList, it.epc],
+          snList: [...?cur.snList, ?cleanSn],
         );
       }
     }
@@ -6740,6 +6745,123 @@ class WarehouseRepository extends ChangeNotifier {
 
     notifyListeners();
     return updatedCount > 0 ? updatedCount : uniqueEpcs.length;
+  }
+
+  /// Lấy danh sách toàn bộ các mã Serial Number (SN) của hàng hóa đã xuất kho theo đơn
+  List<String> getOrderShippedSerialNumbers(OutboundOrder ord) {
+    final result = <String>[];
+    final cleanPo = ord.poNo.trim().toUpperCase();
+    final cleanId = ord.outboundOrderId.trim().toUpperCase();
+
+    // 1. Quét từ bảng items đã xuất theo orderNo
+    for (final it in _items) {
+      final oNo = it.orderNo?.trim().toUpperCase();
+      if (oNo != null && (oNo == cleanPo || oNo == cleanId)) {
+        final sn = it.serialNumber.trim();
+        if (sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+          result.add(sn);
+        }
+      }
+    }
+
+    // 2. Quét từ details.snList của đơn hàng
+    for (final d in ord.details) {
+      if (d.snList != null) {
+        for (final sn in d.snList!) {
+          final s = sn.trim();
+          if (s.isNotEmpty && s != '--' && !result.contains(s)) {
+            result.add(s);
+          }
+        }
+      }
+    }
+
+    // 3. Quét từ epcList trong details của đơn hàng để map sang items
+    for (final d in ord.details) {
+      if (d.epcList != null) {
+        for (final epc in d.epcList!) {
+          final it = _items.where((i) => i.epc.trim().toUpperCase() == epc.trim().toUpperCase()).firstOrNull;
+          final sn = it?.serialNumber.trim();
+          if (sn != null && sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+            result.add(sn);
+          }
+        }
+      }
+    }
+
+    // 4. Quét từ tag lifecycle logs theo documentNo
+    for (final log in _tagLifecycleLogs) {
+      final doc = log.documentNo?.trim().toUpperCase();
+      if (doc != null && (doc == cleanPo || doc == cleanId)) {
+        final sn = log.serialNumber?.trim();
+        if (sn != null && sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+          result.add(sn);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /// Lấy danh sách mã Serial Number (SN) của một SKU cụ thể đã xuất trong đơn
+  List<String> getOrderSkuShippedSerialNumbers(OutboundOrder ord, String sku) {
+    final result = <String>[];
+    final cleanSku = sku.trim().toUpperCase();
+    final cleanPo = ord.poNo.trim().toUpperCase();
+    final cleanId = ord.outboundOrderId.trim().toUpperCase();
+
+    // 1. Quét từ bảng items đã xuất theo SKU và orderNo
+    for (final it in _items) {
+      if (it.sku.trim().toUpperCase() == cleanSku) {
+        final oNo = it.orderNo?.trim().toUpperCase();
+        if (oNo != null && (oNo == cleanPo || oNo == cleanId)) {
+          final sn = it.serialNumber.trim();
+          if (sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+            result.add(sn);
+          }
+        }
+      }
+    }
+
+    // 2. Quét từ details.snList của SKU này trong đơn
+    for (final d in ord.details) {
+      if (d.sku.trim().toUpperCase() == cleanSku && d.snList != null) {
+        for (final sn in d.snList!) {
+          final s = sn.trim();
+          if (s.isNotEmpty && s != '--' && !result.contains(s)) {
+            result.add(s);
+          }
+        }
+      }
+    }
+
+    // 3. Quét từ epcList của SKU này trong đơn
+    for (final d in ord.details) {
+      if (d.sku.trim().toUpperCase() == cleanSku && d.epcList != null) {
+        for (final epc in d.epcList!) {
+          final it = _items.where((i) => i.epc.trim().toUpperCase() == epc.trim().toUpperCase()).firstOrNull;
+          final sn = it?.serialNumber.trim();
+          if (sn != null && sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+            result.add(sn);
+          }
+        }
+      }
+    }
+
+    // 4. Quét từ tag lifecycle logs
+    for (final log in _tagLifecycleLogs) {
+      if (log.sku?.trim().toUpperCase() == cleanSku) {
+        final doc = log.documentNo?.trim().toUpperCase();
+        if (doc != null && (doc == cleanPo || doc == cleanId)) {
+          final sn = log.serialNumber?.trim();
+          if (sn != null && sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+            result.add(sn);
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
 

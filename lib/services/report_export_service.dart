@@ -95,6 +95,19 @@ class ReportExportService {
     }
   }
 
+  /// Xuất file phiếu xuất kho cho 1 đơn cụ thể
+  Future<File> exportSingleOutboundOrder(
+    OutboundOrder order, {
+    ReportFormat format = ReportFormat.xlsx,
+    bool includeEpc = false,
+  }) async {
+    return _exportOutboundForm(
+      format,
+      selectedPoNos: [order.poNo],
+      includeEpc: includeEpc,
+    );
+  }
+
   /// Số lượng bản ghi hiện có cho mỗi loại báo cáo (hỗ trợ lọc theo giai đoạn)
   int getRecordCount(ReportType type, {DateTime? fromDate, DateTime? toDate}) {
     final start = fromDate != null ? DateTime(fromDate.year, fromDate.month, fromDate.day, 0, 0, 0) : null;
@@ -518,6 +531,7 @@ class ReportExportService {
           requiredQty: d.requiredQty,
           pickedQty: d.pickedQty,
           epcList: d.epcList != null ? {...d.epcList!}.toList() : null,
+          snList: d.snList != null ? {...d.snList!}.toList() : null,
         );
       } else {
         final cur = dedupDetails[key]!;
@@ -528,6 +542,7 @@ class ReportExportService {
           requiredQty: cur.requiredQty > 0 ? cur.requiredQty : d.requiredQty,
           pickedQty: cur.pickedQty > d.pickedQty ? cur.pickedQty : d.pickedQty,
           epcList: {...?cur.epcList, ...?d.epcList}.toList(),
+          snList: {...?cur.snList, ...?d.snList}.toList(),
         );
       }
     }
@@ -577,6 +592,7 @@ class ReportExportService {
         requiredQty: d.requiredQty,
         pickedQty: picked,
         epcList: d.epcList,
+        snList: d.snList,
       );
     }).toList();
   }
@@ -604,7 +620,11 @@ class ReportExportService {
 
     final dir = await _getReportDir();
     final timestamp = _fileFmt.format(DateTime.now());
-    final fileName = '${ReportType.outbound.filePrefix}_$timestamp.${format.name}';
+    final isSingle = orders.length == 1;
+    final filePo = isSingle ? orders.first.poNo.replaceAll(RegExp(r'[\\/?*:[\]]'), '_') : '';
+    final fileName = isSingle
+        ? 'phieu_xuat_kho_${filePo}_$timestamp.${format.name}'
+        : '${ReportType.outbound.filePrefix}_$timestamp.${format.name}';
     final filePath = '${dir.path}${Platform.pathSeparator}$fileName';
 
     if (format == ReportFormat.csv) {
@@ -629,24 +649,28 @@ class ReportExportService {
         buffer.writeln();
 
         if (includeEpc) {
-          buffer.writeln('STT,Mã SKU,Tên Sản Phẩm,SL Yêu Cầu,SL Thực Xuất,Vị Trí Lấy Hàng,Mã Pallet,Mã Chip RFID (EPC),Ghi Chú');
+          buffer.writeln('STT,Mã SKU,Tên Sản Phẩm,SL Yêu Cầu,SL Thực Xuất,Vị Trí Lấy Hàng,Mã Pallet,Mã Sê-ri (SN),Mã Chip RFID (EPC),Ghi Chú');
           if (effectiveDetails.isNotEmpty) {
             for (int r = 0; r < effectiveDetails.length; r++) {
               final d = effectiveDetails[r];
+              final skuSns = _repo.getOrderSkuShippedSerialNumbers(ord, d.sku);
+              final sns = skuSns.isNotEmpty ? skuSns.join('; ') : (d.snList != null && d.snList!.isNotEmpty ? d.snList!.join('; ') : '--');
               final epcs = d.epcList != null && d.epcList!.isNotEmpty ? d.epcList!.join('; ') : '--';
-              buffer.writeln('${r + 1},${d.sku},"${d.productName}",${d.requiredQty},${d.pickedQty},Kho Tổng,Pallet xuất,"$epcs",Đạt chuẩn FIFO');
+              buffer.writeln('${r + 1},${d.sku},"${d.productName}",${d.requiredQty},${d.pickedQty},Kho Tổng,Pallet xuất,"$sns","$epcs",Đạt chuẩn FIFO');
+            }
+          }
+          buffer.writeln('TỔNG CỘNG,"Tổng SKU: ${effectiveDetails.length}",,"Tổng YC: $totalReq","Tổng Xuất: $totalPicked",,,,,Đạt chuẩn xuất kho');
+        } else {
+          buffer.writeln('STT,Mã SKU,Tên Sản Phẩm,SL Yêu Cầu,SL Thực Xuất,Vị Trí Lấy Hàng,Mã Pallet,Mã Sê-ri (SN),Ghi Chú');
+          if (effectiveDetails.isNotEmpty) {
+            for (int r = 0; r < effectiveDetails.length; r++) {
+              final d = effectiveDetails[r];
+              final skuSns = _repo.getOrderSkuShippedSerialNumbers(ord, d.sku);
+              final sns = skuSns.isNotEmpty ? skuSns.join('; ') : (d.snList != null && d.snList!.isNotEmpty ? d.snList!.join('; ') : '--');
+              buffer.writeln('${r + 1},${d.sku},"${d.productName}",${d.requiredQty},${d.pickedQty},Kho Tổng,Pallet xuất,"$sns",Đạt chuẩn FIFO');
             }
           }
           buffer.writeln('TỔNG CỘNG,"Tổng SKU: ${effectiveDetails.length}",,"Tổng YC: $totalReq","Tổng Xuất: $totalPicked",,,,Đạt chuẩn xuất kho');
-        } else {
-          buffer.writeln('STT,Mã SKU,Tên Sản Phẩm,SL Yêu Cầu,SL Thực Xuất,Vị Trí Lấy Hàng,Mã Pallet,Ghi Chú');
-          if (effectiveDetails.isNotEmpty) {
-            for (int r = 0; r < effectiveDetails.length; r++) {
-              final d = effectiveDetails[r];
-              buffer.writeln('${r + 1},${d.sku},"${d.productName}",${d.requiredQty},${d.pickedQty},Kho Tổng,Pallet xuất,Đạt chuẩn FIFO');
-            }
-          }
-          buffer.writeln('TỔNG CỘNG,"Tổng SKU: ${effectiveDetails.length}",,"Tổng YC: $totalReq","Tổng Xuất: $totalPicked",,,Đạt chuẩn xuất kho');
         }
 
         buffer.writeln();
@@ -707,8 +731,8 @@ class ReportExportService {
     _setCell(sheet, col: 4, row: 6, value: 'Chuẩn FIFO Date xa nhất', style: _metaValueStyle);
 
     final headers = includeEpc
-        ? ['STT', 'Mã SKU', 'Tên Sản Phẩm', 'SL Yêu Cầu', 'SL Thực Xuất', 'Vị Trí Lấy Hàng', 'Mã Pallet', 'Mã Chip RFID (EPC)', 'Ghi Chú']
-        : ['STT', 'Mã SKU', 'Tên Sản Phẩm', 'SL Yêu Cầu', 'SL Thực Xuất', 'Vị Trí Lấy Hàng', 'Mã Pallet', 'Ghi Chú'];
+        ? ['STT', 'Mã SKU', 'Tên Sản Phẩm', 'SL Yêu Cầu', 'SL Thực Xuất', 'Vị Trí Lấy Hàng', 'Mã Pallet', 'Mã Sê-ri (SN)', 'Mã Chip RFID (EPC)', 'Ghi Chú']
+        : ['STT', 'Mã SKU', 'Tên Sản Phẩm', 'SL Yêu Cầu', 'SL Thực Xuất', 'Vị Trí Lấy Hàng', 'Mã Pallet', 'Mã Sê-ri (SN)', 'Ghi Chú'];
     const startRow = 8;
     for (int col = 0; col < headers.length; col++) {
       _setCell(sheet, col: col, row: startRow, value: headers[col], style: _tableHeaderStyle('#3B82F6'));
@@ -718,34 +742,47 @@ class ReportExportService {
     if (effectiveDetails.isNotEmpty) {
       for (int i = 0; i < effectiveDetails.length; i++) {
         final d = effectiveDetails[i];
+        final allOrderSns = _repo.getOrderShippedSerialNumbers(ord);
+        final skuSns = _repo.getOrderSkuShippedSerialNumbers(ord, d.sku);
+        final effectiveSns = skuSns.isNotEmpty
+            ? skuSns
+            : (d.snList != null && d.snList!.isNotEmpty
+                ? d.snList!
+                : (effectiveDetails.length == 1 ? allOrderSns : <String>[]));
+        final snDisplay = effectiveSns.isNotEmpty ? effectiveSns.join('\r\n') : '--';
         final epcs = d.epcList != null && d.epcList!.isNotEmpty ? d.epcList!.join('\r\n') : '--';
 
         _setCell(sheet, col: 0, row: currentRow, value: '${i + 1}', style: _dataCellCenterStyle);
-        _setCell(sheet, col: 1, row: currentRow, value: d.sku);
-        _setCell(sheet, col: 2, row: currentRow, value: d.productName);
+        _setCell(sheet, col: 1, row: currentRow, value: d.sku, style: _dataCellCenterStyle);
+        _setCell(sheet, col: 2, row: currentRow, value: d.productName, style: _dataCellCenterStyle);
         _setCell(sheet, col: 3, row: currentRow, value: '${d.requiredQty}', style: _dataCellCenterStyle);
         _setCell(sheet, col: 4, row: currentRow, value: '${d.pickedQty}', style: _dataCellCenterStyle);
         _setCell(sheet, col: 5, row: currentRow, value: 'Kho Tổng RFID', style: _dataCellCenterStyle);
         _setCell(sheet, col: 6, row: currentRow, value: 'Pallet Xuất', style: _dataCellCenterStyle);
+        _setCell(sheet, col: 7, row: currentRow, value: snDisplay, style: _multiLineCenterCellStyle);
+
         if (includeEpc) {
-          _setCell(sheet, col: 7, row: currentRow, value: epcs, style: _epcCellStyle);
-          _setCell(sheet, col: 8, row: currentRow, value: 'Đạt chuẩn FIFO', style: _dataCellCenterStyle);
-          final epcCount = d.epcList?.length ?? 1;
-          sheet.setRowHeight(currentRow, epcCount > 1 ? (epcCount * 17.0).clamp(24.0, 400.0) : 24.0);
+          _setCell(sheet, col: 8, row: currentRow, value: epcs, style: _multiLineCenterCellStyle);
+          _setCell(sheet, col: 9, row: currentRow, value: 'Đạt chuẩn FIFO', style: _dataCellCenterStyle);
         } else {
-          _setCell(sheet, col: 7, row: currentRow, value: 'Đạt chuẩn FIFO', style: _dataCellCenterStyle);
-          sheet.setRowHeight(currentRow, 24.0);
+          _setCell(sheet, col: 8, row: currentRow, value: 'Đạt chuẩn FIFO', style: _dataCellCenterStyle);
         }
+
+        final lineCount = [
+          effectiveSns.isNotEmpty ? effectiveSns.length : 1,
+          d.epcList?.length ?? 1,
+        ].reduce((a, b) => a > b ? a : b);
+        sheet.setRowHeight(currentRow, lineCount > 1 ? (lineCount * 18.0).clamp(26.0, 500.0) : 26.0);
         currentRow++;
       }
     } else {
       _setCell(sheet, col: 0, row: currentRow, value: '1', style: _dataCellCenterStyle);
-      _setCell(sheet, col: 1, row: currentRow, value: '--');
-      _setCell(sheet, col: 2, row: currentRow, value: 'Chưa có chi tiết mặt hàng');
+      _setCell(sheet, col: 1, row: currentRow, value: '--', style: _dataCellCenterStyle);
+      _setCell(sheet, col: 2, row: currentRow, value: 'Chưa có chi tiết mặt hàng', style: _dataCellCenterStyle);
       for (int c = 3; c < headers.length; c++) {
         _setCell(sheet, col: c, row: currentRow, value: '--', style: _dataCellCenterStyle);
       }
-      sheet.setRowHeight(currentRow, 24.0);
+      sheet.setRowHeight(currentRow, 26.0);
       currentRow++;
     }
 
@@ -754,16 +791,16 @@ class ReportExportService {
     _setCell(sheet, col: 2, row: currentRow, value: '', style: _totalRowStyle);
     _setCell(sheet, col: 3, row: currentRow, value: 'Tổng YC: $totalReq', style: _totalRowStyle);
     _setCell(sheet, col: 4, row: currentRow, value: 'Tổng Xuất: $totalPicked', style: _totalRowStyle);
+    _setCell(sheet, col: 5, row: currentRow, value: '', style: _totalRowStyle);
+    _setCell(sheet, col: 6, row: currentRow, value: '', style: _totalRowStyle);
+    _setCell(sheet, col: 7, row: currentRow, value: '', style: _totalRowStyle);
     if (includeEpc) {
-      _setCell(sheet, col: 5, row: currentRow, value: '', style: _totalRowStyle);
-      _setCell(sheet, col: 6, row: currentRow, value: '', style: _totalRowStyle);
-      _setCell(sheet, col: 7, row: currentRow, value: '', style: _totalRowStyle);
-      _setCell(sheet, col: 8, row: currentRow, value: 'Đạt chuẩn xuất', style: _totalRowStyle);
+      _setCell(sheet, col: 8, row: currentRow, value: '', style: _totalRowStyle);
+      _setCell(sheet, col: 9, row: currentRow, value: 'Đạt chuẩn xuất', style: _totalRowStyle);
     } else {
-      _setCell(sheet, col: 5, row: currentRow, value: '', style: _totalRowStyle);
-      _setCell(sheet, col: 6, row: currentRow, value: '', style: _totalRowStyle);
-      _setCell(sheet, col: 7, row: currentRow, value: 'Đạt chuẩn xuất', style: _totalRowStyle);
+      _setCell(sheet, col: 8, row: currentRow, value: 'Đạt chuẩn xuất', style: _totalRowStyle);
     }
+    sheet.setRowHeight(currentRow, 26.0);
 
     final signRow = currentRow + 3;
     _setCell(sheet, col: 0, row: signRow, value: 'NGƯỜI LẬP PHIẾU', style: _signTitleStyle);
@@ -784,7 +821,18 @@ class ReportExportService {
     _setCell(sheet, col: 0, row: 1, value: 'BẢNG TỔNG HỢP CÁC ĐƠN XUẤT KHO ĐÃ CHỌN', style: _titleStyle);
     _setCell(sheet, col: 0, row: 2, value: 'Thời điểm xuất: ${_dtFmt.format(DateTime.now())}   |   Số lượng đơn: ${orders.length}', style: _subTitleStyle);
 
-    final headers = ['STT', 'Mã PO / Đơn Xuất', 'Khách Hàng', 'Ngày Tạo', 'Số Loại SKU', 'SL Yêu Cầu', 'SL Đã Xuất', 'Mã Vận Đơn', 'Trạng Thái'];
+    final headers = [
+      'STT',
+      'Mã PO / Đơn Xuất',
+      'Khách Hàng',
+      'Ngày Tạo',
+      'Số Loại SKU',
+      'SL Yêu Cầu',
+      'SL Đã Xuất',
+      'Mã Sê-ri (SN) Đã Xuất',
+      'Mã Vận Đơn',
+      'Trạng Thái',
+    ];
     const startRow = 4;
     for (int c = 0; c < headers.length; c++) {
       _setCell(sheet, col: c, row: startRow, value: headers[c], style: _tableHeaderStyle('#3B82F6'));
@@ -805,15 +853,22 @@ class ReportExportService {
       grandReq += totalReq;
       grandPicked += totalPicked;
 
+      final snList = _repo.getOrderShippedSerialNumbers(ord);
+      final snDisplay = snList.isNotEmpty ? snList.join('\r\n') : '--';
+
       _setCell(sheet, col: 0, row: row, value: '${i + 1}', style: _dataCellCenterStyle);
-      _setCell(sheet, col: 1, row: row, value: ord.poNo);
-      _setCell(sheet, col: 2, row: row, value: ord.customer);
+      _setCell(sheet, col: 1, row: row, value: ord.poNo, style: _dataCellCenterStyle);
+      _setCell(sheet, col: 2, row: row, value: ord.customer.isNotEmpty ? ord.customer : 'Khách mua xuất kho', style: _dataCellCenterStyle);
       _setCell(sheet, col: 3, row: row, value: _dtFmt.format(ord.createdAt), style: _dataCellCenterStyle);
       _setCell(sheet, col: 4, row: row, value: '${cleanDetails.length}', style: _dataCellCenterStyle);
       _setCell(sheet, col: 5, row: row, value: '$totalReq', style: _dataCellCenterStyle);
       _setCell(sheet, col: 6, row: row, value: '$totalPicked', style: _dataCellCenterStyle);
-      _setCell(sheet, col: 7, row: row, value: deliveryNos.isEmpty ? '--' : deliveryNos, style: _dataCellCenterStyle);
-      _setCell(sheet, col: 8, row: row, value: ord.status.label, style: _dataCellCenterStyle);
+      _setCell(sheet, col: 7, row: row, value: snDisplay, style: _multiLineCenterCellStyle);
+      _setCell(sheet, col: 8, row: row, value: deliveryNos.isEmpty ? '--' : deliveryNos, style: _dataCellCenterStyle);
+      _setCell(sheet, col: 9, row: row, value: ord.status.label, style: _dataCellCenterStyle);
+
+      final lineCount = snList.isNotEmpty ? snList.length : 1;
+      sheet.setRowHeight(row, lineCount > 1 ? (lineCount * 18.0).clamp(26.0, 500.0) : 26.0);
       row++;
     }
 
@@ -826,6 +881,8 @@ class ReportExportService {
     _setCell(sheet, col: 6, row: row, value: '$grandPicked SP', style: _totalRowStyle);
     _setCell(sheet, col: 7, row: row, value: '', style: _totalRowStyle);
     _setCell(sheet, col: 8, row: row, value: '', style: _totalRowStyle);
+    _setCell(sheet, col: 9, row: row, value: '', style: _totalRowStyle);
+    sheet.setRowHeight(row, 26.0);
 
     _autoFitColumns(sheet, headers.length, row + 2);
   }
@@ -2449,8 +2506,16 @@ class ReportExportService {
   CellStyle get _epcCellStyle => CellStyle(
         fontSize: 9,
         fontColorHex: ExcelColor.fromHexString('#1E293B'),
-        verticalAlign: VerticalAlign.Top,
-        horizontalAlign: HorizontalAlign.Left,
+        verticalAlign: VerticalAlign.Center,
+        horizontalAlign: HorizontalAlign.Center,
+        textWrapping: TextWrapping.WrapText,
+      );
+
+  CellStyle get _multiLineCenterCellStyle => CellStyle(
+        fontSize: 9,
+        fontColorHex: ExcelColor.fromHexString('#1E293B'),
+        verticalAlign: VerticalAlign.Center,
+        horizontalAlign: HorizontalAlign.Center,
         textWrapping: TextWrapping.WrapText,
       );
 
@@ -2460,6 +2525,7 @@ class ReportExportService {
         fontColorHex: ExcelColor.fromHexString('#0F172A'),
         backgroundColorHex: ExcelColor.fromHexString('#F1F5F9'),
         verticalAlign: VerticalAlign.Center,
+        horizontalAlign: HorizontalAlign.Center,
       );
 
   CellStyle get _signTitleStyle => CellStyle(

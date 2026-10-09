@@ -829,10 +829,13 @@ namespace UHFHardwareBridge
                     {
                         foreach (var kvp in states)
                         {
-                            int pin = int.Parse(kvp.Key);
-                            bool st = Convert.ToBoolean(kvp.Value);
-                            eGPO g = pin == 1 ? eGPO._1 : (pin == 2 ? eGPO._2 : (pin == 3 ? eGPO._3 : eGPO._4));
-                            gpoDic[g] = st ? eGPOState.High : eGPOState.Low;
+                            int pin;
+                            if (int.TryParse(kvp.Key, out pin))
+                            {
+                                bool st = Convert.ToBoolean(kvp.Value);
+                                eGPO g = pin == 1 ? eGPO._1 : (pin == 2 ? eGPO._2 : (pin == 3 ? eGPO._3 : eGPO._4));
+                                gpoDic[g] = st ? eGPOState.High : eGPOState.Low;
+                            }
                         }
                     }
                 }
@@ -846,8 +849,16 @@ namespace UHFHardwareBridge
 
                 if (gpoDic.Count > 0)
                 {
-                    int ret = RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, gpoDic);
-                    BroadcastLog(string.Format("Set GPO total={0} (Result: {1})", gpoDic.Count, ret));
+                    // Hopeland CL7206 / RFIDReaderAPI.dll: Gửi tuần tự từng chân đơn lẻ để đảm bảo
+                    // rơ-le / còi hú phần cứng chốt chính xác và không bị nghẽn buffer.
+                    foreach (var kvp in gpoDic)
+                    {
+                        Dictionary<eGPO, eGPOState> single = new Dictionary<eGPO, eGPOState>();
+                        single[kvp.Key] = kvp.Value;
+                        int ret = RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, single);
+                        if (gpoDic.Count > 1) Thread.Sleep(15);
+                    }
+                    BroadcastLog(string.Format("Set GPO total={0} success", gpoDic.Count));
                 }
             }
             catch (Exception ex)

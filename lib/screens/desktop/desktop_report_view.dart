@@ -516,6 +516,55 @@ class _DesktopReportViewState extends State<DesktopReportView> {
     }
   }
 
+  Future<void> _exportSingleOutboundOrder(OutboundOrder ord) async {
+    try {
+      final file = await _exportService.exportSingleOutboundOrder(
+        ord,
+        format: _businessExportFormat,
+        includeEpc: false,
+      );
+      if (mounted) {
+        setState(() {
+          _lastExportPath = file.path;
+        });
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF047857),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Đã xuất phiếu đơn ${ord.poNo} thành công!',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _openFileInExplorer(file.path),
+                  child: const Text('MỞ THƯ MỤC', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text('❌ Lỗi xuất phiếu đơn: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   void _applyPeriodPreset(String preset) {
     final now = DateTime.now();
     setState(() {
@@ -3006,15 +3055,17 @@ class _DesktopReportViewState extends State<DesktopReportView> {
           _buildTableHeader(
             c,
             [
-              const TableColumn(title: 'STT', width: 55),
+              const TableColumn(title: 'STT', width: 50),
               const TableColumn(title: 'MÃ PO XUẤT', width: 130),
               const TableColumn(title: 'TÊN SẢN PHẨM', flex: 2),
               const TableColumn(title: 'KHÁCH HÀNG / ĐIỂM ĐẾN', flex: 2),
-              const TableColumn(title: 'NGÀY TẠO', width: 140),
-              const TableColumn(title: 'SỐ SKU', width: 85),
-              const TableColumn(title: 'SL', width: 95),
-              const TableColumn(title: 'ĐÃ SOÁT', width: 95),
-              const TableColumn(title: 'TRẠNG THÁI', width: 140),
+              const TableColumn(title: 'NGÀY TẠO', width: 135),
+              const TableColumn(title: 'SỐ SKU', width: 75),
+              const TableColumn(title: 'SL', width: 80),
+              const TableColumn(title: 'ĐÃ SOÁT', width: 85),
+              const TableColumn(title: 'MÃ SN ĐÃ QUÉT', width: 160),
+              const TableColumn(title: 'TRẠNG THÁI', width: 120),
+              const TableColumn(title: 'THAO TÁC', width: 125),
             ],
           ),
           Expanded(
@@ -3047,16 +3098,31 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                     productNames.add(resolved);
                   }
                 }
+                if (productNames.isEmpty) {
+                  final ordItems = _repo.items.where((it) {
+                    final oNo = it.orderNo?.trim().toUpperCase();
+                    return oNo != null && (oNo == ord.poNo.trim().toUpperCase() || oNo == ord.outboundOrderId.trim().toUpperCase());
+                  });
+                  for (final it in ordItems) {
+                    final resolved = _repo.getSkuProductName(it.sku, it.productName).trim();
+                    if (resolved.isNotEmpty && !productNames.contains(resolved)) {
+                      productNames.add(resolved);
+                    }
+                  }
+                }
                 final productNameDisplay = productNames.isNotEmpty ? productNames.join(', ') : '--';
 
                 final reqQty = cleanDetails.fold<int>(0, (s, d) => s + d.requiredQty);
                 final pickedQty = cleanDetails.fold<int>(0, (s, d) => s + d.pickedQty);
 
+                final shippedSns = _repo.getOrderShippedSerialNumbers(ord);
+                final snText = shippedSns.isNotEmpty ? shippedSns.join(', ') : '--';
+
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
                     children: [
-                      SizedBox(width: 55, child: Text('${idx + 1}', style: TextStyle(fontSize: 12, color: c.textSecondary))),
+                      SizedBox(width: 50, child: Text('${idx + 1}', style: TextStyle(fontSize: 12, color: c.textSecondary))),
                       SizedBox(
                         width: 130,
                         child: Text(
@@ -3080,17 +3146,17 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                         child: Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: Text(
-                            ord.customer.isNotEmpty ? ord.customer : 'Khách hàng',
+                            ord.customer.isNotEmpty ? ord.customer : 'Khách mua xuất kho',
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: c.textPrimary),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
-                      SizedBox(width: 140, child: Text(_formatDateTime(ord.createdAt), style: TextStyle(fontSize: 12, color: c.textSecondary))),
-                      SizedBox(width: 85, child: Text('${cleanDetails.length} SKU', style: TextStyle(fontSize: 12, color: c.textPrimary))),
-                      SizedBox(width: 95, child: Text('$reqQty cái', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.textPrimary))),
+                      SizedBox(width: 135, child: Text(_formatDateTime(ord.createdAt), style: TextStyle(fontSize: 12, color: c.textSecondary))),
+                      SizedBox(width: 75, child: Text('${cleanDetails.length} SKU', style: TextStyle(fontSize: 12, color: c.textPrimary))),
+                      SizedBox(width: 80, child: Text('$reqQty cái', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.textPrimary))),
                       SizedBox(
-                        width: 95,
+                        width: 85,
                         child: Text(
                           '$pickedQty cái',
                           style: TextStyle(
@@ -3101,10 +3167,71 @@ class _DesktopReportViewState extends State<DesktopReportView> {
                         ),
                       ),
                       SizedBox(
-                        width: 140,
+                        width: 160,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Tooltip(
+                            message: shippedSns.isNotEmpty ? shippedSns.join('\n') : 'Chưa có mã SN quét qua cổng',
+                            child: Row(
+                              children: [
+                                if (shippedSns.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2563EB).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFF2563EB).withValues(alpha: 0.3)),
+                                    ),
+                                    child: Text(
+                                      '${shippedSns.length}',
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    snText,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: shippedSns.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
+                                      color: shippedSns.isNotEmpty ? const Color(0xFF2563EB) : c.textSecondary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 120,
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: _buildStatusBadge(ord.status.label, ord.status == OutboundOrderStatus.shipped ? const Color(0xFF10B981) : const Color(0xFFEA580C), c),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 125,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _exportSingleOutboundOrder(ord),
+                            icon: const Icon(Icons.file_download_outlined, size: 14, color: Colors.white),
+                            label: const Text(
+                              'XUẤT PHIẾU',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEA580C),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              elevation: 0,
+                            ),
+                          ),
                         ),
                       ),
                     ],

@@ -1059,6 +1059,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
     final summary = states.entries.map((e) => 'GPO${e.key}:${e.value ? "BẬT" : "TẮT"}').join(', ');
     _log('Điều khiển đồng bộ GPO: [$summary]');
     if (_isBridgeConnected) {
+      // 1. Gửi cấu trúc states tổng thể cho Bridge
       _sendBridgeCommand({
         'cmd': 'set_gpo',
         'states': {
@@ -1068,6 +1069,18 @@ class DesktopUhfTcpService extends ChangeNotifier {
           '4': states[4] ?? false,
         },
       });
+
+      // 2. Gửi tuần tự từng chân index với độ trễ 15ms.
+      // Cực kỳ quan trọng: Firmware Hopeland CL7206 / driver RFIDReaderAPI.dll
+      // chỉ chốt rơ-le / còi khi nhận frame điều khiển cho từng chân GPO đơn lẻ.
+      for (final entry in states.entries) {
+        _sendBridgeCommand({
+          'cmd': 'set_gpo',
+          'index': entry.key,
+          'state': entry.value,
+        });
+        await Future.delayed(const Duration(milliseconds: 15));
+      }
     }
   }
 

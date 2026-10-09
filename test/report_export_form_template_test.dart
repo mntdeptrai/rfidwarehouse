@@ -542,6 +542,71 @@ void main() {
 
     if (await fileDefault.exists()) await fileDefault.delete();
   });
+
+  test('Outbound Report exports serial numbers with line breaks and center/mid alignment for all cells and supports single order export', () async {
+    final testOutOrder = OutboundOrder(
+      outboundOrderId: 'TEST-ORD-SN-ALIGN-01',
+      poNo: 'PO-SN-ALIGN-TEST',
+      customer: 'Khách Hàng Test Alignment',
+      createdAt: DateTime(2026, 10, 9, 10, 0),
+      status: OutboundOrderStatus.shipped,
+      details: [
+        OutboundOrderDetail(
+          productId: 'P-SN-01',
+          sku: 'SKU-SN-01',
+          productName: 'Sản Phẩm Test SN',
+          requiredQty: 2,
+          pickedQty: 2,
+          snList: ['SN-TEST-001', 'SN-TEST-002'],
+          epcList: ['E2801160600002198000SN01', 'E2801160600002198000SN02'],
+        ),
+      ],
+    );
+    await repo.addOutboundOrder(testOutOrder);
+
+    // 1. Test exportSingleOutboundOrder
+    final singleFile = await exportService.exportSingleOutboundOrder(testOutOrder, format: ReportFormat.xlsx);
+    expect(await singleFile.exists(), isTrue);
+    final singleBytes = await singleFile.readAsBytes();
+    final singleExcel = Excel.decodeBytes(singleBytes);
+    final sheetName = singleExcel.tables.keys.first;
+    final singleSheet = singleExcel.tables[sheetName]!;
+
+    bool foundSnMultiline = false;
+    for (final row in singleSheet.rows) {
+      for (final cell in row) {
+        final val = cell?.value?.toString() ?? '';
+        if (val.contains('SN-TEST-001')) {
+          foundSnMultiline = true;
+          expect(val.contains('SN-TEST-002'), isTrue);
+          expect(val.contains('\r\n') || val.contains('\n'), isTrue);
+
+          // Verify xl/styles.xml contains horizontal="center" and vertical="center"
+          final archive = ZipDecoder().decodeBytes(singleBytes);
+          final stylesXmlFile = archive.findFile('xl/styles.xml');
+          expect(stylesXmlFile, isNotNull);
+          final stylesXml = utf8.decode(stylesXmlFile!.content as List<int>);
+          expect(stylesXml.contains('horizontal="center"'), isTrue);
+          expect(stylesXml.contains('vertical="center"'), isTrue);
+        }
+      }
+    }
+    expect(foundSnMultiline, isTrue, reason: 'Mỗi SN phải xuống 1 dòng và căn center, mid align');
+
+    // 2. Test summary sheet export
+    final summaryFile = await exportService.exportReportSelected(
+      ReportType.outbound,
+      ReportFormat.xlsx,
+      selectedKeys: ['PO-SN-ALIGN-TEST'],
+    );
+    expect(await summaryFile.exists(), isTrue);
+
+    // Clean up
+    await DatabaseService().deleteOutboundOrder(testOutOrder.outboundOrderId);
+    await repo.reloadFromDatabase();
+    if (await singleFile.exists()) await singleFile.delete();
+    if (await summaryFile.exists()) await summaryFile.delete();
+  });
 }
 
 
