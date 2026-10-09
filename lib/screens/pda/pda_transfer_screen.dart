@@ -9,6 +9,7 @@ import '../../services/warehouse_repository.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
+import '../../widgets/hardware_trigger_feedback_banner.dart';
 import '../../widgets/app_notification_bar.dart';
 import 'pda_merge_pallets_screen.dart';
 
@@ -251,13 +252,13 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF00E5FF),
+        backgroundColor: const Color(0xFF2563EB),
         duration: const Duration(milliseconds: 1800),
         content: Text(
           _mode == _TransferMode.items
               ? '✓ Đã chọn kệ: ${matchedLoc.displayName} (${matchedLoc.locationCode}) ➔ Chuyển sang quét chip RFID'
               : '✓ Đã chọn kệ kho đích: ${matchedLoc.displayName} (${matchedLoc.locationCode})',
-          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -789,7 +790,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                                               Navigator.pop(ctx);
                                               _handleItemScan(it.epc, source: 'Picker');
                                             },
-                                            child: const Text('CHỌN', style: TextStyle(color: Color(0xFF2C251E), fontSize: 11, fontWeight: FontWeight.bold)),
+                                            child: const Text('CHỌN', style: TextStyle(color: Color(0xFFFFFFFF), fontSize: 11, fontWeight: FontWeight.bold)),
                                           ),
                               );
                             },
@@ -933,7 +934,10 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                     Navigator.pop(ctx);
                     _reset(); // Hủy pallet này để thủ kho quét lại tránh nhầm
                   },
-                  child: const Text('HỦY / QUÉT LẠI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('HỦY / QUÉT LẠI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -947,7 +951,10 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                     elevation: 0,
                   ),
                   icon: const Icon(Icons.check_circle_rounded, size: 15),
-                  label: const Text('XÁC NHẬN CHUYỂN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('XÁC NHẬN CHUYỂN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  ),
                   onPressed: () {
                     Navigator.pop(ctx);
                     _confirmTransfer();
@@ -1104,11 +1111,6 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     }
   }
 
-  bool _hasDataToTransfer() {
-    if (_mode == _TransferMode.pallet) return _foundPallet != null;
-    return _scannedItems.isNotEmpty;
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
@@ -1137,7 +1139,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
           IconButton(
             icon: Icon(
               _currentScanMode == PdaScanMode.rfid ? Icons.nfc : Icons.qr_code_scanner,
-              color: _currentScanMode == PdaScanMode.rfid ? const Color(0xFF00E5FF) : const Color(0xFF10B981),
+              color: _currentScanMode == PdaScanMode.rfid ? const Color(0xFF2563EB) : const Color(0xFF10B981),
             ),
             tooltip: 'Đổi chế độ quét: RFID / Barcode',
             onPressed: _toggleScanMode,
@@ -1157,6 +1159,13 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
           child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            HardwareTriggerFeedbackBanner(
+              compact: true,
+              externalIsScanning: _isScanning,
+              scannedCount: _scannedItems.length,
+              customIdleLabel: 'BÓP CÒ QUÉT KỆ ĐÍCH & SẢN PHẨM CẦN CHUYỂN',
+            ),
+            const SizedBox(height: 10),
             _buildModeToggle(c),
             _buildMergePalletBanner(c),
             const SizedBox(height: 14),
@@ -1178,10 +1187,26 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
               _buildStepCard(
                 c: c,
                 step: '2',
-                title: 'Quét Barcode của Pallet',
+                title: _foundPallet != null
+                    ? 'Pallet đã nhận diện'
+                    : 'Quét Barcode của Pallet',
                 color: const Color(0xFFF59E0B),
                 child: _buildPalletScanContent(c),
               ),
+              const SizedBox(height: 12),
+
+              // Bước 3: Xác nhận chuyển Pallet sang Kệ đích (Luôn hiển thị cố định chống quét nhầm)
+              if (!_isSuccess) ...[
+                _buildStepCard(
+                  c: c,
+                  step: '3',
+                  title: 'Xác nhận chuyển Pallet sang Kệ đích',
+                  color: (_foundPallet != null && _selectedLocationId != null)
+                      ? const Color(0xFF10B981)
+                      : c.textMuted,
+                  child: _buildPalletConfirmContent(c, selectedLoc),
+                ),
+              ],
             ] else ...[
               // CHẾ ĐỘ SẢN PHẨM RIÊNG LẺ: TÁCH LÀM 2 BƯỚC / 2 MÀN HÌNH TUẦN TỰ
               _buildItemStepIndicator(c),
@@ -1208,23 +1233,25 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                   color: const Color(0xFFF59E0B),
                   child: _buildItemsScanContent(c),
                 ),
+
+                if (!_isSuccess) ...[
+                  const SizedBox(height: 12),
+                  _buildStepCard(
+                    c: c,
+                    step: '3',
+                    title: 'Xác nhận cập nhật lại vị trí sản phẩm',
+                    color: (_scannedItems.isNotEmpty && _selectedLocationId != null)
+                        ? const Color(0xFF10B981)
+                        : c.textMuted,
+                    child: _buildItemsConfirmContent(c, selectedLoc),
+                  ),
+                ],
               ],
             ],
 
             if (_errorMessage != null) ...[
               const SizedBox(height: 10),
               _buildErrorBanner(c),
-            ],
-
-            if (!_isSuccess && _hasDataToTransfer() && (_mode == _TransferMode.pallet || _itemTransferStep == 2)) ...[
-              const SizedBox(height: 12),
-              _buildStepCard(
-                c: c,
-                step: '3',
-                title: 'Xác nhận cập nhật lại vị trí sản phẩm',
-                color: const Color(0xFF10B981),
-                child: _buildConfirmContent(c, selectedLoc),
-              ),
             ],
 
             if (_isSuccess) ...[
@@ -1294,7 +1321,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                                 '1',
                                 style: TextStyle(
                                   color: _itemTransferStep == 1
-                                      ? const Color(0xFF2C251E)
+                                      ? const Color(0xFFFFFFFF)
                                       : Colors.white,
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
@@ -1529,14 +1556,14 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 14, color: isActive ? const Color(0xFF2C251E) : c.textMuted),
+              Icon(icon, size: 14, color: isActive ? const Color(0xFFFFFFFF) : c.textMuted),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isActive ? const Color(0xFF2C251E) : c.textMuted,
+                    color: isActive ? const Color(0xFFFFFFFF) : c.textMuted,
                     fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                     fontSize: 12,
                   ),
@@ -1600,7 +1627,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.rfidCyan,
-                  foregroundColor: const Color(0xFF2C251E),
+                  foregroundColor: const Color(0xFFFFFFFF),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -1610,7 +1637,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                     _locationInputCtrl.clear();
                   }
                 },
-                child: const Icon(Icons.check, color: Color(0xFF2C251E), size: 18),
+                child: const Icon(Icons.check, color: Color(0xFFFFFFFF), size: 18),
               ),
             ],
           ),
@@ -1825,7 +1852,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                                     : ElevatedButton(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: c.rfidCyan,
-                                          foregroundColor: const Color(0xFF2C251E),
+                                          foregroundColor: const Color(0xFFFFFFFF),
                                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                           minimumSize: Size.zero,
                                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1982,8 +2009,8 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _currentScanMode == PdaScanMode.barcode ? const Color(0xFF10B981) : const Color(0xFF00E5FF),
-                  side: BorderSide(color: _currentScanMode == PdaScanMode.barcode ? const Color(0xFF10B981) : const Color(0xFF00E5FF)),
+                  foregroundColor: _currentScanMode == PdaScanMode.barcode ? const Color(0xFF10B981) : const Color(0xFF2563EB),
+                  side: BorderSide(color: _currentScanMode == PdaScanMode.barcode ? const Color(0xFF10B981) : const Color(0xFF2563EB)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 ),
@@ -2138,7 +2165,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                   _manualInputCtrl.clear();
                 }
               },
-              child: const Icon(Icons.check, color: Color(0xFF2C251E), size: 18),
+              child: const Icon(Icons.check, color: Color(0xFFFFFFFF), size: 18),
             ),
           ],
         ),
@@ -2230,9 +2257,85 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
     );
   }
 
-  Widget _buildConfirmContent(EyeCareColors c, Location? selectedLoc) {
-    final qty = _mode == _TransferMode.pallet ? _palletItems.length : _scannedItems.length;
-    final targetLocName = selectedLoc?.displayName ?? (selectedLoc?.locationCode ?? _selectedLocationId ?? '');
+  Widget _buildPalletConfirmContent(EyeCareColors c, Location? selectedLoc) {
+    final hasEnoughData = _foundPallet != null && _selectedLocationId != null;
+
+    if (!hasEnoughData) {
+      final locText = selectedLoc?.displayName ?? (_selectedLocationId != null ? 'Kệ $_selectedLocationId' : 'Chưa chọn (Quét ở Bước 1)');
+      final palletText = _foundPallet != null ? '${_foundPallet!.palletCode} (${_palletItems.length} SP)' : 'Chưa quét (Quét ở Bước 2)';
+
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: c.bgDeep,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.shield_outlined, size: 16, color: c.textSecondary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Bước xác nhận chuyển chống quét nhầm:',
+                    style: TextStyle(color: c.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _buildSummaryRow(
+              c,
+              label: '1. Kệ kho đích',
+              value: locText,
+              valueColor: _selectedLocationId != null ? const Color(0xFF10B981) : c.textMuted,
+            ),
+            const SizedBox(height: 6),
+            _buildSummaryRow(
+              c,
+              label: '2. Pallet cần chuyển',
+              value: palletText,
+              valueColor: _foundPallet != null ? c.rfidCyan : c.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
+              decoration: BoxDecoration(
+                color: c.bgCard,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: c.border.withValues(alpha: 0.6)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 15, color: c.textMuted),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Chờ quét đủ Kệ và Pallet để xác nhận',
+                      style: TextStyle(color: c.textMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final oldLoc = _foundPallet!.locationId != null
+        ? _repo.locations.where((l) => l.locationId == _foundPallet!.locationId || l.locationCode == _foundPallet!.locationId).firstOrNull
+        : null;
+    final oldLocDisplay = oldLoc?.displayName ?? (_foundPallet!.locationId ?? 'Chưa có vị trí');
+    final targetLocName = selectedLoc?.displayName ?? (_selectedLocationId ?? '');
 
     return Column(
       children: [
@@ -2246,23 +2349,23 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
           child: Column(
             children: [
               _buildSummaryRow(c,
-                  label: _mode == _TransferMode.pallet ? 'Pallet' : 'Số sản phẩm',
-                  value: _mode == _TransferMode.pallet
-                      ? _foundPallet!.palletCode
-                      : '$qty mặt hàng',
+                  label: 'Pallet cần chuyển',
+                  value: _foundPallet!.palletCode,
                   valueColor: c.rfidCyan),
               const SizedBox(height: 6),
               _buildSummaryRow(c,
-                  label: 'Kệ kho đích',
+                  label: 'Vị trí hiện tại',
+                  value: oldLocDisplay),
+              const SizedBox(height: 6),
+              _buildSummaryRow(c,
+                  label: 'Chuyển đến Kệ đích',
                   value: targetLocName,
                   valueColor: const Color(0xFF10B981)),
-              if (_mode == _TransferMode.items) ...[
-                const SizedBox(height: 6),
-                _buildSummaryRow(c,
-                    label: 'Pallet đích',
-                    value: _selectedTargetPalletId != null ? 'Pallet $_selectedTargetPalletId' : 'Không gán (để riêng lẻ)',
-                    valueColor: c.textSecondary),
-              ],
+              const SizedBox(height: 6),
+              _buildSummaryRow(c,
+                  label: 'Số sản phẩm trên Pallet',
+                  value: '${_palletItems.length} sản phẩm',
+                  valueColor: c.textPrimary),
             ],
           ),
         ),
@@ -2270,44 +2373,375 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
         Row(
           children: [
             Expanded(
+              flex: 1,
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: c.errorCoral,
                   side: BorderSide(color: c.errorCoral),
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 icon: const Icon(Icons.refresh_rounded, size: 16),
-                label: const Text(
-                  'HỦY / QUÉT LẠI',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                label: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'HỦY / QUÉT LẠI',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
                 ),
                 onPressed: _isProcessing ? null : _reset,
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
-              flex: 2,
+              flex: 1,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
                 ),
                 icon: _isProcessing
-                    ? const SizedBox(width: 18, height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.swap_horiz_rounded, color: Colors.white),
-                label: Text(
-                  _isProcessing ? 'Đang xử lý...' : 'XÁC NHẬN CẬP NHẬT VỊ TRÍ',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_circle_rounded, size: 18),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _isProcessing ? 'Đang chuyển...' : 'XÁC NHẬN CHUYỂN',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                  ),
                 ),
-                onPressed: _isProcessing ? null : _confirmTransfer,
+                onPressed: _isProcessing
+                    ? null
+                    : () => _showPalletConfirmDialog(_foundPallet!, _palletItems, selectedLoc),
               ),
             ),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildItemsConfirmContent(EyeCareColors c, Location? selectedLoc) {
+    if (_scannedItems.isEmpty) {
+      final locText = selectedLoc?.displayName ?? (_selectedLocationId != null ? 'Kệ $_selectedLocationId' : 'Chưa chọn');
+
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: c.bgDeep,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.shield_outlined, size: 16, color: c.textSecondary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Bước xác nhận chuyển chống quét nhầm:',
+                    style: TextStyle(color: c.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _buildSummaryRow(
+              c,
+              label: '1. Kệ kho đích',
+              value: locText,
+              valueColor: const Color(0xFF10B981),
+            ),
+            const SizedBox(height: 6),
+            _buildSummaryRow(
+              c,
+              label: '2. Số sản phẩm đã quét',
+              value: '0 sản phẩm',
+              valueColor: c.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
+              decoration: BoxDecoration(
+                color: c.bgCard,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: c.border.withValues(alpha: 0.6)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_outline_rounded, size: 15, color: c.textMuted),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Quét ít nhất 1 sản phẩm để xác nhận',
+                      style: TextStyle(color: c.textMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final targetLocName = selectedLoc?.displayName ?? (_selectedLocationId != null ? 'Kệ $_selectedLocationId' : 'Chưa chọn (Quét ở Bước 1)');
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10B981).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            children: [
+              _buildSummaryRow(c,
+                  label: 'Số sản phẩm cần chuyển',
+                  value: '${_scannedItems.length} sản phẩm',
+                  valueColor: c.rfidCyan),
+              const SizedBox(height: 6),
+              _buildSummaryRow(c,
+                  label: 'Kệ kho đích',
+                  value: targetLocName,
+                  valueColor: _selectedLocationId != null ? const Color(0xFF10B981) : c.errorCoral),
+              const SizedBox(height: 6),
+              _buildSummaryRow(c,
+                  label: 'Pallet đích',
+                  value: _selectedTargetPalletId != null ? 'Pallet $_selectedTargetPalletId' : 'Không gán (để riêng lẻ)',
+                  valueColor: c.textSecondary),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.errorCoral,
+                  side: BorderSide(color: c.errorCoral),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'HỦY / QUÉT LẠI',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+                onPressed: _isProcessing ? null : _reset,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 1,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                icon: _isProcessing
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check_circle_rounded, size: 18),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _isProcessing ? 'Đang xử lý...' : 'XÁC NHẬN CẬP NHẬT VỊ TRÍ',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                  ),
+                ),
+                onPressed: _isProcessing
+                    ? null
+                    : () {
+                        if (_selectedLocationId == null) {
+                          setState(() {
+                            _errorMessage = 'Vui lòng chọn hoặc quét Barcode kệ kho đích trước!';
+                            _itemTransferStep = 1;
+                            _uhf.setScanMode(PdaScanMode.barcode);
+                            _currentScanMode = PdaScanMode.barcode;
+                          });
+                          return;
+                        }
+                        _showItemsConfirmDialog(selectedLoc);
+                      },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showItemsConfirmDialog(Location? targetLoc) async {
+    final c = _eyeCare.colors;
+    final targetLocDisplay = targetLoc?.displayName ?? (_selectedLocationId ?? 'Chưa chọn kệ');
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.bgCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.swap_horiz_rounded, color: Color(0xFF10B981), size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Xác Nhận Chuyển Sản Phẩm',
+                    style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Kiểm tra thông tin trước khi chuyển để tránh quét nhầm',
+                    style: TextStyle(color: c.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: c.bgDeep,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.border),
+                ),
+                child: Column(
+                  children: [
+                    _buildSummaryRow(c,
+                        label: 'Tổng số sản phẩm',
+                        value: '${_scannedItems.length} mặt hàng',
+                        valueColor: c.rfidCyan),
+                    const Divider(height: 14),
+                    _buildSummaryRow(c,
+                        label: 'Chuyển đến Kệ đích',
+                        value: targetLocDisplay,
+                        valueColor: const Color(0xFF10B981)),
+                    if (_selectedTargetPalletId != null) ...[
+                      const SizedBox(height: 6),
+                      _buildSummaryRow(c,
+                          label: 'Gán vào Pallet đích',
+                          value: 'Pallet $_selectedTargetPalletId',
+                          valueColor: c.textSecondary),
+                    ],
+                  ],
+                ),
+              ),
+              if (_scannedItems.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Danh sách sản phẩm sẽ chuyển:',
+                  style: TextStyle(color: c.textSecondary, fontSize: 11.5, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                ..._scannedItems.take(3).map((it) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    '• ${it.productName} (${it.sku})',
+                    style: TextStyle(color: c.textPrimary, fontSize: 11.5),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )),
+                if (_scannedItems.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '... và ${_scannedItems.length - 3} sản phẩm khác',
+                      style: TextStyle(color: c.textMuted, fontSize: 10.5, fontStyle: FontStyle.italic),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.errorCoral,
+                    side: BorderSide(color: c.errorCoral),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('HỦY BỎ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.check_circle_rounded, size: 15),
+                  label: const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('XÁC NHẬN CHUYỂN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _confirmTransfer();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -2461,11 +2895,24 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
   Widget _buildSummaryRow(EyeCareColors c, {required String label, required String value, Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 13)),
-        Flexible(child: Text(value,
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(color: c.textSecondary, fontSize: 12.5),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
             textAlign: TextAlign.end,
-            style: TextStyle(color: valueColor ?? c.textPrimary, fontSize: 13, fontWeight: FontWeight.bold))),
+            style: TextStyle(color: valueColor ?? c.textPrimary, fontSize: 12.5, fontWeight: FontWeight.bold),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }

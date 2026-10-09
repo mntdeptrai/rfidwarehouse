@@ -231,5 +231,35 @@ void main() {
       expect(find.text('E2806894000000000000AAAA'), findsOneWidget);
       expect(find.text('SKU-AAA'), findsOneWidget);
     });
+
+    test('4. Khi chưa thực hiện kiểm kê (chưa quét thẻ), không báo lệch thiếu sai lệch', () async {
+      final unscannedSession = InventorySession(
+        sessionId: 'SESS-UNAUDITED-01',
+        sessionCode: 'KK-UNAUDITED-001',
+        zone: 'Khu A',
+        startedAt: DateTime.now(),
+        isCompleted: false,
+        results: [
+          InventoryItemResult(
+            epc: 'E28068940000000000000001',
+            resultType: InventoryVarianceType.missing,
+            readAt: DateTime.now(),
+            sku: 'SKU-01',
+            productName: 'Áo Thun Basic',
+            expectedLocation: 'A-01-01',
+          ),
+        ],
+      );
+
+      final rows = repo.buildSessionSkuBreakdown(unscannedSession);
+      expect(rows, isNotEmpty);
+      final row = rows.firstWhere((r) => r.sku == 'SKU-01');
+      expect(row.isAudited, isFalse);
+      expect(row.expectedQty, 1);
+      expect(row.actualQty, 0);
+      expect(row.missingCount, 0);
+      expect(row.difference, 0);
+      expect(row.statusLabel, 'Chưa kiểm kê');
+    });
   });
 }

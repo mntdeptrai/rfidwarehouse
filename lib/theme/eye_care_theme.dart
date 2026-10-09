@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
+import 'app_colors.dart';
+import 'app_theme.dart';
 
+export 'app_colors.dart';
+export 'app_theme.dart';
+export 'app_typography.dart';
+
+/// Theme Modes (maintained for 100% compatibility).
 enum EyeCareMode {
-  softSepia, // Giấy mộc sáng dịu (Không chói lóa mắt, êm dịu làm việc lâu dài)
+  softSepia, // Default: Warm Stone (#F5F5F4 / #FAFAF9) + Enterprise Royal Blue (#2563EB)
+  warmDark,  // Industrial Dark Slate
+  amberNight // Warm Stone Light
 }
 
+/// Theme colors provider across Desktop Workstation & Mobile PDA screens.
+///
+/// Defaults to Sáng Ấm Áp (Warm Stone `#F5F5F4` / `#FAFAF9`) +
+/// Xanh Dương Doanh Nghiệp (Royal Blue `#2563EB` với chữ trắng rõ nét).
 class EyeCareColors {
   final EyeCareMode mode;
   final Color bgDeep;
@@ -23,80 +36,72 @@ class EyeCareColors {
 
   const EyeCareColors({
     this.mode = EyeCareMode.softSepia,
-    this.bgDeep = const Color(0xFFF4EFE6),
-    this.bgCard = const Color(0xFFE9E2D5),
-    this.bgCardElevated = const Color(0xFFDFD6C7),
-    this.border = const Color(0xFFC7BDAF),
-    this.borderLight = const Color(0xFFB5A999),
-    this.textPrimary = const Color(0xFF2C251E),
-    this.textSecondary = const Color(0xFF6B5D4D),
-    this.textMuted = const Color(0xFF8F8070),
-    this.rfidCyan = const Color(0xFF0284C7),
-    this.rfidBlue = const Color(0xFF0369A1),
-    this.successEmerald = const Color(0xFF047857),
-    this.warningAmber = const Color(0xFFB45309),
-    this.errorCoral = const Color(0xFFBE123C),
+    this.bgDeep = AppColors.warmBgDeep,
+    this.bgCard = AppColors.warmBgCard,
+    this.bgCardElevated = AppColors.warmBgElevated,
+    this.border = AppColors.warmBorder,
+    this.borderLight = AppColors.warmBorderLight,
+    this.textPrimary = AppColors.warmTextPrimary,
+    this.textSecondary = AppColors.warmTextSecondary,
+    this.textMuted = AppColors.warmTextMuted,
+    this.rfidCyan = AppColors.royalBlue,
+    this.rfidBlue = AppColors.royalBlueDark,
+    this.successEmerald = AppColors.emeraldEnterprise,
+    this.warningAmber = AppColors.amberEnterprise,
+    this.errorCoral = AppColors.coralEnterprise,
     this.overlayTint = Colors.transparent,
   });
 
   static const EyeCareColors softSepia = EyeCareColors();
   static const EyeCareColors warmDark = EyeCareColors();
   static const EyeCareColors amberNight = EyeCareColors();
+
+  // Ergonomic modern token extensions
+  Color get duplicateIndigo => AppColors.rfidDuplicate;
+  Color get rfidMatched => successEmerald;
+  Color get rfidScanning => rfidCyan;
+  Color get rfidWarning => warningAmber;
+  Color get rfidError => errorCoral;
+  Color get rfidDuplicate => AppColors.rfidDuplicate;
+
+  Color get slate950 => AppColors.slate950;
+  Color get slate900 => AppColors.slate900;
+  Color get slate850 => AppColors.slate850;
+  Color get slate800 => AppColors.slate800;
+  Color get slate750 => AppColors.slate750;
+  Color get slate700 => AppColors.slate700;
+  Color get slate600 => AppColors.slate600;
+  Color get slate500 => AppColors.slate500;
+  Color get slate400 => AppColors.slate400;
+  Color get slate300 => AppColors.slate300;
+  Color get slate200 => AppColors.slate200;
+  Color get slate100 => AppColors.slate100;
+  Color get slate50 => AppColors.slate50;
 }
 
+/// Service managing application theme and backward compatible bridging.
 class EyeCareThemeService extends ChangeNotifier {
   static final EyeCareThemeService _instance = EyeCareThemeService._internal();
   factory EyeCareThemeService() => _instance;
 
   EyeCareThemeService._internal();
 
-  final EyeCareMode _mode = EyeCareMode.softSepia;
+  EyeCareMode _mode = EyeCareMode.softSepia;
 
   EyeCareMode get mode => _mode;
   EyeCareColors get colors => EyeCareColors.softSepia;
 
-  void setMode(EyeCareMode newMode) {}
-  void toggleNextMode() {}
-
-  String get modeName => 'Giấy Mộc Dịu Mắt';
-
-  ThemeData get themeData {
-    const c = EyeCareColors.softSepia;
-
-    return ThemeData(
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: c.bgDeep,
-      cardColor: c.bgCard,
-      dividerColor: c.border,
-      colorScheme: ColorScheme.light(
-        primary: c.rfidBlue,
-        secondary: c.rfidCyan,
-        surface: c.bgCard,
-        error: c.errorCoral,
-      ),
-      appBarTheme: AppBarTheme(
-        backgroundColor: c.bgDeep,
-        elevation: 0,
-        centerTitle: false,
-        iconTheme: IconThemeData(color: c.textPrimary),
-        titleTextStyle: TextStyle(
-          color: c.textPrimary,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.3,
-        ),
-      ),
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        elevation: 6,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        dismissDirection: DismissDirection.down,
-        showCloseIcon: true,
-        closeIconColor: Colors.white,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-    );
+  void setMode(EyeCareMode newMode) {
+    _mode = newMode;
+    notifyListeners();
   }
+
+  void toggleNextMode() {
+    notifyListeners();
+  }
+
+  String get modeName => 'Enterprise Warm Light';
+
+  /// Delegated to Enterprise Warm Light ThemeData (Warm Stone + Royal Blue #2563EB).
+  ThemeData get themeData => AppTheme.enterpriseWarmLightTheme;
 }

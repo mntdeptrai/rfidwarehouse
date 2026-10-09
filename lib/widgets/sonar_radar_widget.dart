@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 class SonarRadarWidget extends StatefulWidget {
   final double rssi; // -95 to -25 dBm
@@ -92,11 +94,11 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
     final isModerate = widget.isTracking && widget.rssi >= -65.0;
 
     Color getSignalColor() {
-      if (!widget.isTracking) return const Color(0xFF64748B);
-      if (isVeryClose) return const Color(0xFF10B981); // Emerald Green (AirTag Success)
-      if (isClose) return const Color(0xFF06B6D4);     // Cyan / Electric Blue
-      if (isModerate) return const Color(0xFF0284C7);  // Sky Blue
-      return const Color(0xFFF59E0B);                 // Amber (Far)
+      if (!widget.isTracking) return AppColors.slate500;
+      if (isVeryClose) return AppColors.rfidMatched; // Emerald Green (AirTag Success)
+      if (isClose) return AppColors.cyanTech;        // Cyan / Electric Blue
+      if (isModerate) return AppColors.techBlue;     // Sky Blue
+      return AppColors.rfidWarning;                  // Amber (Far)
     }
 
     // Tính cự ly theo mô hình Log-Distance Path Loss chuẩn sóng vô tuyến UHF:
@@ -170,7 +172,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
             gradient: RadialGradient(
               colors: [
                 signalColor.withValues(alpha: widget.isTracking ? 0.22 : 0.06),
-                const Color(0xFF1E293B).withValues(alpha: 0.1),
+                AppColors.slate800.withValues(alpha: 0.1),
                 Colors.transparent,
               ],
               stops: const [0.0, 0.65, 1.0],
@@ -180,16 +182,16 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
             alignment: Alignment.center,
             children: [
               // Vòng tròn định vị cơ sở (Concentric rings)
-              _buildRadarRing(230, const Color(0xFFC7BDAF).withValues(alpha: 0.4), isDashed: true),
-              _buildRadarRing(175, const Color(0xFFC7BDAF).withValues(alpha: 0.5)),
-              _buildRadarRing(120, const Color(0xFFC7BDAF).withValues(alpha: 0.65)),
-              _buildRadarRing(65, const Color(0xFFC7BDAF).withValues(alpha: 0.8)),
+              _buildRadarRing(230, AppColors.slate600.withValues(alpha: 0.4), isDashed: true),
+              _buildRadarRing(175, AppColors.slate600.withValues(alpha: 0.5)),
+              _buildRadarRing(120, AppColors.slate600.withValues(alpha: 0.65)),
+              _buildRadarRing(65, AppColors.slate500.withValues(alpha: 0.8)),
 
               // Trục chữ thập định hướng (Crosshair guide)
               CustomPaint(
                 size: const Size(230, 230),
                 painter: _RadarCrosshairPainter(
-                  lineColor: const Color(0xFFC7BDAF).withValues(alpha: 0.35),
+                  lineColor: AppColors.slate600.withValues(alpha: 0.35),
                 ),
               ),
 
@@ -258,7 +260,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                 child: Center(
                   child: Icon(
                     directionIcon,
-                    color: Colors.white,
+                    color: AppColors.slate950,
                     size: isVeryClose ? 34 : (diff >= 0.8 ? 32 : 26),
                   ),
                 ),
@@ -274,16 +276,16 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFE9E2D5),
+            color: AppColors.slate800,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isVeryClose ? const Color(0xFF10B981) : const Color(0xFFC7BDAF),
+              color: isVeryClose ? AppColors.rfidMatched : AppColors.slate700,
               width: isVeryClose ? 2.0 : 1.0,
             ),
             boxShadow: isVeryClose
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.18),
+                      color: AppColors.rfidMatched.withValues(alpha: 0.25),
                       blurRadius: 12,
                       offset: const Offset(0, 3),
                     )
@@ -338,12 +340,9 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                 children: [
                   Text(
                     getDistanceEstimate(),
-                    style: TextStyle(
-                      color: isVeryClose ? const Color(0xFF10B981) : const Color(0xFF2C251E),
+                    style: AppTypography.kpiNumberLarge.copyWith(
+                      color: isVeryClose ? AppColors.rfidMatched : AppColors.slate50,
                       fontSize: 34,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.5,
-                      fontFamily: 'monospace',
                     ),
                   ),
                 ],
@@ -352,15 +351,18 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
               const SizedBox(height: 4),
 
               // Chỉ số dBm & Xu hướng Nóng/Lạnh
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: [
                   Text(
                     (!widget.isTracking || widget.rssi <= -88.0)
                         ? 'Cường độ: --- dBm'
                         : 'Cường độ: ${widget.rssi.toStringAsFixed(0)} dBm',
                     style: const TextStyle(
-                      color: Color(0xFF6B5D4D),
+                      color: AppColors.slate400,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -369,20 +371,17 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                     Text(
                       '⚡ ${(widget.readsPerSecond ?? 0).toStringAsFixed(0)} gói/s',
                       style: const TextStyle(
-                        color: Color(0xFF0D9488),
+                        color: AppColors.cyanTech,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  Flexible(
-                    child: Text(
-                      getTrendText(),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: diff <= -1.0 ? const Color(0xFFD97706) : signalColor,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  Text(
+                    getTrendText(),
+                    style: TextStyle(
+                      color: diff <= -1.0 ? AppColors.rfidWarning : signalColor,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
@@ -396,9 +395,9 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                 child: LinearProgressIndicator(
                   value: widget.isTracking ? strength : 0.0,
                   minHeight: 8,
-                  backgroundColor: const Color(0xFFF4EFE6),
+                  backgroundColor: AppColors.slate900,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    diff <= -1.2 ? const Color(0xFFF59E0B) : signalColor,
+                    diff <= -1.2 ? AppColors.rfidWarning : signalColor,
                   ),
                 ),
               ),
@@ -413,13 +412,13 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              color: AppColors.rfidMatched.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+              border: Border.all(color: AppColors.rfidMatched, width: 1.5),
             ),
             child: Row(
               children: [
-                const Icon(Icons.stars_rounded, color: Color(0xFF10B981), size: 26),
+                const Icon(Icons.stars_rounded, color: AppColors.rfidMatched, size: 26),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -428,7 +427,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                       const Text(
                         'ĐÃ TÌM THẤY MỤC TIÊU!',
                         style: TextStyle(
-                          color: Color(0xFF047857),
+                          color: AppColors.rfidMatched,
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
                         ),
@@ -437,7 +436,7 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
                         widget.locationDisplay != null && widget.locationDisplay!.isNotEmpty
                             ? 'Vị trí đăng ký: ${widget.locationDisplay}'
                             : 'Thẻ RFID đang nằm ngay sát đầu đọc súng PDA.',
-                        style: const TextStyle(color: Color(0xFF2C251E), fontSize: 11),
+                        style: const TextStyle(color: AppColors.slate200, fontSize: 11),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -453,21 +452,21 @@ class _SonarRadarWidgetState extends State<SonarRadarWidget> with TickerProvider
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFFF4EFE6),
+            color: AppColors.slate850,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFE2D9CC)),
+            border: Border.all(color: AppColors.slate700),
           ),
           child: const Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.tips_and_updates_rounded, size: 16, color: Color(0xFFD97706)),
+              Icon(Icons.tips_and_updates_rounded, size: 16, color: AppColors.rfidWarning),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Mẹo chỉ hướng: Bóp cò & lia súng hình nan quạt (trái ↔ phải). Hướng nào sóng tăng và mũi tên ⬆ xanh sáng là hướng của mã EPC. Khi cự ly < 1m, cự ly sẽ nhảy số chính xác từng centimet (cm).',
                   style: TextStyle(
                     fontSize: 10.5,
-                    color: Color(0xFF6B5D4D),
+                    color: AppColors.slate300,
                     height: 1.35,
                   ),
                 ),

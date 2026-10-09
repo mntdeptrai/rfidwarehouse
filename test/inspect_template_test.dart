@@ -61,29 +61,26 @@ void main() {
     expect(csvFile.existsSync(), isTrue);
     final csvContent = csvFile.readAsStringSync();
     expect(csvContent.contains('PEPSICO VIETNAM'), isTrue);
-    expect(csvContent.contains('Vòng Đời Thẻ'), isTrue);
+    expect(csvContent.contains('Số Lượng'), isTrue);
 
-    // Test XLSX export
+    // Test XLSX export: Sheet 1 Ton_Kho_SKU & Sheet 2 Chi_Tiet_Cac_Chip
     final xlsxFile = await exportService.exportInventoryReport(ReportFormat.xlsx, items: [item]);
     expect(xlsxFile.existsSync(), isTrue);
     final xlsxBytes = xlsxFile.readAsBytesSync();
     final excel = Excel.decodeBytes(xlsxBytes);
-    final sheet = excel['Ton_Kho_RFID'];
+
+    expect(excel.sheets.containsKey('Ton_Kho_SKU'), isTrue);
+    final skuSheet = excel['Ton_Kho_SKU'];
     bool foundSupplier = false;
-    bool foundLifecycleHeader = false;
-    for (var row in sheet.rows) {
+    for (var row in skuSheet.rows) {
       for (var cell in row) {
         final val = cell?.value?.toString() ?? '';
         if (val.contains('PEPSICO VIETNAM')) {
           foundSupplier = true;
         }
-        if (val.contains('Vòng Đời Thẻ')) {
-          foundLifecycleHeader = true;
-        }
       }
     }
     expect(foundSupplier, isTrue);
-    expect(foundLifecycleHeader, isTrue);
   });
 
   test('Verify Stock Reconciliation Report generates 3 sheets with excess EPC listing in Sheet 3', () async {
@@ -170,6 +167,7 @@ void main() {
       rows: reconciliationRows,
       scopeTitle: 'Toàn bộ kho - Test 3 Sheets',
       sessionCode: 'KK-3SHEET-01',
+      includeEpc: true,
     );
 
     expect(file.existsSync(), isTrue);
@@ -221,7 +219,7 @@ void main() {
     for (var row in sheet3.rows) {
       for (var cell in row) {
         final val = cell?.value?.toString() ?? '';
-        if (val.contains('BẢNG ĐỐI CHIẾU THỪA & LIỆT KÊ MÃ CHIP RFID (EPC) THỪA')) {
+        if (val.contains('BẢNG ĐỐI CHIẾU HÀNG THỪA THEO MÃ SKU') || val.contains('BẢNG ĐỐI CHIẾU THỪA')) {
           foundSheet3Title = true;
         }
         if (val.contains('EPC-EXTRA-UNKNOWN-999')) {

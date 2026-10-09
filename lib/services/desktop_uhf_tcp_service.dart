@@ -34,15 +34,7 @@ class DesktopUhfTcpService extends ChangeNotifier {
   factory DesktopUhfTcpService() => _instance;
   DesktopUhfTcpService._internal() {
     _initBridge();
-    loadConfig().then((_) {
-      if (!Platform.environment.containsKey('FLUTTER_TEST') && _config.autoConnectOnStartup) {
-        Timer(const Duration(milliseconds: 1500), () {
-          if (!_isConnected && !_isConnecting) {
-            connectWithSavedConfig();
-          }
-        });
-      }
-    });
+    loadConfig();
   }
 
   Socket? _bridgeSocket;
@@ -291,7 +283,6 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _isScanning = false;
         _isConnecting = false;
         _connectTimeoutTimer?.cancel();
-        _scheduleReconnect();
         notifyListeners();
       },
       onDone: () {
@@ -301,7 +292,6 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _isScanning = false;
         _isConnecting = false;
         _connectTimeoutTimer?.cancel();
-        _scheduleReconnect();
         notifyListeners();
       },
     );
@@ -348,9 +338,6 @@ class DesktopUhfTcpService extends ChangeNotifier {
         _isConnected = msg['connected'] == true;
         _isScanning = msg['scanning'] == true;
         _currentConnId = msg['connId']?.toString() ?? '';
-        if (!_isConnected) {
-          _scheduleReconnect();
-        }
         notifyListeners();
         break;
 
@@ -376,11 +363,11 @@ class DesktopUhfTcpService extends ChangeNotifier {
             _connectCompleter!.complete(true);
           }
         } else {
-          _log('Không thể kết nối tới đầu đọc ($_currentConnId). Vui lòng kiểm tra cáp hoặc cổng COM.');
+          final targetLabel = _currentConnId.isNotEmpty ? _currentConnId : _config.connectionSummary;
+          _log('Không thể kết nối tới đầu đọc ($targetLabel). Vui lòng kiểm tra cáp hoặc cổng COM.');
           if (_connectCompleter != null && !_connectCompleter!.isCompleted) {
             _connectCompleter!.complete(false);
           }
-          _scheduleReconnect();
         }
         notifyListeners();
         break;
@@ -442,8 +429,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
       connectionType: 'RS232',
       comPort: portName,
       baudRate: baudRate,
-      autoConnectOnStartup: true,
-      autoReconnect: true,
+      autoConnectOnStartup: false,
+      autoReconnect: false,
     );
     unawaited(saveConfig(_config));
 
@@ -480,8 +467,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
       rs485Address: address,
       comPort: portName,
       baudRate: baudRate,
-      autoConnectOnStartup: true,
-      autoReconnect: true,
+      autoConnectOnStartup: false,
+      autoReconnect: false,
     );
     unawaited(saveConfig(_config));
 
@@ -518,8 +505,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
       connectionType: 'TCP Client',
       tcpIp: ip,
       tcpPort: port,
-      autoConnectOnStartup: true,
-      autoReconnect: true,
+      autoConnectOnStartup: false,
+      autoReconnect: false,
     );
     unawaited(saveConfig(_config));
 
@@ -553,8 +540,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
     await disconnect();
     _config = _config.copyWith(
       connectionType: 'USB',
-      autoConnectOnStartup: true,
-      autoReconnect: true,
+      autoConnectOnStartup: false,
+      autoReconnect: false,
     );
     unawaited(saveConfig(_config));
 
@@ -765,17 +752,6 @@ class DesktopUhfTcpService extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-  }
-
-  void _scheduleReconnect() {
-    if (!_config.autoReconnect || _isConnected || _isConnecting || !Platform.isWindows) return;
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), () async {
-      if (!_isConnected && !_isConnecting && _config.autoReconnect) {
-        _log('Tự động thử kết nối lại đầu đọc (${_config.connectionSummary})...');
-        await connectWithSavedConfig();
-      }
-    });
   }
 
   Future<void> searchLanDevices() async {

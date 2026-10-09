@@ -424,14 +424,14 @@ class _PdaShelfStatusScreenState extends State<PdaShelfStatusScreen> {
             children: [
               Icon(
                 icon,
-                color: isSelected ? const Color(0xFF2C251E) : color,
+                color: isSelected ? const Color(0xFFFFFFFF) : color,
                 size: 20,
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? const Color(0xFF2C251E) : color,
+                  color: isSelected ? const Color(0xFFFFFFFF) : color,
                   fontWeight: FontWeight.bold,
                   fontSize: 11.5,
                 ),

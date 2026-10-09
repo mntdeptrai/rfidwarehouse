@@ -273,7 +273,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               await _repo.addProduct(newProd);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('LƯU SẢN PHẨM', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+            child: const Text('LƯU SẢN PHẨM', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -370,7 +370,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
 
                 Navigator.pop(ctx);
               },
-              child: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+              child: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -443,7 +443,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                     );
                     Navigator.pop(context);
                   },
-                  child: const Text('XÁC NHẬN DI CHUYỂN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                  child: const Text('XÁC NHẬN DI CHUYỂN', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
                 ),
               ],
             );
@@ -745,7 +745,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       },
                 child: isProcessing
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('XÁC NHẬN CẬP NHẬT VỊ TRÍ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                    : const Text('XÁC NHẬN CẬP NHẬT VỊ TRÍ', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -1087,7 +1087,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       },
                 child: isProcessing
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('XÁC NHẬN NHẬP GỘP', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                    : const Text('XÁC NHẬN NHẬP GỘP', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -1252,7 +1252,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               await _repo.clearAllData();
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('XÓA SẠCH DỮ LIỆU', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+            child: const Text('XÓA SẠCH DỮ LIỆU', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1301,8 +1301,8 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                       children: [
                         if (widget.enablePalletMerge)
                           ElevatedButton.icon(
-                            icon: const Icon(Icons.call_merge, size: 16, color: Color(0xFF2C251E)),
-                            label: const Text('GỘP PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                            icon: const Icon(Icons.call_merge, size: 16, color: Color(0xFFFFFFFF)),
+                            label: const Text('GỘP PALLET', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold, fontSize: 12)),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF59E0B),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1311,8 +1311,8 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                             onPressed: () => _openMergePalletFlow(),
                           ),
                         ElevatedButton.icon(
-                          icon: const Icon(Icons.swap_horiz_rounded, size: 16, color: Color(0xFF2C251E)),
-                          label: const Text('CHUYỂN SẢN PHẨM', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                          icon: const Icon(Icons.swap_horiz_rounded, size: 16, color: Color(0xFFFFFFFF)),
+                          label: const Text('CHUYỂN SẢN PHẨM', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold, fontSize: 12)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: c.rfidCyan,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1321,8 +1321,8 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                           onPressed: () => _showMoveSingleItemDialog(),
                         ),
                         ElevatedButton.icon(
-                          icon: const Icon(Icons.add_box, size: 16, color: Color(0xFF2C251E)),
-                          label: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                          icon: const Icon(Icons.add_box, size: 16, color: Color(0xFFFFFFFF)),
+                          label: const Text('TẠO PALLET', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold, fontSize: 12)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1443,8 +1443,8 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                icon: const Icon(Icons.add, size: 16, color: Color(0xFF2C251E)),
-                label: const Text('TẠO PALLET MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                icon: const Icon(Icons.add, size: 16, color: Color(0xFFFFFFFF)),
+                label: const Text('TẠO PALLET MỚI', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold, fontSize: 12)),
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
                 onPressed: _showAddPalletDialog,
               ),
@@ -1648,8 +1648,8 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               Text('Chưa có tồn kho sản phẩm nào trong kho.', style: TextStyle(color: c.textSecondary, fontSize: 13)),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                icon: const Icon(Icons.add, size: 16, color: Color(0xFF2C251E)),
-                label: const Text('THÊM SẢN PHẨM MỚI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12)),
+                icon: const Icon(Icons.add, size: 16, color: Color(0xFFFFFFFF)),
+                label: const Text('THÊM SẢN PHẨM MỚI', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold, fontSize: 12)),
                 style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan),
                 onPressed: _showAddProductDialog,
               ),
@@ -1963,7 +1963,7 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
               await _repo.updateProduct(updated);
               if (ctx.mounted) Navigator.pop(ctx);
             },
-            child: const Text('LƯU THAY ĐỔI', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+            child: const Text('LƯU THAY ĐỔI', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
           ),
         ],
       ),

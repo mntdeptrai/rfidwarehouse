@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../models/wms_models.dart';
 import '../../services/warehouse_repository.dart';
 import '../../services/auth_service.dart';
@@ -92,6 +93,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     if (epc.isEmpty || _activeSession == null) return;
 
     if (_scannedEpcs.add(epc)) {
+      if (_repo.isEpcOrSnAlreadyShipped(epc: epc)) {
+        SystemSound.play(SystemSoundType.alert);
+      }
       final session = _activeSession!;
       if (session.zone.startsWith('File:')) {
         // Đối soát danh sách hàng nạp từ File Excel
@@ -622,7 +626,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   return ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: isAssignedToStaff ? const Color(0xFF0284C7) : c.rfidCyan,
-                      foregroundColor: isAssignedToStaff ? Colors.white : const Color(0xFF2C251E),
+                      foregroundColor: isAssignedToStaff ? Colors.white : const Color(0xFFFFFFFF),
                       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -977,6 +981,18 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     try {
       File file;
       if (exportType == 'AUDIT_TICKET') {
+        if (_repo.inventorySessions.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFFF59E0B),
+              content: Text(
+                '⚠️ Chưa có đợt kiểm kê nào trong lịch sử! Vui lòng thực hiện kiểm kê trước khi xuất biên bản.',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          );
+          return;
+        }
         file = await _exportService.exportReportSelected(
           ReportType.audit,
           format,
@@ -989,6 +1005,18 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
         final rows = _repo.getStockReconciliation(
           sessionId: session?.sessionId,
         );
+        if (rows.isEmpty || !rows.any((r) => r.isAudited)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFFF59E0B),
+              content: Text(
+                '⚠️ Chưa có dữ liệu kiểm kê thực tế! Vui lòng thực hiện kiểm kê kho trước khi xuất bảng đối soát.',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          );
+          return;
+        }
         final scopeTitle = session != null
             ? 'Phiếu kiểm kê ${session.sessionCode} (${session.zone})'
             : 'Toàn bộ kho hàng';
@@ -1116,7 +1144,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                           desc: 'Khởi tạo đợt kiểm kê dựa trên dữ liệu hàng tồn kho thực tế (Toàn bộ kho, Theo khu vực Zone hoặc Từng dãy kệ).',
                           btnLabel: '+ TẠO ĐƠN KIỂM KÊ',
                           btnColor: c.rfidCyan,
-                          textColor: const Color(0xFF2C251E),
+                          textColor: const Color(0xFFFFFFFF),
                           onTap: _showCreateSessionDialog,
                           c: c,
                         ),
@@ -1419,7 +1447,8 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
       if (_tableFilter == 'MATCH' && r.resultType != InventoryVarianceType.match) return false;
       if (_tableFilter == 'MISSING' && r.resultType != InventoryVarianceType.missing) return false;
       if (_tableFilter == 'WRONG_LOC' && r.resultType != InventoryVarianceType.wrongLocation) return false;
-      if (_tableFilter == 'UNKNOWN' && r.resultType != InventoryVarianceType.unknownEpc) return false;
+      if (_tableFilter == 'UNKNOWN' && (r.resultType != InventoryVarianceType.unknownEpc || r.expectedLocation == 'ĐÃ XUẤT KHO')) return false;
+      if (_tableFilter == 'SHIPPED' && r.expectedLocation != 'ĐÃ XUẤT KHO') return false;
 
       if (q.isEmpty) return true;
       return r.epc.toLowerCase().contains(q) ||
@@ -1546,7 +1575,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: c.rfidCyan,
-                        foregroundColor: const Color(0xFF2C251E),
+                        foregroundColor: const Color(0xFFFFFFFF),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
@@ -1568,7 +1597,44 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             ),
           ),
 
-          // 3. 4 Thẻ Chỉ Số Đối Soát Thời Gian Thực (Audit KPI Cards)
+          // 3. Cảnh báo chip đã xuất kho (nếu có phát hiện)
+          if (session.shippedItemCount > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFEF4444)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '🚨 CẢNH BÁO BẤT THƯỜNG: Phát hiện ${session.shippedItemCount} chip RFID của hàng đã xuất kho trước đó vẫn còn trong khu vực kiểm kê! Cần rà soát kiểm tra đối chiếu ngay.',
+                        style: const TextStyle(color: Color(0xFF991B1B), fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _tableFilter = 'SHIPPED'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text('Xem danh sách', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // 4. 4 Thẻ Chỉ Số Đối Soát Thời Gian Thực (Audit KPI Cards)
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
             child: Row(
@@ -1626,7 +1692,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             ),
           ),
 
-          // 4. Thanh Tìm Kiếm & Bộ Lọc Trạng Thái
+          // 5. Thanh Tìm Kiếm & Bộ Lọc Trạng Thái
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Row(
@@ -1641,7 +1707,11 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   const SizedBox(width: 6),
                   _buildFilterPill('Sai Vị Trí (${session.wrongLocationCount})', 'WRONG_LOC', c, activeColor: const Color(0xFFF59E0B)),
                   const SizedBox(width: 6),
-                  _buildFilterPill('Thẻ Lạ (${session.unknownEpcCount})', 'UNKNOWN', c, activeColor: const Color(0xFF8B5CF6)),
+                  _buildFilterPill('Thẻ Lạ (${session.trueUnknownEpcCount})', 'UNKNOWN', c, activeColor: const Color(0xFF8B5CF6)),
+                  if (session.shippedItemCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _buildFilterPill('🚨 Đã Xuất Kho (${session.shippedItemCount})', 'SHIPPED', c, activeColor: const Color(0xFFDC2626)),
+                  ],
                 ],
 
                 const Spacer(),
@@ -1743,7 +1813,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                                   ),
                                   SizedBox(
                                     width: 170,
-                                    child: _buildStatusPill(r.resultType),
+                                    child: _buildStatusPill(r.resultType, expectedLocation: r.expectedLocation),
                                   ),
                                   SizedBox(
                                     width: 110,
@@ -1831,7 +1901,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: c.rfidCyan,
-                      foregroundColor: const Color(0xFF2C251E),
+                      foregroundColor: const Color(0xFFFFFFFF),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -1980,7 +2050,22 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     );
   }
 
-  Widget _buildStatusPill(InventoryVarianceType type) {
+  Widget _buildStatusPill(InventoryVarianceType type, {String? expectedLocation}) {
+    if (expectedLocation == 'ĐÃ XUẤT KHO') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.5)),
+        ),
+        child: const Text(
+          '🚨 ĐÃ XUẤT KHO',
+          style: TextStyle(color: Color(0xFFDC2626), fontSize: 10.5, fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+
     String label;
     Color color;
 

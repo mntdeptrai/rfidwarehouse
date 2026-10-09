@@ -163,7 +163,7 @@ class PdaDrawer extends StatelessWidget {
                 ),
                 ListTile(
                   leading: Icon(Icons.delete_sweep_rounded, color: c.errorCoral),
-                  title: Text('Xóa Sạch Dữ Liệu', style: TextStyle(color: c.errorCoral, fontSize: 14)),
+                  title: Text('Xóa Sạch Dữ Liệu', style: TextStyle(color: c.errorCoral, fontSize: 14, fontWeight: FontWeight.bold)),
                   onTap: () async {
                     Navigator.pop(context);
                     final confirm = await showDialog<bool>(
@@ -177,7 +177,7 @@ class PdaDrawer extends StatelessWidget {
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral),
                             onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('XÓA SẠCH', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                            child: const Text('XÓA SẠCH', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -196,7 +196,7 @@ class PdaDrawer extends StatelessWidget {
                 ),
                 ListTile(
                   leading: Icon(Icons.cleaning_services_rounded, color: c.successEmerald),
-                  title: Text('Dọn Sạch Cache Cục Bộ', style: TextStyle(color: c.textPrimary, fontSize: 14)),
+                  title: Text('Dọn Sạch Cache Cục Bộ', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
                   subtitle: Text('Dọn sạch rác cục bộ & nạp thẳng 100% từ Cloud', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
                   onTap: () async {
                     Navigator.pop(context);

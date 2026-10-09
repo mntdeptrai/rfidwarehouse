@@ -386,6 +386,10 @@ class DatabaseService {
   }
 
   Future<void> insertOutboundOrder(OutboundOrder order) async {
+    final cleanPo = order.poNo.trim().toUpperCase();
+    if (cleanPo.isNotEmpty) {
+      _outboundOrders.removeWhere((id, o) => id != order.outboundOrderId && o.poNo.trim().toUpperCase() == cleanPo);
+    }
     _outboundOrders[order.outboundOrderId] = order;
   }
 
@@ -397,8 +401,8 @@ class DatabaseService {
   }
 
   Future<void> deleteOutboundOrder(String orderId) async {
-    final clean = orderId.trim();
-    _outboundOrders.removeWhere((id, o) => id == clean || o.poNo == clean);
+    final clean = orderId.trim().toUpperCase();
+    _outboundOrders.removeWhere((id, o) => id.trim().toUpperCase() == clean || o.poNo.trim().toUpperCase() == clean);
   }
 
   // --- SYNC QUEUE (IN-MEMORY FOR TESTS / TEMPORARY HOLD) ---

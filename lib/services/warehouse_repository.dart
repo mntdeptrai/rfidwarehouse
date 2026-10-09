@@ -136,6 +136,16 @@ class WarehouseRepository extends ChangeNotifier {
         }
       }
 
+      // Tự động hoàn tất đơn nhập kho nếu tất cả các mặt hàng của đơn đã cất vào kệ
+      for (final ord in _inboundOrders) {
+        if (ord.status != InboundOrderStatus.completed && isInboundOrderPutawayCompleted(ord)) {
+          ord.status = InboundOrderStatus.completed;
+          for (var d in ord.details) {
+            d.receivedQty = d.requiredQty;
+          }
+        }
+      }
+
       _outboundOrders.clear();
       _outboundOrders.addAll(cleanOutboundOrders);
 
@@ -393,7 +403,11 @@ class WarehouseRepository extends ChangeNotifier {
         final key = sku.isNotEmpty ? sku : prodId;
         final req = (d['required_qty'] as num?)?.toInt() ?? 0;
         final rec = (d['received_qty'] as num?)?.toInt() ?? 0;
-        final prodName = (d['product_name'] ?? '').toString();
+        final rawProdName = (d['product_name'] ?? '').toString().trim();
+        final prodName = rawProdName.replaceFirst(RegExp(r'\s+\d+$'), '').trim();
+        if (prodName.isNotEmpty && prodName != rawProdName) {
+          inbOrdersWithDuplicates.add(orderId);
+        }
 
         final orderSkuMap = inbDetailsByOrderAndSku.putIfAbsent(orderId, () => {});
         if (orderSkuMap.containsKey(key)) {
@@ -402,7 +416,7 @@ class WarehouseRepository extends ChangeNotifier {
           orderSkuMap[key] = InboundOrderDetail(
             productId: cur.productId.isNotEmpty ? cur.productId : prodId,
             sku: cur.sku.isNotEmpty ? cur.sku : (d['sku'] ?? '').toString(),
-            productName: cur.productName.isNotEmpty ? cur.productName : prodName,
+            productName: cur.productName.isNotEmpty ? cur.productName : (prodName.isNotEmpty ? prodName : rawProdName),
             requiredQty: cur.requiredQty > 0 ? cur.requiredQty : req,
             receivedQty: cur.receivedQty > rec ? cur.receivedQty : rec,
           );
@@ -410,7 +424,7 @@ class WarehouseRepository extends ChangeNotifier {
           orderSkuMap[key] = InboundOrderDetail(
             productId: prodId,
             sku: (d['sku'] ?? '').toString(),
-            productName: prodName,
+            productName: prodName.isNotEmpty ? prodName : rawProdName,
             requiredQty: req,
             receivedQty: rec,
           );
@@ -419,6 +433,33 @@ class WarehouseRepository extends ChangeNotifier {
       final Map<String, List<InboundOrderDetail>> inbDetailsMap = {};
       for (final entry in inbDetailsByOrderAndSku.entries) {
         inbDetailsMap[entry.key] = entry.value.values.toList();
+      }
+
+      // Tự động làm sạch các dòng trùng lặp trong inbound_order_details trên Supabase Cloud
+      if (inbOrdersWithDuplicates.isNotEmpty && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        Future.microtask(() async {
+          try {
+            final supa = Supabase.instance.client;
+            for (final dupOrderId in inbOrdersWithDuplicates) {
+              final cleanList = inbDetailsMap[dupOrderId] ?? [];
+              if (cleanList.isNotEmpty) {
+                await supa.from('inbound_order_details').delete().eq('order_id', dupOrderId);
+                final newRows = cleanList.map((d) => {
+                  'order_id': dupOrderId,
+                  'product_id': d.productId,
+                  'sku': d.sku,
+                  'product_name': d.productName,
+                  'required_qty': d.requiredQty,
+                  'received_qty': d.receivedQty,
+                }).toList();
+                await supa.from('inbound_order_details').insert(newRows);
+                debugPrint('Tự động dọn sạch duplicate inbound_order_details cho đơn $dupOrderId');
+              }
+            }
+          } catch (e) {
+            debugPrint('Lỗi tự động dọn duplicate inbound_order_details: $e');
+          }
+        });
       }
 
       final loadedInbOrders = inbRows.map((om) {
@@ -449,7 +490,11 @@ class WarehouseRepository extends ChangeNotifier {
         final key = sku.isNotEmpty ? sku : prodId;
         final req = (d['required_qty'] as num?)?.toInt() ?? 0;
         final picked = (d['picked_qty'] as num?)?.toInt() ?? 0;
-        final prodName = (d['product_name'] ?? '').toString();
+        final rawProdName = (d['product_name'] ?? '').toString().trim();
+        final prodName = rawProdName.replaceFirst(RegExp(r'\s+\d+$'), '').trim();
+        if (prodName.isNotEmpty && prodName != rawProdName) {
+          outOrdersWithDuplicates.add(orderId);
+        }
 
         final orderSkuMap = outDetailsByOrderAndSku.putIfAbsent(orderId, () => {});
         if (orderSkuMap.containsKey(key)) {
@@ -458,7 +503,7 @@ class WarehouseRepository extends ChangeNotifier {
           orderSkuMap[key] = OutboundOrderDetail(
             productId: cur.productId.isNotEmpty ? cur.productId : prodId,
             sku: cur.sku.isNotEmpty ? cur.sku : (d['sku'] ?? '').toString(),
-            productName: cur.productName.isNotEmpty ? cur.productName : prodName,
+            productName: cur.productName.isNotEmpty ? cur.productName : (prodName.isNotEmpty ? prodName : rawProdName),
             requiredQty: cur.requiredQty > 0 ? cur.requiredQty : req,
             pickedQty: cur.pickedQty > picked ? cur.pickedQty : picked,
           );
@@ -466,7 +511,7 @@ class WarehouseRepository extends ChangeNotifier {
           orderSkuMap[key] = OutboundOrderDetail(
             productId: prodId,
             sku: (d['sku'] ?? '').toString(),
-            productName: prodName,
+            productName: prodName.isNotEmpty ? prodName : rawProdName,
             requiredQty: req,
             pickedQty: picked,
           );
@@ -503,7 +548,7 @@ class WarehouseRepository extends ChangeNotifier {
           }
         });
       }
-      final List<OutboundOrder> loadedOutOrders = outRows.map((om) {
+      final List<OutboundOrder> rawLoadedOutOrders = outRows.map((om) {
         final orderId = (om['outbound_order_id'] ?? '').toString();
         final statusStr = (om['status'] ?? '').toString();
         final status = OutboundOrderStatus.values.firstWhere(
@@ -520,6 +565,57 @@ class WarehouseRepository extends ChangeNotifier {
           details: details,
         );
       }).toList();
+
+      // Tự động phát hiện và dọn dẹp các đơn xuất nháp XK- trùng lặp (0 SP đã nhặt - Mới tiếp nhận)
+      // khi đã có đơn XK- cùng khách hàng & cùng SKU+số lượng đã xuất hàng (SHIPPED) hoặc mới hơn
+      String outboundSignature(OutboundOrder o) {
+        final skuParts = o.details
+            .map((d) => '${d.sku.trim().toUpperCase()}:${d.requiredQty}')
+            .toList()
+          ..sort();
+        return '${o.customer.trim().toLowerCase()}|${skuParts.join(",")}';
+      }
+
+      final redundantOutOrders = <OutboundOrder>[];
+      final List<OutboundOrder> loadedOutOrders = [];
+      for (final o in rawLoadedOutOrders) {
+        final isUnpickedDraft = o.status == OutboundOrderStatus.newOrder &&
+            o.poNo.startsWith('XK-') &&
+            o.details.isNotEmpty &&
+            o.details.every((d) => d.pickedQty == 0);
+        if (isUnpickedDraft) {
+          final sig = outboundSignature(o);
+          final hasSupersedingOrder = rawLoadedOutOrders.any((other) {
+            if (other.outboundOrderId == o.outboundOrderId) return false;
+            if (outboundSignature(other) != sig) return false;
+            if (other.status == OutboundOrderStatus.shipped || other.status == OutboundOrderStatus.processing) {
+              return true;
+            }
+            return other.createdAt.isAfter(o.createdAt);
+          });
+          if (hasSupersedingOrder) {
+            redundantOutOrders.add(o);
+            continue;
+          }
+        }
+        loadedOutOrders.add(o);
+      }
+
+      if (redundantOutOrders.isNotEmpty && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        Future.microtask(() async {
+          try {
+            final supa = Supabase.instance.client;
+            for (final dup in redundantOutOrders) {
+              await _dbService.deleteOutboundOrder(dup.outboundOrderId);
+              await supa.from('outbound_order_details').delete().eq('order_id', dup.outboundOrderId);
+              await supa.from('outbound_orders').delete().eq('outbound_order_id', dup.outboundOrderId);
+              debugPrint('Tự động xóa đơn xuất nháp trùng lặp: ${dup.poNo} (${dup.outboundOrderId})');
+            }
+          } catch (e) {
+            debugPrint('Lỗi tự động xóa đơn xuất nháp trùng lặp: $e');
+          }
+        });
+      }
 
       // 7. Users
       final List<WmsUser> loadedUsers = userRows.map((u) => WmsUser(
@@ -643,6 +739,16 @@ class WarehouseRepository extends ChangeNotifier {
           if ((it.status == ItemStatus.pendingInbound || it.status == ItemStatus.waitingPalletize) &&
               waitingPutawayOrderNos.contains((it.orderNo ?? '').trim().toUpperCase())) {
             it.status = ItemStatus.waitingPutaway;
+          }
+        }
+      }
+
+      // Tự động hoàn tất đơn nhập kho nếu tất cả các mặt hàng của đơn đã cất vào kệ
+      for (final ord in _inboundOrders) {
+        if (ord.status != InboundOrderStatus.completed && isInboundOrderPutawayCompleted(ord)) {
+          ord.status = InboundOrderStatus.completed;
+          for (var d in ord.details) {
+            d.receivedQty = d.requiredQty;
           }
         }
       }
@@ -1296,6 +1402,33 @@ class WarehouseRepository extends ChangeNotifier {
   }
 
   Future<List<Item>> addInboundOrder(InboundOrder order, {bool autoGenerateEpcs = true}) async {
+    final Map<String, InboundOrderDetail> dedupMap = {};
+    for (final d in order.details) {
+      final key = d.sku.trim().toUpperCase().isNotEmpty ? d.sku.trim().toUpperCase() : d.productId;
+      final cleanName = getSkuProductName(d.sku, d.productName);
+      if (dedupMap.containsKey(key)) {
+        final cur = dedupMap[key]!;
+        dedupMap[key] = InboundOrderDetail(
+          productId: cur.productId.isNotEmpty ? cur.productId : d.productId,
+          sku: cur.sku.isNotEmpty ? cur.sku : d.sku,
+          productName: cleanName.isNotEmpty ? cleanName : cur.productName,
+          requiredQty: cur.requiredQty > d.requiredQty ? cur.requiredQty : d.requiredQty,
+          receivedQty: cur.receivedQty > d.receivedQty ? cur.receivedQty : d.receivedQty,
+        );
+      } else {
+        dedupMap[key] = InboundOrderDetail(
+          productId: d.productId,
+          sku: d.sku,
+          productName: cleanName,
+          requiredQty: d.requiredQty,
+          receivedQty: d.receivedQty,
+        );
+      }
+    }
+    order.details
+      ..clear()
+      ..addAll(dedupMap.values);
+
     await _dbService.insertInboundOrder(order);
     final existingIdx = _inboundOrders.indexWhere((o) => o.orderNo == order.orderNo || o.inboundOrderId == order.inboundOrderId);
     if (existingIdx >= 0) {
@@ -1311,7 +1444,7 @@ class WarehouseRepository extends ChangeNotifier {
         final prodRows = order.details.map((d) => {
           'product_id': d.productId,
           'sku': d.sku,
-          'product_name': d.productName,
+          'product_name': getSkuProductName(d.sku, d.productName),
           'unit': 'Cái',
           'category': 'Hàng nhập kho',
         }).toList();
@@ -1330,7 +1463,7 @@ class WarehouseRepository extends ChangeNotifier {
           'order_id': order.inboundOrderId,
           'product_id': d.productId,
           'sku': d.sku,
-          'product_name': d.productName,
+          'product_name': getSkuProductName(d.sku, d.productName),
           'required_qty': d.requiredQty,
           'received_qty': d.receivedQty,
         }).toList();
@@ -1787,13 +1920,50 @@ class WarehouseRepository extends ChangeNotifier {
   }
 
   Future<void> addOutboundOrder(OutboundOrder order) async {
+    final Map<String, OutboundOrderDetail> dedupMap = {};
+    for (final d in order.details) {
+      final key = d.sku.trim().toUpperCase().isNotEmpty ? d.sku.trim().toUpperCase() : d.productId;
+      final cleanName = getSkuProductName(d.sku, d.productName);
+      if (dedupMap.containsKey(key)) {
+        final cur = dedupMap[key]!;
+        dedupMap[key] = OutboundOrderDetail(
+          productId: cur.productId.isNotEmpty ? cur.productId : d.productId,
+          sku: cur.sku.isNotEmpty ? cur.sku : d.sku,
+          productName: cleanName.isNotEmpty ? cleanName : cur.productName,
+          requiredQty: cur.requiredQty > d.requiredQty ? cur.requiredQty : d.requiredQty,
+          pickedQty: cur.pickedQty > d.pickedQty ? cur.pickedQty : d.pickedQty,
+          epcList: {...?cur.epcList, ...?d.epcList}.toList(),
+        );
+      } else {
+        dedupMap[key] = OutboundOrderDetail(
+          productId: d.productId,
+          sku: d.sku,
+          productName: cleanName,
+          requiredQty: d.requiredQty,
+          pickedQty: d.pickedQty,
+          epcList: d.epcList,
+        );
+      }
+    }
+    order.details
+      ..clear()
+      ..addAll(dedupMap.values);
+
     await _dbService.insertOutboundOrder(order);
+    final cleanPo = order.poNo.trim().toUpperCase();
+    final cleanId = order.outboundOrderId.trim().toUpperCase();
     final existingIdx = _outboundOrders.indexWhere((o) =>
-        o.outboundOrderId == order.outboundOrderId || o.poNo == order.poNo);
+        (cleanId.isNotEmpty && o.outboundOrderId.trim().toUpperCase() == cleanId) ||
+        (cleanPo.isNotEmpty && o.poNo.trim().toUpperCase() == cleanPo));
     if (existingIdx >= 0) {
       _outboundOrders[existingIdx] = order;
     } else {
       _outboundOrders.add(order);
+    }
+    if (cleanPo.isNotEmpty) {
+      _outboundOrders.removeWhere((o) =>
+          o.outboundOrderId != order.outboundOrderId &&
+          o.poNo.trim().toUpperCase() == cleanPo);
     }
 
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -1809,7 +1979,7 @@ class WarehouseRepository extends ChangeNotifier {
           prodRows.add({
             'product_id': prodId,
             'sku': d.sku,
-            'product_name': d.productName,
+            'product_name': getSkuProductName(d.sku, d.productName),
             'unit': matchingProd?.unit ?? 'Cái',
             'category': matchingProd?.category ?? 'Hàng xuất kho',
           });
@@ -1838,7 +2008,7 @@ class WarehouseRepository extends ChangeNotifier {
             'order_id': order.outboundOrderId,
             'product_id': prodId,
             'sku': d.sku,
-            'product_name': d.productName,
+            'product_name': getSkuProductName(d.sku, d.productName),
             'required_qty': d.requiredQty,
             'picked_qty': d.pickedQty,
           };
@@ -1876,51 +2046,85 @@ class WarehouseRepository extends ChangeNotifier {
 
   Future<void> deleteOutboundOrder(String orderId) async {
     final cleanId = orderId.trim();
-    final targetOrder = _outboundOrders.where((o) => o.outboundOrderId == cleanId || o.poNo == cleanId).firstOrNull;
-    final poNo = targetOrder?.poNo ?? cleanId;
-    final orderIdVal = targetOrder?.outboundOrderId ?? cleanId;
+    final cleanUpper = cleanId.toUpperCase();
+    final isExplicitId = _outboundOrders.any((o) => o.outboundOrderId.trim().toUpperCase() == cleanUpper);
 
-    await _dbService.deleteOutboundOrder(orderIdVal);
-    await _dbService.deleteOutboundOrder(poNo);
+    final String resolvedOrderId;
+    final String resolvedPoNo;
 
-    _outboundOrders.removeWhere((o) =>
-        o.outboundOrderId == orderIdVal ||
-        o.poNo == poNo ||
-        o.outboundOrderId == cleanId ||
-        o.poNo == cleanId);
+    if (isExplicitId) {
+      final targetOrder = _outboundOrders.firstWhere((o) => o.outboundOrderId.trim().toUpperCase() == cleanUpper);
+      resolvedOrderId = targetOrder.outboundOrderId;
+      resolvedPoNo = targetOrder.poNo;
 
-    _transactions.removeWhere((t) =>
-        t.type == TransactionType.outbound &&
-        (t.documentNo.trim().toUpperCase() == poNo.trim().toUpperCase() ||
-         t.documentNo.trim().toUpperCase() == orderIdVal.trim().toUpperCase() ||
-         t.transactionId == cleanId));
+      await _dbService.deleteOutboundOrder(resolvedOrderId);
+      _outboundOrders.removeWhere((o) => o.outboundOrderId.trim().toUpperCase() == cleanUpper);
 
-    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      try {
-        final supa = Supabase.instance.client;
-        await supa.from('outbound_order_details').delete().eq('order_id', orderIdVal);
-        if (poNo != orderIdVal) {
-          await supa.from('outbound_order_details').delete().eq('order_id', poNo);
+      _transactions.removeWhere((t) =>
+          t.type == TransactionType.outbound &&
+          (t.documentNo.trim().toUpperCase() == resolvedOrderId.trim().toUpperCase() ||
+           t.transactionId.trim().toUpperCase() == resolvedOrderId.trim().toUpperCase()));
+
+      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+        try {
+          final supa = Supabase.instance.client;
+          await supa.from('outbound_order_details').delete().eq('order_id', resolvedOrderId);
+          await supa.from('outbound_orders').delete().eq('outbound_order_id', resolvedOrderId);
+          await supa.from('inventory_transactions').delete().eq('document_no', resolvedOrderId);
+        } catch (e) {
+          debugPrint('deleteOutboundOrder Supabase direct error: $e');
         }
-        await supa.from('outbound_orders').delete().eq('outbound_order_id', orderIdVal);
-        await supa.from('outbound_orders').delete().eq('po_no', poNo);
-        if (cleanId != poNo && cleanId != orderIdVal) {
-          await supa.from('outbound_orders').delete().eq('po_no', cleanId);
+      }
+    } else {
+      final targetOrder = _outboundOrders.where((o) => o.poNo.trim().toUpperCase() == cleanUpper).firstOrNull;
+      resolvedPoNo = targetOrder?.poNo ?? cleanId;
+      resolvedOrderId = targetOrder?.outboundOrderId ?? cleanId;
+
+      await _dbService.deleteOutboundOrder(resolvedOrderId);
+      await _dbService.deleteOutboundOrder(resolvedPoNo);
+
+      final poUpper = resolvedPoNo.trim().toUpperCase();
+      final idUpper = resolvedOrderId.trim().toUpperCase();
+      _outboundOrders.removeWhere((o) =>
+          o.outboundOrderId.trim().toUpperCase() == idUpper ||
+          o.poNo.trim().toUpperCase() == poUpper ||
+          o.outboundOrderId.trim().toUpperCase() == cleanUpper ||
+          o.poNo.trim().toUpperCase() == cleanUpper);
+
+      _transactions.removeWhere((t) =>
+          t.type == TransactionType.outbound &&
+          (t.documentNo.trim().toUpperCase() == poUpper ||
+           t.documentNo.trim().toUpperCase() == idUpper ||
+           t.documentNo.trim().toUpperCase() == cleanUpper ||
+           t.transactionId.trim().toUpperCase() == cleanUpper));
+
+      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+        try {
+          final supa = Supabase.instance.client;
+          await supa.from('outbound_order_details').delete().eq('order_id', resolvedOrderId);
+          if (resolvedPoNo != resolvedOrderId) {
+            await supa.from('outbound_order_details').delete().eq('order_id', resolvedPoNo);
+          }
+          await supa.from('outbound_orders').delete().eq('outbound_order_id', resolvedOrderId);
+          await supa.from('outbound_orders').delete().eq('po_no', resolvedPoNo);
+          if (cleanId != resolvedPoNo && cleanId != resolvedOrderId) {
+            await supa.from('outbound_orders').delete().eq('po_no', cleanId);
+          }
+          await supa.from('inventory_transactions').delete().eq('document_no', resolvedPoNo);
+          if (resolvedOrderId != resolvedPoNo) {
+            await supa.from('inventory_transactions').delete().eq('document_no', resolvedOrderId);
+          }
+        } catch (e) {
+          debugPrint('deleteOutboundOrder Supabase direct error: $e');
         }
-        await supa.from('inventory_transactions').delete().eq('document_no', poNo);
-        if (orderIdVal != poNo) {
-          await supa.from('inventory_transactions').delete().eq('document_no', orderIdVal);
-        }
-      } catch (e) {
-        debugPrint('deleteOutboundOrder Supabase direct error: $e');
       }
     }
 
     await _syncDirectOrQueue(
       tableName: 'outbound_orders',
-      recordId: orderIdVal,
+      recordId: resolvedOrderId,
       action: 'DELETE',
-      payload: {'outbound_order_id': orderIdVal, 'po_no': poNo},
+      payload: {'outbound_order_id': resolvedOrderId, 'po_no': resolvedPoNo},
     );
 
     notifyListeners();
@@ -2578,6 +2782,60 @@ class WarehouseRepository extends ChangeNotifier {
   List<WmsUser> get users => List.unmodifiable(_users);
   List<Customer> get customers => List.unmodifiable(_customers);
   List<DeliveryNote> get deliveryNotes => List.unmodifiable(_deliveryNotes);
+
+  /// Kiểm tra xem một đơn hàng nhập kho đã được xếp hoàn tất vào kệ lưu trữ hay chưa
+  bool isInboundOrderPutawayCompleted(InboundOrder order) {
+    if (order.status == InboundOrderStatus.completed) return true;
+    final ordNo = order.orderNo.trim().toUpperCase();
+    final ordId = order.inboundOrderId.trim().toUpperCase();
+
+    // Tìm tất cả các items thuộc đơn hàng này trong kho
+    final orderItems = _items.where((it) {
+      final itemOrd = (it.orderNo ?? '').trim().toUpperCase();
+      return itemOrd == ordNo ||
+          itemOrd == 'INB-$ordNo' ||
+          'INB-$itemOrd' == ordNo ||
+          (ordId.isNotEmpty && itemOrd == ordId);
+    }).toList();
+
+    if (orderItems.isEmpty) {
+      return false;
+    }
+
+    // Đơn hàng hoàn tất khi tất cả sản phẩm đều đã được cất lên kệ hợp lệ
+    final allPutaway = orderItems.every((it) =>
+        it.status == ItemStatus.inStock &&
+        it.locationId != null &&
+        it.locationId!.trim().isNotEmpty &&
+        it.locationId != 'LOC-GATE-IN' &&
+        it.locationId != 'CỔNG GATE (IN)');
+
+    return allPutaway;
+  }
+
+  /// Tự động quét và hoàn tất trạng thái các đơn nhập kho mà toàn bộ mặt hàng đã xếp vào kệ
+  Future<void> autoResolveCompletedInboundOrders() async {
+    final now = DateTime.now();
+    for (final ord in _inboundOrders) {
+      if (ord.status != InboundOrderStatus.completed && isInboundOrderPutawayCompleted(ord)) {
+        ord.status = InboundOrderStatus.completed;
+        for (var d in ord.details) {
+          d.receivedQty = d.requiredQty;
+        }
+        await _dbService.updateInboundOrderStatus(ord.inboundOrderId, InboundOrderStatus.completed);
+        await _syncDirectOrQueue(
+          tableName: 'inbound_orders',
+          recordId: ord.inboundOrderId,
+          action: 'UPDATE',
+          payload: {
+            'inbound_order_id': ord.inboundOrderId,
+            'status': InboundOrderStatus.completed.code,
+            'updated_at': now.toIso8601String(),
+          },
+        );
+      }
+    }
+  }
 
   /// Ghi nhận nhật ký vòng đời thẻ RFID (Tag Lifecycle Log / Audit Trail)
   Future<TagLifecycleLog> recordTagLifecycle({
@@ -3764,6 +4022,31 @@ class WarehouseRepository extends ChangeNotifier {
     return DateTime.now();
   }
 
+  /// Lấy tên sản phẩm chuẩn theo mã SKU (Ưu tiên danh mục sản phẩm chính thức -> Làm sạch số thứ tự cá thể ở đuôi)
+  String getSkuProductName(String sku, [String? fallbackName]) {
+    final cleanSku = sku.trim();
+    if (cleanSku.isNotEmpty) {
+      _ensureIndexes();
+      final prod = _products.where((p) => p.sku.trim().toLowerCase() == cleanSku.toLowerCase()).firstOrNull;
+      if (prod != null && prod.productName.trim().isNotEmpty) {
+        final catalogName = prod.productName.trim();
+        // Nếu tên danh mục không bị gắn số thứ tự cá thể ở đuôi (ví dụ "Chứng từ 14"), trả về ngay
+        if (!RegExp(r'\s+[-#]?\s*\d+$').hasMatch(catalogName)) {
+          return catalogName;
+        }
+      }
+    }
+
+    // Nếu có fallbackName (ví dụ lấy từ item đầu tiên như "Chứng từ 14")
+    final raw = (fallbackName != null && fallbackName.trim().isNotEmpty)
+        ? fallbackName.trim()
+        : cleanSku;
+
+    // Loại bỏ hậu tố số thứ tự cá thể của chip (ví dụ "Chứng từ 14" -> "Chứng từ", "Hồ sơ #01" -> "Hồ sơ")
+    final cleaned = raw.replaceFirst(RegExp(r'(\s+[-#]?\s*\d+)$'), '').trim();
+    return cleaned.isNotEmpty ? cleaned : raw;
+  }
+
   /// Lấy thông tin Nhà cung cấp của một Item (Ưu tiên thuộc tính trên Item -> Tra cứu Đơn PO)
   String getItemSupplier(Item item) {
     if (item.supplier != null && item.supplier!.trim().isNotEmpty && item.supplier!.trim() != 'Chưa khai báo') {
@@ -4362,6 +4645,37 @@ class WarehouseRepository extends ChangeNotifier {
     if (loc != null) {
       loc.currentPallets = _pallets.where((p) => p.locationId == loc.locationId || p.locationId == loc.locationCode).length;
       await _dbService.insertLocation(loc);
+    }
+
+    // Tự động kiểm tra và hoàn thành đơn nhập kho nếu tất cả mặt hàng đã cất vào kệ
+    final affectedOrderNos = matchedItems
+        .map((i) => (i.orderNo ?? '').trim().toUpperCase())
+        .where((s) => s.isNotEmpty)
+        .toSet();
+    for (final oNo in affectedOrderNos) {
+      final ord = _inboundOrders.where((o) =>
+        o.orderNo.trim().toUpperCase() == oNo ||
+        o.inboundOrderId.trim().toUpperCase() == oNo
+      ).firstOrNull;
+      if (ord != null && ord.status != InboundOrderStatus.completed) {
+        if (isInboundOrderPutawayCompleted(ord)) {
+          ord.status = InboundOrderStatus.completed;
+          for (var d in ord.details) {
+            d.receivedQty = d.requiredQty;
+          }
+          await _dbService.updateInboundOrderStatus(ord.inboundOrderId, InboundOrderStatus.completed, locationId: locationId);
+          await _syncDirectOrQueue(
+            tableName: 'inbound_orders',
+            recordId: ord.inboundOrderId,
+            action: 'UPDATE',
+            payload: {
+              'inbound_order_id': ord.inboundOrderId,
+              'status': InboundOrderStatus.completed.code,
+              'updated_at': DateTime.now().toIso8601String(),
+            },
+          );
+        }
+      }
     }
 
     notifyListeners();
@@ -5095,8 +5409,7 @@ class WarehouseRepository extends ChangeNotifier {
         o.inboundOrderId.trim().toUpperCase() == oNo.trim().toUpperCase()
       ).firstOrNull;
       if (ord != null) {
-        final orderItems = _items.where((i) => i.orderNo == ord.orderNo).toList();
-        if (orderItems.isNotEmpty && orderItems.every((i) => i.status == ItemStatus.inStock)) {
+        if (isInboundOrderPutawayCompleted(ord)) {
           ord.status = InboundOrderStatus.completed;
           for (var d in ord.details) {
             d.receivedQty = d.requiredQty;
@@ -5465,15 +5778,8 @@ class WarehouseRepository extends ChangeNotifier {
     final List<String> unexpectedEpcs = [];
     final List<String> unstockedEpcs = [];
 
-    // Kiểm tra xem đơn có gán danh sách EPC cụ thể không (đơn xuất lẻ)
-    final Set<String> explicitExpectedEpcs = {};
-    for (var d in order.details) {
-      if (d.epcList != null && d.epcList!.isNotEmpty) {
-        explicitExpectedEpcs.addAll(d.epcList!.map((e) => e.toUpperCase()));
-      }
-    }
-
     final allowedSkus = order.details.map((d) => d.sku.toUpperCase()).toSet();
+    final allowedProdIds = order.details.map((d) => d.productId.toUpperCase()).toSet();
 
     final List<SkuVerificationBreakdown> breakdowns = [];
     bool allMatched = true;
@@ -5483,24 +5789,31 @@ class WarehouseRepository extends ChangeNotifier {
 
       if (item == null) {
         unexpectedEpcs.add(epc);
-      } else if (explicitExpectedEpcs.isNotEmpty && !explicitExpectedEpcs.contains(epc.toUpperCase())) {
-        // Sai mã EPC lẻ
-        unexpectedEpcs.add(epc);
-      } else if (explicitExpectedEpcs.isEmpty && !allowedSkus.contains(item.sku.toUpperCase()) && !allowedSkus.contains(item.productId.toUpperCase()) && !(item.palletId != null && allowedSkus.contains(item.palletId!.toUpperCase()))) {
-        // Sai SKU/Thùng
+      } else if (!allowedSkus.contains(item.sku.toUpperCase()) &&
+                 !allowedProdIds.contains(item.productId.toUpperCase()) &&
+                 !(item.palletId != null && allowedSkus.contains(item.palletId!.toUpperCase()))) {
+        // Chip không thuộc mã hàng/SKU nào trong đơn xuất
         unexpectedEpcs.add(epc);
       } else if (!isItemStockedInLocation(item)) {
         unstockedEpcs.add(epc);
         allMatched = false;
       } else {
-        final matchedSku = order.details.where((d) =>
+        final matchedDetail = order.details.where((d) =>
           d.sku.toUpperCase() == item.sku.toUpperCase() ||
+          d.productId.toUpperCase() == item.productId.toUpperCase() ||
           d.sku.toUpperCase() == item.productId.toUpperCase() ||
-          (item.palletId != null && d.sku.toUpperCase() == item.palletId!.toUpperCase()) ||
-          (d.epcList != null && d.epcList!.map((e) => e.toUpperCase()).contains(epc.toUpperCase()))
-        ).firstOrNull?.sku ?? item.sku;
+          (item.palletId != null && d.sku.toUpperCase() == item.palletId!.toUpperCase())
+        ).firstOrNull;
 
-        actualSkuCounts[matchedSku] = (actualSkuCounts[matchedSku] ?? 0) + 1;
+        final matchedSku = matchedDetail?.sku ?? item.sku;
+        final currentCount = actualSkuCounts[matchedSku] ?? 0;
+        final maxRequired = matchedDetail?.requiredQty ?? 0;
+        actualSkuCounts[matchedSku] = currentCount + 1;
+
+        if (currentCount >= maxRequired) {
+          // Vượt quá số lượng yêu cầu của SKU này, chip quét thêm tính là thẻ thừa
+          unexpectedEpcs.add(epc);
+        }
       }
     }
 
@@ -5792,6 +6105,31 @@ class WarehouseRepository extends ChangeNotifier {
   }
 
 
+  /// Kiểm tra xem mã EPC hoặc Serial Number (SN) này đã từng được xuất kho (đã xuất đi rồi) hay chưa.
+  Item? findShippedItem({String? epc, String? serialNumber}) {
+    final cleanEpc = epc?.trim().toUpperCase();
+    final cleanSn = serialNumber?.trim().toUpperCase();
+    final hasEpc = cleanEpc != null && cleanEpc.isNotEmpty && cleanEpc != '--';
+    final hasSn = cleanSn != null && cleanSn.isNotEmpty && cleanSn != '--';
+    if (!hasEpc && !hasSn) return null;
+
+    for (final it in _items) {
+      if (it.status != ItemStatus.out) continue;
+      if (hasEpc && it.epc.trim().toUpperCase() == cleanEpc) {
+        return it;
+      }
+      if (hasSn && it.serialNumber.trim().toUpperCase() == cleanSn) {
+        return it;
+      }
+    }
+    return null;
+  }
+
+  /// Trả về true nếu mã EPC hoặc Serial Number (SN) này đã được xuất kho trước đó.
+  bool isEpcOrSnAlreadyShipped({String? epc, String? serialNumber}) {
+    return findShippedItem(epc: epc, serialNumber: serialNumber) != null;
+  }
+
   /// Đối soát danh sách hàng cần xuất kho với tồn kho thực tế và vị trí kệ FIFO:
   /// - Kiểm tra số lượng tồn kho theo từng SKU (`status == ItemStatus.inStock`).
   /// - Nếu hàng có sẵn trong kho: sắp xếp theo FIFO (`inboundTime` tăng dần - hàng nhập trước ưu tiên xuất trước).
@@ -6034,9 +6372,14 @@ class WarehouseRepository extends ChangeNotifier {
           fifoPriority: fifoPriority,
           fifoWarning: fifoWarning,
           matchedItemId: matchedItem.itemId,
+          serialNumber: matchedItem.serialNumber,
         ));
       } else {
-        // Hết hàng tồn kho cho món này
+        // Hết hàng tồn kho hoặc đã xuất trước đó cho món này
+        final reqSn = (req['serialNumber'] ?? req['sn'])?.toString().trim();
+        final shipped = findShippedItem(epc: reqEpc, serialNumber: reqSn);
+        final isShipped = shipped != null;
+
         validatedList.add(OutboundValidatedItem(
           sku: sku,
           productId: (req['productId'] ?? sku).toString().trim(),
@@ -6047,11 +6390,15 @@ class WarehouseRepository extends ChangeNotifier {
           customer: customer,
           palletEpc: palletEpc,
           epc: reqEpc.isNotEmpty ? reqEpc : '--',
+          serialNumber: (reqSn != null && reqSn.isNotEmpty) ? reqSn : (shipped?.serialNumber ?? '--'),
           isInStock: false,
+          isAlreadyShipped: isShipped,
           locationCode: '--',
           inboundTime: null,
           fifoPriority: 999,
-          fifoWarning: 'Không đủ hàng tồn trong kho để xuất!',
+          fifoWarning: isShipped
+              ? '🚨 LỖI TRÙNG EPC/SN: Hàng hóa [${shipped.productName}] (SN: ${shipped.serialNumber.isNotEmpty ? shipped.serialNumber : "--"}, EPC: ${shipped.epc}) ĐÃ ĐƯỢC XUẤT KHO TRƯỚC ĐÓ!'
+              : 'Không đủ hàng tồn trong kho để xuất!',
           matchedItemId: null,
         ));
       }
@@ -6080,19 +6427,22 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     final bool isStockSufficient = (shortageCount == 0);
+    final bool hasShippedConflict = validatedList.any((v) => v.isAlreadyShipped);
 
     return OutboundInventoryValidationResult(
-      isStockSufficient: isStockSufficient,
+      isStockSufficient: isStockSufficient && !hasShippedConflict,
       totalRequested: requestedItems.length,
       totalInStock: availableStockItems.length,
       shortageCount: shortageCount,
       shortageBySku: shortageBySku,
       items: validatedList,
+      hasShippedConflict: hasShippedConflict,
     );
   }
 
   /// Xác nhận xuất kho đối soát qua cổng RFID Gate (Hàng + Pallet)
   Future<int> confirmGateOutbound({
+    String? orderId,
     required String poNo,
     required String customer,
     required List<String> scannedEpcs,
@@ -6205,13 +6555,12 @@ class WarehouseRepository extends ChangeNotifier {
     }
 
     final outboundId = 'OUT-${now.millisecondsSinceEpoch}';
-    final existingOrder = _outboundOrders.where((o) => o.poNo == poNo).firstOrNull;
 
     // Phân rã danh sách chi tiết hàng hóa xuất kho thực tế theo SKU từ các chip đã quét
     final Map<String, OutboundOrderDetail> detailsBySku = {};
     for (var it in affectedItems) {
       final sku = it.sku.isNotEmpty ? it.sku : 'MULTI';
-      final pName = it.productName.isNotEmpty ? it.productName : 'Sản phẩm xuất kho';
+      final pName = getSkuProductName(sku, it.productName.isNotEmpty ? it.productName : 'Sản phẩm xuất kho');
       final pId = it.productId.isNotEmpty ? it.productId : sku;
       if (!detailsBySku.containsKey(sku)) {
         detailsBySku[sku] = OutboundOrderDetail(
@@ -6246,6 +6595,14 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
     final orderDetails = detailsBySku.values.toList();
+
+    final cleanOrderUpper = (orderId ?? '').trim().toUpperCase();
+    final cleanPoUpper = poNo.trim().toUpperCase();
+    var existingOrder = _outboundOrders.where((o) =>
+        (cleanOrderUpper.isNotEmpty && o.outboundOrderId.trim().toUpperCase() == cleanOrderUpper) ||
+        (cleanPoUpper.isNotEmpty &&
+         (o.poNo.trim().toUpperCase() == cleanPoUpper ||
+          o.outboundOrderId.trim().toUpperCase() == cleanPoUpper))).firstOrNull;
 
     late final OutboundOrder targetOrder;
     if (existingOrder != null) {
@@ -6298,10 +6655,29 @@ class WarehouseRepository extends ChangeNotifier {
       );
     }
 
+    // Dọn dẹp các đơn nháp cùng mã đơn hoặc cùng orderId để không bị tồn tại 2 đơn
+    final cleanTargetPo = targetOrder.poNo.trim().toUpperCase();
+    final cleanTargetId = targetOrder.outboundOrderId.trim().toUpperCase();
+    final redundantDrafts = _outboundOrders.where((o) {
+      if (o.outboundOrderId == targetOrder.outboundOrderId) return false;
+      if (o.status != OutboundOrderStatus.newOrder) return false;
+      final samePo = cleanTargetPo.isNotEmpty && o.poNo.trim().toUpperCase() == cleanTargetPo;
+      final sameId = cleanTargetId.isNotEmpty && o.outboundOrderId.trim().toUpperCase() == cleanTargetId;
+      return samePo || sameId;
+    }).toList();
+    for (final dup in redundantDrafts) {
+      _outboundOrders.removeWhere((o) => o.outboundOrderId == dup.outboundOrderId);
+      await _dbService.deleteOutboundOrder(dup.outboundOrderId);
+    }
+
     // Ghi nhận trực tiếp chi tiết đơn xuất kho vào Supabase nếu kết nối trực tuyến
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       try {
         final supa = Supabase.instance.client;
+        for (final dup in redundantDrafts) {
+          await supa.from('outbound_order_details').delete().eq('order_id', dup.outboundOrderId);
+          await supa.from('outbound_orders').delete().eq('outbound_order_id', dup.outboundOrderId);
+        }
         await supa.from('outbound_orders').upsert({
           'outbound_order_id': targetOrder.outboundOrderId,
           'po_no': targetOrder.poNo,
@@ -6320,7 +6696,7 @@ class WarehouseRepository extends ChangeNotifier {
               'order_id': targetOrder.outboundOrderId,
               'product_id': pid,
               'sku': d.sku,
-              'product_name': d.productName,
+              'product_name': getSkuProductName(d.sku, d.productName),
               'required_qty': d.requiredQty,
               'picked_qty': d.pickedQty,
             });
@@ -6531,6 +6907,22 @@ class WarehouseRepository extends ChangeNotifier {
             readAt: DateTime.now(),
           ),
         );
+      } else if (item.status == ItemStatus.out) {
+        // Hàng hóa này đã làm thủ tục xuất kho trước đó nhưng vẫn quét thấy chip trong kho
+        if (session.isSkuSpecific && !session.targetSkus.contains(item.sku)) {
+          continue;
+        }
+        session.results.add(
+          InventoryItemResult(
+            epc: item.epc,
+            sku: item.sku,
+            productName: item.productName,
+            expectedLocation: 'ĐÃ XUẤT KHO',
+            actualLocation: currentAuditLocDisplay,
+            resultType: InventoryVarianceType.unknownEpc,
+            readAt: DateTime.now(),
+          ),
+        );
       } else if (session.isSkuSpecific) {
         // Đơn kiểm kê theo từng mặt hàng cụ thể (SKU):
         // Chỉ cần biết là có đủ hay không (số lượng quét vs tồn CSDL).
@@ -6731,7 +7123,15 @@ class WarehouseRepository extends ChangeNotifier {
     for (final r in session.results) {
       TagLifecycleAction act = TagLifecycleAction.auditMatch;
       String note = 'Kiểm kê kho khớp chuẩn tại ${r.actualLocation ?? session.zone}';
-      if (r.resultType == InventoryVarianceType.wrongLocation) {
+      String prevStatus = ItemStatus.inStock.label;
+      String newStatus = ItemStatus.inStock.label;
+
+      if (r.expectedLocation == 'ĐÃ XUẤT KHO') {
+        act = TagLifecycleAction.unauthorizedExit;
+        prevStatus = ItemStatus.out.label;
+        newStatus = ItemStatus.out.label;
+        note = '🚨 CẢNH BÁO KIỂM KÊ: Phát hiện chip của hàng đã xuất kho trước đó tồn tại ở ${r.actualLocation}';
+      } else if (r.resultType == InventoryVarianceType.wrongLocation) {
         act = TagLifecycleAction.auditMisplaced;
         note = 'Kiểm kê sai vị trí: Sổ sách ở ${r.expectedLocation}, quét tại ${r.actualLocation}';
       } else if (r.resultType == InventoryVarianceType.missing) {
@@ -6747,8 +7147,8 @@ class WarehouseRepository extends ChangeNotifier {
         sku: r.sku,
         productName: r.productName,
         action: act,
-        previousStatus: ItemStatus.inStock.label,
-        newStatus: ItemStatus.inStock.label,
+        previousStatus: prevStatus,
+        newStatus: newStatus,
         fromLocation: r.expectedLocation,
         toLocation: r.actualLocation,
         documentNo: session.sessionCode,
@@ -6816,38 +7216,45 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // Nếu chọn ALL: Hợp nhất toàn bộ các đợt kiểm kê đã chốt hoặc tất cả các đợt
+    // Nếu chọn ALL: Hợp nhất toàn bộ các đợt kiểm kê đã chốt hoặc đã có kết quả quét thực tế
     if (sessionId == 'ALL' && _inventorySessions.isNotEmpty) {
       final completed = _inventorySessions.where((s) => s.isCompleted).toList();
-      final targetSessions = completed.isNotEmpty ? completed : _inventorySessions;
-      final Map<String, InventoryItemResult> mergedResults = {};
-      for (final s in targetSessions) {
-        if (s.results.isEmpty) {
-          _populateSessionResultsIfEmpty(s);
+      final targetSessions = completed.isNotEmpty
+          ? completed
+          : _inventorySessions.where((s) => s.actualScannedCount > 0).toList();
+      if (targetSessions.isNotEmpty) {
+        final Map<String, InventoryItemResult> mergedResults = {};
+        for (final s in targetSessions) {
+          if (s.results.isEmpty) {
+            _populateSessionResultsIfEmpty(s);
+          }
+          for (final r in s.results) {
+            mergedResults[r.epc.toUpperCase()] = r;
+          }
         }
-        for (final r in s.results) {
-          mergedResults[r.epc.toUpperCase()] = r;
-        }
+        final virtualSession = InventorySession(
+          sessionId: 'ALL_COMBINED',
+          sessionCode: 'TOÀN_KHO',
+          zone: zone ?? 'Toàn bộ kho',
+          startedAt: targetSessions.last.startedAt,
+          completedAt: targetSessions.first.completedAt,
+          isCompleted: true,
+          results: mergedResults.values.toList(),
+        );
+        return buildSessionSkuBreakdown(virtualSession, zoneFilter: zone);
       }
-      final virtualSession = InventorySession(
-        sessionId: 'ALL_COMBINED',
-        sessionCode: 'TOÀN_KHO',
-        zone: zone ?? 'Toàn bộ kho',
-        startedAt: targetSessions.last.startedAt,
-        completedAt: targetSessions.first.completedAt,
-        isCompleted: true,
-        results: mergedResults.values.toList(),
-      );
-      return buildSessionSkuBreakdown(virtualSession, zoneFilter: zone);
     }
 
-    // Nếu không chọn session cụ thể hoặc phiên không tìm thấy: Lấy phiên kiểm kê mới nhất đã hoàn thành, hoặc phiên mới nhất
-    if (_inventorySessions.isNotEmpty) {
-      final latestSession = _inventorySessions.where((s) => s.isCompleted).firstOrNull ?? _inventorySessions.first;
+    // Nếu không chọn session cụ thể hoặc phiên không tìm thấy: Lấy phiên kiểm kê mới nhất đã hoàn thành hoặc đã quét
+    if (_inventorySessions.isNotEmpty && sessionId != 'ALL') {
+      final latestSession = _inventorySessions.where((s) => s.isCompleted).firstOrNull ??
+          _inventorySessions.where((s) => s.actualScannedCount > 0).firstOrNull ??
+          _inventorySessions.first;
       return buildSessionSkuBreakdown(latestSession, zoneFilter: zone);
     }
 
-    // Nếu chưa có phiên kiểm kê nào trong CSDL: Thống kê từ các mặt hàng IN_STOCK hiện tại
+    // Nếu chưa có phiên kiểm kê nào trong CSDL (hoặc chưa có phiên nào được quét):
+    // Chỉ hiển thị Tồn Kho Dự Kiến (Sổ sách) — KHÔNG tính lệch thiếu khi chưa kiểm kê!
     final Map<String, List<Item>> itemsBySku = {};
     for (final it in _items) {
       if (it.status != ItemStatus.inStock) continue;
@@ -6876,9 +7283,10 @@ class WarehouseRepository extends ChangeNotifier {
         expectedQty: itList.length,
         actualQty: 0,
         matchedCount: 0,
-        missingCount: itList.length,
+        missingCount: 0,
         wrongLocationCount: 0,
         unknownCount: 0,
+        isAudited: false,
         itemResults: itList.map((it) => InventoryItemResult(
           epc: it.epc,
           sku: it.sku,
@@ -6898,6 +7306,7 @@ class WarehouseRepository extends ChangeNotifier {
     if (session.results.isEmpty) {
       _populateSessionResultsIfEmpty(session);
     }
+    final isSessionAudited = session.isCompleted || session.actualScannedCount > 0;
     final Map<String, List<InventoryItemResult>> map = {};
     for (final r in session.results) {
       // Nếu là kiểm kê theo mặt hàng cụ thể (SKU): chỉ quan tâm đến các SKU mục tiêu, bỏ qua chip khác
@@ -6947,7 +7356,9 @@ class WarehouseRepository extends ChangeNotifier {
           actual++;
           wrongLoc++;
         } else if (r.resultType == InventoryVarianceType.missing) {
-          missing++;
+          if (isSessionAudited) {
+            missing++;
+          }
         } else if (r.resultType == InventoryVarianceType.unknownEpc) {
           actual++;
           unknown++;
@@ -6965,6 +7376,7 @@ class WarehouseRepository extends ChangeNotifier {
         missingCount: missing,
         wrongLocationCount: wrongLoc,
         unknownCount: unknown,
+        isAudited: isSessionAudited,
         itemResults: list,
       ));
     }

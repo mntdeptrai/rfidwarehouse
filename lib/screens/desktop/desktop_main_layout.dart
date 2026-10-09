@@ -22,6 +22,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   int _selectedMenuIndex = 0;
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
   final AuthService _auth = AuthService();
+  final DesktopUhfTcpService _tcpService = DesktopUhfTcpService();
 
   List<Widget> _buildViews() => [
     DesktopGoodsReceiveView(key: const ValueKey('desktop_goods_receive'), isActive: _selectedMenuIndex == 0), // 0: Goods Receive
@@ -38,6 +39,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     super.initState();
     _eyeCare.addListener(_onThemeUpdate);
     _auth.addListener(_onThemeUpdate);
+    _tcpService.addListener(_onThemeUpdate);
   }
 
   void _onThemeUpdate() {
@@ -48,6 +50,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   void dispose() {
     _eyeCare.removeListener(_onThemeUpdate);
     _auth.removeListener(_onThemeUpdate);
+    _tcpService.removeListener(_onThemeUpdate);
     super.dispose();
   }
 
@@ -75,6 +78,146 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     if (confirm == true) {
       await _auth.logout();
     }
+  }
+
+  Widget _buildGlobalHardwareStatusHeader(EyeCareColors c) {
+    final isConnected = _tcpService.isConnected;
+    final isConnecting = _tcpService.isConnecting;
+    final isScanning = _tcpService.isScanning;
+    final cfg = _tcpService.config;
+    final activeAnts = _tcpService.activeAntennas.toList()..sort();
+    final statusColor = isScanning
+        ? c.rfidCyan
+        : (isConnected
+            ? const Color(0xFF10B981)
+            : (isConnecting ? const Color(0xFFF59E0B) : c.textMuted));
+
+    return Container(
+      key: const Key('desktop_global_hardware_header'),
+      height: 36,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        border: Border(bottom: BorderSide(color: c.border, width: 1)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            // Reader Connection Pill
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isScanning
+                        ? 'UHF GATE: ACTIVE SCAN'
+                        : (isConnected
+                            ? 'UHF GATE: ONLINE'
+                            : (isConnecting ? 'UHF GATE: CONNECTING' : 'UHF GATE: STANDBY')),
+                    style: AppTypography.monospaceTabular(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Endpoint Summary
+            Icon(Icons.settings_ethernet_rounded, size: 13, color: c.textSecondary),
+            const SizedBox(width: 4),
+            Text(
+              cfg.connectionSummary,
+              style: AppTypography.monospaceTabular(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: c.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // RF Power Readout
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: c.bgDeep,
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: c.border),
+              ),
+              child: Text(
+                'RF ${cfg.rfPower} dBm',
+                style: AppTypography.monospaceTabular(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: c.rfidCyan,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Active Antennas 1..4
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (int ant = 1; ant <= 4; ant++) ...[
+                  Container(
+                    margin: const EdgeInsets.only(right: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: activeAnts.contains(ant)
+                          ? const Color(0xFF10B981).withValues(alpha: 0.16)
+                          : c.bgDeep,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: activeAnts.contains(ant)
+                            ? const Color(0xFF10B981).withValues(alpha: 0.5)
+                            : c.border,
+                      ),
+                    ),
+                    child: Text(
+                      'A$ant',
+                      style: AppTypography.monospaceTabular(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        color: activeAnts.contains(ant)
+                            ? const Color(0xFF10B981)
+                            : c.textMuted,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(width: 10),
+            // Live Telemetry Rate & Unique Tags
+            Text(
+              '${_tcpService.readRate.toStringAsFixed(0)} tag/s • ${_tcpService.uniqueCount} EPC',
+              style: AppTypography.monospaceTabular(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: isScanning ? c.rfidCyan : c.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -105,11 +248,18 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
               // Sidebar: Tự động co giãn thanh điều hướng theo kích thước cửa sổ
               _buildSidebar(c, isCompact: isCompactSidebar),
 
-              // Main View Content: Tự động co giãn toàn bộ diện tích còn lại, sát trên cùng
+              // Main View Content: Kèm thanh trạng thái phần cứng UHF toàn cục phía trên
               Expanded(
-                child: IndexedStack(
-                  index: effectiveIndex,
-                  children: _buildViews(),
+                child: Column(
+                  children: [
+                    _buildGlobalHardwareStatusHeader(c),
+                    Expanded(
+                      child: IndexedStack(
+                        index: effectiveIndex,
+                        children: _buildViews(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -179,15 +329,17 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              'RFIDwarehouse',
-                              style: TextStyle(
-                                color: c.textPrimary,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                letterSpacing: 0.5,
+                            Flexible(
+                              child: Text(
+                                'RFIDwarehouse',
+                                style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                  letterSpacing: 0.5,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(width: 6),
                             Container(
@@ -199,17 +351,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'UHF WMS Intelligent Suite',
-                          style: TextStyle(
-                            color: c.textMuted,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.3,
-                          ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -229,9 +370,9 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     child: Text(
                       'QUẢN LÝ KHO',
                       style: TextStyle(
-                        color: c.textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                        color: c.textSecondary,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
                       ),
                     ),
@@ -269,9 +410,9 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       child: Text(
                         'HỆ THỐNG & ĐẦU ĐỌC',
                         style: TextStyle(
-                          color: c.textMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
+                          color: c.textSecondary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 1.2,
                         ),
                       ),
@@ -293,9 +434,9 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                       child: Text(
                         'QUẢN TRỊ HỆ THỐNG',
                         style: TextStyle(
-                          color: c.textMuted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
+                          color: c.textSecondary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 1.2,
                         ),
                       ),
@@ -566,7 +707,7 @@ class _SidebarItemState extends State<_SidebarItem> {
                   isLocked ? Icons.lock_outline_rounded : widget.icon,
                   color: isSelected
                       ? c.rfidCyan
-                      : (isLocked ? c.textMuted : (_isHovered ? c.textPrimary : c.textSecondary)),
+                      : (isLocked ? c.textMuted : c.textPrimary),
                   size: 19,
                 ),
                 const SizedBox(width: 10),
@@ -576,9 +717,9 @@ class _SidebarItemState extends State<_SidebarItem> {
                     style: TextStyle(
                       color: isSelected
                           ? c.rfidCyan
-                          : (isLocked ? c.textMuted : (_isHovered ? c.textPrimary : c.textSecondary)),
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 13,
+                          : (isLocked ? c.textMuted : c.textPrimary),
+                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                      fontSize: 13.5,
                       letterSpacing: 0.2,
                     ),
                     overflow: TextOverflow.ellipsis,

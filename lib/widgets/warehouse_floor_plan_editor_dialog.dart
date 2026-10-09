@@ -191,9 +191,9 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
                         actions: [
                           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('HỦY')),
                           ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppColors.rfidMatched, foregroundColor: AppColors.slate950),
                             onPressed: () => Navigator.of(ctx).pop(true),
-                            child: const Text('XÁC NHẬN'),
+                            child: const Text('XÁC NHẬN', style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
@@ -219,15 +219,15 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.rfidMatched,
+                        foregroundColor: AppColors.slate950,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       icon: _isSaving
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.save, size: 18),
-                      label: const Text('LƯU SƠ ĐỒ KHO', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.slate950))
+                          : const Icon(Icons.save, size: 18, color: AppColors.slate950),
+                      label: const Text('LƯU SƠ ĐỒ KHO', style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold)),
                       onPressed: _isSaving ? null : _saveConfig,
                     ),
                   ],
@@ -315,7 +315,7 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
                 color: isSelected ? const Color(0xFF10B981) : c.bgDeep,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: isSelected ? Colors.white : c.textSecondary, size: 26),
+              child: Icon(icon, color: isSelected ? AppColors.slate950 : c.textSecondary, size: 26),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -500,13 +500,13 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.rfidMatched,
+                foregroundColor: AppColors.slate950,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('THÊM KỆ MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+              icon: const Icon(Icons.add, size: 16, color: AppColors.slate950),
+              label: const Text('THÊM KỆ MỚI', style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold, fontSize: 11.5)),
               onPressed: () => _showAddOrEditRackDialog(null),
             ),
           ],
@@ -606,9 +606,9 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
                   actions: [
                     TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('HỦY')),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.rfidErrorDark, foregroundColor: Colors.white),
                       onPressed: () => Navigator.of(ctx).pop(true),
-                      child: const Text('XÓA'),
+                      child: const Text('XÓA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -765,7 +765,7 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
               child: Text('HỦY', style: TextStyle(color: c.textSecondary)),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.rfidMatched, foregroundColor: AppColors.slate950),
               onPressed: () async {
                 final code = codeCtrl.text.trim().toUpperCase();
                 final shelf = shelfCtrl.text.trim();
@@ -806,7 +806,7 @@ class _WarehouseFloorPlanEditorDialogState extends State<WarehouseFloorPlanEdito
                 if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                 setState(() {});
               },
-              child: Text(isEdit ? 'CẬP NHẬT' : 'THÊM KỆ', style: const TextStyle(fontWeight: FontWeight.bold)),
+              child: Text(isEdit ? 'CẬP NHẬT' : 'THÊM KỆ', style: const TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold)),
             ),
           ],
         ),

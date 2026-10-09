@@ -1,0 +1,1106 @@
+{
+  ".agents/mcp_config.json": {
+    "mtime": 1789369419.7223544,
+    "seen": 1791510760.7671697,
+    "ast_hash": "b53b138293d3f11d75494cff77ee1a5d",
+    "semantic_hash": "b53b138293d3f11d75494cff77ee1a5d"
+  },
+  "android/app/build.gradle.kts": {
+    "mtime": 1787542487.0117364,
+    "seen": 1791510760.7671697,
+    "ast_hash": "535925a48a7e980780bba9f5768ce34e",
+    "semantic_hash": "535925a48a7e980780bba9f5768ce34e"
+  },
+  "android/app/src/main/kotlin/com/example/uhf/MainActivity.kt": {
+    "mtime": 1791334805.809614,
+    "seen": 1791510760.7671697,
+    "ast_hash": "bd5b173b9cce869f9f9a2291d359b9ad",
+    "semantic_hash": "bd5b173b9cce869f9f9a2291d359b9ad"
+  },
+  "android/build.gradle.kts": {
+    "mtime": 1787123038.1349308,
+    "seen": 1791510760.7671697,
+    "ast_hash": "803fe22651fbe96ed401eb0b66a492d1",
+    "semantic_hash": "803fe22651fbe96ed401eb0b66a492d1"
+  },
+  "android/settings.gradle.kts": {
+    "mtime": 1787123038.1975741,
+    "seen": 1791510760.7671697,
+    "ast_hash": "087a01c04d081ae02a8e5db89f4bf3f3",
+    "semantic_hash": "087a01c04d081ae02a8e5db89f4bf3f3"
+  },
+  "create_foreign_keys.sql": {
+    "mtime": 1791304471.0676458,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3b4fd4049777a268aef04c03d0efec64",
+    "semantic_hash": "3b4fd4049777a268aef04c03d0efec64"
+  },
+  "create_tag_lifecycle_logs.sql": {
+    "mtime": 1791346209.2231483,
+    "seen": 1791510760.7671697,
+    "ast_hash": "741723efa3ffd4de1f3c5dd2a7ea75d2",
+    "semantic_hash": "741723efa3ffd4de1f3c5dd2a7ea75d2"
+  },
+  "desktop/App.xaml": {
+    "mtime": 1787123634.5232618,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e78051cedae8a3aa285ee54a9b74e430",
+    "semantic_hash": "e78051cedae8a3aa285ee54a9b74e430"
+  },
+  "desktop/App.xaml.cs": {
+    "mtime": 1787123637.199727,
+    "seen": 1791510760.7671697,
+    "ast_hash": "5d895614ed561c7548428cd01fe5db6f",
+    "semantic_hash": "5d895614ed561c7548428cd01fe5db6f"
+  },
+  "desktop/MainWindow.xaml": {
+    "mtime": 1787282261.133483,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6a6af820869b5d22308b0399b4dae452",
+    "semantic_hash": "6a6af820869b5d22308b0399b4dae452"
+  },
+  "desktop/MainWindow.xaml.cs": {
+    "mtime": 1787192305.2162013,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2600451da1adb0e7fbe9ff715b8747d0",
+    "semantic_hash": "2600451da1adb0e7fbe9ff715b8747d0"
+  },
+  "desktop/Models/DiscoveredDevice.cs": {
+    "mtime": 1787192141.460397,
+    "seen": 1791510760.7671697,
+    "ast_hash": "1f2fe093648371ef5834a48456b20d14",
+    "semantic_hash": "1f2fe093648371ef5834a48456b20d14"
+  },
+  "desktop/Models/TagItem.cs": {
+    "mtime": 1787192146.9817405,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c97c89bb1e8d3dfee558e27c76ec9297",
+    "semantic_hash": "c97c89bb1e8d3dfee558e27c76ec9297"
+  },
+  "desktop/Properties/AssemblyInfo.cs": {
+    "mtime": 1787123639.6420877,
+    "seen": 1791510760.7671697,
+    "ast_hash": "da769ded06dc45d44cacbe5980152be2",
+    "semantic_hash": "da769ded06dc45d44cacbe5980152be2"
+  },
+  "desktop/Services/RFIDReaderService.cs": {
+    "mtime": 1787620149.1908946,
+    "seen": 1791510760.7671697,
+    "ast_hash": "61403e7face34eb0d403995cb3d8474d",
+    "semantic_hash": "61403e7face34eb0d403995cb3d8474d"
+  },
+  "desktop/Services/UHFReader105ENService.cs": {
+    "mtime": 1787123725.5469956,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3a9f782eee8cdab3a14c28ca6300da2e",
+    "semantic_hash": "3a9f782eee8cdab3a14c28ca6300da2e"
+  },
+  "desktop/UHFDesktopApp.csproj": {
+    "mtime": 1787192170.8304687,
+    "seen": 1791510760.7671697,
+    "ast_hash": "1d2744bb1818ff4ea8cdc935937b2952",
+    "semantic_hash": "1d2744bb1818ff4ea8cdc935937b2952"
+  },
+  "desktop/UHFHardwareBridge.cs": {
+    "mtime": 1791358639.3065374,
+    "seen": 1791510760.7671697,
+    "ast_hash": "f97f24d791a9ed9d693643f2fd4a5c31",
+    "semantic_hash": "f97f24d791a9ed9d693643f2fd4a5c31"
+  },
+  "ios/RunnerTests/RunnerTests.swift": {
+    "mtime": 1787123038.3352945,
+    "seen": 1791510760.7671697,
+    "ast_hash": "24e5d095048eb86c30423f4e04b6e57b",
+    "semantic_hash": "24e5d095048eb86c30423f4e04b6e57b"
+  },
+  "ios/Runner/AppDelegate.swift": {
+    "mtime": 1783998801.484106,
+    "seen": 1791510760.7671697,
+    "ast_hash": "9e1de9c329a3fe4931876063de95132b",
+    "semantic_hash": "9e1de9c329a3fe4931876063de95132b"
+  },
+  "ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json": {
+    "mtime": 1783998801.5186803,
+    "seen": 1791510760.7671697,
+    "ast_hash": "31a08e429403e265cabfb31b3d65f049",
+    "semantic_hash": "31a08e429403e265cabfb31b3d65f049"
+  },
+  "ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json": {
+    "mtime": 1783998801.60909,
+    "seen": 1791510760.7671697,
+    "ast_hash": "b9e927ac17345f2d5f052fe68a3487f9",
+    "semantic_hash": "b9e927ac17345f2d5f052fe68a3487f9"
+  },
+  "ios/Runner/Runner-Bridging-Header.h": {
+    "mtime": 1783998801.4937975,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7ad7b5cea096132de13ba526b2b9efbe",
+    "semantic_hash": "7ad7b5cea096132de13ba526b2b9efbe"
+  },
+  "ios/Runner/SceneDelegate.swift": {
+    "mtime": 1783998801.4937975,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0c3e86af131f6a9e547c80b5ed058914",
+    "semantic_hash": "0c3e86af131f6a9e547c80b5ed058914"
+  },
+  "lib/config/secrets.dart": {
+    "mtime": 1789014501.5114765,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e68641ee0b89209bf31969845ad98e0c",
+    "semantic_hash": "e68641ee0b89209bf31969845ad98e0c"
+  },
+  "lib/config/secrets.example.dart": {
+    "mtime": 1787539447.379417,
+    "seen": 1791510760.7671697,
+    "ast_hash": "a3ef442073449da99e0106096abe3426",
+    "semantic_hash": "a3ef442073449da99e0106096abe3426"
+  },
+  "lib/main.dart": {
+    "mtime": 1790824061.9114718,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2f67699764511311e53551c8fcc16717",
+    "semantic_hash": "2f67699764511311e53551c8fcc16717"
+  },
+  "lib/models/catalog_models.dart": {
+    "mtime": 1788925897.7217991,
+    "seen": 1791510760.7671697,
+    "ast_hash": "5f3d4dd6ddb541d33c31507373c49431",
+    "semantic_hash": "5f3d4dd6ddb541d33c31507373c49431"
+  },
+  "lib/models/inventory_models.dart": {
+    "mtime": 1791477464.5689774,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c5b2f4becc580b81d45f3abedf6b25fe",
+    "semantic_hash": "c5b2f4becc580b81d45f3abedf6b25fe"
+  },
+  "lib/models/order_models.dart": {
+    "mtime": 1791474330.308077,
+    "seen": 1791510760.7671697,
+    "ast_hash": "a7ee5dc379f4d55ef1fb644cfd826031",
+    "semantic_hash": "a7ee5dc379f4d55ef1fb644cfd826031"
+  },
+  "lib/models/roles/admin_role.dart": {
+    "mtime": 1790656299.814404,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e06c7d6150e6a21691da1b4205878530",
+    "semantic_hash": "e06c7d6150e6a21691da1b4205878530"
+  },
+  "lib/models/roles/handheld_role.dart": {
+    "mtime": 1790656299.8154035,
+    "seen": 1791510760.7671697,
+    "ast_hash": "82f99ffcb8fbda35c736e74e8647c5b1",
+    "semantic_hash": "82f99ffcb8fbda35c736e74e8647c5b1"
+  },
+  "lib/models/roles/role_base.dart": {
+    "mtime": 1790656299.8154035,
+    "seen": 1791510760.7671697,
+    "ast_hash": "abc9ece628c585eb3105b8b799e30119",
+    "semantic_hash": "abc9ece628c585eb3105b8b799e30119"
+  },
+  "lib/models/roles/role_registry.dart": {
+    "mtime": 1788921504.2111602,
+    "seen": 1791510760.7671697,
+    "ast_hash": "524c76c27a015081e1a4756ecfbac7f6",
+    "semantic_hash": "524c76c27a015081e1a4756ecfbac7f6"
+  },
+  "lib/models/roles/seller_role.dart": {
+    "mtime": 1788757125.122425,
+    "seen": 1791510760.7671697,
+    "ast_hash": "fb73c3e0c108dac25270e15ee0019741",
+    "semantic_hash": "fb73c3e0c108dac25270e15ee0019741"
+  },
+  "lib/models/roles/technician_role.dart": {
+    "mtime": 1789022665.5201125,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c6547c6397071892a545ee92171a1bf9",
+    "semantic_hash": "c6547c6397071892a545ee92171a1bf9"
+  },
+  "lib/models/roles/warehouse_keeper_role.dart": {
+    "mtime": 1790656299.8164046,
+    "seen": 1791510760.7671697,
+    "ast_hash": "154eb57faa966a5fc4ad1f8a4c460c5c",
+    "semantic_hash": "154eb57faa966a5fc4ad1f8a4c460c5c"
+  },
+  "lib/models/tag_info.dart": {
+    "mtime": 1790761007.8825495,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ea22239c955477576ac3434332267796",
+    "semantic_hash": "ea22239c955477576ac3434332267796"
+  },
+  "lib/models/uhf_connection_config.dart": {
+    "mtime": 1791474736.7505999,
+    "seen": 1791510760.7671697,
+    "ast_hash": "d2fb70312361ccc7b86ac38039d9c5e7",
+    "semantic_hash": "d2fb70312361ccc7b86ac38039d9c5e7"
+  },
+  "lib/models/user_models.dart": {
+    "mtime": 1790656299.8169117,
+    "seen": 1791510760.7671697,
+    "ast_hash": "77cb915f25d147bf687e79d86dd54439",
+    "semantic_hash": "77cb915f25d147bf687e79d86dd54439"
+  },
+  "lib/models/wms_models.dart": {
+    "mtime": 1788757152.8914635,
+    "seen": 1791510760.7671697,
+    "ast_hash": "38791f4a832969a2d77f0f2c7696a55f",
+    "semantic_hash": "38791f4a832969a2d77f0f2c7696a55f"
+  },
+  "lib/screens/auth/login_screen.dart": {
+    "mtime": 1790825212.8456478,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6e7bd3b61dc54f1c02227c7884de53f9",
+    "semantic_hash": "6e7bd3b61dc54f1c02227c7884de53f9"
+  },
+  "lib/screens/auth/register_screen.dart": {
+    "mtime": 1790656299.8180308,
+    "seen": 1791510760.7671697,
+    "ast_hash": "37d4890b3d92dbb0239c7645402eafcc",
+    "semantic_hash": "37d4890b3d92dbb0239c7645402eafcc"
+  },
+  "lib/screens/desktop/desktop_audit_ticket_detail_view.dart": {
+    "mtime": 1791472639.39385,
+    "seen": 1791510760.7671697,
+    "ast_hash": "30f331012106f9a8baf5cf1634d412bd",
+    "semantic_hash": "30f331012106f9a8baf5cf1634d412bd"
+  },
+  "lib/screens/desktop/desktop_goods_delivery_view.dart": {
+    "mtime": 1791505604.236876,
+    "seen": 1791510760.7671697,
+    "ast_hash": "06d678daa9fb4581bb17bad8f532060d",
+    "semantic_hash": "06d678daa9fb4581bb17bad8f532060d"
+  },
+  "lib/screens/desktop/desktop_goods_receive_view.dart": {
+    "mtime": 1791481497.7235806,
+    "seen": 1791510760.7671697,
+    "ast_hash": "d018d94a10bc0977b750370b09d60f32",
+    "semantic_hash": "d018d94a10bc0977b750370b09d60f32"
+  },
+  "lib/screens/desktop/desktop_inventory_view.dart": {
+    "mtime": 1791477735.7415469,
+    "seen": 1791510760.7671697,
+    "ast_hash": "fe4c77aeac0bca2e6de382034e5973fc",
+    "semantic_hash": "fe4c77aeac0bca2e6de382034e5973fc"
+  },
+  "lib/screens/desktop/desktop_location_management_view.dart": {
+    "mtime": 1791472639.402768,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3762d34082e2c994c5c5032ce5365348",
+    "semantic_hash": "3762d34082e2c994c5c5032ce5365348"
+  },
+  "lib/screens/desktop/desktop_lookup_view.dart": {
+    "mtime": 1791447382.1453838,
+    "seen": 1791510760.7671697,
+    "ast_hash": "867f4dd2c3429abe6f0091d84e85ec8e",
+    "semantic_hash": "867f4dd2c3429abe6f0091d84e85ec8e"
+  },
+  "lib/screens/desktop/desktop_main_layout.dart": {
+    "mtime": 1791475781.275548,
+    "seen": 1791510760.7671697,
+    "ast_hash": "41a1ffb2eaa6a45baf26d73ac6135cc9",
+    "semantic_hash": "41a1ffb2eaa6a45baf26d73ac6135cc9"
+  },
+  "lib/screens/desktop/desktop_report_view.dart": {
+    "mtime": 1791483174.65701,
+    "seen": 1791510760.7671697,
+    "ast_hash": "620b2817c3aab2bb33bd7b3b098aaa6f",
+    "semantic_hash": "620b2817c3aab2bb33bd7b3b098aaa6f"
+  },
+  "lib/screens/desktop/desktop_stock_reconciliation_view.dart": {
+    "mtime": 1791483205.245392,
+    "seen": 1791510760.7671697,
+    "ast_hash": "d8da74f6fb319dfe63341c09d3308da2",
+    "semantic_hash": "d8da74f6fb319dfe63341c09d3308da2"
+  },
+  "lib/screens/desktop/desktop_uhf_studio_view.dart": {
+    "mtime": 1791475856.780578,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c542b531306cea2136dc435bb8887a3c",
+    "semantic_hash": "c542b531306cea2136dc435bb8887a3c"
+  },
+  "lib/screens/desktop/desktop_user_management_view.dart": {
+    "mtime": 1790705605.8501964,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e4adb921e72da0232f93d9c4d9206e02",
+    "semantic_hash": "e4adb921e72da0232f93d9c4d9206e02"
+  },
+  "lib/screens/desktop/desktop_warehouse_management_view.dart": {
+    "mtime": 1791476237.762872,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7886623e9e05aac6e439f74e1cb5b2ad",
+    "semantic_hash": "7886623e9e05aac6e439f74e1cb5b2ad"
+  },
+  "lib/screens/desktop_pda_wrapper.dart": {
+    "mtime": 1789443079.314384,
+    "seen": 1791510760.7671697,
+    "ast_hash": "b31aea7e6e11a323dc4e26300d2dd4aa",
+    "semantic_hash": "b31aea7e6e11a323dc4e26300d2dd4aa"
+  },
+  "lib/screens/devices_erp_screen.dart": {
+    "mtime": 1791472639.3612604,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6a7d1775184c7eb7fbb8e9969639081d",
+    "semantic_hash": "6a7d1775184c7eb7fbb8e9969639081d"
+  },
+  "lib/screens/fifo_search_screen.dart": {
+    "mtime": 1791470282.4996102,
+    "seen": 1791510760.7671697,
+    "ast_hash": "1c304ea5f9eb43de6a6436779f631531",
+    "semantic_hash": "1c304ea5f9eb43de6a6436779f631531"
+  },
+  "lib/screens/gate_monitor_screen.dart": {
+    "mtime": 1791472639.36226,
+    "seen": 1791510760.7671697,
+    "ast_hash": "691e8538c53c29d136b2ac1239cf2119",
+    "semantic_hash": "691e8538c53c29d136b2ac1239cf2119"
+  },
+  "lib/screens/inbound_screen.dart": {
+    "mtime": 1789441416.3521435,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3463daa1a39c1a342adfad58dc6235dd",
+    "semantic_hash": "3463daa1a39c1a342adfad58dc6235dd"
+  },
+  "lib/screens/inventory_audit_screen.dart": {
+    "mtime": 1791472639.3637679,
+    "seen": 1791510760.7671697,
+    "ast_hash": "99775b4f4fbeb19e5a3c078bbcc624f5",
+    "semantic_hash": "99775b4f4fbeb19e5a3c078bbcc624f5"
+  },
+  "lib/screens/outbound_screen.dart": {
+    "mtime": 1789441438.7753403,
+    "seen": 1791510760.7671697,
+    "ast_hash": "1ccc7864fd29c3e5a0ea600e9d15198d",
+    "semantic_hash": "1ccc7864fd29c3e5a0ea600e9d15198d"
+  },
+  "lib/screens/pda/pda_drawer.dart": {
+    "mtime": 1791475968.8890855,
+    "seen": 1791510760.7671697,
+    "ast_hash": "296fc262baa33244c985f17248947653",
+    "semantic_hash": "296fc262baa33244c985f17248947653"
+  },
+  "lib/screens/pda/pda_goods_delivery_screen.dart": {
+    "mtime": 1791505626.74671,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ff94bae5e540fba8c086160afcce4a04",
+    "semantic_hash": "ff94bae5e540fba8c086160afcce4a04"
+  },
+  "lib/screens/pda/pda_home_screen.dart": {
+    "mtime": 1791469139.4631774,
+    "seen": 1791510760.7671697,
+    "ast_hash": "fc16243927b12ddfa411b9ebaa2bf0ab",
+    "semantic_hash": "fc16243927b12ddfa411b9ebaa2bf0ab"
+  },
+  "lib/screens/pda/pda_inbound_screen.dart": {
+    "mtime": 1791472639.4210045,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c4786ae795f7402c1305436b9ac9e16f",
+    "semantic_hash": "c4786ae795f7402c1305436b9ac9e16f"
+  },
+  "lib/screens/pda/pda_inventory_screen.dart": {
+    "mtime": 1791472639.3675535,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2852c3830172a69b2d124739cd3b54ff",
+    "semantic_hash": "2852c3830172a69b2d124739cd3b54ff"
+  },
+  "lib/screens/pda/pda_locate_tasks_screen.dart": {
+    "mtime": 1791472639.3695579,
+    "seen": 1791510760.7671697,
+    "ast_hash": "9af1a4f6a6621eefa88a3d934c9dc6a5",
+    "semantic_hash": "9af1a4f6a6621eefa88a3d934c9dc6a5"
+  },
+  "lib/screens/pda/pda_lookup_screen.dart": {
+    "mtime": 1791472639.4230053,
+    "seen": 1791510760.7671697,
+    "ast_hash": "5c6232bbfbf37725bab06a89dd909233",
+    "semantic_hash": "5c6232bbfbf37725bab06a89dd909233"
+  },
+  "lib/screens/pda/pda_merge_pallets_screen.dart": {
+    "mtime": 1790850305.8411062,
+    "seen": 1791510760.7671697,
+    "ast_hash": "f8b7f08b656d33ce5c4742345c775aab",
+    "semantic_hash": "f8b7f08b656d33ce5c4742345c775aab"
+  },
+  "lib/screens/pda/pda_putaway_screen.dart": {
+    "mtime": 1791472639.42401,
+    "seen": 1791510760.7671697,
+    "ast_hash": "681fcd3d6a87833a95168bd6b1431f6e",
+    "semantic_hash": "681fcd3d6a87833a95168bd6b1431f6e"
+  },
+  "lib/screens/pda/pda_shelf_status_screen.dart": {
+    "mtime": 1791472639.4250064,
+    "seen": 1791510760.7671697,
+    "ast_hash": "4e3d2356bb08d48642568d3c3c9edcb1",
+    "semantic_hash": "4e3d2356bb08d48642568d3c3c9edcb1"
+  },
+  "lib/screens/pda/pda_transfer_screen.dart": {
+    "mtime": 1791472639.4270084,
+    "seen": 1791510760.7671697,
+    "ast_hash": "9a038b3db1e9bd143b3f54652c7578f4",
+    "semantic_hash": "9a038b3db1e9bd143b3f54652c7578f4"
+  },
+  "lib/screens/pda/pda_warehouse_management_screen.dart": {
+    "mtime": 1791475960.8311381,
+    "seen": 1791510760.7671697,
+    "ast_hash": "d806ec4ffb786a8cc2b06d1cfc0b9599",
+    "semantic_hash": "d806ec4ffb786a8cc2b06d1cfc0b9599"
+  },
+  "lib/screens/radar_locate_screen.dart": {
+    "mtime": 1791447382.1499698,
+    "seen": 1791510760.7671697,
+    "ast_hash": "dadf0ea9f152c9538f13294da7e876de",
+    "semantic_hash": "dadf0ea9f152c9538f13294da7e876de"
+  },
+  "lib/screens/splash/splash_screen.dart": {
+    "mtime": 1790656299.8389843,
+    "seen": 1791510760.7671697,
+    "ast_hash": "71318cc0afe98f06ed4ec64e680e4bb8",
+    "semantic_hash": "71318cc0afe98f06ed4ec64e680e4bb8"
+  },
+  "lib/screens/storage_screen.dart": {
+    "mtime": 1791472639.382701,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0ef197a400a8fdf3b3b966df8fa84985",
+    "semantic_hash": "0ef197a400a8fdf3b3b966df8fa84985"
+  },
+  "lib/services/api_service.dart": {
+    "mtime": 1791459102.044531,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ca9c2787060b30b48d1025a41d7fbaa2",
+    "semantic_hash": "ca9c2787060b30b48d1025a41d7fbaa2"
+  },
+  "lib/services/auth_service.dart": {
+    "mtime": 1790705700.0042922,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2faa21ac1b549e75654b5286280be893",
+    "semantic_hash": "2faa21ac1b549e75654b5286280be893"
+  },
+  "lib/services/database_service.dart": {
+    "mtime": 1791503259.7945015,
+    "seen": 1791510760.7671697,
+    "ast_hash": "f2f6a3cecfc3f930b7cdf0bb7f7383b5",
+    "semantic_hash": "f2f6a3cecfc3f930b7cdf0bb7f7383b5"
+  },
+  "lib/services/desktop_uhf_tcp_service.dart": {
+    "mtime": 1791474842.6794813,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2d4e6f7b8fb409758432bb1d716b414d",
+    "semantic_hash": "2d4e6f7b8fb409758432bb1d716b414d"
+  },
+  "lib/services/erp_bravo_service.dart": {
+    "mtime": 1787124914.9882646,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ffc2593877c4ab4feba028dadcd92633",
+    "semantic_hash": "ffc2593877c4ab4feba028dadcd92633"
+  },
+  "lib/services/excel_import_service.dart": {
+    "mtime": 1791459102.0460293,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e510c9939cae58c762b9c5cf68199c1a",
+    "semantic_hash": "e510c9939cae58c762b9c5cf68199c1a"
+  },
+  "lib/services/inbound_demo_service.dart": {
+    "mtime": 1791366444.8425088,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ef0568c46d32a41d848b1a237f9558d1",
+    "semantic_hash": "ef0568c46d32a41d848b1a237f9558d1"
+  },
+  "lib/services/radar_spatial_tracker.dart": {
+    "mtime": 1791338720.836007,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ada339c2d737ec2f3630150bd282c4ef",
+    "semantic_hash": "ada339c2d737ec2f3630150bd282c4ef"
+  },
+  "lib/services/report_export_service.dart": {
+    "mtime": 1791483553.562966,
+    "seen": 1791510760.7671697,
+    "ast_hash": "96e668ea04769ae5d7484bebc46d09bb",
+    "semantic_hash": "96e668ea04769ae5d7484bebc46d09bb"
+  },
+  "lib/services/supabase_sync_service.dart": {
+    "mtime": 1791304560.471732,
+    "seen": 1791510760.7671697,
+    "ast_hash": "59ec43197697c939450b4de11ba93f9e",
+    "semantic_hash": "59ec43197697c939450b4de11ba93f9e"
+  },
+  "lib/services/tower_light_service.dart": {
+    "mtime": 1791367702.321659,
+    "seen": 1791510760.7671697,
+    "ast_hash": "77607eb572709d1ab4f7a2b2090d108a",
+    "semantic_hash": "77607eb572709d1ab4f7a2b2090d108a"
+  },
+  "lib/services/uhf_service.dart": {
+    "mtime": 1791330894.2100284,
+    "seen": 1791510760.7671697,
+    "ast_hash": "60b142a97ce29a852fbf025ec2d4ad48",
+    "semantic_hash": "60b142a97ce29a852fbf025ec2d4ad48"
+  },
+  "lib/services/warehouse_repository.dart": {
+    "mtime": 1791510033.0576584,
+    "seen": 1791510760.7671697,
+    "ast_hash": "f08aed79e620fc11aedbf948253f8829",
+    "semantic_hash": "f08aed79e620fc11aedbf948253f8829"
+  },
+  "lib/theme/app_colors.dart": {
+    "mtime": 1791472560.479506,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6059b824a7e7383fb34fb24531836765",
+    "semantic_hash": "6059b824a7e7383fb34fb24531836765"
+  },
+  "lib/theme/app_theme.dart": {
+    "mtime": 1791472564.0717645,
+    "seen": 1791510760.7671697,
+    "ast_hash": "df4e1cac7cf3e555865e5aea230d4529",
+    "semantic_hash": "df4e1cac7cf3e555865e5aea230d4529"
+  },
+  "lib/theme/app_typography.dart": {
+    "mtime": 1791461776.4651916,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c0b50f3bf4b6006e1f6eb9f5f8156352",
+    "semantic_hash": "c0b50f3bf4b6006e1f6eb9f5f8156352"
+  },
+  "lib/theme/eye_care_theme.dart": {
+    "mtime": 1791472571.721171,
+    "seen": 1791510760.7671697,
+    "ast_hash": "b8011cbda90e1e09235d0a11f7654d7e",
+    "semantic_hash": "b8011cbda90e1e09235d0a11f7654d7e"
+  },
+  "lib/widgets/app_notification_bar.dart": {
+    "mtime": 1790656299.8470137,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ae00c8d71135607ea8e76fae1bac1fa0",
+    "semantic_hash": "ae00c8d71135607ea8e76fae1bac1fa0"
+  },
+  "lib/widgets/gate_pass_fail_banner.dart": {
+    "mtime": 1791464253.5140016,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c696be8f0e4ece2082af329a3c520601",
+    "semantic_hash": "c696be8f0e4ece2082af329a3c520601"
+  },
+  "lib/widgets/hardware_status_appbar.dart": {
+    "mtime": 1791472611.1450722,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c9998ae51f337c489ad4c0f6b916d370",
+    "semantic_hash": "c9998ae51f337c489ad4c0f6b916d370"
+  },
+  "lib/widgets/hardware_trigger_feedback_banner.dart": {
+    "mtime": 1791472607.1198852,
+    "seen": 1791510760.7671697,
+    "ast_hash": "15a81dd684c23a810dd618308d0a78b8",
+    "semantic_hash": "15a81dd684c23a810dd618308d0a78b8"
+  },
+  "lib/widgets/pda_location_barcode_card.dart": {
+    "mtime": 1791469035.098996,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0eb0fb342fec4c83f0f7947a36f8a8cc",
+    "semantic_hash": "0eb0fb342fec4c83f0f7947a36f8a8cc"
+  },
+  "lib/widgets/putaway_barcode_modal.dart": {
+    "mtime": 1791469013.3397675,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0fd8a617f6d32dcfe325ccf0eb67e670",
+    "semantic_hash": "0fd8a617f6d32dcfe325ccf0eb67e670"
+  },
+  "lib/widgets/rfid_telemetry_card.dart": {
+    "mtime": 1791464192.9674983,
+    "seen": 1791510760.7671697,
+    "ast_hash": "edb5923f49053e6eccafdb19608c0edd",
+    "semantic_hash": "edb5923f49053e6eccafdb19608c0edd"
+  },
+  "lib/widgets/sonar_radar_widget.dart": {
+    "mtime": 1791464157.2155836,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2507eb96ddee342fba9e2d54f51aa2f7",
+    "semantic_hash": "2507eb96ddee342fba9e2d54f51aa2f7"
+  },
+  "lib/widgets/tag_lifecycle_timeline_dialog.dart": {
+    "mtime": 1791464425.7077904,
+    "seen": 1791510760.7671697,
+    "ast_hash": "1cee897e27b04251a1da0e4efa133d3a",
+    "semantic_hash": "1cee897e27b04251a1da0e4efa133d3a"
+  },
+  "lib/widgets/tower_light_widget.dart": {
+    "mtime": 1791463876.8984585,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c3c06cd737374a27532488853e414735",
+    "semantic_hash": "c3c06cd737374a27532488853e414735"
+  },
+  "lib/widgets/warehouse_floor_plan_editor_dialog.dart": {
+    "mtime": 1791463973.688447,
+    "seen": 1791510760.7671697,
+    "ast_hash": "bf0cc96f21d5e46682ba358e656ba582",
+    "semantic_hash": "bf0cc96f21d5e46682ba358e656ba582"
+  },
+  "lib/widgets/warehouse_floor_plan_widget.dart": {
+    "mtime": 1791464130.264195,
+    "seen": 1791510760.7671697,
+    "ast_hash": "49e81a66cec20f7074bcdadb98a37299",
+    "semantic_hash": "49e81a66cec20f7074bcdadb98a37299"
+  },
+  "lib/widgets/warehouse_location_grid_widget.dart": {
+    "mtime": 1791464056.4803421,
+    "seen": 1791510760.7671697,
+    "ast_hash": "731a43a3bfcdf4eff1654ce7cfb6a975",
+    "semantic_hash": "731a43a3bfcdf4eff1654ce7cfb6a975"
+  },
+  "supabase_schema.sql": {
+    "mtime": 1791346196.9255643,
+    "seen": 1791510760.7671697,
+    "ast_hash": "77bfa7c4fdea9a3811e09f66bf13def8",
+    "semantic_hash": "77bfa7c4fdea9a3811e09f66bf13def8"
+  },
+  "test/adversarial_m1_empirical_test.dart": {
+    "mtime": 1791510047.7141876,
+    "seen": 1791510760.7671697,
+    "ast_hash": "046acd22ad715d19b6f577aad244954e",
+    "semantic_hash": "046acd22ad715d19b6f577aad244954e"
+  },
+  "test/adversarial_outbound_review_test.dart": {
+    "mtime": 1791504782.582928,
+    "seen": 1791510760.7671697,
+    "ast_hash": "586dddc87c1b860d7fda00b781464e80",
+    "semantic_hash": "586dddc87c1b860d7fda00b781464e80"
+  },
+  "test/antenna_power_config_test.dart": {
+    "mtime": 1789377927.4475236,
+    "seen": 1791510760.7671697,
+    "ast_hash": "be781045c6a89321d1eff3fbb5dfa305",
+    "semantic_hash": "be781045c6a89321d1eff3fbb5dfa305"
+  },
+  "test/api_service_test.dart": {
+    "mtime": 1787540759.7091463,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ed5285d0a1a8b0d4fd9c82a2f44259c4",
+    "semantic_hash": "ed5285d0a1a8b0d4fd9c82a2f44259c4"
+  },
+  "test/app_notification_bar_test.dart": {
+    "mtime": 1790658784.7626958,
+    "seen": 1791510760.7671697,
+    "ast_hash": "84a44f6d55549e6767418d44986d98d2",
+    "semantic_hash": "84a44f6d55549e6767418d44986d98d2"
+  },
+  "test/auth_service_test.dart": {
+    "mtime": 1790705817.7245934,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c0b6b31b6d1af122e309cacd42e178cc",
+    "semantic_hash": "c0b6b31b6d1af122e309cacd42e178cc"
+  },
+  "test/auto_confirm_outbound_test.dart": {
+    "mtime": 1791369889.1050363,
+    "seen": 1791510760.7671697,
+    "ast_hash": "87ca46b83028c324824883c79af6f697",
+    "semantic_hash": "87ca46b83028c324824883c79af6f697"
+  },
+  "test/business_operations_period_report_test.dart": {
+    "mtime": 1791479530.898907,
+    "seen": 1791510760.7671697,
+    "ast_hash": "f242d6b617cadbd333ac19bf2ca3be9d",
+    "semantic_hash": "f242d6b617cadbd333ac19bf2ca3be9d"
+  },
+  "test/carton_putaway_workflow_test.dart": {
+    "mtime": 1790705803.3741524,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7e8472ea9259687f1f7224b3f2f2d934",
+    "semantic_hash": "7e8472ea9259687f1f7224b3f2f2d934"
+  },
+  "test/desktop_goods_receive_pallet_by_pallet_test.dart": {
+    "mtime": 1790764778.1329257,
+    "seen": 1791510760.7671697,
+    "ast_hash": "312a2b41d8fa05f730e268d1ef2fdc5e",
+    "semantic_hash": "312a2b41d8fa05f730e268d1ef2fdc5e"
+  },
+  "test/desktop_inventory_view_sync_test.dart": {
+    "mtime": 1790839524.2650366,
+    "seen": 1791510760.7671697,
+    "ast_hash": "beb8fa1601ebe43765b8ad993a41cb8b",
+    "semantic_hash": "beb8fa1601ebe43765b8ad993a41cb8b"
+  },
+  "test/desktop_stock_reconciliation_test.dart": {
+    "mtime": 1791477891.020511,
+    "seen": 1791510760.7671697,
+    "ast_hash": "800efc137bb2d9d57a4cd1cbde16988e",
+    "semantic_hash": "800efc137bb2d9d57a4cd1cbde16988e"
+  },
+  "test/excel_import_service_test.dart": {
+    "mtime": 1789089220.5519683,
+    "seen": 1791510760.7671697,
+    "ast_hash": "592bdfda8aa8a30b0e19532c5e51a48f",
+    "semantic_hash": "592bdfda8aa8a30b0e19532c5e51a48f"
+  },
+  "test/fifo_location_search_test.dart": {
+    "mtime": 1791448857.6217215,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3f16f2e1ef431a3594276b559002ba43",
+    "semantic_hash": "3f16f2e1ef431a3594276b559002ba43"
+  },
+  "test/gate_security_theft_prevention_test.dart": {
+    "mtime": 1791356687.6907778,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3441d8f5c7edf33a8192d07d936c8ab0",
+    "semantic_hash": "3441d8f5c7edf33a8192d07d936c8ab0"
+  },
+  "test/generate_sample_excel_script.dart": {
+    "mtime": 1790795479.414867,
+    "seen": 1791510760.7671697,
+    "ast_hash": "4a068fce1bbe9ab0bdce8b59c426bba3",
+    "semantic_hash": "4a068fce1bbe9ab0bdce8b59c426bba3"
+  },
+  "test/generate_two_products_two_pallets_script.dart": {
+    "mtime": 1790795488.3930106,
+    "seen": 1791510760.7671697,
+    "ast_hash": "5190eaacc69954eebd17034071e8b01c",
+    "semantic_hash": "5190eaacc69954eebd17034071e8b01c"
+  },
+  "test/goods_receive_dynamic_pallet_order_test.dart": {
+    "mtime": 1790837183.482859,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0a1193e86bd08684f15e2adbb4f4ac60",
+    "semantic_hash": "0a1193e86bd08684f15e2adbb4f4ac60"
+  },
+  "test/goods_receive_sequential_pallets_test.dart": {
+    "mtime": 1790829700.7066505,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2bab701cc482b63804fea5ad145c60f3",
+    "semantic_hash": "2bab701cc482b63804fea5ad145c60f3"
+  },
+  "test/inbound_tower_light_and_demo_test.dart": {
+    "mtime": 1791367919.5582142,
+    "seen": 1791510760.7671697,
+    "ast_hash": "f40ce612ae0124fd5cec29967e5fc799",
+    "semantic_hash": "f40ce612ae0124fd5cec29967e5fc799"
+  },
+  "test/individual_item_movement_test.dart": {
+    "mtime": 1789035684.7061582,
+    "seen": 1791510760.7671697,
+    "ast_hash": "f541e0bcabd9193a407fb9d848d6fc4f",
+    "semantic_hash": "f541e0bcabd9193a407fb9d848d6fc4f"
+  },
+  "test/inspect_template_test.dart": {
+    "mtime": 1791483749.7737331,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7f8b5368c3124ed50b2051bde99bce83",
+    "semantic_hash": "7f8b5368c3124ed50b2051bde99bce83"
+  },
+  "test/locate_order_and_assignment_test.dart": {
+    "mtime": 1790788335.5758915,
+    "seen": 1791510760.7671697,
+    "ast_hash": "9185b54807cfb58a37c881595562892a",
+    "semantic_hash": "9185b54807cfb58a37c881595562892a"
+  },
+  "test/location_inventory_audit_test.dart": {
+    "mtime": 1790841015.6922922,
+    "seen": 1791510760.7671697,
+    "ast_hash": "bc171f0f0b9a9953bbd604eef2f194d5",
+    "semantic_hash": "bc171f0f0b9a9953bbd604eef2f194d5"
+  },
+  "test/outbound_desktop_to_pda_loose_and_pallet_test.dart": {
+    "mtime": 1790849695.6113386,
+    "seen": 1791510760.7671697,
+    "ast_hash": "64d73b0e4eaa096de63f0eddce830866",
+    "semantic_hash": "64d73b0e4eaa096de63f0eddce830866"
+  },
+  "test/outbound_excel_sku_quantity_matching_test.dart": {
+    "mtime": 1791459102.0530663,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c353591f8a1156aed16cfef31c440c60",
+    "semantic_hash": "c353591f8a1156aed16cfef31c440c60"
+  },
+  "test/outbound_inventory_fifo_validation_test.dart": {
+    "mtime": 1789377927.4475236,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e9df9d90de2b620ee678862f7abc53e0",
+    "semantic_hash": "e9df9d90de2b620ee678862f7abc53e0"
+  },
+  "test/outbound_location_wizard_test.dart": {
+    "mtime": 1791352512.9108517,
+    "seen": 1791510760.7671697,
+    "ast_hash": "d42b86179b88503b95ce3e832a92c474",
+    "semantic_hash": "d42b86179b88503b95ce3e832a92c474"
+  },
+  "test/outbound_order_detail_dedup_test.dart": {
+    "mtime": 1791459102.0540671,
+    "seen": 1791510760.7671697,
+    "ast_hash": "76ea3545b1cf2944cb9b1d1d945bdaf0",
+    "semantic_hash": "76ea3545b1cf2944cb9b1d1d945bdaf0"
+  },
+  "test/outbound_single_order_import_test.dart": {
+    "mtime": 1791503676.8184705,
+    "seen": 1791510760.7671697,
+    "ast_hash": "98fd02cc0797037225c790cc00e57978",
+    "semantic_hash": "98fd02cc0797037225c790cc00e57978"
+  },
+  "test/outbound_tower_light_alert_test.dart": {
+    "mtime": 1791306015.8876865,
+    "seen": 1791510760.7671697,
+    "ast_hash": "13b1dec671324329cd5e7d5b348ef6ae",
+    "semantic_hash": "13b1dec671324329cd5e7d5b348ef6ae"
+  },
+  "test/pallet_rfid_test.dart": {
+    "mtime": 1790705784.55014,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6ce4cc9feded72ff7a101711bf0ab69d",
+    "semantic_hash": "6ce4cc9feded72ff7a101711bf0ab69d"
+  },
+  "test/pda_barcode_location_test.dart": {
+    "mtime": 1789089109.3450825,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7bbe76a70702005d2fb4c7861eda6d45",
+    "semantic_hash": "7bbe76a70702005d2fb4c7861eda6d45"
+  },
+  "test/pda_merge_pallets_test.dart": {
+    "mtime": 1789348882.7975051,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0024fc4f1a1d1f95ed6fd7a9612ea155",
+    "semantic_hash": "0024fc4f1a1d1f95ed6fd7a9612ea155"
+  },
+  "test/pda_outbound_fifo_workflow_test.dart": {
+    "mtime": 1789014501.5357158,
+    "seen": 1791510760.7671697,
+    "ast_hash": "72b7ac83641b5207e8c31caf10d10bee",
+    "semantic_hash": "72b7ac83641b5207e8c31caf10d10bee"
+  },
+  "test/pda_putaway_barcode_scan_test.dart": {
+    "mtime": 1790835556.346198,
+    "seen": 1791510760.7671697,
+    "ast_hash": "43c954e58a1b5a4856e815aa67766ff2",
+    "semantic_hash": "43c954e58a1b5a4856e815aa67766ff2"
+  },
+  "test/pda_transfer_pallet_confirmation_test.dart": {
+    "mtime": 1790760222.9226348,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e7cea87bef343d60aaf18ad97d731b22",
+    "semantic_hash": "e7cea87bef343d60aaf18ad97d731b22"
+  },
+  "test/pda_transfer_two_step_and_shelf_duplicate_filter_test.dart": {
+    "mtime": 1790762282.5813255,
+    "seen": 1791510760.7671697,
+    "ast_hash": "1be6ce2ea2741af748d25680b4bd305f",
+    "semantic_hash": "1be6ce2ea2741af748d25680b4bd305f"
+  },
+  "test/radar_spatial_tracker_test.dart": {
+    "mtime": 1791336606.7121296,
+    "seen": 1791510760.7671697,
+    "ast_hash": "dd2981f177fb7028885ac5bb20427e09",
+    "semantic_hash": "dd2981f177fb7028885ac5bb20427e09"
+  },
+  "test/report_export_form_template_test.dart": {
+    "mtime": 1791483364.6350822,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3de602b64b210239b109762b87226c35",
+    "semantic_hash": "3de602b64b210239b109762b87226c35"
+  },
+  "test/reviewer_r2_adversarial_break_test.dart": {
+    "mtime": 1791510345.2558422,
+    "seen": 1791510760.7671697,
+    "ast_hash": "d6a8a3ce6adef74cebfcc4f874b6e37f",
+    "semantic_hash": "d6a8a3ce6adef74cebfcc4f874b6e37f"
+  },
+  "test/role_permissions_test.dart": {
+    "mtime": 1790656299.853095,
+    "seen": 1791510760.7671697,
+    "ast_hash": "4de5236a9f3e8bfa8ec0cb3d483c1a59",
+    "semantic_hash": "4de5236a9f3e8bfa8ec0cb3d483c1a59"
+  },
+  "test/sample_template_import_test.dart": {
+    "mtime": 1790752186.4986112,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0776a170dd0d0500370a05fa12bfe02e",
+    "semantic_hash": "0776a170dd0d0500370a05fa12bfe02e"
+  },
+  "test/sku_inventory_audit_test.dart": {
+    "mtime": 1790842910.5733566,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6af4c86c77ce2c2fc4c27afd7a104dec",
+    "semantic_hash": "6af4c86c77ce2c2fc4c27afd7a104dec"
+  },
+  "test/stock_reconciliation_auto_test.dart": {
+    "mtime": 1791453051.8690033,
+    "seen": 1791510760.7671697,
+    "ast_hash": "787fa7a98b47660c42bf8e477d0cd116",
+    "semantic_hash": "787fa7a98b47660c42bf8e477d0cd116"
+  },
+  "test/tag_lifecycle_logs_test.dart": {
+    "mtime": 1791369996.7414272,
+    "seen": 1791510760.7671697,
+    "ast_hash": "df82c467bb5f5d5ded07fbdcf11d2915",
+    "semantic_hash": "df82c467bb5f5d5ded07fbdcf11d2915"
+  },
+  "test/theme/app_theme_tokens_test.dart": {
+    "mtime": 1791472708.7703302,
+    "seen": 1791510760.7671697,
+    "ast_hash": "5a36a4ba8c89183cc2727e8b10b08019",
+    "semantic_hash": "5a36a4ba8c89183cc2727e8b10b08019"
+  },
+  "test/tower_light_service_test.dart": {
+    "mtime": 1791305649.346679,
+    "seen": 1791510760.7671697,
+    "ast_hash": "422707fa48cd06b4703f226579077fc3",
+    "semantic_hash": "422707fa48cd06b4703f226579077fc3"
+  },
+  "test/warehouse_floor_plan_test.dart": {
+    "mtime": 1788926024.3897288,
+    "seen": 1791510760.7671697,
+    "ast_hash": "118ea06dfb507df98befaf26f483934a",
+    "semantic_hash": "118ea06dfb507df98befaf26f483934a"
+  },
+  "test/warehouse_repository_test.dart": {
+    "mtime": 1790705842.983997,
+    "seen": 1791510760.7671697,
+    "ast_hash": "68e66a51a4f0716f030d97d9a6ca8e2d",
+    "semantic_hash": "68e66a51a4f0716f030d97d9a6ca8e2d"
+  },
+  "test/warehouse_two_locations_pallet_putaway_test.dart": {
+    "mtime": 1790749041.585392,
+    "seen": 1791510760.7671697,
+    "ast_hash": "c91cfbd28bc835b24d8df83116c8be60",
+    "semantic_hash": "c91cfbd28bc835b24d8df83116c8be60"
+  },
+  "test/widget_test.dart": {
+    "mtime": 1791453803.3524795,
+    "seen": 1791510760.7671697,
+    "ast_hash": "4a9f98374d1e3ec114e05ced05811ba9",
+    "semantic_hash": "4a9f98374d1e3ec114e05ced05811ba9"
+  },
+  "test/widgets/hardware_trigger_and_pda_ergonomics_test.dart": {
+    "mtime": 1791470542.360698,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7828bbc6221def32071564c920db53e1",
+    "semantic_hash": "7828bbc6221def32071564c920db53e1"
+  },
+  "test/widgets/m1_stress_edge_cases_test.dart": {
+    "mtime": 1791464335.8208861,
+    "seen": 1791510760.7671697,
+    "ast_hash": "23db0442b49b8b8bd31ffeddaecd5afe",
+    "semantic_hash": "23db0442b49b8b8bd31ffeddaecd5afe"
+  },
+  "test/widgets/modernized_core_widgets_test.dart": {
+    "mtime": 1791462221.4362326,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7ad234233f66217b2ae7aaff6c741e17",
+    "semantic_hash": "7ad234233f66217b2ae7aaff6c741e17"
+  },
+  "tool/clear_orders_and_products.dart": {
+    "mtime": 1790795469.6878335,
+    "seen": 1791510760.7671697,
+    "ast_hash": "ed7f605b3726f23cd9d2662ba5bb39db",
+    "semantic_hash": "ed7f605b3726f23cd9d2662ba5bb39db"
+  },
+  "web/manifest.json": {
+    "mtime": 1787123038.3613136,
+    "seen": 1791510760.7671697,
+    "ast_hash": "acd774fa6a4a32c171a277b7cba04c40",
+    "semantic_hash": "acd774fa6a4a32c171a277b7cba04c40"
+  },
+  "windows/flutter/generated_plugin_registrant.cc": {
+    "mtime": 1789445944.4166493,
+    "seen": 1791510760.7671697,
+    "ast_hash": "a8f91348d8d9090f22ec69d597c41e1f",
+    "semantic_hash": "a8f91348d8d9090f22ec69d597c41e1f"
+  },
+  "windows/flutter/generated_plugin_registrant.h": {
+    "mtime": 1787123041.793049,
+    "seen": 1791510760.7671697,
+    "ast_hash": "0ea33875f9f8e118f9c2ded03e2e2835",
+    "semantic_hash": "0ea33875f9f8e118f9c2ded03e2e2835"
+  },
+  "windows/runner/flutter_window.cpp": {
+    "mtime": 1783998802.2688806,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2f463f9b7da67a2d692a012f9ea85e0c",
+    "semantic_hash": "2f463f9b7da67a2d692a012f9ea85e0c"
+  },
+  "windows/runner/flutter_window.h": {
+    "mtime": 1783998802.277026,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7defcc89d4a26d56e801241d624d48fb",
+    "semantic_hash": "7defcc89d4a26d56e801241d624d48fb"
+  },
+  "windows/runner/main.cpp": {
+    "mtime": 1787123038.3794336,
+    "seen": 1791510760.7671697,
+    "ast_hash": "2debefdc6ea889c8e6b25da0ac9b63ca",
+    "semantic_hash": "2debefdc6ea889c8e6b25da0ac9b63ca"
+  },
+  "windows/runner/resource.h": {
+    "mtime": 1783998802.2891026,
+    "seen": 1791510760.7671697,
+    "ast_hash": "1ade5dd15e613479a15e8832ed276f2b",
+    "semantic_hash": "1ade5dd15e613479a15e8832ed276f2b"
+  },
+  "windows/runner/utils.cpp": {
+    "mtime": 1783998802.2942183,
+    "seen": 1791510760.7671697,
+    "ast_hash": "e18900a4c2c2962ad732d3b83f0396b9",
+    "semantic_hash": "e18900a4c2c2962ad732d3b83f0396b9"
+  },
+  "windows/runner/utils.h": {
+    "mtime": 1783998802.3087704,
+    "seen": 1791510760.7671697,
+    "ast_hash": "fd81e143f5614eb6fd75efe539002853",
+    "semantic_hash": "fd81e143f5614eb6fd75efe539002853"
+  },
+  "windows/runner/win32_window.cpp": {
+    "mtime": 1783998802.3087704,
+    "seen": 1791510760.7671697,
+    "ast_hash": "571eb8234dbc2661be03aa5f2a4d2fca",
+    "semantic_hash": "571eb8234dbc2661be03aa5f2a4d2fca"
+  },
+  "windows/runner/win32_window.h": {
+    "mtime": 1783998802.3087704,
+    "seen": 1791510760.7671697,
+    "ast_hash": "7569387d58711ab975940f4df3b4bcda",
+    "semantic_hash": "7569387d58711ab975940f4df3b4bcda"
+  },
+  ".agents/skills/flutter-ui-taste/SKILL.md": {
+    "mtime": 1789369405.112823,
+    "seen": 1791510760.7671697,
+    "ast_hash": "849d9c0587d4a56417d9c3303a382a8b",
+    "semantic_hash": "849d9c0587d4a56417d9c3303a382a8b"
+  },
+  ".agents/skills/qa-test-engineer/SKILL.md": {
+    "mtime": 1789369414.0162604,
+    "seen": 1791510760.7671697,
+    "ast_hash": "3a7b8304a589703c78bc06b3ab073f72",
+    "semantic_hash": "3a7b8304a589703c78bc06b3ab073f72"
+  },
+  ".agents/skills/rfid-hardware-engineer/SKILL.md": {
+    "mtime": 1789369383.3411243,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6affaffecd13ebfd1a7ff782ebac374b",
+    "semantic_hash": "6affaffecd13ebfd1a7ff782ebac374b"
+  },
+  ".agents/skills/supabase-db-architect/SKILL.md": {
+    "mtime": 1789369395.9150383,
+    "seen": 1791510760.7671697,
+    "ast_hash": "83f5ebe99af7f90b4c2af8d2311d9025",
+    "semantic_hash": "83f5ebe99af7f90b4c2af8d2311d9025"
+  },
+  "AGENTS.md": {
+    "mtime": 1790705983.745823,
+    "seen": 1791510760.7671697,
+    "ast_hash": "6779761f092f3ff19b787db92e0228f5",
+    "semantic_hash": "6779761f092f3ff19b787db92e0228f5"
+  },
+  "CODE_GRAPH.md": {
+    "mtime": 1791459102.033763,
+    "seen": 1791510760.7671697,
+    "ast_hash": "aea00aa467e60e126022ba0d58990cb5",
+    "semantic_hash": "aea00aa467e60e126022ba0d58990cb5"
+  },
+  "PROJECT.md": {
+    "mtime": 1791470622.6498294,
+    "seen": 1791510760.7671697,
+    "ast_hash": "571a38dd58e8a09c65a4112c5f320d90",
+    "semantic_hash": "571a38dd58e8a09c65a4112c5f320d90"
+  },
+  "SO_DO_LUONG_HE_THONG.md": {
+    "mtime": 1790705968.426463,
+    "seen": 1791510760.7671697,
+    "ast_hash": "38e5ae91a17eefb61339e7f278c89e7b",
+    "semantic_hash": "38e5ae91a17eefb61339e7f278c89e7b"
+  },
+  "TEST_INFRA.md": {
+    "mtime": 1791461452.6630244,
+    "seen": 1791510760.7671697,
+    "ast_hash": "d3957408a996a2b95fc302bc68554392",
+    "semantic_hash": "d3957408a996a2b95fc302bc68554392"
+  }
+}

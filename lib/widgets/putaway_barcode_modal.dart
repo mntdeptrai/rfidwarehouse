@@ -148,12 +148,16 @@ class PutawayBarcodeModal extends StatelessWidget {
                         children: [
                           const Icon(Icons.hourglass_top_rounded, color: Color(0xFFF59E0B), size: 16),
                           const SizedBox(width: 6),
-                          const Text(
-                            'TRẠNG THÁI: CHỜ PDA QUÉT XẾP LÊN KỆ',
-                            style: TextStyle(
-                              color: Color(0xFFF59E0B),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
+                          const Flexible(
+                            child: Text(
+                              'TRẠNG THÁI: CHỜ PDA QUÉT XẾP LÊN KỆ',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Color(0xFFF59E0B),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ],
@@ -164,11 +168,12 @@ class PutawayBarcodeModal extends StatelessWidget {
 
                     // Barcode Card (High Contrast White Board for easy scanning off-screen)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF2C251E), width: 1.5),
+                        border: Border.all(color: AppColors.slate950, width: 1.5),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.08),
@@ -189,18 +194,21 @@ class PutawayBarcodeModal extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 10),
-                          // Vector Barcode 128
-                          BarcodeWidget(
-                            barcode: Barcode.code128(),
-                            data: barcode,
-                            width: 380,
-                            height: 80,
-                            drawText: true,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                              letterSpacing: 2.0,
+                          // Vector Barcode 128 scaled safely for 320px PDA screens
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: BarcodeWidget(
+                              barcode: Barcode.code128(),
+                              data: barcode,
+                              width: 340,
+                              height: 80,
+                              drawText: true,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                                letterSpacing: 2.0,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 6),
@@ -209,12 +217,16 @@ class PutawayBarcodeModal extends StatelessWidget {
                             children: [
                               Icon(Icons.inventory_2_outlined, size: 14, color: Colors.grey.shade600),
                               const SizedBox(width: 4),
-                              Text(
-                                '$itemCount chip RFID / sản phẩm trong thùng',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade700,
+                              Flexible(
+                                child: Text(
+                                  '$itemCount chip RFID / sản phẩm trong thùng',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
+                                  ),
                                 ),
                               ),
                             ],
@@ -291,7 +303,8 @@ class PutawayBarcodeModal extends StatelessWidget {
 
             // Actions Footer
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: c.bgCardElevated,
                 borderRadius: const BorderRadius.only(
@@ -300,7 +313,11 @@ class PutawayBarcodeModal extends StatelessWidget {
                 ),
                 border: Border(top: BorderSide(color: c.border)),
               ),
-              child: Row(
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   OutlinedButton.icon(
                     onPressed: () {
@@ -309,19 +326,20 @@ class PutawayBarcodeModal extends StatelessWidget {
                     icon: const Icon(Icons.copy, size: 16),
                     label: const Text('Sao chép mã'),
                     style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(64, 48),
                       foregroundColor: c.textPrimary,
                       side: BorderSide(color: c.border),
                     ),
                   ),
-                  const Spacer(),
                   ElevatedButton.icon(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.check_circle_outline, size: 18),
                     label: const Text('XÁC NHẬN & ĐÓNG'),
                     style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(64, 48),
                       backgroundColor: const Color(0xFF047857),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
@@ -338,13 +356,26 @@ class PutawayBarcodeModal extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 12)),
-        Text(
-          value,
-          style: TextStyle(
-            color: c.textPrimary,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-            fontSize: 12,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: c.textSecondary, fontSize: 12),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: c.textPrimary,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              fontSize: 12,
+            ),
           ),
         ),
       ],

@@ -126,15 +126,16 @@ void main() {
     expect(find.text('TÌM VỊ TRÍ 2D (FIFO)'), findsOneWidget);
     expect(find.widgetWithText(TextField, 'SKU-TEST-FIFO'), findsOneWidget);
 
-    // 2. Kiểm tra thẻ tóm tắt FIFO: Chỉ hiển thị ô cần lấy là Kệ A1 (không cần liệt kê danh sách mã item)
-    expect(find.text('⭐ CẦN LẤY THEO FIFO'), findsOneWidget);
+    // 2. Kiểm tra thẻ tóm tắt vị trí: Chỉ hiển thị ô cần lấy là Kệ A1 và số lượng tồn
+    expect(find.textContaining('Ô KỆ:'), findsOneWidget);
     expect(find.textContaining('KỆ A1'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Tồn:'), findsAtLeastNWidgets(1));
 
     // 3. Kiểm tra Bản đồ 2D được hiển thị
     expect(find.byType(WarehouseFloorPlanWidget), findsOneWidget);
 
-    // 4. Ô Kệ A1 trên bản đồ 2D được làm sáng với huy hiệu ⭐ CẦN LẤY (FIFO)
-    expect(find.text('⭐ CẦN LẤY (FIFO)'), findsAtLeastNWidgets(1));
+    // 4. Ô Kệ A1 trên bản đồ 2D được làm sáng với huy hiệu ⭐ CẦN TÌM
+    expect(find.text('⭐ CẦN TÌM'), findsAtLeastNWidgets(1));
 
     // 5. Các ô kệ khác (B1, C1) được đánh dấu có hàng
     expect(find.textContaining('Có hàng'), findsAtLeastNWidgets(1));
@@ -153,9 +154,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Khi chưa tìm kiếm: KHÔNG hiển thị thẻ FIFO hay huy hiệu CẦN LẤY (FIFO)
-    expect(find.text('⭐ CẦN LẤY THEO FIFO'), findsNothing);
-    expect(find.text('⭐ CẦN LẤY (FIFO)'), findsNothing);
+    // Khi chưa tìm kiếm: KHÔNG hiển thị thẻ vị trí hay huy hiệu CẦN TÌM
+    expect(find.textContaining('Ô KỆ:'), findsNothing);
+    expect(find.text('⭐ CẦN TÌM'), findsNothing);
     expect(find.textContaining('Nhập mã hàng/SKU'), findsOneWidget);
 
     // Nhập mã hàng ITEM-FIFO-002 để tìm kiếm
@@ -163,9 +164,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Sau khi tìm kiếm: Làm sáng ô Kệ B1 cần lấy
-    expect(find.text('⭐ CẦN LẤY THEO FIFO'), findsOneWidget);
+    expect(find.textContaining('Ô KỆ:'), findsOneWidget);
     expect(find.textContaining('KỆ B1'), findsAtLeastNWidgets(1));
-    expect(find.text('⭐ CẦN LẤY (FIFO)'), findsAtLeastNWidgets(1));
+    expect(find.text('⭐ CẦN TÌM'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('3. Hiển thị mượt mà trên Desktop không bị lỗi RenderFlex overflow', (WidgetTester tester) async {

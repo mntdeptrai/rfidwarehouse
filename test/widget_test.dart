@@ -1422,27 +1422,98 @@ void main() {
     expect(find.byType(TextField), findsOneWidget);
     expect(find.textContaining('Hiển thị:'), findsNothing);
 
-    // Verify table headers include SỐ SERI (SN)
-    expect(find.text('SỐ SERI (SN)'), findsOneWidget);
+    // Verify view mode toggle buttons exist
+    expect(find.textContaining('Gộp Theo SKU'), findsOneWidget);
+    expect(find.textContaining('Chi Tiết Từng Thẻ'), findsOneWidget);
+
+    // Default is grouped by SKU: verify SKU headers and actions
     expect(find.text('MÃ SKU'), findsOneWidget);
     expect(find.text('TÊN HÀNG HÓA'), findsOneWidget);
+    expect(find.text('TỒN KHO'), findsOneWidget);
+    expect(find.text('THAO TÁC'), findsOneWidget);
+
+    // Switch to flat detailed items view to inspect serial numbers
+    await tester.tap(find.textContaining('Chi Tiết Từng Thẻ'));
+    await tester.pumpAndSettle();
+
+    // Verify table headers include SỐ SERI (SN) and EPC
+    expect(find.text('SỐ SERI (SN)'), findsOneWidget);
     expect(find.text('MÃ CHIP RFID (EPC)'), findsOneWidget);
 
     // Verify export button
     expect(find.textContaining('XUẤT BÁO CÁO'), findsOneWidget);
+
+    // Verify outer flat table does NOT contain VÒNG ĐỜI THẺ column
+    expect(find.text('VÒNG ĐỜI THẺ'), findsNothing);
 
     // Test searching by non-existent SN
     await tester.enterText(find.byType(TextField), 'SN_NON_EXISTING_9999');
     await tester.pumpAndSettle();
 
     // Verify empty search result notice
-    expect(find.textContaining('Không tìm thấy sản phẩm tồn kho nào khớp với Số Seri'), findsOneWidget);
+    expect(find.textContaining('Không tìm thấy sản phẩm tồn kho nào khớp'), findsOneWidget);
     expect(find.text('XÓA BỘ LỌC TÌM KIẾM'), findsOneWidget);
 
     // Clear search filter
     await tester.tap(find.text('XÓA BỘ LỌC TÌM KIẾM'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Không tìm thấy sản phẩm tồn kho nào khớp với Số Seri'), findsNothing);
+    expect(find.textContaining('Không tìm thấy sản phẩm tồn kho nào khớp'), findsNothing);
+  });
+
+  testWidgets('DesktopReportView groups inventory by SKU and displays VÒNG ĐỜI THẺ inside SKU detail dialog', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = WarehouseRepository();
+    final testItem = Item(
+      itemId: 'ITEM-SKU-DETAIL-TEST-1',
+      productId: 'P-SKU-TEST-1',
+      sku: 'SKU-WIDGET-TEST',
+      productName: 'Sản Phẩm Kiểm Thử Hộp Thoại SKU',
+      serialNumber: 'SN-WIDGET-999',
+      epc: 'E2801160600002198000SKUDT',
+      status: ItemStatus.inStock,
+      locationId: 'KỆ-T1',
+    );
+    await repo.addItem(testItem);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          useMaterial3: false,
+          splashFactory: NoSplash.splashFactory,
+        ),
+        home: const Scaffold(
+          body: DesktopReportView(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Default view: Gộp Theo SKU
+    expect(find.text('SKU-WIDGET-TEST'), findsOneWidget);
+    expect(find.text('XEM CHI TIẾT'), findsOneWidget);
+
+    // Bảng ngoài không có cột VÒNG ĐỜI THẺ
+    expect(find.text('VÒNG ĐỜI THẺ'), findsNothing);
+
+    // Bấm xem chi tiết
+    await tester.tap(find.text('XEM CHI TIẾT'));
+    await tester.pumpAndSettle();
+
+    // Trong hộp thoại: Có tiêu đề và có cột VÒNG ĐỜI THẺ
+    expect(find.text('CHI TIẾT MÃ SKU: SKU-WIDGET-TEST'), findsOneWidget);
+    expect(find.text('VÒNG ĐỜI THẺ'), findsOneWidget);
+    expect(find.text('ĐÓNG'), findsOneWidget);
+
+    // Đóng dialog
+    await tester.tap(find.text('ĐÓNG'));
+    await tester.pumpAndSettle();
+    expect(find.text('CHI TIẾT MÃ SKU: SKU-WIDGET-TEST'), findsNothing);
+
+    // Clean up
+    await repo.deleteItem(testItem.epc);
   });
 
   testWidgets('DesktopWarehouseManagementView includes Outbound and Transfer transactions in history tab', (WidgetTester tester) async {

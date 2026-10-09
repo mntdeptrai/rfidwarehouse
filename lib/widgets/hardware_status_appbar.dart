@@ -45,6 +45,7 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                 : (pendingCount > 0 ? 'Offline ($pendingCount)' : 'Offline'));
 
         final scanMode = uhfService.scanMode;
+        final isTriggerActive = uhfService.isTriggerPressed;
         final (scanLabel, scanIcon, scanColor) = switch (scanMode) {
           PdaScanMode.auto => ('AUTO', Icons.auto_mode, c.rfidCyan),
           PdaScanMode.rfid => ('RFID', Icons.sensors, c.rfidCyan),
@@ -60,80 +61,119 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
           backgroundColor: c.bgDeep,
           elevation: 0,
           leading: leading,
-          title: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: c.textPrimary,
-              fontWeight: FontWeight.bold,
-              fontSize: isUltraNarrow ? 13.0 : 15.5,
-              letterSpacing: 0.3,
-            ),
-          ),
-          actions: [
-            // Scan Mode Switcher Chip
-            if (showScanMode ?? uhfService.isScanAllowed)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
-                child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  final nextMode = switch (scanMode) {
-                    PdaScanMode.auto => PdaScanMode.rfid,
-                    PdaScanMode.rfid => PdaScanMode.barcode,
-                    PdaScanMode.barcode => PdaScanMode.hybrid,
-                    PdaScanMode.hybrid => PdaScanMode.auto,
-                  };
-                  uhfService.scanMode = nextMode;
-
-                  final modeDesc = switch (nextMode) {
-                    PdaScanMode.auto => 'Tự động theo màn hình (Auto Context)',
-                    PdaScanMode.rfid => 'Chỉ quét sóng UHF RFID',
-                    PdaScanMode.barcode => 'Chỉ quét mã Laser/2D Barcode',
-                    PdaScanMode.hybrid => 'Quét song song cả RFID & Barcode',
-                  };
-
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: c.bgCardElevated,
-                      duration: const Duration(milliseconds: 900),
-                      content: Text('Chế độ cò PDA: $modeDesc', style: TextStyle(color: c.textPrimary)),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 5 : 7, vertical: 2),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isTriggerActive) ...[
+                Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
-                    color: scanColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: scanColor, width: 1),
+                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: c.rfidCyan, width: 1.2),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(scanIcon, size: isUltraNarrow ? 11 : 12, color: scanColor),
-                      if (!isCompact) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          scanLabel,
-                          style: TextStyle(
-                            color: scanColor,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ],
+                  child: Icon(
+                    Icons.radar_rounded,
+                    size: 13,
+                    color: c.rfidCyan,
+                  ),
+                ),
+              ],
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: isUltraNarrow ? 13.0 : 15.5,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ),
-            ),
+            ],
+          ),
+          actions: [
+            // Scan Mode Switcher Chip (Glove-friendly min touch area)
+            if (showScanMode ?? uhfService.isScanAllowed)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () {
+                    final nextMode = switch (scanMode) {
+                      PdaScanMode.auto => PdaScanMode.rfid,
+                      PdaScanMode.rfid => PdaScanMode.barcode,
+                      PdaScanMode.barcode => PdaScanMode.hybrid,
+                      PdaScanMode.hybrid => PdaScanMode.auto,
+                    };
+                    uhfService.scanMode = nextMode;
 
-            // Cloud Sync Status Chip
+                    final modeDesc = switch (nextMode) {
+                      PdaScanMode.auto => 'Tự động theo màn hình (Auto Context)',
+                      PdaScanMode.rfid => 'Chỉ quét sóng UHF RFID',
+                      PdaScanMode.barcode => 'Chỉ quét mã Laser/2D Barcode',
+                      PdaScanMode.hybrid => 'Quét song song cả RFID & Barcode',
+                    };
+
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: c.bgCardElevated,
+                        duration: const Duration(milliseconds: 900),
+                        content: Text('Chế độ cò PDA: $modeDesc', style: TextStyle(color: c.textPrimary)),
+                      ),
+                    );
+                  },
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: 38,
+                      minWidth: isUltraNarrow ? 32 : 44,
+                    ),
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: EdgeInsets.symmetric(horizontal: isCompact ? 6 : 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isTriggerActive
+                            ? AppColors.electricCyan.withValues(alpha: 0.25)
+                            : scanColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isTriggerActive ? AppColors.electricCyan : scanColor,
+                          width: isTriggerActive ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isTriggerActive ? Icons.bolt_rounded : scanIcon,
+                            size: isUltraNarrow ? 12 : 14,
+                            color: isTriggerActive ? AppColors.electricCyan : scanColor,
+                          ),
+                          if (!isCompact) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              isTriggerActive ? 'TRIGGER' : scanLabel,
+                              style: TextStyle(
+                                color: isTriggerActive ? AppColors.electricCyan : scanColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Cloud Sync Status Chip (Glove-friendly min touch area)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () async {
@@ -152,45 +192,52 @@ class HardwareStatusAppBar extends StatelessWidget implements PreferredSizeWidge
                   );
                   await syncService.syncNow();
                 },
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: isCompact ? 5 : 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: statusColor,
-                      width: 1,
-                    ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: 38,
+                    minWidth: isUltraNarrow ? 32 : 44,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isCompact) ...[
-                        Icon(
-                          isSyncing ? Icons.sync : (isOnline ? Icons.cloud_done : Icons.cloud_off),
-                          size: isUltraNarrow ? 11 : 13,
-                          color: statusColor,
-                        ),
-                      ] else ...[
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: EdgeInsets.symmetric(horizontal: isCompact ? 6 : 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: statusColor,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isCompact) ...[
+                          Icon(
+                            isSyncing ? Icons.sync : (isOnline ? Icons.cloud_done : Icons.cloud_off),
+                            size: isUltraNarrow ? 12 : 14,
                             color: statusColor,
-                            shape: BoxShape.circle,
                           ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          statusLabel,
-                          style: TextStyle(
-                            color: statusColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                        ] else ...[
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: statusColor,
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 5),
+                          Text(
+                            statusLabel,
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),

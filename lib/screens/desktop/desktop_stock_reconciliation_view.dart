@@ -38,6 +38,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
   String _searchQuery = '';
 
   bool _isExporting = false;
+  static const bool _includeEpcInExport = false;
 
   @override
   void initState() {
@@ -115,6 +116,18 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
       );
       return;
     }
+    if (!rows.any((r) => r.isAudited)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFF59E0B),
+          content: Text(
+            '⚠️ Chưa có đợt kiểm kê thực tế nào! Vui lòng thực hiện kiểm kê kho trước khi xuất báo cáo đối soát.',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isExporting = true);
     try {
@@ -128,6 +141,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
         rows: rows,
         scopeTitle: scopeTitle,
         sessionCode: session?.sessionCode,
+        includeEpc: _includeEpcInExport,
       );
 
       if (!mounted) return;
@@ -208,11 +222,11 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                   children: [
                     Text('Dự kiến: ${row.expectedQty}', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(width: 14),
-                    Text('Thực tế: ${row.actualQty}', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text('Thực tế: ${row.isAudited ? row.actualQty : "--"}', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(width: 14),
                     Text('Khớp: ${row.matchedCount}', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(width: 14),
-                    Text('Thiếu: ${row.missingCount}', style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text('Thiếu: ${row.isAudited ? row.missingCount : 0}', style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12)),
                     const SizedBox(width: 14),
                     Text('Sai vị trí: ${row.wrongLocationCount}', style: const TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 12)),
                   ],
@@ -245,7 +259,10 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                           final it = row.itemResults[idx];
                           Color resColor = const Color(0xFF10B981);
                           String resLabel = 'Khớp chuẩn';
-                          if (it.resultType == InventoryVarianceType.missing) {
+                          if (!row.isAudited) {
+                            resColor = c.textSecondary;
+                            resLabel = 'Chưa kiểm kê';
+                          } else if (it.resultType == InventoryVarianceType.missing) {
                             resColor = const Color(0xFFEF4444);
                             resLabel = 'Thiếu';
                           } else if (it.resultType == InventoryVarianceType.wrongLocation) {
@@ -295,15 +312,18 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
     final allRows = _getReconciliationData();
+    final hasAuditedData = allRows.any((r) => r.isAudited);
 
-    // 1. Thống kê KPI tổng
+    // 1. Thống kê KPI tổng (chỉ tính chênh lệch khi đã thực hiện kiểm kê)
     final totalExpected = allRows.fold<int>(0, (sum, r) => sum + r.expectedQty);
-    final totalActual = allRows.fold<int>(0, (sum, r) => sum + r.actualQty);
-    final totalMatched = allRows.fold<int>(0, (sum, r) => sum + r.matchedCount);
-    final totalMissing = allRows.fold<int>(0, (sum, r) => sum + r.missingCount);
-    final totalSurplus = allRows.fold<int>(0, (sum, r) => sum + (r.difference > 0 ? r.difference : 0));
-    final totalWrongLoc = allRows.fold<int>(0, (sum, r) => sum + r.wrongLocationCount);
-    final accuracyPercent = totalExpected > 0 ? (totalMatched / totalExpected * 100).toStringAsFixed(1) : '100.0';
+    final totalActual = hasAuditedData ? allRows.fold<int>(0, (sum, r) => sum + r.actualQty) : 0;
+    final totalMatched = hasAuditedData ? allRows.fold<int>(0, (sum, r) => sum + r.matchedCount) : 0;
+    final totalMissing = hasAuditedData ? allRows.fold<int>(0, (sum, r) => sum + r.missingCount) : 0;
+    final totalSurplus = hasAuditedData ? allRows.fold<int>(0, (sum, r) => sum + (r.difference > 0 ? r.difference : 0)) : 0;
+    final totalWrongLoc = hasAuditedData ? allRows.fold<int>(0, (sum, r) => sum + r.wrongLocationCount) : 0;
+    final accuracyPercent = !hasAuditedData
+        ? '--'
+        : (totalExpected > 0 ? (totalMatched / totalExpected * 100).toStringAsFixed(1) : '100.0');
 
     // 2. Lọc dữ liệu theo từ khóa tìm kiếm và chênh lệch
     var filtered = allRows;
@@ -317,19 +337,19 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
     }
 
     if (_discrepancyFilter == 'DISCREPANCY') {
-      filtered = filtered.where((r) => r.difference != 0 || r.wrongLocationCount > 0).toList();
+      filtered = filtered.where((r) => r.isAudited && (r.difference != 0 || r.wrongLocationCount > 0)).toList();
     } else if (_discrepancyFilter == 'MATCH') {
-      filtered = filtered.where((r) => r.difference == 0 && r.wrongLocationCount == 0).toList();
+      filtered = filtered.where((r) => r.isAudited && r.difference == 0 && r.wrongLocationCount == 0).toList();
     } else if (_discrepancyFilter == 'SHORTAGE') {
-      filtered = filtered.where((r) => r.difference < 0).toList();
+      filtered = filtered.where((r) => r.isAudited && r.difference < 0).toList();
     } else if (_discrepancyFilter == 'SURPLUS') {
-      filtered = filtered.where((r) => r.difference > 0).toList();
+      filtered = filtered.where((r) => r.isAudited && r.difference > 0).toList();
     }
 
-    final totalDiscrepancies = allRows.where((r) => r.difference != 0 || r.wrongLocationCount > 0).length;
-    final totalMatches = allRows.where((r) => r.difference == 0 && r.wrongLocationCount == 0).length;
-    final totalShortages = allRows.where((r) => r.difference < 0).length;
-    final totalSurpluses = allRows.where((r) => r.difference > 0).length;
+    final totalDiscrepancies = allRows.where((r) => r.isAudited && (r.difference != 0 || r.wrongLocationCount > 0)).length;
+    final totalMatches = allRows.where((r) => r.isAudited && r.difference == 0 && r.wrongLocationCount == 0).length;
+    final totalShortages = allRows.where((r) => r.isAudited && r.difference < 0).length;
+    final totalSurpluses = allRows.where((r) => r.isAudited && r.difference > 0).length;
 
     // Lấy danh sách zones
     final allZones = _repo.locations.map((l) => l.zone.trim()).where((z) => z.isNotEmpty).toSet().toList();
@@ -356,6 +376,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                   // THẺ KPI SCORECARD (6 METRICS)
                   _buildScorecard(
                     c,
+                    hasAuditedData: hasAuditedData,
                     totalExpected: totalExpected,
                     totalActual: totalActual,
                     totalMatched: totalMatched,
@@ -377,6 +398,32 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                     totalSurpluses: totalSurpluses,
                   ),
                   const SizedBox(height: 14),
+
+                  // THÔNG BÁO NẾU CHƯA CÓ ĐỢT KIỂM KÊ NÀO
+                  if (!hasAuditedData && allRows.isNotEmpty) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: c.rfidCyan.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded, color: c.rfidCyan, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Hiện chưa có đợt kiểm kê thực tế nào được thực hiện. Bảng dưới đây đang hiển thị Tồn Kho Dự Kiến (Sổ sách) — chưa phát sinh chênh lệch thừa/thiếu.',
+                              style: TextStyle(color: c.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // BẢNG DỮ LIỆU ĐỐI SOÁT CHI TIẾT
                   _buildReconciliationTable(c, filtered, currentSession),
@@ -462,11 +509,12 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                   label: Text('XEM PHIẾU ${currentSession.sessionCode}'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: c.rfidCyan,
-                    side: BorderSide(color: c.rfidCyan.withValues(alpha: 0.5)),
+                    side: BorderSide(color: c.rfidCyan.withValues(alpha: 0.3)),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
                   onPressed: () => widget.onOpenSessionDetail!(currentSession),
                 ),
+
               ElevatedButton.icon(
                 icon: _isExporting
                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
@@ -492,6 +540,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
   // ===========================================================================
   Widget _buildScorecard(
     EyeCareColors c, {
+    required bool hasAuditedData,
     required int totalExpected,
     required int totalActual,
     required int totalMatched,
@@ -500,6 +549,11 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
     required int totalWrongLoc,
     required String accuracyPercent,
   }) {
+    final parsedAcc = double.tryParse(accuracyPercent);
+    final accColor = !hasAuditedData || parsedAcc == null
+        ? c.textSecondary
+        : (parsedAcc >= 95 ? const Color(0xFF10B981) : const Color(0xFFF59E0B));
+
     return Row(
       children: [
         Expanded(
@@ -517,7 +571,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
         Expanded(
           child: _metricCard(
             title: 'THỰC TẾ KIỂM KÊ (RFID)',
-            value: '$totalActual Chip',
+            value: hasAuditedData ? '$totalActual Chip' : 'Chưa kiểm',
             icon: Icons.radar_rounded,
             color: c.rfidCyan,
             bg: c.rfidCyan.withValues(alpha: 0.1),
@@ -541,7 +595,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
         Expanded(
           child: _metricCard(
             title: '🔻 TỔNG LỆCH THIẾU',
-            value: '-$totalMissing SP',
+            value: totalMissing > 0 ? '-$totalMissing SP' : '0 SP',
             icon: Icons.remove_circle_outline_rounded,
             color: const Color(0xFFEF4444),
             bg: const Color(0xFFEF4444).withValues(alpha: 0.1),
@@ -553,7 +607,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
         Expanded(
           child: _metricCard(
             title: '🔺 TỔNG LỆCH THỪA / LẠ',
-            value: '+$totalSurplus Chip',
+            value: totalSurplus > 0 ? '+$totalSurplus Chip' : '0 Chip',
             icon: Icons.add_circle_outline_rounded,
             color: const Color(0xFF8B5CF6),
             bg: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
@@ -565,11 +619,11 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
         Expanded(
           child: _metricCard(
             title: '🎯 ĐỘ CHÍNH XÁC KHO',
-            value: '$accuracyPercent%',
+            value: !hasAuditedData || parsedAcc == null ? 'Chưa kiểm' : '$accuracyPercent%',
             icon: Icons.verified_rounded,
-            color: double.parse(accuracyPercent) >= 95 ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-            bg: (double.parse(accuracyPercent) >= 95 ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.1),
-            borderColor: (double.parse(accuracyPercent) >= 95 ? const Color(0xFF10B981) : const Color(0xFFF59E0B)).withValues(alpha: 0.3),
+            color: accColor,
+            bg: !hasAuditedData || parsedAcc == null ? c.bgCardElevated : accColor.withValues(alpha: 0.1),
+            borderColor: !hasAuditedData || parsedAcc == null ? c.border : accColor.withValues(alpha: 0.3),
             c: c,
           ),
         ),
@@ -830,18 +884,21 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
             ...rows.asMap().entries.map((entry) {
               final idx = entry.key;
               final r = entry.value;
+              final isAudited = r.isAudited;
               final diff = r.difference;
 
-              Color diffColor = const Color(0xFF10B981);
-              String diffStr = '0';
-              if (diff < 0) {
-                diffColor = const Color(0xFFEF4444);
-                diffStr = '$diff';
-              } else if (diff > 0) {
-                diffColor = const Color(0xFF8B5CF6);
-                diffStr = '+$diff';
-              } else if (r.wrongLocationCount > 0) {
-                diffColor = const Color(0xFFF59E0B);
+              Color diffColor = isAudited ? const Color(0xFF10B981) : c.textSecondary;
+              String diffStr = isAudited ? '0' : '--';
+              if (isAudited) {
+                if (diff < 0) {
+                  diffColor = const Color(0xFFEF4444);
+                  diffStr = '$diff';
+                } else if (diff > 0) {
+                  diffColor = const Color(0xFF8B5CF6);
+                  diffStr = '+$diff';
+                } else if (r.wrongLocationCount > 0) {
+                  diffColor = const Color(0xFFF59E0B);
+                }
               }
 
               return TableRow(
@@ -852,7 +909,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                   _dataCell(r.unit, c, align: TextAlign.center),
                   _dataCell(r.zoneOrLocation, c, isSecondary: true),
                   _dataCell('${r.expectedQty}', c, align: TextAlign.center, isBold: true),
-                  _dataCell('${r.actualQty}', c, align: TextAlign.center, isBold: true),
+                  _dataCell(isAudited ? '${r.actualQty}' : '--', c, align: TextAlign.center, isBold: isAudited, isMuted: !isAudited),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     child: Center(
@@ -869,7 +926,7 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                       ),
                     ),
                   ),
-                  _dataCell('${r.accuracyPercent.toStringAsFixed(1)}%', c, align: TextAlign.center, isBold: true),
+                  _dataCell(isAudited ? '${r.accuracyPercent.toStringAsFixed(1)}%' : '--', c, align: TextAlign.center, isBold: isAudited, isMuted: !isAudited),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 9),
                     child: Center(child: _buildStatusPill(r.statusLabel, diffColor)),

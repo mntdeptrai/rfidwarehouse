@@ -180,8 +180,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Bấm chuyển sang tab 'Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)' trong mục Báo Cáo
-      final tabFinder = find.text('Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)');
+      // Bấm chuyển sang tab 'Đối Soát Tồn Kho' trong mục Báo Cáo
+      final tabFinder = find.text('Đối Soát Tồn Kho');
       expect(tabFinder, findsOneWidget);
       await tester.tap(tabFinder);
       await tester.pumpAndSettle();

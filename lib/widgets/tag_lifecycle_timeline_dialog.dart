@@ -108,8 +108,8 @@ class TagLifecycleTimelineDialog extends StatelessWidget {
     // Tính toán thông tin hiển thị
     final sku = effItem?.sku ?? 'SKU-RFID';
     final prodName = effItem?.productName ?? 'Chip RFID';
-    final serial = (effItem?.serialNumber != null && effItem!.serialNumber.isNotEmpty)
-        ? effItem!.serialNumber
+    final serial = (effItem != null && effItem.serialNumber.isNotEmpty)
+        ? effItem.serialNumber
         : '--';
     final location = effItem?.locationId ?? 'Chưa xác định';
     final pallet = effItem?.palletId ?? 'Không có';

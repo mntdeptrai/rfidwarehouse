@@ -712,7 +712,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           const SizedBox(width: 18),
 
           // Conn Type
-          Text('Conn Type', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+          Text('Conn Type', style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold)),
           const SizedBox(width: 6),
           Container(
             height: 30,
@@ -726,7 +726,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               child: DropdownButton<String>(
                 value: _selectedConnType,
                 dropdownColor: c.bgCard,
-                style: TextStyle(color: canConfigure ? c.textPrimary : c.textMuted, fontSize: 11),
+                style: TextStyle(color: canConfigure ? c.textPrimary : c.textMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
                 items: const [
                   DropdownMenuItem(value: 'RS232', child: Text('RS232')),
                   DropdownMenuItem(value: 'TCP Client', child: Text('TCP Client')),
@@ -745,7 +745,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
           const SizedBox(width: 14),
 
           // Param Label
-          Text('Param', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+          Text('Param', style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold)),
           const SizedBox(width: 6),
 
           // Dynamic Param Controls based on Conn Type
@@ -763,7 +763,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 child: DropdownButton<String>(
                   value: _selectedComPort,
                   dropdownColor: c.bgCard,
-                  style: TextStyle(color: canConfigure ? c.textPrimary : c.textMuted, fontSize: 11),
+                  style: TextStyle(color: canConfigure ? c.textPrimary : c.textMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
                   items: _comPorts.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                   onChanged: canConfigure
                       ? (val) {
@@ -788,7 +788,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                 child: DropdownButton<int>(
                   value: _selectedBaudRate,
                   dropdownColor: c.bgCard,
-                  style: TextStyle(color: canConfigure ? c.textPrimary : c.textMuted, fontSize: 11),
+                  style: TextStyle(color: canConfigure ? c.textPrimary : c.textMuted, fontSize: 11.5, fontWeight: FontWeight.bold),
                   items: _baudRates.map((b) => DropdownMenuItem(value: b, child: Text('$b'))).toList(),
                   onChanged: canConfigure
                       ? (val) {
@@ -1158,7 +1158,9 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
         isScrollable: true,
         indicatorColor: c.rfidCyan,
         labelColor: c.rfidCyan,
-        unselectedLabelColor: c.textMuted,
+        unselectedLabelColor: c.textPrimary,
+        labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
         tabs: [
           const Tab(icon: Icon(Icons.radar, size: 15), text: 'Quét Thẻ (Live Inventory)'),
           Tab(
@@ -1202,7 +1204,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                Text('Anten: ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11)),
+                Text('Anten: ', style: TextStyle(color: c.rfidCyan, fontWeight: FontWeight.bold, fontSize: 11.5)),
                 if (!canConfigure)
                   Padding(
                     padding: const EdgeInsets.only(right: 4),
@@ -1225,7 +1227,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                           visualDensity: VisualDensity.compact,
                           onChanged: canConfigure ? (val) => _uhfService.setAntenna(antNum, val ?? false) : null,
                         ),
-                        Text('ANT $antNum', style: TextStyle(color: isChecked ? c.rfidCyan : c.textPrimary, fontWeight: isChecked ? FontWeight.bold : FontWeight.normal, fontSize: 11)),
+                        Text('ANT $antNum', style: TextStyle(color: isChecked ? c.rfidCyan : c.textPrimary, fontWeight: FontWeight.bold, fontSize: 11.5)),
                       ],
                     ),
                   );
@@ -1248,7 +1250,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                         const SizedBox(width: 3),
                         Text(
                           '${_uhfService.config.rfPower} dBm',
-                          style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: c.rfidCyan, fontSize: 11.5, fontWeight: FontWeight.bold),
                         ),
                         if (canConfigure) ...[
                           const SizedBox(width: 4),
@@ -1259,7 +1261,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                   ),
                 ),
                 const SizedBox(width: 14),
-                Text('Chế độ: ', style: TextStyle(color: c.textSecondary, fontSize: 11)),
+                Text('Chế độ: ', style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
@@ -1271,7 +1273,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                     child: DropdownButton<int>(
                       value: _scanMode,
                       dropdownColor: c.bgCard,
-                      style: TextStyle(color: c.textPrimary, fontSize: 11),
+                      style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold),
                       items: const [
                         DropdownMenuItem(value: 0, child: Text('Chỉ mã EPC')),
                         DropdownMenuItem(value: 1, child: Text('EPC + TID')),
@@ -1288,7 +1290,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                   visualDensity: VisualDensity.compact,
                   onChanged: (val) => setState(() => _soundEnabled = val ?? true),
                 ),
-                Text('🔔 Bíp', style: TextStyle(color: c.textPrimary, fontSize: 11)),
+                Text('🔔 Bíp', style: TextStyle(color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 12),
                 Checkbox(
                   value: _uhfService.ignoreAlreadyScanned,
@@ -1296,7 +1298,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                   visualDensity: VisualDensity.compact,
                   onChanged: (val) => setState(() => _uhfService.ignoreAlreadyScanned = val ?? true),
                 ),
-                Text('🚫 Bỏ qua thẻ đã quét', style: TextStyle(color: c.successEmerald, fontSize: 11, fontWeight: FontWeight.bold)),
+                Text('🚫 Bỏ qua thẻ đã quét', style: TextStyle(color: c.successEmerald, fontSize: 11.5, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -1341,9 +1343,9 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
               OutlinedButton.icon(
                 onPressed: () => _uhfService.clearTags(),
                 icon: const Icon(Icons.clear_all, size: 14),
-                label: const Text('Xóa danh sách', style: TextStyle(fontSize: 11)),
+                label: const Text('Xóa danh sách', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: c.textSecondary,
+                  foregroundColor: c.textPrimary,
                   side: BorderSide(color: c.border),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
@@ -1957,7 +1959,7 @@ class _DesktopUhfStudioViewState extends State<DesktopUhfStudioView> with Single
                                     content: Text('Bạn có chắc chắn muốn hủy vĩnh viễn thẻ này không?', style: TextStyle(color: c.textPrimary)),
                                     actions: [
                                       TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
-                                      ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral), child: const Text('HỦY THẺ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold))),
+                                      ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: c.errorCoral), child: const Text('HỦY THẺ', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold))),
                                     ],
                                   ),
                                 );

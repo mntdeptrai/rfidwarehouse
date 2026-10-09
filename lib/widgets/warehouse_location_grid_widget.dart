@@ -367,13 +367,13 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              foregroundColor: Colors.white,
+                              backgroundColor: AppColors.rfidMatched,
+                              foregroundColor: AppColors.slate950,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text('➕ THÊM Ô KỆ MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            icon: const Icon(Icons.add, size: 16, color: AppColors.slate950),
+                            label: const Text('➕ THÊM Ô KỆ MỚI', style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold, fontSize: 12)),
                             onPressed: () => _showAddLocationDialog(context, c),
                           ),
                         ],
@@ -991,7 +991,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : color,
+              color: isSelected ? AppColors.slate950 : color,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
               fontSize: 11.5,
             ),
@@ -1102,7 +1102,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(confirmCtx, false), child: Text('HỦY', style: TextStyle(color: c.textMuted))),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.rfidErrorDark),
                         onPressed: () => Navigator.pop(confirmCtx, true),
                         child: const Text('XÓA KỆ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
@@ -1127,8 +1127,8 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.rfidMatched,
+                foregroundColor: AppColors.slate950,
               ),
               onPressed: () async {
                 final cap = int.tryParse(capCtrl.text) ?? loc.maxPalletCapacity;
@@ -1147,7 +1147,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
                 setState(() {});
                 widget.onLocationDataChanged?.call();
               },
-              child: const Text('LƯU'),
+              child: const Text('LƯU', style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1225,8 +1225,8 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              foregroundColor: Colors.white,
+              backgroundColor: AppColors.rfidMatched,
+              foregroundColor: AppColors.slate950,
             ),
             onPressed: () async {
               final code = codeCtrl.text.trim().toUpperCase();
@@ -1250,7 +1250,7 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
               setState(() {});
               widget.onLocationDataChanged?.call();
             },
-            child: const Text('THÊM KỆ'),
+            child: const Text('THÊM KỆ', style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1268,9 +1268,9 @@ class _WarehouseLocationGridWidgetState extends State<WarehouseLocationGridWidge
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('HỦY')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.rfidMatched, foregroundColor: AppColors.slate950),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('XÁC NHẬN'),
+            child: const Text('XÁC NHẬN', style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

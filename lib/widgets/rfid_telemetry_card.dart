@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 
 class RfidTelemetryCard extends StatelessWidget {
   final int uniqueTags;
@@ -23,54 +25,67 @@ class RfidTelemetryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE9E2D5),
+        color: AppColors.slate800,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFC7BDAF)),
+        border: Border.all(color: AppColors.slate700, width: 1.0),
       ),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: isScanning ? const Color(0xFF10B981) : Colors.white30,
-                      shape: BoxShape.circle,
-                      boxShadow: isScanning
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.6),
-                                blurRadius: 8,
-                                spreadRadius: 2,
-                              ),
-                            ]
-                          : null,
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: isScanning ? AppColors.electricCyan : AppColors.slate500,
+                        shape: BoxShape.circle,
+                        boxShadow: isScanning
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.electricCyan.withValues(alpha: 0.6),
+                                  blurRadius: 8,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isScanning ? 'SÓNG RFID ĐANG PHÁT' : 'CHẾ ĐỘ CHỜ',
-                    style: TextStyle(
-                      color: isScanning ? const Color(0xFF10B981) : Colors.white54,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        isScanning ? 'SÓNG RFID ĐANG PHÁT' : 'CHẾ ĐỘ CHỜ',
+                        style: TextStyle(
+                          color: isScanning ? AppColors.electricCyan : AppColors.slate400,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4EFE6),
+                  color: AppColors.slate850,
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppColors.slate700, width: 0.5),
                 ),
                 child: Text(
                   antennaInfo,
-                  style: const TextStyle(color: Color(0xFF0284C7), fontSize: 11, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    color: AppColors.cyanTech,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -83,7 +98,7 @@ class RfidTelemetryCard extends StatelessWidget {
                   title: 'Thẻ Duy Nhất',
                   value: uniqueTags.toString(),
                   unit: 'Tags',
-                  color: const Color(0xFF0284C7),
+                  color: AppColors.cyanTech,
                   icon: Icons.tag,
                 ),
               ),
@@ -93,7 +108,7 @@ class RfidTelemetryCard extends StatelessWidget {
                   title: 'Tổng Đọc Thô',
                   value: totalReads.toString(),
                   unit: 'Lượt',
-                  color: const Color(0xFFA78BFA),
+                  color: AppColors.rfidDuplicate,
                   icon: Icons.repeat,
                 ),
               ),
@@ -103,7 +118,7 @@ class RfidTelemetryCard extends StatelessWidget {
                   title: 'Tốc Độ Đọc',
                   value: readRate.toStringAsFixed(0),
                   unit: 'Tag/s',
-                  color: const Color(0xFF34D399),
+                  color: AppColors.rfidMatched,
                   icon: Icons.speed,
                 ),
               ),
@@ -124,9 +139,9 @@ class RfidTelemetryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4EFE6),
+        color: AppColors.slate850,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFC7BDAF), width: 0.5),
+        border: Border.all(color: AppColors.slate700, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -138,31 +153,42 @@ class RfidTelemetryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 10, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    color: AppColors.slate400,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  color: const Color(0xFF2C251E),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  value,
+                  style: AppTypography.kpiNumber.copyWith(
+                    color: AppColors.slate50,
+                    fontSize: 18,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 3),
-              Text(
-                unit,
-                style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
-              ),
-            ],
+                const SizedBox(width: 3),
+                Text(
+                  unit,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

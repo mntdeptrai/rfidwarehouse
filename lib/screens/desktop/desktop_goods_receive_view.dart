@@ -123,23 +123,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           ? _pendingGateOrders.where((p) => p.order.orderNo == _activeOrderNo || p.order.inboundOrderId == _activeOrderNo).toList()
           : _pendingGateOrders.where((p) => !p.isGatePassed).toList();
       final effectiveOrders = targetOrders.isNotEmpty ? targetOrders : _pendingGateOrders;
-      final expectedEpcs = <String>{};
+      int count = 0;
       for (final p in effectiveOrders) {
-        for (final it in p.items) {
-          expectedEpcs.add(it.epc.trim().toUpperCase());
-        }
+        count += p.items.length;
         for (final palletEpc in p.pallets.values) {
           if (palletEpc != null && palletEpc.isNotEmpty && palletEpc != '--') {
-            expectedEpcs.add(palletEpc.trim().toUpperCase());
+            count += 1;
           }
         }
       }
-      return expectedEpcs.length;
+      return count;
     }
     final effectiveItems = _activeExpectedItems.isNotEmpty
         ? _activeExpectedItems
         : _repo.items.where((i) => i.status == ItemStatus.pendingInbound).toList();
-    return effectiveItems.map((i) => i.epc.trim().toUpperCase()).toSet().length;
+    return effectiveItems.length;
   }
 
   int get _totalFileScanned {
@@ -148,28 +146,35 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           ? _pendingGateOrders.where((p) => p.order.orderNo == _activeOrderNo || p.order.inboundOrderId == _activeOrderNo).toList()
           : _pendingGateOrders.where((p) => !p.isGatePassed).toList();
       final effectiveOrders = targetOrders.isNotEmpty ? targetOrders : _pendingGateOrders;
-      final expectedEpcs = <String>{};
+      int count = 0;
       for (final p in effectiveOrders) {
-        for (final it in p.items) {
-          expectedEpcs.add(it.epc.trim().toUpperCase());
-        }
+        final ordNo = p.order.orderNo;
+        final scannedMap = _scannedTagsByOrderNo[ordNo] ?? {};
+        final matchedItemsCount = p.items.where((i) {
+          final clean = i.epc.trim().toUpperCase();
+          return clean != '--' && clean.isNotEmpty &&
+              (scannedMap.containsKey(clean) || _wizardScannedTags.containsKey(clean) || _passedGateEpcs.contains(clean));
+        }).length;
+        count += matchedItemsCount;
         for (final palletEpc in p.pallets.values) {
           if (palletEpc != null && palletEpc.isNotEmpty && palletEpc != '--') {
-            expectedEpcs.add(palletEpc.trim().toUpperCase());
+            final cleanPal = palletEpc.trim().toUpperCase();
+            if (scannedMap.containsKey(cleanPal) || _wizardScannedTags.containsKey(cleanPal) || _passedGateEpcs.contains(cleanPal)) {
+              count += 1;
+            }
           }
         }
       }
-      return expectedEpcs.where((epc) {
-        return _passedGateEpcs.contains(epc) ||
-            _wizardScannedTags.containsKey(epc) ||
-            _scannedTagsByOrderNo.values.any((m) => m.containsKey(epc));
-      }).length;
+      return count;
     }
     final effectiveItems = _activeExpectedItems.isNotEmpty
         ? _activeExpectedItems
         : _repo.items.where((i) => i.status == ItemStatus.pendingInbound).toList();
-    final expectedEpcs = effectiveItems.map((i) => i.epc.trim().toUpperCase()).toSet();
-    return expectedEpcs.where((epc) => _passedGateEpcs.contains(epc) || _wizardScannedTags.containsKey(epc)).length;
+    return effectiveItems.where((i) {
+      final clean = i.epc.trim().toUpperCase();
+      return clean != '--' && clean.isNotEmpty &&
+          (_passedGateEpcs.contains(clean) || _wizardScannedTags.containsKey(clean));
+    }).length;
   }
 
   void _syncWizardScannedTagsForActiveOrder() {
@@ -226,10 +231,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     _repo.addListener(_onRepoUpdate);
     _towerLight.addListener(_onThemeUpdate);
     _initTagListener();
-
-    if (!_desktopUhf.isConnected && _desktopUhf.config.autoConnectOnStartup) {
-      _desktopUhf.connectWithSavedConfig();
-    }
   }
 
   void _onThemeUpdate() {
@@ -412,14 +413,14 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
     // 1. Ưu tiên danh sách hàng của xe/pallet đang active hiện tại
     if (_activeExpectedItems.isNotEmpty) {
-      set.addAll(_activeExpectedItems.map((i) => i.epc.trim().toUpperCase()));
-      if (_activePalletTag != null && _activePalletTag!.isNotEmpty) {
+      set.addAll(_activeExpectedItems.map((i) => i.epc.trim().toUpperCase()).where((e) => e.isNotEmpty && e != '--'));
+      if (_activePalletTag != null && _activePalletTag!.isNotEmpty && _activePalletTag != '--') {
         set.add(_activePalletTag!.trim().toUpperCase());
       }
     } else if (_activeOrderNo != null && _pendingGateOrders.isNotEmpty) {
       final pOrder = _pendingGateOrders.where((p) => p.order.orderNo == _activeOrderNo || p.order.inboundOrderId == _activeOrderNo).firstOrNull;
       if (pOrder != null) {
-        set.addAll(pOrder.items.map((i) => i.epc.trim().toUpperCase()));
+        set.addAll(pOrder.items.map((i) => i.epc.trim().toUpperCase()).where((e) => e.isNotEmpty && e != '--'));
         for (final pal in pOrder.pallets.values) {
           if (pal != null && pal.isNotEmpty && pal != '--') {
             set.add(pal.trim().toUpperCase());
@@ -429,7 +430,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     } else if (_pendingGateOrders.isNotEmpty) {
       for (final p in _pendingGateOrders) {
         if (p.isGatePassed) continue;
-        set.addAll(p.items.map((i) => i.epc.trim().toUpperCase()));
+        set.addAll(p.items.map((i) => i.epc.trim().toUpperCase()).where((e) => e.isNotEmpty && e != '--'));
         for (final pal in p.pallets.values) {
           if (pal != null && pal.isNotEmpty && pal != '--') {
             set.add(pal.trim().toUpperCase());
@@ -437,19 +438,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         }
       }
     } else if (_wizardSelectedEpcs.isNotEmpty) {
-      set.addAll(_wizardSelectedEpcs.map((e) => e.trim().toUpperCase()));
+      set.addAll(_wizardSelectedEpcs.map((e) => e.trim().toUpperCase()).where((e) => e.isNotEmpty && e != '--'));
     } else {
       final cartons = _getAvailableCartons();
       for (var c in cartons) {
         final box = (c['cartonBox'] ?? c['code'] ?? '').toString().trim();
         if (_wizardSelectedCartons.contains(box)) {
           final serials = (c['serials'] as List<dynamic>?)?.map((e) => e.toString().trim().toUpperCase()).toList() ?? [];
-          set.addAll(serials);
+          set.addAll(serials.where((e) => e.isNotEmpty && e != '--'));
         }
       }
       if (set.isEmpty) {
         final dbPending = _repo.items.where((i) => i.status == ItemStatus.pendingInbound);
-        set.addAll(dbPending.map((i) => i.epc.trim().toUpperCase()));
+        set.addAll(dbPending.map((i) => i.epc.trim().toUpperCase()).where((e) => e.isNotEmpty && e != '--'));
       }
     }
 
@@ -631,8 +632,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   }
 
   Future<void> _stopWizardScan() async {
-    _autoCompleteTimer?.cancel();
-    _autoCompleteTimer = null;
     _wizardCountdownTimer?.cancel();
     _wizardCountdownTimer = null;
     _tagBatchUiTimer?.cancel();
@@ -652,6 +651,9 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
     if (_wizardUnexpectedTags.isEmpty) {
       _towerLight.turnOffAll(reason: 'Đã dừng quét cổng nhập kho');
     }
+
+    // Tự động kiểm tra và xác nhận nếu đã đối soát đủ khi dừng quét
+    _checkAndTriggerAutoComplete();
   }
 
   List<TagInfo> _getFilteredUnexpectedTags() {
@@ -896,6 +898,53 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
       }
     }
 
+    // Nếu không khớp chính xác EPC đã có trong file, kiểm tra slot chưa gán EPC (-- hoặc rỗng)
+    if (itemPendingOrder == null) {
+      for (final pOrder in _pendingGateOrders) {
+        if (pOrder.isGatePassed) continue;
+        final ordNo = pOrder.order.orderNo;
+        final scannedMap = _scannedTagsByOrderNo[ordNo] ?? {};
+        if (scannedMap.containsKey(cleanEpc) || _wizardScannedTags.containsKey(cleanEpc)) continue;
+
+        // Ưu tiên pallet đang active nếu có
+        Item? unassignedSlot;
+        if (_activePallet != null) {
+          final cleanActivePal = _activePallet!.palletCode.trim().toUpperCase().replaceAll('PAL-', '');
+          unassignedSlot = pOrder.items.where((i) {
+            final itPal = (i.palletId ?? '').trim().toUpperCase().replaceAll('PAL-', '');
+            final isPalMatch = itPal == cleanActivePal || (itPal.isEmpty && pOrder.getPalletCodes().length <= 1);
+            return isPalMatch && (i.epc.trim().isEmpty || i.epc.trim() == '--');
+          }).firstOrNull;
+        }
+        unassignedSlot ??= pOrder.items.where((i) => i.epc.trim().isEmpty || i.epc.trim() == '--').firstOrNull;
+
+        if (unassignedSlot != null) {
+          final slotIdx = pOrder.items.indexOf(unassignedSlot);
+          if (slotIdx >= 0) {
+            final updatedItem = unassignedSlot.copyWith(
+              epc: cleanEpc,
+              serialNumber: cleanEpc,
+            );
+            pOrder.items[slotIdx] = updatedItem;
+            final repoIdx = _repo.items.indexWhere((it) => it.itemId == unassignedSlot!.itemId);
+            if (repoIdx >= 0) {
+              _repo.items[repoIdx] = updatedItem;
+            }
+            if (_activeExpectedItems.isNotEmpty) {
+              final actIdx = _activeExpectedItems.indexWhere((it) => it.itemId == unassignedSlot!.itemId);
+              if (actIdx >= 0) {
+                _activeExpectedItems[actIdx] = updatedItem;
+              }
+            }
+            _invalidateCartonCaches();
+            itemPendingOrder = pOrder;
+            matchedItem = updatedItem;
+            break;
+          }
+        }
+      }
+    }
+
     if (itemPendingOrder != null && matchedItem != null) {
       final ordNo = itemPendingOrder.order.orderNo;
       final itPal = matchedItem.palletId;
@@ -1099,12 +1148,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   /// Tự động hoàn tất nhập kho và đẩy sang PDA khi đã quét đủ 100% khớp file (không cần bấm tay)
   void _checkAndTriggerAutoComplete() {
     if (_isCompletingGoodsReceive) return;
-    // BẮT BUỘC: Nếu không quét hoặc đã qua cổng hết thì không kích hoạt
-    if (!_wizardIsScanning && !_desktopUhf.isScanning) {
-      _autoCompleteTimer?.cancel();
-      _autoCompleteTimer = null;
-      return;
-    }
     if (_pendingGateOrders.isNotEmpty && _pendingGateOrders.every((p) => p.isGatePassed)) {
       _autoCompleteTimer?.cancel();
       _autoCompleteTimer = null;
@@ -1180,7 +1223,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         _autoCompleteTimer = Timer(const Duration(milliseconds: 350), () {
           _autoCompleteTimer = null;
           if (!mounted || _isCompletingGoodsReceive) return;
-          if (!_wizardIsScanning && !_desktopUhf.isScanning) return;
           final currentUnexp = _getFilteredUnexpectedTags();
           if (currentUnexp.isEmpty) {
             _completeGoodsReceiveAtGate();
@@ -1450,7 +1492,11 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           }
           final targetPalId = isNoPallet ? null : (palCode.startsWith('PAL-') ? palCode : 'PAL-$palCode');
           if (pending != null) {
-            await _repo.addInboundOrder(pending.order, autoGenerateEpcs: false);
+            final alreadyInRepo = _repo.inboundOrders.any((o) =>
+                o.orderNo == pending.order.orderNo || o.inboundOrderId == pending.order.inboundOrderId);
+            if (!alreadyInRepo) {
+              await _repo.addInboundOrder(pending.order, autoGenerateEpcs: false);
+            }
             for (var it in palItems) {
               it.status = ItemStatus.waitingPutaway;
               it.palletId = targetPalId;
@@ -2209,25 +2255,25 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: c.rfidCyan,
-                            foregroundColor: const Color(0xFF2C251E),
+                            foregroundColor: const Color(0xFFFFFFFF),
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             elevation: 1,
                           ),
-                          icon: const Icon(Icons.sensors, size: 16, color: Color(0xFF2C251E)),
+                          icon: const Icon(Icons.sensors, size: 16, color: Color(0xFFFFFFFF)),
                           label: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 'CHỌN ĐỐI SOÁT',
                                 style: TextStyle(
-                                  color: Color(0xFF2C251E),
+                                  color: Color(0xFFFFFFFF),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12.5,
                                 ),
                               ),
                               SizedBox(width: 6),
-                              Icon(Icons.arrow_forward, size: 14, color: Color(0xFF2C251E)),
+                              Icon(Icons.arrow_forward, size: 14, color: Color(0xFFFFFFFF)),
                             ],
                           ),
                           onPressed: () => _selectActivePendingPallet(ordNo, palletCode),
@@ -2368,16 +2414,16 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
             final assignedPalletId = effectivePallet != null
                 ? (_repo.pallets.where((p) => p.palletCode.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == effectivePallet.toUpperCase() || p.palletId.toUpperCase() == 'PAL-${effectivePallet.toUpperCase()}').firstOrNull?.palletId ?? (effectivePallet.toUpperCase().startsWith('PAL-') ? effectivePallet : 'PAL-$effectivePallet'))
                 : null;
-            final assignedOrderNo = inboundOrderNo;
+            final sSerialNumber = (sItem['serialNumber'] ?? sSerial).toString().trim();
             explicitItems.add(Item(
               itemId: 'ITEM-${now.millisecondsSinceEpoch}-$itemSeq',
               productId: sBarcode,
               sku: sBarcode,
               productName: sName,
-              serialNumber: sSerial,
+              serialNumber: sSerialNumber.isNotEmpty ? sSerialNumber : sSerial,
               epc: sSerial,
               status: ItemStatus.pendingInbound,
-              orderNo: assignedOrderNo,
+              orderNo: inboundOrderNo,
               palletId: assignedPalletId,
               cartonCode: cartonBox != null && cartonBox.isNotEmpty ? cartonBox : null,
               supplier: sSupplier,
@@ -2421,19 +2467,20 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
         final ord = item.orderNo ?? inboundOrderNo;
         ordersDetailMap.putIfAbsent(ord, () => {});
         final detailMap = ordersDetailMap[ord]!;
+        final cleanProdName = _repo.getSkuProductName(item.sku, item.productName);
         if (detailMap.containsKey(item.sku)) {
           final old = detailMap[item.sku]!;
           detailMap[item.sku] = InboundOrderDetail(
             productId: item.productId,
             sku: item.sku,
-            productName: item.productName,
+            productName: cleanProdName,
             requiredQty: old.requiredQty + 1,
           );
         } else {
           detailMap[item.sku] = InboundOrderDetail(
             productId: item.productId,
             sku: item.sku,
-            productName: item.productName,
+            productName: cleanProdName,
             requiredQty: 1,
           );
         }
@@ -2455,7 +2502,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           newProducts.add(Product(
             productId: item.productId,
             sku: item.sku,
-            productName: item.productName,
+            productName: _repo.getSkuProductName(item.sku, item.productName),
             category: 'Hàng nhập qua cổng RFID',
             unit: 'Cái',
           ));
@@ -2591,7 +2638,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
 
         for (var r in poRows) {
           final sku = (r['sku'] ?? '--').toString().trim();
-          final prodName = (r['productName'] ?? 'Sản phẩm PO').toString().trim();
+          final prodName = _repo.getSkuProductName(sku, (r['productName'] ?? 'Sản phẩm PO').toString().trim());
           final qty = (r['quantity'] as int?) ?? 1;
           final rowEpc = (r['epc'] ?? '').toString().trim();
 
@@ -2672,7 +2719,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
           newProducts.add(Product(
             productId: item.productId,
             sku: item.sku,
-            productName: item.productName,
+            productName: _repo.getSkuProductName(item.sku, item.productName),
             category: 'Hàng nhập đơn PO',
             unit: 'Cái',
           ));
@@ -4628,21 +4675,21 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                                 const SizedBox(
                                   width: 14,
                                   height: 14,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2C251E)),
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFFFFF)),
                                 )
                               else
-                                const Icon(Icons.file_download_outlined, size: 18, color: Color(0xFF2C251E)),
+                                const Icon(Icons.file_download_outlined, size: 18, color: Color(0xFFFFFFFF)),
                               const SizedBox(width: 6),
                               Text(
                                 _isImporting ? 'ĐANG XỬ LÝ...' : 'NHẬP HÀNG',
                                 style: const TextStyle(
-                                  color: Color(0xFF2C251E),
+                                  color: Color(0xFFFFFFFF),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12.5,
                                 ),
                               ),
                               const SizedBox(width: 4),
-                              const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF2C251E)),
+                              const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFFFFFFFF)),
                             ],
                           ),
                         ),
@@ -5762,7 +5809,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                               backgroundColor: isScanning
                                   ? const Color(0xFFEF4444)
                                   : (isLocked ? const Color(0xFF10B981) : c.rfidCyan),
-                              foregroundColor: (isScanning || isLocked) ? Colors.white : const Color(0xFF2C251E),
+                              foregroundColor: (isScanning || isLocked) ? Colors.white : const Color(0xFFFFFFFF),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               elevation: 2,
@@ -5783,7 +5830,7 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
                             ),
                             onPressed: isScanning
                                 ? _stopWizardScan
-                                : (isLocked ? null : _toggleWizardScan),
+                                : (isLocked ? () => _completeGoodsReceiveAtGate() : _toggleWizardScan),
                           );
                         },
                       ),
@@ -5896,19 +5943,19 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
               Icon(
                 Icons.all_inclusive,
                 size: 13,
-                color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+                color: isSelected ? const Color(0xFFFFFFFF) : c.textSecondary,
               )
             else
               Icon(
                 Icons.timer_outlined,
                 size: 13,
-                color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+                color: isSelected ? const Color(0xFFFFFFFF) : c.textSecondary,
               ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+                color: isSelected ? const Color(0xFFFFFFFF) : c.textSecondary,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 11.5,
               ),

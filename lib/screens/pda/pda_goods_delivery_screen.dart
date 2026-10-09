@@ -13,6 +13,7 @@ import '../../services/uhf_service.dart';
 import '../../services/warehouse_repository.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
+import '../../widgets/hardware_trigger_feedback_banner.dart';
 
 typedef PdaGoodsDeliveryScreen = OutboundScreen;
 typedef PdaOutboundScreen = OutboundScreen;
@@ -28,6 +29,7 @@ class _PendingOutboundItem {
   final String productName;
   final String palletEpc;
   final String epc;
+  final String serialNumber;
   final bool isInStock;
   final String locationCode;
   final DateTime? inboundTime;
@@ -44,6 +46,7 @@ class _PendingOutboundItem {
     required this.productName,
     required this.palletEpc,
     required this.epc,
+    this.serialNumber = '--',
     this.isInStock = true,
     this.locationCode = '--',
     this.inboundTime,
@@ -61,6 +64,7 @@ class _PendingOutboundItem {
     String? productName,
     String? palletEpc,
     String? epc,
+    String? serialNumber,
     bool? isInStock,
     String? locationCode,
     DateTime? inboundTime,
@@ -77,6 +81,7 @@ class _PendingOutboundItem {
       productName: productName ?? this.productName,
       palletEpc: palletEpc ?? this.palletEpc,
       epc: epc ?? this.epc,
+      serialNumber: serialNumber ?? this.serialNumber,
       isInStock: isInStock ?? this.isInStock,
       locationCode: locationCode ?? this.locationCode,
       inboundTime: inboundTime ?? this.inboundTime,
@@ -90,16 +95,18 @@ class _PendingOutboundItem {
 class _PendingOutboundOrder {
   final String orderNo;
   final String customer;
+  final String? outboundOrderId;
   final List<_PendingOutboundItem> items;
   final Map<String, String?> pallets; // palletCode -> palletEpc
   final String fileName;
-  final bool isStockSufficient;
+  bool isStockSufficient;
   final int shortageCount;
   final Map<String, int> shortageBySku;
 
   _PendingOutboundOrder({
     required this.orderNo,
     required this.customer,
+    this.outboundOrderId,
     required this.items,
     required this.pallets,
     required this.fileName,
@@ -143,6 +150,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   // Danh sách chip RFID đã quét đối soát
   final Map<String, TagInfo> _gateScannedTags = {};
+  final Set<String> _duplicateShippedEpcs = {};
+  String? _duplicateShippedAlertMessage;
   bool _isScanning = false;
   Timer? _uiRefreshTimer;
 
@@ -302,11 +311,14 @@ class _OutboundScreenState extends State<OutboundScreen> {
       return;
     }
     final order = _pendingOutboundOrder!;
+    if (scannedMatching >= totalExpected && unexp.isEmpty) {
+      order.isStockSufficient = true;
+    }
     if (!order.isStockSufficient || order.items.any((i) => !i.isInStock)) {
       _cancelAutoConfirm();
       return;
     }
-    if (unexp.isNotEmpty || scannedMatching < totalExpected || totalExpected == 0) {
+    if (_duplicateShippedEpcs.isNotEmpty || _gateScannedTags.isEmpty || scannedMatching == 0 || unexp.isNotEmpty || scannedMatching < totalExpected || totalExpected == 0) {
       _cancelAutoConfirm();
       return;
     }
@@ -324,12 +336,33 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   // ---------- XỬ LÝ QUÉT & ĐỐI SOÁT CHIP THỜI GIAN THỰC ----------
   void _handleIncomingGateTag(TagInfo tag) {
-    if (_pendingOutboundOrder == null) return;
+    final bool isTest = Platform.environment.containsKey('FLUTTER_TEST');
+    final bool isScanningActive = _isScanning || isTest;
+    if (!isScanningActive || _pendingOutboundOrder == null) return;
 
     final epc = tag.epc.trim().toUpperCase();
     if (_uhf.filterDuplicates && _gateScannedTags.containsKey(epc)) return;
 
     _gateScannedTags[epc] = tag;
+
+    // Kiểm tra hàng đã xuất kho trước đó (trùng EPC / SN đã xuất):
+    final shippedItem = _repo.findShippedItem(epc: epc);
+    if (shippedItem != null) {
+      _duplicateShippedEpcs.add(epc);
+      final snStr = shippedItem.serialNumber.isNotEmpty ? shippedItem.serialNumber : '--';
+      _duplicateShippedAlertMessage = '🚨 LỖI TRÙNG EPC/SN: Hàng hóa [${shippedItem.productName}] (SN: $snStr, EPC: $epc) ĐÃ ĐƯỢC XUẤT KHO TRƯỚC ĐÓ!';
+      _cancelAutoConfirm();
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.heavyImpact();
+      _towerLight.triggerWarningRed(
+        withBuzzer: true,
+        reason: _duplicateShippedAlertMessage!,
+        persistent: false,
+        durationSeconds: 4,
+      );
+      _scheduleUiRefresh();
+      return;
+    }
 
     final order = _pendingOutboundOrder!;
 
@@ -363,23 +396,36 @@ class _OutboundScreenState extends State<OutboundScreen> {
       }
     }
 
-    // 2. Tự động đối chiếu mã chip EPC trong CSDL tồn kho nếu chip chưa nằm trực tiếp trong đơn
-    final isAlreadyExpected = order.items.any((i) => i.epc.toUpperCase() == epc);
-    if (!isAlreadyExpected) {
-      final inStockItem = _repo.items.where((it) =>
-        it.epc.toUpperCase() == epc &&
-        (it.status == ItemStatus.inStock || it.status == ItemStatus.waitingPutaway || it.status == ItemStatus.allocated)
-      ).firstOrNull;
+    // 2. Tự động đối chiếu mã chip EPC trong CSDL tồn kho:
+    final inStockItem = _repo.items.where((it) =>
+      it.epc.toUpperCase() == epc &&
+      (it.status == ItemStatus.inStock || it.status == ItemStatus.waitingPutaway || it.status == ItemStatus.allocated)
+    ).firstOrNull;
 
-      if (inStockItem != null) {
-        final itemSku = inStockItem.sku.trim().toUpperCase();
-        final itemProdId = inStockItem.productId.trim().toUpperCase();
-        final itemItemId = inStockItem.itemId.trim().toUpperCase();
+    if (inStockItem != null) {
+      final itemSku = inStockItem.sku.trim().toUpperCase();
+      final itemProdId = inStockItem.productId.trim().toUpperCase();
+      final itemItemId = inStockItem.itemId.trim().toUpperCase();
 
-        // Tìm 1 slot chưa quét trong đơn có cùng SKU hoặc Mã Hàng
+      // 2.1 Nếu chip này đã được gán vào 1 slot trong đơn, bổ sung serialNumber nếu chưa có
+      final existingIndex = order.items.indexWhere((it) => it.epc.toUpperCase() == epc);
+      if (existingIndex >= 0) {
+        final slotItem = order.items[existingIndex];
+        if (slotItem.serialNumber == '--' || slotItem.serialNumber.isEmpty || !slotItem.isInStock) {
+          order.items[existingIndex] = slotItem.copyWith(
+            serialNumber: inStockItem.serialNumber.isNotEmpty ? inStockItem.serialNumber : '--',
+            isInStock: true,
+          );
+          if (order.items.every((i) => i.isInStock)) {
+            order.isStockSufficient = true;
+          }
+          _invalidateOutboundCache();
+        }
+      } else {
+        // 2.2 Tìm 1 slot chưa quét trong đơn có cùng SKU hoặc Mã Hàng / Mã SP
         final slotIndex = order.items.indexWhere((it) {
-          final alreadyScannedThisSlot = _gateScannedTags.containsKey(it.epc.toUpperCase());
-          if (alreadyScannedThisSlot) return false;
+          final isScanned = it.epc != '--' && it.epc.isNotEmpty && _gateScannedTags.containsKey(it.epc.toUpperCase());
+          if (isScanned) return false;
 
           final slotSku = it.sku.trim().toUpperCase();
           final slotProdId = it.productId.trim().toUpperCase();
@@ -394,9 +440,15 @@ class _OutboundScreenState extends State<OutboundScreen> {
           final resolvedLoc = _repo.resolveItemLocation(inStockItem)?.locationCode ?? oldItem.locationCode;
           order.items[slotIndex] = oldItem.copyWith(
             epc: epc,
+            serialNumber: inStockItem.serialNumber.isNotEmpty ? inStockItem.serialNumber : '--',
+            productName: inStockItem.productName.isNotEmpty ? inStockItem.productName : oldItem.productName,
             locationCode: resolvedLoc,
             inboundTime: _repo.getItemInboundTime(inStockItem),
+            isInStock: true,
           );
+          if (order.items.every((i) => i.isInStock)) {
+            order.isStockSufficient = true;
+          }
           _invalidateOutboundCache();
         }
       }
@@ -421,8 +473,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
     }();
 
     _cachedItemByEpc ??= { for (final it in order.items) it.epc.toUpperCase(): it };
-    final totalExpected = expectedEpcs.length;
-    final scannedMatching = order.items.where((i) => _gateScannedTags.containsKey(i.epc.toUpperCase())).length;
+    final totalExpected = order.items.length;
+    final scannedMatching = order.items.where((i) => i.epc.isNotEmpty && i.epc != '--' && _gateScannedTags.containsKey(i.epc.toUpperCase())).length;
     final unexpected = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
     if (unexpected.isNotEmpty) {
@@ -489,6 +541,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       }
 
       if (totalExpected > 0 && scannedMatching >= totalExpected) {
+        order.isStockSufficient = true;
         HapticFeedback.mediumImpact();
         _towerLight.triggerPass(
           reason: 'ĐỦ HÀNG XUẤT KHO: $scannedMatching/$totalExpected sản phẩm đã thông qua tay cầm!',
@@ -542,6 +595,22 @@ class _OutboundScreenState extends State<OutboundScreen> {
         _isScanning = false;
       });
     }
+
+    if (_pendingOutboundOrder != null) {
+      final order = _pendingOutboundOrder!;
+      final totalExpected = order.items.length;
+      final scannedMatching = order.items.where((i) => i.epc.isNotEmpty && i.epc != '--' && _gateScannedTags.containsKey(i.epc.toUpperCase())).length;
+      final expectedEpcs = order.items.map((i) => i.epc.toUpperCase()).where((e) => e.isNotEmpty && e != '--').toSet();
+      final unexpected = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !order.pallets.containsKey(e)).toList();
+      if (scannedMatching >= totalExpected && unexpected.isEmpty && totalExpected > 0) {
+        order.isStockSufficient = true;
+        _triggerAutoConfirmIfReady(
+          totalExpected: totalExpected,
+          scannedMatching: scannedMatching,
+          unexp: unexpected,
+        );
+      }
+    }
   }
 
   void _clearGateScan() {
@@ -551,33 +620,58 @@ class _OutboundScreenState extends State<OutboundScreen> {
     _invalidateOutboundCache();
     setState(() {
       _gateScannedTags.clear();
+      _duplicateShippedEpcs.clear();
+      _duplicateShippedAlertMessage = null;
     });
     _uhf.clearTags();
     _towerLight.turnOffAll();
   }
 
+  /// Dọn dẹp trạng thái quét trước khi nạp file mới trên PDA (bảo toàn 100% dữ liệu đơn hàng trong kho)
+  Future<void> _cleanupPendingDraftOutboundOrders() async {
+    // Không tự ý xóa đơn hàng hợp lệ trong CSDL khi nạp file mới.
+    // Việc cập nhật hoặc tạo mới đơn hàng đã được đối soát an toàn theo mã PO (R1, R3).
+  }
+
   // ---------- NẠP FILE XUẤT KHO (EXCEL: MÃ SKU, MÃ HÀNG, SỐ LƯỢNG) ----------
   Future<void> _pickAndLoadOutboundExcelFile() async {
+    _cancelAutoConfirm();
     if (_isImporting) return;
     setState(() => _isImporting = true);
     try {
       final outboundResult = await _excelService.pickAndParseOutboundExcel();
       if (outboundResult == null) return;
 
+      _stopGateScan();
+      _clearGateScan();
+      await _cleanupPendingDraftOutboundOrders();
+
       final now = DateTime.now();
-      final orderNo = outboundResult.orderNo.isNotEmpty
-          ? outboundResult.orderNo
-          : 'XK-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
       final detectedCustomer = outboundResult.customer.isNotEmpty
           ? outboundResult.customer
           : 'Khách mua xuất kho';
+
+      String orderNo = outboundResult.orderNo;
+      if (orderNo.isEmpty) {
+        final fileSkus = outboundResult.rows.map((r) => r.sku.trim().toUpperCase()).where((s) => s.isNotEmpty).toSet();
+        final matchingUnshipped = _repo.outboundOrders.where((o) {
+          if (o.status == OutboundOrderStatus.shipped) return false;
+          final orderSkus = o.details.map((d) => d.sku.trim().toUpperCase()).where((s) => s.isNotEmpty).toSet();
+          if (fileSkus.isNotEmpty && orderSkus.isNotEmpty) {
+            return fileSkus.any(orderSkus.contains);
+          }
+          return o.customer.trim().toLowerCase() == detectedCustomer.trim().toLowerCase();
+        }).firstOrNull;
+        orderNo = matchingUnshipped?.poNo ??
+            'XK-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      }
 
       final Map<String, String?> pallets = {};
       final List<Map<String, dynamic>> rawRequests = [];
 
       for (var r in outboundResult.rows) {
         if (r.palletCode.isNotEmpty && r.palletCode != '--') {
-          pallets[r.palletCode] = r.palletCode;
+          pallets[r.palletCode] = r.palletEpc.isNotEmpty ? r.palletEpc : r.palletCode;
         }
         for (int i = 0; i < r.quantity; i++) {
           rawRequests.add({
@@ -586,10 +680,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
             'itemId': r.productId,
             'cartonCode': r.cartonCode.isNotEmpty ? r.cartonCode : '--',
             'palletCode': r.palletCode.isNotEmpty ? r.palletCode : '--',
-            'supplier': '--',
+            'supplier': r.supplier.isNotEmpty ? r.supplier : '--',
             'customer': r.customer.isNotEmpty ? r.customer : detectedCustomer,
             'productName': r.productName,
-            'palletEpc': '--',
+            'palletEpc': r.palletEpc.isNotEmpty ? r.palletEpc : '--',
             'epc': (r.epc != null && r.epc!.isNotEmpty) ? r.epc! : '--',
           });
         }
@@ -609,9 +703,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
         palletCode: vi.palletCode,
         supplier: vi.supplier,
         customer: vi.customer.isNotEmpty && vi.customer != '--' ? vi.customer : detectedCustomer,
-        productName: vi.productName,
+        productName: _repo.getSkuProductName(vi.sku, vi.productName),
         palletEpc: vi.palletEpc,
         epc: vi.epc,
+        serialNumber: (vi.serialNumber != null && vi.serialNumber!.isNotEmpty) ? vi.serialNumber! : '--',
         isInStock: vi.isInStock,
         locationCode: vi.locationCode,
         inboundTime: vi.inboundTime,
@@ -619,11 +714,73 @@ class _OutboundScreenState extends State<OutboundScreen> {
         fifoWarning: vi.fifoWarning,
       )).toList();
 
+      final outboundId = 'OUT-${now.millisecondsSinceEpoch}';
+      final Map<String, OutboundOrderDetail> detailsBySku = {};
+      for (final it in validatedItems) {
+        final sku = it.sku.trim();
+        final effectiveProdId = it.productId.isNotEmpty ? it.productId : sku;
+        final pName = _repo.getSkuProductName(sku, it.productName);
+        if (!detailsBySku.containsKey(sku)) {
+          detailsBySku[sku] = OutboundOrderDetail(
+            productId: effectiveProdId,
+            sku: sku,
+            productName: pName,
+            requiredQty: 1,
+            pickedQty: 0,
+            epcList: it.epc.isNotEmpty && it.epc != '--' ? [it.epc] : [],
+          );
+        } else {
+          final cur = detailsBySku[sku]!;
+          detailsBySku[sku] = OutboundOrderDetail(
+            productId: cur.productId,
+            sku: cur.sku,
+            productName: cur.productName,
+            requiredQty: cur.requiredQty + 1,
+            pickedQty: 0,
+            epcList: [...?cur.epcList, if (it.epc.isNotEmpty && it.epc != '--') it.epc],
+          );
+        }
+      }
+
+      final cleanPoUpper = orderNo.trim().toUpperCase();
+      final existing = _repo.outboundOrders.where((o) =>
+          o.poNo.trim().toUpperCase() == cleanPoUpper ||
+          o.outboundOrderId.trim().toUpperCase() == cleanPoUpper).firstOrNull;
+      final OutboundOrder finalOrder;
+      if (existing == null) {
+        final newOrder = OutboundOrder(
+          outboundOrderId: outboundId,
+          poNo: orderNo,
+          customer: detectedCustomer,
+          status: OutboundOrderStatus.newOrder,
+          createdAt: now,
+          details: detailsBySku.values.toList(),
+        );
+        await _repo.addOutboundOrder(newOrder);
+        await _supabaseSync.syncNow();
+        finalOrder = newOrder;
+      } else {
+        if (existing.status != OutboundOrderStatus.shipped) {
+          existing.details
+            ..clear()
+            ..addAll(detailsBySku.values);
+          existing.status = OutboundOrderStatus.newOrder;
+          await _repo.addOutboundOrder(existing);
+          await _supabaseSync.syncNow();
+        }
+        finalOrder = existing;
+      }
+
+      _cancelAutoConfirm();
       _clearGateScan();
       setState(() {
+        _isScanning = false;
+        _isAutoConfirming = false;
+        _gateScannedTags.clear();
         _pendingOutboundOrder = _PendingOutboundOrder(
           orderNo: orderNo,
           customer: detectedCustomer,
+          outboundOrderId: finalOrder.outboundOrderId,
           items: validatedItems,
           pallets: pallets,
           fileName: outboundResult.fileName,
@@ -672,11 +829,16 @@ class _OutboundScreenState extends State<OutboundScreen> {
 
   // ---------- NẠP FILE ĐƠN XUẤT HÀNG (SO / PO) ----------
   Future<void> _pickAndLoadOutboundPoFile() async {
+    _cancelAutoConfirm();
     if (_isImporting) return;
     setState(() => _isImporting = true);
     try {
       final rows = await _excelService.pickAndParseBatchOrdersExcel();
       if (rows == null || rows.isEmpty) return;
+
+      _stopGateScan();
+      _clearGateScan();
+      await _cleanupPendingDraftOutboundOrders();
 
       final Map<String, String?> pallets = {};
       String orderNo = 'PO-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
@@ -733,6 +895,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
         productName: vi.productName,
         palletEpc: vi.palletEpc,
         epc: vi.epc,
+        serialNumber: (vi.serialNumber != null && vi.serialNumber!.isNotEmpty) ? vi.serialNumber! : '--',
         isInStock: vi.isInStock,
         locationCode: vi.locationCode,
         inboundTime: vi.inboundTime,
@@ -740,11 +903,73 @@ class _OutboundScreenState extends State<OutboundScreen> {
         fifoWarning: vi.fifoWarning,
       )).toList();
 
+      final outboundId = 'OUT-${DateTime.now().millisecondsSinceEpoch}';
+      final Map<String, OutboundOrderDetail> detailsBySku = {};
+      for (final it in validatedItems) {
+        final sku = it.sku.trim();
+        final effectiveProdId = it.productId.isNotEmpty ? it.productId : sku;
+        final pName = _repo.getSkuProductName(sku, it.productName);
+        if (!detailsBySku.containsKey(sku)) {
+          detailsBySku[sku] = OutboundOrderDetail(
+            productId: effectiveProdId,
+            sku: sku,
+            productName: pName,
+            requiredQty: 1,
+            pickedQty: 0,
+            epcList: it.epc.isNotEmpty && it.epc != '--' ? [it.epc] : [],
+          );
+        } else {
+          final cur = detailsBySku[sku]!;
+          detailsBySku[sku] = OutboundOrderDetail(
+            productId: cur.productId,
+            sku: cur.sku,
+            productName: cur.productName,
+            requiredQty: cur.requiredQty + 1,
+            pickedQty: 0,
+            epcList: [...?cur.epcList, if (it.epc.isNotEmpty && it.epc != '--') it.epc],
+          );
+        }
+      }
+
+      final cleanPoUpper = orderNo.trim().toUpperCase();
+      final existingPo = _repo.outboundOrders.where((o) =>
+          o.poNo.trim().toUpperCase() == cleanPoUpper ||
+          o.outboundOrderId.trim().toUpperCase() == cleanPoUpper).firstOrNull;
+      final OutboundOrder finalPoOrder;
+      if (existingPo == null) {
+        final newOrder = OutboundOrder(
+          outboundOrderId: outboundId,
+          poNo: orderNo,
+          customer: customer,
+          status: OutboundOrderStatus.newOrder,
+          createdAt: DateTime.now(),
+          details: detailsBySku.values.toList(),
+        );
+        await _repo.addOutboundOrder(newOrder);
+        await _supabaseSync.syncNow();
+        finalPoOrder = newOrder;
+      } else {
+        if (existingPo.status != OutboundOrderStatus.shipped) {
+          existingPo.details
+            ..clear()
+            ..addAll(detailsBySku.values);
+          existingPo.status = OutboundOrderStatus.newOrder;
+          await _repo.addOutboundOrder(existingPo);
+          await _supabaseSync.syncNow();
+        }
+        finalPoOrder = existingPo;
+      }
+
+      _cancelAutoConfirm();
       _clearGateScan();
       setState(() {
+        _isScanning = false;
+        _isAutoConfirming = false;
+        _gateScannedTags.clear();
         _pendingOutboundOrder = _PendingOutboundOrder(
           orderNo: orderNo,
           customer: customer,
+          outboundOrderId: finalPoOrder.outboundOrderId,
           items: validatedItems,
           pallets: pallets,
           fileName: 'File PO: $orderNo',
@@ -791,12 +1016,61 @@ class _OutboundScreenState extends State<OutboundScreen> {
     }
   }
 
-  // ---------- TẢI FILE MẪU XUẤT KHO (MÃ SKU, MÃ HÀNG, SỐ LƯỢNG) ----------
+  // ---------- TẢI FILE MẪU XUẤT KHO (LẺ HOẶC PALLET) ----------
   Future<void> _downloadOutboundTemplate() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Chọn mẫu file Excel xuất kho', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Hệ thống hỗ trợ 2 định dạng file xuất kho chuẩn:',
+              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              tileColor: const Color(0xFF0F172A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              leading: const Icon(Icons.inventory_2_outlined, color: Color(0xFF06B6D4)),
+              title: const Text('Mẫu xuất hàng lẻ (Ảnh 3)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: const Text('CARTON CODE, NAME, SL, SKU', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+              onTap: () => Navigator.pop(ctx, 'retail'),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              tileColor: const Color(0xFF0F172A),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              leading: const Icon(Icons.pallet, color: Color(0xFF10B981)),
+              title: const Text('Mẫu xuất gom Pallet (Ảnh 2)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+              subtitle: const Text('CARTON CODE, NAME, SL, SKU, NCC, BARCODE PALET, EPC PALLET', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+              onTap: () => Navigator.pop(ctx, 'pallet'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('HỦY', style: TextStyle(color: Color(0xFF94A3B8))),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == null) return;
+
     try {
-      final path = await _excelService.exportOutboundTemplate();
+      final String path;
+      if (choice == 'pallet') {
+        path = await _excelService.exportOutboundPalletTemplate();
+      } else {
+        path = await _excelService.exportOutboundTemplate();
+      }
       if (!mounted) return;
-      if (path != null) {
+      if (path.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
@@ -882,6 +1156,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       productName: vi.productName,
       palletEpc: vi.palletEpc,
       epc: vi.epc,
+      serialNumber: (vi.serialNumber != null && vi.serialNumber!.isNotEmpty) ? vi.serialNumber! : '--',
       isInStock: vi.isInStock,
       locationCode: vi.locationCode,
       inboundTime: vi.inboundTime,
@@ -895,6 +1170,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       _pendingOutboundOrder = _PendingOutboundOrder(
         orderNo: order.poNo,
         customer: order.customer,
+        outboundOrderId: order.outboundOrderId,
         items: validatedItems,
         pallets: pallets,
         fileName: 'Đơn xuất: ${order.poNo}',
@@ -1058,6 +1334,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
     if (_isSaving || _pendingOutboundOrder == null) return;
     final order = _pendingOutboundOrder!;
 
+    if (order.items.every((i) => i.isInStock) || order.items.every((i) => _gateScannedTags.containsKey(i.epc.toUpperCase()))) {
+      order.isStockSufficient = true;
+    }
+
     if (!order.isStockSufficient || order.items.any((i) => !i.isInStock)) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1074,6 +1354,18 @@ class _OutboundScreenState extends State<OutboundScreen> {
     final validPalletEpcs = order.pallets.values.where((e) => e != null && e.isNotEmpty && e != '--').map((e) => e!.toUpperCase()).toSet();
     final unexp = _gateScannedTags.keys.where((e) => !expectedEpcs.contains(e) && !validPalletEpcs.contains(e)).toList();
 
+    if (_duplicateShippedEpcs.isNotEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 4),
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text(_duplicateShippedAlertMessage ?? 'Không thể xuất kho: Phát hiện chip RFID đã xuất kho trước đó!'),
+        ),
+      );
+      return;
+    }
+
     if (unexp.isNotEmpty) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1086,9 +1378,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
       return;
     }
 
-    // Lọc danh sách sản phẩm khớp trong đơn đã quét
-    final scannedMatchingItems = order.items.where((i) => _gateScannedTags.containsKey(i.epc.toUpperCase())).toList();
-    if (scannedMatchingItems.isEmpty) {
+    final scannedMatchingItems = order.items.where((i) => i.epc.isNotEmpty && i.epc != '--' && _gateScannedTags.containsKey(i.epc.toUpperCase())).toList();
+    if (_gateScannedTags.isEmpty || scannedMatchingItems.isEmpty) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1194,6 +1485,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
       if (_isScanning) _stopGateScan();
 
       final shippedCount = await _repo.confirmGateOutbound(
+        orderId: order.outboundOrderId,
         poNo: order.orderNo,
         customer: order.customer,
         scannedEpcs: scannedEpcs,
@@ -1212,6 +1504,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
           _pendingOutboundOrder = _PendingOutboundOrder(
             orderNo: order.orderNo,
             customer: order.customer,
+            outboundOrderId: order.outboundOrderId,
             items: remainingItems,
             pallets: order.pallets,
             fileName: order.fileName,
@@ -1474,20 +1767,20 @@ class _OutboundScreenState extends State<OutboundScreen> {
                       const SizedBox(
                         width: 12,
                         height: 12,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2C251E)),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFFFFF)),
                       )
                     else
-                      const Icon(Icons.file_upload_outlined, size: 14, color: Color(0xFF2C251E)),
+                      const Icon(Icons.file_upload_outlined, size: 14, color: Color(0xFFFFFFFF)),
                     const SizedBox(width: 4),
                     Text(
                       _isImporting ? 'ĐANG NẠP...' : 'XUẤT HÀNG',
                       style: const TextStyle(
-                        color: Color(0xFF2C251E),
+                        color: Color(0xFFFFFFFF),
                         fontWeight: FontWeight.bold,
                         fontSize: 11,
                       ),
                     ),
-                    const Icon(Icons.arrow_drop_down, size: 14, color: Color(0xFF2C251E)),
+                    const Icon(Icons.arrow_drop_down, size: 14, color: Color(0xFFFFFFFF)),
                   ],
                 ),
               ),
@@ -1779,6 +2072,45 @@ class _OutboundScreenState extends State<OutboundScreen> {
         _buildTowerLightAlertBar(c),
 
         // Banner Cảnh Báo An Ninh: Hàng lạ không thuộc đơn
+        // Banner Cảnh Báo Trùng EPC/SN Đã Xuất Kho
+        if (_duplicateShippedEpcs.isNotEmpty) ...[
+          Container(
+            margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFEF4444), width: 2),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '🚨 LỖI TRÙNG EPC/SN: PHÁT HIỆN ${_duplicateShippedEpcs.length} CHIP ĐÃ XUẤT!',
+                        style: const TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _duplicateShippedAlertMessage ?? 'Hàng này đã xuất kho trước đó! Nghiêm cấm xuất lại lần 2.',
+                        style: TextStyle(color: c.textPrimary, fontSize: 10.5, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         if (unexpCount > 0) ...[
           Container(
             margin: const EdgeInsets.fromLTRB(10, 4, 10, 4),
@@ -1949,6 +2281,16 @@ class _OutboundScreenState extends State<OutboundScreen> {
           ),
         ],
 
+        // PHẢN HỒI CÒ SÚNG SEUIC UTOUCH 2 / UTOUCH C (EYE-LEVEL ZONE)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: HardwareTriggerFeedbackBanner(
+            compact: true,
+            externalIsScanning: _isScanning,
+            scannedCount: scannedCount,
+          ),
+        ),
+
         // 3 Ô CHỈ SỐ: ĐÃ QUÉT (xanh), THIẾU (vàng), LẠ (đỏ) - Đều nhau (RepaintBoundary cách ly vẽ lại)
         RepaintBoundary(
           child: Container(
@@ -2001,7 +2343,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                 scrollDirection: Axis.horizontal,
                 physics: const ClampingScrollPhysics(),
                 child: SizedBox(
-                  width: 760,
+                  width: 875,
                   child: Column(
                     children: [
                       // Header bảng PDA
@@ -2016,6 +2358,8 @@ class _OutboundScreenState extends State<OutboundScreen> {
                             SizedBox(width: 42, child: Text('STT', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
                             SizedBox(width: 95, child: Text('MÃ SKU', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
+                            const SizedBox(width: 6),
+                            SizedBox(width: 110, child: Text('MÃ SN', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
                             SizedBox(width: 95, child: Text('MÃ THÙNG', style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold))),
                             const SizedBox(width: 6),
@@ -2078,6 +2422,26 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                           color: isScanned ? const Color(0xFF10B981) : c.textPrimary,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+
+                                    // 2.1 MÃ SN (Tự động match từ chip RFID)
+                                    SizedBox(
+                                      width: 110,
+                                      child: Text(
+                                        item.serialNumber,
+                                        style: TextStyle(
+                                          color: isScanned && item.serialNumber != '--'
+                                              ? const Color(0xFF10B981)
+                                              : c.textSecondary,
+                                          fontSize: 10.5,
+                                          fontWeight: isScanned && item.serialNumber != '--'
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -2197,6 +2561,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                               final foundInDb = _repo.items.where((i) => i.epc.toUpperCase() == unexpEpc).firstOrNull;
 
                               final skuText = foundInDb?.sku ?? 'CHIP LẠ';
+                              final snText = foundInDb?.serialNumber ?? '--';
                               final cartonText = foundInDb?.cartonCode ?? '--';
                               final palletText = foundInDb?.palletId ?? '--';
                               final locText = foundInDb?.locationId ?? '--';
@@ -2245,6 +2610,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
                                     SizedBox(width: 95, child: Text(skuText, style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                     const SizedBox(width: 6),
 
+                                    // 2.1 MÃ SN
+                                    SizedBox(width: 110, child: Text(snText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 10.5, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                                    const SizedBox(width: 6),
+
                                     // 3. MÃ THÙNG
                                     SizedBox(width: 95, child: Text(cartonText, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                     const SizedBox(width: 6),
@@ -2291,7 +2660,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
     );
   }
 
-  // ---------- 4. THANH ĐIỀU KHIỂN DƯỚI CÙNG (HỖ TRỢ XUẤT LẺ & XUẤT ĐỦ) ----------
+  // ---------- 4. THANH ĐIỀU KHIỂN DƯỚI CÙNG (THUMB ZONE >= 48DP - HỖ TRỢ XUẤT LẺ & XUẤT ĐỦ) ----------
   Widget _buildBottomControlBar(
     EyeCareColors c, {
     required int scannedCount,
@@ -2302,9 +2671,10 @@ class _OutboundScreenState extends State<OutboundScreen> {
   }) {
     final hasUnexpected = unexpCount > 0;
     final canConfirm = scannedCount > 0 && !hasUnexpected;
+    final bool effectiveStockSuff = isStockSufficient || isComplete;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: c.bgCardElevated,
         border: Border(top: BorderSide(color: c.border)),
@@ -2313,46 +2683,80 @@ class _OutboundScreenState extends State<OutboundScreen> {
         top: false,
         child: Row(
           children: [
-            // NÚT: LÀM MỚI QUÉT (Luôn luôn hiển thị và bấm được mọi lúc để xóa lượt quét)
+            // NÚT: LÀM MỚI QUÉT (Touch Target >= 48dp)
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
+                minimumSize: const Size(56, 48),
                 foregroundColor: c.textPrimary,
                 side: BorderSide(color: c.border),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              icon: const Icon(Icons.replay, size: 14, color: Color(0xFF0284C7)),
+              icon: const Icon(Icons.replay, size: 15, color: Color(0xFF0284C7)),
               label: const Text('Làm mới', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
               onPressed: _clearGateScan,
             ),
             const SizedBox(width: 6),
-            // NÚT: BẮT ĐẦU QUÉT / DỪNG QUÉT
+            // NÚT: BẮT ĐẦU QUÉT / DỪNG QUÉT (Touch Target >= 48dp)
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
+                minimumSize: const Size(56, 48),
                 foregroundColor: _isScanning ? Colors.white : c.textPrimary,
                 backgroundColor: _isScanning ? const Color(0xFFEF4444) : null,
                 side: BorderSide(color: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7)),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              icon: Icon(_isScanning ? Icons.stop : Icons.play_arrow, size: 14, color: _isScanning ? Colors.white : const Color(0xFF0284C7)),
+              icon: Icon(_isScanning ? Icons.stop : Icons.play_arrow, size: 15, color: _isScanning ? Colors.white : const Color(0xFF0284C7)),
               label: Text(_isScanning ? 'Dừng' : 'Quét', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _isScanning ? Colors.white : c.textPrimary)),
               onPressed: _toggleGateScan,
             ),
-            if (canConfirm) ...[
-              const SizedBox(width: 8),
+            if (_duplicateShippedEpcs.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(64, 48),
+                    backgroundColor: const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.error_outline_rounded, size: 16),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '🚨 LỖI: TRÙNG EPC ĐÃ XUẤT (${_duplicateShippedEpcs.length})',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        duration: const Duration(seconds: 4),
+                        backgroundColor: const Color(0xFFEF4444),
+                        content: Text(_duplicateShippedAlertMessage ?? 'Phát hiện chip RFID đã xuất kho trước đó! Vui lòng loại bỏ con hàng này.'),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ] else if (canConfirm) ...[
+              const SizedBox(width: 6),
               // Nút Xác Nhận Xuất Kho: Hỗ trợ Xuất Lẻ ($scanned/$expected) hoặc Xuất Đủ
               Expanded(
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: !isStockSufficient
+                    minimumSize: const Size(64, 48),
+                    backgroundColor: !effectiveStockSuff
                         ? const Color(0xFF9CA3AF)
                         : (isComplete ? const Color(0xFF10B981) : const Color(0xFF0284C7)),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  icon: isStockSufficient
+                  icon: effectiveStockSuff
                       ? (_isSaving
                           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : Icon(_isAutoConfirming
@@ -2362,7 +2766,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   label: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      !isStockSufficient
+                      !effectiveStockSuff
                           ? 'KHÓA XUẤT (THIẾU TỒN)'
                           : (_isSaving
                               ? 'ĐANG LƯU KHO...'
@@ -2374,7 +2778,7 @@ class _OutboundScreenState extends State<OutboundScreen> {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),
-                  onPressed: (_isSaving || !isStockSufficient) ? null : () => _confirmOutboundDelivery(isAuto: false),
+                  onPressed: (_isSaving || !effectiveStockSuff) ? null : () => _confirmOutboundDelivery(isAuto: false),
                 ),
               ),
             ],

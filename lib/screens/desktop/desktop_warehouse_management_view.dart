@@ -203,7 +203,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
       borderRadius: BorderRadius.circular(6),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? c.rfidCyan : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
@@ -211,14 +211,14 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.white : c.textSecondary),
+            Icon(icon, size: 16, color: isSelected ? Colors.white : c.textPrimary),
             const SizedBox(width: 8),
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? Colors.white : c.textSecondary,
+                color: isSelected ? Colors.white : c.textPrimary,
                 fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
@@ -2063,7 +2063,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
             ),
             actions: [
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
+                style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFFFFFFFF)),
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('ĐÓNG', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
@@ -2311,7 +2311,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
               },
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
+              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFFFFFFFF)),
               onPressed: () => Navigator.pop(ctx),
               child: const Text('ĐÓNG', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
@@ -2505,7 +2505,7 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
             },
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
+            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFFFFFFFF)),
             onPressed: () => Navigator.pop(ctx),
             child: const Text('ĐÓNG', style: TextStyle(fontWeight: FontWeight.bold)),
           ),

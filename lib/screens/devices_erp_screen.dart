@@ -77,18 +77,18 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4EFE6),
+      backgroundColor: const Color(0xFFF5F5F4),
       appBar: const HardwareStatusAppBar(title: '📡 Thiết Bị RFID & ERP Bravo Hub'),
       body: Column(
         children: [
           Container(
-            color: const Color(0xFFE9E2D5),
+            color: const Color(0xFFFAFAF9),
             child: TabBar(
               controller: _tabController,
-              indicatorColor: const Color(0xFF0284C7),
+              indicatorColor: const Color(0xFF2563EB),
               indicatorWeight: 3,
-              labelColor: const Color(0xFF0284C7),
-              unselectedLabelColor: const Color(0xFF6B5D4D),
+              labelColor: const Color(0xFF2563EB),
+              unselectedLabelColor: const Color(0xFF57534E),
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
               tabs: const [
@@ -122,19 +122,19 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFFE9E2D5),
+            color: const Color(0xFFFAFAF9),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFC7BDAF)),
+            border: Border.all(color: const Color(0xFFD6D3D1)),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.2),
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(_getDeviceIcon(dev.type), color: const Color(0xFF0284C7), size: 28),
+                child: Icon(_getDeviceIcon(dev.type), color: const Color(0xFF2563EB), size: 28),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -143,12 +143,12 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
                   children: [
                     Text(
                       dev.name,
-                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14),
+                      style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Cổng/IP: ${dev.ipOrPort}',
-                      style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF57534E), fontSize: 12),
                     ),
                     const SizedBox(height: 4),
                     Row(
@@ -218,9 +218,9 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE9E2D5),
+                  color: const Color(0xFFFAFAF9),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFC7BDAF)),
+                  border: Border.all(color: const Color(0xFFD6D3D1)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,7 +231,7 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
                         const Text(
                           'CẤU HÌNH KẾT NỐI ERP BRAVO',
                           style: TextStyle(
-                            color: Color(0xFF0284C7),
+                            color: Color(0xFF2563EB),
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -256,7 +256,7 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
                     const SizedBox(height: 12),
                     Text(
                       'Endpoint: ${_bravo.serverUrl}',
-                      style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF57534E), fontFamily: 'Courier', fontSize: 12),
                     ),
                     const SizedBox(height: 14),
                     Row(
@@ -264,12 +264,12 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
                         Expanded(
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFF0284C7)),
+                              side: const BorderSide(color: Color(0xFF2563EB)),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: () => _bravo.pullInboundOrders(),
-                            child: const Text('Kéo Đơn Nhập', style: TextStyle(color: Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.bold)),
+                            child: const Text('Kéo Đơn Nhập', style: TextStyle(color: Color(0xFF2563EB), fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -296,7 +296,7 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
               const Text(
                 'NHẬT KÝ TÍCH HỢP (INTEGRATION AUDIT LOG)',
                 style: TextStyle(
-                  color: Color(0xFF2C251E),
+                  color: Color(0xFF1C1917),
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                   letterSpacing: 0.5,
@@ -314,7 +314,7 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE9E2D5),
+                      color: const Color(0xFFFAFAF9),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: log.isSuccess ? const Color(0xFF10B981).withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3),
@@ -334,12 +334,12 @@ class _DevicesErpScreenState extends State<DevicesErpScreen> with SingleTickerPr
                             children: [
                               Text(
                                 log.message,
-                                style: const TextStyle(color: Color(0xFF2C251E), fontSize: 12.5, fontWeight: FontWeight.w600),
+                                style: const TextStyle(color: Color(0xFF1C1917), fontSize: 12.5, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 '${log.action} • ${log.timestamp.hour.toString().padLeft(2, '0')}:${log.timestamp.minute.toString().padLeft(2, '0')}:${log.timestamp.second.toString().padLeft(2, '0')}',
-                                style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                                style: const TextStyle(color: Color(0xFF57534E), fontSize: 11),
                               ),
                             ],
                           ),

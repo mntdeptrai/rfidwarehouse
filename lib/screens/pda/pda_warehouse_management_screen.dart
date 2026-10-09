@@ -82,9 +82,9 @@ class _PdaWarehouseManagementScreenState extends State<PdaWarehouseManagementScr
                 indicatorColor: c.rfidCyan,
                 indicatorWeight: 3,
                 labelColor: c.rfidCyan,
-                unselectedLabelColor: c.textMuted,
+                unselectedLabelColor: c.textPrimary,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11.5),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                 tabs: const [
                   Tab(icon: Icon(Icons.pallet, size: 20), text: 'Pallet'),
                   Tab(icon: Icon(Icons.grid_view_rounded, size: 20), text: 'Vị Trí Kho'),
@@ -190,7 +190,7 @@ class _PalletManagementTabState extends State<_PalletManagementTab>
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: c.rfidCyan,
-                    foregroundColor: const Color(0xFF2C251E),
+                    foregroundColor: const Color(0xFFFFFFFF),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
@@ -476,7 +476,7 @@ class _PalletManagementTabState extends State<_PalletManagementTab>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Hủy', style: TextStyle(color: c.textMuted))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
+            style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFFFFFFFF)),
             onPressed: () async {
               final code = codeCtrl.text.trim();
               if (code.isEmpty) return;
@@ -578,7 +578,7 @@ class _PalletManagementTabState extends State<_PalletManagementTab>
               child: const Text('Gỡ Khỏi Kệ', style: TextStyle(color: Color(0xFFEF4444))),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFF2C251E)),
+              style: ElevatedButton.styleFrom(backgroundColor: c.rfidCyan, foregroundColor: const Color(0xFFFFFFFF)),
               onPressed: selectedLocId == null
                   ? null
                   : () {
@@ -2197,7 +2197,7 @@ class _ProductLookupTabState extends State<_ProductLookupTab>
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? const Color(0xFF2C251E) : c.textSecondary,
+            color: isSelected ? const Color(0xFFFFFFFF) : c.textSecondary,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             fontSize: 11,
           ),

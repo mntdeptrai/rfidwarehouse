@@ -302,5 +302,194 @@ SKU-TEST-B,PROD-TEST-B,1,Sản Phẩm B,Khách Hàng ABC''';
       await tester.pump(const Duration(seconds: 5));
       await repo.deleteItem(testEpc);
     });
+
+    test('7. Mẫu Nhập kho chi tiết (Ảnh 1): exportGoodsReceiveTemplate và parse phân biệt rõ SN với EPC', () {
+      final excel = Excel.createExcel();
+      final sheetName = excel.getDefaultSheet() ?? 'Sheet1';
+      final sheet = excel[sheetName];
+
+      // Đúng 8 cột theo Ảnh 1
+      final headers = ['CARTON CODE', 'EPC', 'NAME', 'SN', 'SKU', 'NCC', 'BARCODE PALET', 'EPC PALLET'];
+      for (int i = 0; i < headers.length; i++) {
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0)).value = TextCellValue(headers[i]);
+      }
+
+      // Dữ liệu dòng mẫu 1
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue('CARTON-POLO-001');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1)).value = TextCellValue('810000000001');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1)).value = TextCellValue('Chứng từ 1');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 1)).value = TextCellValue('SN-810000000001');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 1)).value = TextCellValue('SKU-CHUNG-TU');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 1)).value = TextCellValue('Tổng Công Ty May Việt Tiến');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 1)).value = TextCellValue('PL-02');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: 1)).value = TextCellValue('E2806894000050322C76D473');
+
+      final bytes = Uint8List.fromList(excel.encode()!);
+      final (cartons, validRows) = excelService.parseBytes(bytes);
+      expect(validRows, 1);
+      expect(cartons.length, 1);
+      final firstCarton = cartons.first;
+      expect(firstCarton['cartonBox'], 'CARTON-POLO-001');
+      expect(firstCarton['palletCode'], 'PL-02');
+      expect(firstCarton['palletEpc'], 'E2806894000050322C76D473');
+      expect(firstCarton['supplier'], 'Tổng Công Ty May Việt Tiến');
+
+      final serialItems = firstCarton['serialItems'] as List<dynamic>;
+      expect(serialItems.length, 1);
+      final sItem = serialItems.first as Map<String, dynamic>;
+      expect(sItem['serial'], '810000000001'); // Mã EPC
+      expect(sItem['serialNumber'], 'SN-810000000001'); // Mã SN tách biệt
+      expect(sItem['barcode'], 'SKU-CHUNG-TU');
+      expect(sItem['name'], 'Chứng từ 1');
+    });
+
+    test('8. Mẫu Xuất kho gom Pallet (Ảnh 2): parseOutboundExcelBytes nhận diện chuẩn 7 cột', () {
+      final excel = Excel.createExcel();
+      final sheetName = excel.getDefaultSheet() ?? 'Sheet1';
+      final sheet = excel[sheetName];
+
+      // Đúng 7 cột theo Ảnh 2
+      final headers = ['CARTON CODE', 'NAME', 'SL', 'SKU', 'NCC', 'BARCODE PALET', 'EPC PALLET'];
+      for (int i = 0; i < headers.length; i++) {
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0)).value = TextCellValue(headers[i]);
+      }
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue('CARTON-POLO-001');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1)).value = TextCellValue('Chứng từ 1');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1)).value = TextCellValue('10');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 1)).value = TextCellValue('SKU-CHUNG-TU');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: 1)).value = TextCellValue('Tổng Công Ty May Việt Tiến');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: 1)).value = TextCellValue('PL-02');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: 1)).value = TextCellValue('E2806894000050322C76D473');
+
+      final bytes = Uint8List.fromList(excel.encode()!);
+      final result = excelService.parseOutboundExcelBytes(bytes, fileName: 'Xuat_Pallet.xlsx');
+
+      expect(result.rows.length, 1);
+      final r = result.rows.first;
+      expect(r.cartonCode, 'CARTON-POLO-001');
+      expect(r.productName, 'Chứng từ 1');
+      expect(r.quantity, 10);
+      expect(r.sku, 'SKU-CHUNG-TU');
+      expect(r.supplier, 'Tổng Công Ty May Việt Tiến');
+      expect(r.palletCode, 'PL-02');
+      expect(r.palletEpc, 'E2806894000050322C76D473');
+      expect(r.epc, isNull); // Đơn xuất không cần khai báo chip EPC của từng con hàng
+    });
+
+    test('9. Mẫu Xuất kho Lẻ (Ảnh 3): parseOutboundExcelBytes nhận diện chuẩn 4 cột', () {
+      final excel = Excel.createExcel();
+      final sheetName = excel.getDefaultSheet() ?? 'Sheet1';
+      final sheet = excel[sheetName];
+
+      // Đúng 4 cột theo Ảnh 3
+      final headers = ['CARTON CODE', 'NAME', 'SL', 'SKU'];
+      for (int i = 0; i < headers.length; i++) {
+        sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0)).value = TextCellValue(headers[i]);
+      }
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 1)).value = TextCellValue('CARTON-POLO-001');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: 1)).value = TextCellValue('Chứng từ 1');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: 1)).value = TextCellValue('10');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: 1)).value = TextCellValue('SKU-CHUNG-TU');
+
+      final bytes = Uint8List.fromList(excel.encode()!);
+      final result = excelService.parseOutboundExcelBytes(bytes, fileName: 'Xuat_Le.xlsx');
+
+      expect(result.rows.length, 1);
+      final r = result.rows.first;
+      expect(r.cartonCode, 'CARTON-POLO-001');
+      expect(r.productName, 'Chứng từ 1');
+      expect(r.quantity, 10);
+      expect(r.sku, 'SKU-CHUNG-TU');
+      expect(r.epc, isNull);
+    });
+
+    testWidgets('10. Quét chip EPC tại cổng xuất tự động match slot SKU và hiển thị đúng mã SN từ CSDL', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      const testSku = 'SKU-SN-MATCH-88';
+      const testProdId = 'PROD-SN-MATCH-88';
+      const testEpc = 'E2806894000050322C76D088';
+      const testSn = 'SN-810000000088';
+
+      await repo.clearAllData(alsoClearCloud: false);
+      await repo.ensureDefault10Locations();
+
+      final loc = repo.locations.first;
+      await repo.addItem(Item(
+        itemId: 'ITEM-SN-MATCH-88',
+        productId: testProdId,
+        sku: testSku,
+        productName: 'Áo Sơ Mi Việt Tiến',
+        serialNumber: testSn,
+        epc: testEpc,
+        locationId: loc.locationId,
+        status: ItemStatus.inStock,
+      ));
+
+      // Đơn xuất chỉ có SKU và SL = 1, không có mã EPC
+      final order = OutboundOrder(
+        outboundOrderId: 'ORD-SN-TEST-88',
+        poNo: 'PO-SN-TEST-88',
+        customer: 'Khách đối soát SN',
+        createdAt: DateTime.now(),
+        status: OutboundOrderStatus.newOrder,
+        details: [
+          OutboundOrderDetail(
+            productId: testProdId,
+            sku: testSku,
+            productName: 'Áo Sơ Mi Việt Tiến',
+            requiredQty: 1,
+            pickedQty: 0,
+            epcList: null,
+          ),
+        ],
+      );
+      await repo.addOutboundOrder(order);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(useMaterial3: false),
+          home: const Scaffold(
+            body: DesktopGoodsDeliveryView(isActive: true),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Mở PopupMenu chọn đơn
+      final selectOrderBtn = find.text('XUẤT HÀNG');
+      expect(selectOrderBtn, findsOneWidget);
+      await tester.tap(selectOrderBtn);
+      await tester.pumpAndSettle();
+
+      final fromDbOption = find.textContaining('Chọn Đơn Xuất Có Sẵn');
+      expect(fromDbOption, findsOneWidget);
+      await tester.tap(fromDbOption);
+      await tester.pumpAndSettle();
+
+      final pickOrderBtn = find.widgetWithText(ElevatedButton, 'CHỌN');
+      expect(pickOrderBtn, findsOneWidget);
+      await tester.tap(pickOrderBtn);
+      await tester.pumpAndSettle();
+
+      // Trước khi quét: cột MÃ SN hiển thị '--'
+      expect(find.text(testSn), findsNothing);
+
+      // Quét chip testEpc qua đầu đọc RFID
+      final uhf = UhfService();
+      uhf.simulateTag(testEpc);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Sau khi quét: hệ thống tự động đối chiếu EPC trong CSDL và hiển thị đúng mã SN: SN-810000000088
+      expect(find.text(testSn), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle), findsWidgets);
+
+      await tester.pump(const Duration(seconds: 5));
+      await repo.deleteItem(testEpc);
+    });
   });
 }

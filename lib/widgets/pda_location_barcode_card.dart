@@ -98,10 +98,13 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
           duration: const Duration(seconds: 2),
           content: Row(
             children: [
-              const Icon(Icons.check_circle, color: Color(0xFF2C251E), size: 20),
+              const Icon(Icons.check_circle, color: AppColors.slate950, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('✓ Đã chọn vị trí: ${found.locationCode} (Khu ${found.zone})'),
+                child: Text(
+                  '✓ Đã chọn vị trí: ${found.locationCode} (Khu ${found.zone})',
+                  style: const TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
@@ -411,7 +414,7 @@ class _PdaLocationBarcodeCardState extends State<PdaLocationBarcodeCard> {
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : c.textSecondary,
+            color: isSelected ? AppColors.slate950 : c.textSecondary,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             fontSize: 11.5,
           ),

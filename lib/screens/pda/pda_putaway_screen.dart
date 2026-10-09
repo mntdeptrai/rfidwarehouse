@@ -8,6 +8,7 @@ import '../../services/warehouse_repository.dart';
 import '../../services/supabase_sync_service.dart';
 import '../../theme/eye_care_theme.dart';
 import '../../widgets/hardware_status_appbar.dart';
+import '../../widgets/hardware_trigger_feedback_banner.dart';
 import '../../widgets/app_notification_bar.dart';
 
 /// Màn hình Cất Hàng Lên Kệ (Putaway) trên tay cầm PDA
@@ -208,7 +209,6 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
     ).toList();
   }
 
-  static String normalizePalletCode(String raw) => PdaPutawayScreen.normalizePalletCode(raw);
   static bool isSamePallet(String? a, String? b) => PdaPutawayScreen.isSamePallet(a, b);
 
   Map<String, List<Item>> _pendingGroups() {
@@ -502,6 +502,11 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const HardwareTriggerFeedbackBanner(
+                compact: true,
+                customIdleLabel: 'BÓP CÒ QUÉT TEM PALLET & KỆ ĐỂ CẤT KHO',
+              ),
+              const SizedBox(height: 10),
               if (_lastResult != null) ...[
                 _buildResultBanner(c, _lastResult!),
                 const SizedBox(height: 10),
@@ -885,7 +890,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Khu vực: ${selectedLoc.zone} • Tầng: ${selectedLoc.shelf}',
+                          'Khu vực: ${selectedLoc.zone} • Kệ: ${selectedLoc.shelf} • ${selectedLoc.level.toUpperCase().startsWith('TẦNG') ? selectedLoc.level : 'Tầng: ${selectedLoc.level}'}',
                           style: TextStyle(color: c.textSecondary, fontSize: 11.5),
                         ),
                       ],
@@ -1033,7 +1038,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: c.rfidCyan,
-                foregroundColor: const Color(0xFF2C251E),
+                foregroundColor: const Color(0xFFFFFFFF),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               icon: const Icon(Icons.sync_rounded, size: 18),
@@ -1126,7 +1131,7 @@ class _PdaPutawayScreenState extends State<PdaPutawayScreen> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: c.rfidCyan,
-                    foregroundColor: const Color(0xFF2C251E),
+                    foregroundColor: const Color(0xFFFFFFFF),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                   ),

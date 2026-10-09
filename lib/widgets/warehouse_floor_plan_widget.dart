@@ -146,14 +146,25 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
               Container(
                 padding: EdgeInsets.all(isFifo ? 4 : 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                  color: (isFifo ? const Color(0xFFF59E0B) : const Color(0xFF10B981)).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(Icons.map_rounded, size: isFifo ? 14 : 16, color: const Color(0xFF10B981)),
+                child: Icon(
+                  Icons.map_rounded,
+                  size: isFifo ? 14 : 16,
+                  color: isFifo ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
+                ),
               ),
               Text(
-                'SƠ ĐỒ 10 VỊ TRÍ & MẶT BẰNG KHO: ${config.warehouseName.toUpperCase()}',
-                style: TextStyle(color: c.textPrimary, fontSize: isFifo ? 11.5 : 13, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                isFifo
+                    ? 'SƠ ĐỒ VỊ TRÍ KHO: ${config.warehouseName.toUpperCase()}'
+                    : 'SƠ ĐỒ 10 VỊ TRÍ & MẶT BẰNG KHO: ${config.warehouseName.toUpperCase()}',
+                style: TextStyle(
+                  color: c.textPrimary,
+                  fontSize: isFifo ? 11 : 13,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.3,
+                ),
               ),
               if (!isFifo) ...[
                 Container(
@@ -181,7 +192,7 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
             spacing: 6,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              if (selectedLoc != null) ...[
+              if (selectedLoc != null && !isFifo) ...[
                 InkWell(
                   onTap: () => widget.onLocationSelected?.call(null),
                   borderRadius: BorderRadius.circular(6),
@@ -226,12 +237,26 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
   // ==================== 2. THANH CHỈ DẪN LỘ TRÌNH XE NÂNG ====================
   Widget _buildNavigationBreadcrumbBanner(WarehouseFloorPlanConfig config, Location? selectedLoc, EyeCareColors c) {
     final isFifo = widget.mode == WarehouseFloorPlanMode.fifoSearch || widget.fifoPickLocationId != null;
-    final isOutbound = widget.mode == WarehouseFloorPlanMode.outbound;
-    final themeColor = isFifo
-        ? const Color(0xFFF59E0B)
-        : (isOutbound ? const Color(0xFFF59E0B) : const Color(0xFF10B981));
+    if (isFifo) {
+      return const SizedBox.shrink();
+    }
 
-    if (selectedLoc == null) {
+    final isOutbound = widget.mode == WarehouseFloorPlanMode.outbound;
+    final themeColor = isOutbound ? const Color(0xFFF59E0B) : const Color(0xFF10B981);
+
+    // Trong chế độ FIFO, nếu không có selectedLoc thủ công thì tự động trỏ đến ô kệ FIFO
+    final effectiveLoc = selectedLoc ??
+        (widget.fifoPickLocationId != null
+            ? _repo.locations.where((l) {
+                final cid = widget.fifoPickLocationId!.trim().toUpperCase();
+                return l.locationId.trim().toUpperCase() == cid || l.locationCode.trim().toUpperCase() == cid;
+              }).firstOrNull
+            : null);
+
+    if (effectiveLoc == null) {
+      if (isFifo) {
+        return const SizedBox.shrink();
+      }
       return Container(
         width: double.infinity,
         padding: EdgeInsets.symmetric(horizontal: isFifo ? 10 : 14, vertical: isFifo ? 5 : 7),
@@ -245,10 +270,8 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                isFifo
-                    ? '💡 Chạm vào ô kệ trên sơ đồ để xem vị trí'
-                    : '💡 Chạm vào kệ trên sơ đồ để xem lộ trình xe nâng di chuyển và lọc danh sách hàng hóa tương ứng',
-                style: TextStyle(color: c.textSecondary, fontSize: isFifo ? 10.5 : 11.5),
+                '💡 Chạm vào kệ trên sơ đồ để xem lộ trình xe nâng di chuyển và lọc danh sách hàng hóa tương ứng',
+                style: TextStyle(color: c.textSecondary, fontSize: 11.5),
               ),
             ),
           ],
@@ -256,22 +279,22 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
       );
     }
 
-    final isLeft = selectedLoc.aisleSide == 'LEFT';
-    final isRight = selectedLoc.aisleSide == 'RIGHT';
-    final turnText = isLeft ? 'RẼ TRÁI' : (isRight ? 'RẼ PHẢI' : 'CHẠY THẲNG ĐẾN CUỐI KHO');
+    final isLeft = effectiveLoc.aisleSide == 'LEFT';
+    final isRight = effectiveLoc.aisleSide == 'RIGHT';
+    final turnText = isLeft ? 'RẼ TRÁI' : (isRight ? 'RẼ PHẢI' : 'CHẠY THẲNG');
     final turnIcon = isLeft ? Icons.turn_left_rounded : (isRight ? Icons.turn_right_rounded : Icons.straight_rounded);
 
     final bannerTitle = isFifo
-        ? 'LỘ TRÌNH LẤY HÀNG THEO FIFO:'
+        ? 'LỘ TRÌNH XE NÂNG (FIFO):'
         : (isOutbound ? 'LỘ TRÌNH LẤY HÀNG XUẤT:' : 'CHỈ DẪN PALLET VÀO KHO:');
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: isFifo ? 10 : 14, vertical: isFifo ? 5 : 8),
+      padding: EdgeInsets.symmetric(horizontal: isFifo ? 8 : 14, vertical: isFifo ? 5 : 8),
       decoration: BoxDecoration(
-        color: themeColor.withValues(alpha: 0.12),
+        color: themeColor.withValues(alpha: 0.08),
         border: Border(
-          bottom: BorderSide(color: themeColor.withValues(alpha: 0.4), width: 1.0),
+          bottom: BorderSide(color: themeColor.withValues(alpha: 0.3), width: 1.0),
         ),
       ),
       child: Wrap(
@@ -280,17 +303,17 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Wrap(
-            spacing: 6,
+            spacing: 5,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.all(3.5),
                 decoration: BoxDecoration(color: themeColor, borderRadius: BorderRadius.circular(4)),
-                child: const Icon(Icons.forklift, color: Colors.white, size: 13),
+                child: const Icon(Icons.forklift, color: Colors.white, size: 12),
               ),
               Text(
                 bannerTitle,
-                style: TextStyle(color: themeColor, fontSize: isFifo ? 10.5 : 11.5, fontWeight: FontWeight.bold),
+                style: TextStyle(color: themeColor, fontSize: isFifo ? 10 : 11.5, fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -313,22 +336,18 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(turnIcon, size: isFifo ? 12 : 14, color: Colors.white),
+                    Icon(turnIcon, size: isFifo ? 11 : 14, color: AppColors.slate950),
                     const SizedBox(width: 3),
                     Text(
-                      '3. $turnText VÀO ${selectedLoc.displayName}',
-                      style: TextStyle(color: Colors.white, fontSize: isFifo ? 10 : 11.5, fontWeight: FontWeight.bold),
+                      '3. $turnText VÀO ${effectiveLoc.displayName}',
+                      style: TextStyle(color: AppColors.slate950, fontSize: isFifo ? 9.5 : 11.5, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
-              if (isFifo && widget.fifoItem != null) ...[
-                Icon(Icons.arrow_forward_rounded, size: isFifo ? 11 : 14, color: themeColor),
-                _buildStepBadge('4. Bốc: ${widget.fifoItem!.sku.isNotEmpty ? widget.fifoItem!.sku : widget.fifoItem!.itemId}', Icons.check_circle_outline, c),
-              ],
               if ((isOutbound || isFifo) && !config.isSingleGate) ...[
                 Icon(Icons.arrow_forward_rounded, size: isFifo ? 11 : 14, color: themeColor),
-                _buildStepBadge(isFifo ? '5. Ra ${config.exitGateName}' : '4. Ra ${config.exitGateName}', Icons.output_rounded, c),
+                _buildStepBadge('4. Ra ${config.exitGateName}', Icons.output_rounded, c),
               ],
             ],
           ),
@@ -372,7 +391,7 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
   ) {
     final leftRacks = locations.where((l) => l.aisleSide == 'LEFT').toList();
     final rightRacks = locations.where((l) => l.aisleSide == 'RIGHT').toList();
-    final backRacks = locations.where((l) => l.aisleSide == 'BACK').toList();
+    final backRacks = locations.where((l) => l.aisleSide != 'LEFT' && l.aisleSide != 'RIGHT').toList();
 
     leftRacks.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     rightRacks.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
@@ -385,6 +404,21 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
         final minW = isFifo ? constraints.maxWidth : 760.0;
         final needsHScroll = !isFifo && constraints.maxWidth < minW;
         final contentW = needsHScroll ? minW : constraints.maxWidth;
+
+        // Phân bổ flex thông minh cho chế độ FIFO trên màn hình bé:
+        final hasLeft = leftRacks.isNotEmpty;
+        final hasRight = rightRacks.isNotEmpty;
+        int leftFlex = 5;
+        int rightFlex = 5;
+        if (isFifo) {
+          if (hasLeft && !hasRight) {
+            leftFlex = 7;
+            rightFlex = 3;
+          } else if (!hasLeft && hasRight) {
+            leftFlex = 3;
+            rightFlex = 7;
+          }
+        }
 
         Widget mapContent = Container(
           width: contentW,
@@ -402,7 +436,7 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
                 children: [
                   // DÃY KỆ BÊN TRÁI
                   Expanded(
-                    flex: isFifo ? 5 : 4,
+                    flex: isFifo ? leftFlex : 4,
                     child: _buildAisleRackColumn(
                       title: isFifo ? 'DÃY TRÁI' : 'DÃY KỆ BÊN TRÁI (LEFT AISLE)',
                       color: const Color(0xFF3B82F6),
@@ -416,16 +450,22 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
                   SizedBox(width: isFifo ? 4 : 8),
 
                   // LỐI ĐI CHÍNH XE NÂNG (CENTRAL FORKLIFT RUNWAY)
-                  Expanded(
-                    flex: isFifo ? 2 : 3,
-                    child: _buildCentralForkliftCorridor(config, selectedLoc, c),
-                  ),
+                  if (isFifo)
+                    SizedBox(
+                      width: 32,
+                      child: _buildCentralForkliftCorridor(config, selectedLoc, c),
+                    )
+                  else
+                    Expanded(
+                      flex: 3,
+                      child: _buildCentralForkliftCorridor(config, selectedLoc, c),
+                    ),
 
                   SizedBox(width: isFifo ? 4 : 8),
 
                   // DÃY KỆ BÊN PHẢI
                   Expanded(
-                    flex: isFifo ? 5 : 4,
+                    flex: isFifo ? rightFlex : 4,
                     child: _buildAisleRackColumn(
                       title: isFifo ? 'DÃY PHẢI' : 'DÃY KỆ BÊN PHẢI (RIGHT AISLE)',
                       color: const Color(0xFF10B981),
@@ -489,25 +529,25 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
   }) {
     final isFifo = widget.mode == WarehouseFloorPlanMode.fifoSearch;
     final gateColor = isExit ? const Color(0xFFF59E0B) : const Color(0xFF10B981);
-    final icon = isExit ? Icons.output_rounded : Icons.sensor_door_rounded;
+    final icon = isExit ? Icons.logout_rounded : Icons.login_rounded;
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: isFifo ? 6 : 14, vertical: isFifo ? 5 : 8),
+      padding: EdgeInsets.symmetric(horizontal: isFifo ? 6 : 14, vertical: isFifo ? 4.5 : 8),
       decoration: BoxDecoration(
-        color: gateColor.withValues(alpha: 0.1),
+        color: gateColor.withValues(alpha: isFifo ? 0.08 : 0.1),
         borderRadius: BorderRadius.circular(isFifo ? 6 : 8),
-        border: Border.all(color: gateColor.withValues(alpha: 0.4), width: 1.0),
+        border: Border.all(color: gateColor.withValues(alpha: 0.35), width: 1.0),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: gateColor, size: isFifo ? 13 : 16),
+          Icon(icon, color: gateColor, size: isFifo ? 12 : 16),
           const SizedBox(width: 4),
           Flexible(
             child: Text(
               label.toUpperCase(),
-              style: TextStyle(color: gateColor, fontSize: isFifo ? 10 : 11.5, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              style: TextStyle(color: gateColor, fontSize: isFifo ? 9.5 : 11.5, fontWeight: FontWeight.bold, letterSpacing: 0.4),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -583,7 +623,11 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
         children: [
           Row(
             children: [
-              Container(width: 3, height: isFifo ? 12 : 14, color: color),
+              Container(
+                width: 3,
+                height: isFifo ? 12 : 14,
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(1.5)),
+              ),
               const SizedBox(width: 5),
               Expanded(
                 child: Text(
@@ -596,9 +640,31 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
           SizedBox(height: isFifo ? 5 : 8),
           if (racks.isEmpty)
             Container(
-              padding: const EdgeInsets.all(10),
+              constraints: BoxConstraints(minHeight: isFifo ? 140 : 80),
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
               alignment: Alignment.center,
-              child: Text('Trống', style: TextStyle(color: c.textSecondary, fontSize: 10)),
+              decoration: BoxDecoration(
+                color: c.bgCard.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: c.border.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.crop_free_rounded, size: 20, color: c.textSecondary.withValues(alpha: 0.35)),
+                  const SizedBox(height: 5),
+                  Text(
+                    'SÀN TRỐNG',
+                    style: TextStyle(color: c.textSecondary.withValues(alpha: 0.6), fontSize: 9.5, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Chưa bố trí kệ',
+                    style: TextStyle(color: c.textSecondary.withValues(alpha: 0.4), fontSize: 8.5),
+                  ),
+                ],
+              ),
             )
           else
             ConstrainedBox(
@@ -607,7 +673,7 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
                 shrinkWrap: true,
                 physics: const BouncingScrollPhysics(),
                 itemCount: racks.length,
-                separatorBuilder: (context, index) => SizedBox(height: isFifo ? 4 : 6),
+                separatorBuilder: (context, index) => SizedBox(height: isFifo ? 5 : 6),
                 itemBuilder: (context, index) {
                   final loc = racks[index];
                   return _buildRackCard(loc, selectedLoc, c);
@@ -631,46 +697,73 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
     final isRight = selectedLoc?.aisleSide == 'RIGHT';
 
     if (isFifo) {
-      // Dải phân cách trung tâm siêu tối giản cho chế độ FIFO trên PDA - Chống overflow
+      final fifoLoc = widget.fifoPickLocationId != null
+          ? _repo.locations.where((l) {
+              final cid = widget.fifoPickLocationId!.trim().toUpperCase();
+              return l.locationId.trim().toUpperCase() == cid || l.locationCode.trim().toUpperCase() == cid;
+            }).firstOrNull
+          : null;
+      final autoTurnLeft = fifoLoc?.aisleSide == 'LEFT';
+      final autoTurnRight = fifoLoc?.aisleSide == 'RIGHT';
+
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B).withValues(alpha: 0.4),
+          color: c.bgDeep.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF10B981) : c.border.withValues(alpha: 0.4),
-            width: 1,
+          border: Border.symmetric(
+            vertical: BorderSide(color: c.border.withValues(alpha: 0.6), width: 1.0),
           ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.arrow_downward_rounded, size: 14, color: Color(0xFFF59E0B)),
-            const SizedBox(height: 4),
-            const Icon(Icons.forklift, size: 14, color: Color(0xFFF59E0B)),
-            const SizedBox(height: 6),
+            const Icon(Icons.arrow_downward_rounded, size: 12, color: Color(0xFFF59E0B)),
+            const SizedBox(height: 5),
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.forklift, size: 13, color: Color(0xFFF59E0B)),
+            ),
+            const SizedBox(height: 5),
             for (int i = 0; i < 3; i++) ...[
               Container(
-                width: 10,
-                height: 3,
-                margin: const EdgeInsets.symmetric(vertical: 3),
+                width: 8,
+                height: 2.2,
+                margin: const EdgeInsets.symmetric(vertical: 2.5),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(1.5),
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(1.1),
                 ),
               ),
             ],
-            if (isSelected) ...[
+            if (autoTurnLeft || isLeft) ...[
               const SizedBox(height: 4),
-              Icon(
-                isLeft ? Icons.arrow_back : (isRight ? Icons.arrow_forward : Icons.arrow_downward),
-                size: 14,
-                color: const Color(0xFF10B981),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: const Icon(Icons.arrow_back_rounded, size: 13, color: Color(0xFFF59E0B)),
+              ),
+            ] else if (autoTurnRight || isRight) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: const Icon(Icons.arrow_forward_rounded, size: 13, color: Color(0xFFF59E0B)),
               ),
             ],
-            const SizedBox(height: 4),
-            const Icon(Icons.arrow_downward_rounded, size: 14, color: Color(0xFFF59E0B)),
+            const SizedBox(height: 5),
+            const Icon(Icons.arrow_downward_rounded, size: 12, color: Color(0xFFF59E0B)),
           ],
         ),
       );
@@ -747,12 +840,12 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
                   Icon(
                     isLeft ? Icons.arrow_back : (isRight ? Icons.arrow_forward : Icons.arrow_upward),
                     size: 14,
-                    color: Colors.white,
+                    color: AppColors.slate950,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     isLeft ? 'RẼ TRÁI ➜' : (isRight ? '➜ RẼ PHẢI' : 'ĐI THẲNG'),
-                    style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: AppColors.slate950, fontSize: 10.5, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -863,96 +956,175 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
     final isFifo = widget.mode == WarehouseFloorPlanMode.fifoSearch;
 
     if (isFifo) {
-      // Giao diện ô kệ siêu tối giản cho chế độ FIFO trên màn hình bé PDA
-      return InkWell(
-        onTap: () {
-          if (isSelected) {
-            widget.onLocationSelected?.call(null);
-          } else {
-            widget.onLocationSelected?.call(loc.locationCode);
-          }
-        },
-        borderRadius: BorderRadius.circular(6),
-        child: AnimatedContainer(
+      // Chế độ xem trực quan tĩnh (Read-only visual map) cho FIFO:
+      // Tuyệt đối không nhận tương tác click / không đổi màu selection xanh lá
+      if (isFifoPick) {
+        return AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: cardBgColor,
-            borderRadius: BorderRadius.circular(6),
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: cardBorderColor,
-              width: cardBorderWidth,
+              color: const Color(0xFFF59E0B),
+              width: 1.8,
             ),
-            boxShadow: cardShadow,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.25),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isFifoPick) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: const Text(
-                    '⭐ CẦN LẤY (FIFO)',
-                    style: TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 3),
-              ],
-              Row(
+              // Hàng 1: Chip Cần Lấy (FIFO) + Số lượng tồn (Dùng Wrap chống overflow triệt để trên màn hình hẹp)
+              Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                alignment: WrapAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      loc.displayName,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      '⭐ CẦN TÌM',
                       style: TextStyle(
-                        color: isSelected
-                            ? const Color(0xFF10B981)
-                            : (isFifoPick ? const Color(0xFFF59E0B) : c.textPrimary),
+                        color: AppColors.slate950,
+                        fontSize: 8.5,
                         fontWeight: FontWeight.bold,
-                        fontSize: 10.5,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (isHighlighted && !isFifoPick)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: c.rfidCyan.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(3),
-                        border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.5),
+                        width: 0.8,
                       ),
-                      child: Text(
-                        'Có hàng (${matchingCount > 0 ? matchingCount : 1})',
-                        style: TextStyle(color: c.rfidCyan, fontSize: 8, fontWeight: FontWeight.bold),
+                    ),
+                    child: Text(
+                      '$itemCount SP',
+                      style: const TextStyle(
+                        color: Color(0xFFB45309),
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.bold,
                       ),
-                    )
-                  else if (!isFifoPick) ...[
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
                     ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '$itemCount SP',
-                      style: TextStyle(color: c.textSecondary, fontSize: 8.5),
-                    ),
-                  ] else ...[
-                    Text(
-                      '$itemCount SP',
-                      style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 9, fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                  ),
                 ],
+              ),
+              const SizedBox(height: 3),
+              // Hàng 2: Tên kệ hiển thị trọn vẹn bề ngang, không bao giờ bị cắt cụt ba chấm!
+              Text(
+                loc.displayName,
+                style: const TextStyle(
+                  color: Color(0xFF92400E), // Tương phản AAA rõ nét, không bị xanh lá hay cam mờ
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: 0.2,
+                  height: 1.2,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
+        );
+      }
+
+      // Kệ thường trong chế độ FIFO
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5.5),
+        decoration: BoxDecoration(
+          color: c.bgCard,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isHighlighted ? c.rfidCyan : c.border.withValues(alpha: 0.6),
+            width: isHighlighted ? 1.4 : 1.0,
+          ),
+          boxShadow: isHighlighted
+              ? [
+                  BoxShadow(
+                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                loc.displayName,
+                style: TextStyle(
+                  color: isHighlighted ? c.rfidCyan : c.textPrimary,
+                  fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 10.5,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            if (isHighlighted)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(color: c.rfidCyan.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  'Có hàng (${matchingCount > 0 ? matchingCount : 1})',
+                  style: TextStyle(color: c.rfidCyan, fontSize: 8, fontWeight: FontWeight.bold),
+                ),
+              )
+            else if (itemCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: c.bgDeep,
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(color: c.border.withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  '$itemCount SP',
+                  style: TextStyle(color: c.textSecondary, fontSize: 8.5, fontWeight: FontWeight.bold),
+                ),
+              )
+            else
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: c.textSecondary.withValues(alpha: 0.35),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    '0 SP',
+                    style: TextStyle(color: c.textSecondary.withValues(alpha: 0.6), fontSize: 8.5),
+                  ),
+                ],
+              ),
+          ],
         ),
       );
     }
@@ -993,11 +1165,11 @@ class _WarehouseFloorPlanWidgetState extends State<WarehouseFloorPlanWidget> {
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.star_rounded, size: 12, color: Colors.white),
+                    Icon(Icons.star_rounded, size: 12, color: AppColors.slate950),
                     SizedBox(width: 3),
                     Text(
-                      '⭐ CẦN LẤY (FIFO)',
-                      style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
+                      '⭐ CẦN TÌM',
+                      style: TextStyle(color: AppColors.slate950, fontSize: 9.5, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),

@@ -5,6 +5,7 @@ import '../services/uhf_service.dart';
 import '../services/warehouse_repository.dart';
 import '../theme/eye_care_theme.dart';
 import '../widgets/hardware_status_appbar.dart';
+import '../widgets/hardware_trigger_feedback_banner.dart';
 import '../widgets/warehouse_floor_plan_widget.dart';
 
 /// Màn hình Tìm Kiếm Vị Trí Hàng Hóa 2D & Điều Phối Lấy Hàng Theo FIFO (First In, First Out).
@@ -40,7 +41,6 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
 
   late final TextEditingController _searchCtrl;
-  String? _selectedLocationId;
   StreamSubscription<String>? _barcodeSub;
   StreamSubscription<bool>? _triggerSub;
 
@@ -81,12 +81,10 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
       }
     });
 
-    // Lắng nghe bóp cò vật lý trên tay cầm PDA
+    // Lắng nghe bóp cò vật lý trên tay cầm súng Seuic UTouch 2 / UTouch C
     _triggerSub = _uhf.onTriggerStateChanged.listen((isPressed) {
       if (!mounted) return;
-      if (isPressed) {
-        // Cho phép người dùng bóp cò để quét mã
-      }
+      setState(() {});
     });
   }
 
@@ -225,6 +223,13 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (!isDesktop) ...[
+                    const HardwareTriggerFeedbackBanner(
+                      compact: true,
+                      customIdleLabel: 'BÓP CÒ SÚNG QUÉT MÃ HÀNG / BARCODE ĐỂ ĐỊNH VỊ 2D',
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   // 1. THANH TÌM KIẾM THEO MÃ HÀNG & MÃ SKU
                   _buildSearchBar(c),
 
@@ -250,7 +255,7 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              'Nhập mã hàng/SKU hoặc chạm gợi ý bên trên để định vị ô cần lấy theo FIFO',
+                              'Nhập mã hàng/SKU hoặc chạm gợi ý bên trên để định vị vị trí ô kệ',
                               style: TextStyle(color: c.textSecondary, fontSize: 10.5),
                             ),
                           ),
@@ -264,19 +269,15 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
 
                   const SizedBox(height: 10),
 
-                  // 4. BẢN ĐỒ MẶT BẰNG KHO 2D VỚI Ô HIGHLIGHT THEO FIFO
+                  // 4. BẢN ĐỒ MẶT BẰNG KHO 2D VỚI Ô HIGHLIGHT THEO FIFO (CHẾ ĐỘ XEM TRỰC QUAN)
                   WarehouseFloorPlanWidget(
                     mode: WarehouseFloorPlanMode.fifoSearch,
-                    selectedLocationId: _selectedLocationId ?? fifoLocationId,
+                    selectedLocationId: null,
                     fifoPickLocationId: fifoLocationId,
                     fifoItem: fifoItem,
                     highlightLocationIds: highlightLocationIds,
                     matchingItemCounts: matchingItemCounts,
-                    onLocationSelected: (locCode) {
-                      setState(() {
-                        _selectedLocationId = locCode;
-                      });
-                    },
+                    onLocationSelected: null,
                   ),
                 ],
               ),
@@ -326,9 +327,7 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
               icon: Icon(Icons.cancel, color: c.textSecondary, size: 18),
               onPressed: () {
                 _searchCtrl.clear();
-                setState(() {
-                  _selectedLocationId = null;
-                });
+                setState(() {});
               },
             ),
         ],
@@ -416,46 +415,31 @@ class _FifoSearchScreenState extends State<FifoSearchScreen> {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.star_rounded, color: Colors.white, size: 12),
-                    SizedBox(width: 3),
-                    Text(
-                      '⭐ CẦN LẤY THEO FIFO',
-                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Tồn: $totalCount SP',
-                style: TextStyle(color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              const Icon(Icons.place_rounded, size: 14, color: Color(0xFFF59E0B)),
-              const SizedBox(width: 4),
+              const Icon(Icons.place_rounded, size: 16, color: Color(0xFFF59E0B)),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   'Ô KỆ: $locationName ${locationSub.isNotEmpty ? "($locationSub)" : ""}',
                   style: const TextStyle(
                     color: Color(0xFFF59E0B),
-                    fontSize: 12,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.bold,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  'Tồn: $totalCount SP',
+                  style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

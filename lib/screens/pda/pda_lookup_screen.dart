@@ -405,7 +405,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
                           },
                     child: isProcessing
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('XÁC NHẬN CHUYỂN KỆ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 14)),
+                        : const Text('XÁC NHẬN CHUYỂN KỆ', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold, fontSize: 14)),
                   ),
                 ),
               ],
@@ -429,7 +429,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
           IconButton(
             icon: Icon(
               _currentScanMode == PdaScanMode.rfid ? Icons.nfc : Icons.qr_code_scanner,
-              color: _currentScanMode == PdaScanMode.rfid ? const Color(0xFF00E5FF) : const Color(0xFF10B981),
+              color: _currentScanMode == PdaScanMode.rfid ? const Color(0xFF2563EB) : const Color(0xFF10B981),
             ),
             tooltip: 'Đổi chế độ quét: RFID / Barcode',
             onPressed: _toggleScanMode,
@@ -771,7 +771,7 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: c.rfidCyan,
-                    foregroundColor: const Color(0xFF2C251E),
+                    foregroundColor: const Color(0xFFFFFFFF),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),

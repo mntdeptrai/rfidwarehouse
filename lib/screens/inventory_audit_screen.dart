@@ -47,7 +47,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           duration: const Duration(seconds: 2),
-        backgroundColor: const Color(0xFF0284C7),
+        backgroundColor: const Color(0xFF2563EB),
         content: Text('Đã khởi tạo Phiên kiểm kê ${session.sessionCode}!'),
       ),
     );
@@ -109,7 +109,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4EFE6),
+      backgroundColor: const Color(0xFFF5F5F4),
       appBar: const HardwareStatusAppBar(title: 'Kiểm Kê Kho (Utouch 2)'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -138,9 +138,9 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE9E2D5),
+        color: const Color(0xFFFAFAF9),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFC7BDAF)),
+        border: Border.all(color: const Color(0xFFD6D3D1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,7 +152,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
                 child: Text(
                   '1. THIẾT LẬP PHẠM VI KIỂM KÊ',
                   style: TextStyle(
-                    color: Color(0xFF0284C7),
+                    color: Color(0xFF2563EB),
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                     letterSpacing: 0.5,
@@ -186,12 +186,12 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
                     if (availableZones.isEmpty) {
                       return TextFormField(
                         initialValue: _selectedZone,
-                        style: const TextStyle(color: Color(0xFF2C251E)),
+                        style: const TextStyle(color: Color(0xFF1C1917)),
                         decoration: InputDecoration(
                           labelText: 'Nhập Khu vực (Zone)',
-                          labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
+                          labelStyle: const TextStyle(color: Color(0xFF57534E), fontSize: 12),
                           filled: true,
-                          fillColor: const Color(0xFFF4EFE6),
+                          fillColor: const Color(0xFFF5F5F4),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         onChanged: (val) => _selectedZone = val.trim(),
@@ -199,13 +199,13 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
                     }
                     return DropdownButtonFormField<String>(
                       initialValue: availableZones.contains(_selectedZone) ? _selectedZone : availableZones.first,
-                      dropdownColor: const Color(0xFFE9E2D5),
-                      style: const TextStyle(color: Color(0xFF2C251E)),
+                      dropdownColor: const Color(0xFFFAFAF9),
+                      style: const TextStyle(color: Color(0xFF1C1917)),
                       decoration: InputDecoration(
                         labelText: 'Khu vực (Zone)',
-                        labelStyle: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
+                        labelStyle: const TextStyle(color: Color(0xFF57534E), fontSize: 12),
                         filled: true,
-                        fillColor: const Color(0xFFF4EFE6),
+                        fillColor: const Color(0xFFF5F5F4),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       items: availableZones.map((z) => DropdownMenuItem(value: z, child: Text(z))).toList(),
@@ -224,14 +224,14 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0284C7),
+                  backgroundColor: const Color(0xFF2563EB),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _startNewSession,
                 child: const Text(
                   'BẮT ĐẦU PHIÊN KIỂM KÊ MỚI',
-                  style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -244,9 +244,9 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE9E2D5),
+        color: const Color(0xFFFAFAF9),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFC7BDAF)),
+        border: Border.all(color: const Color(0xFFD6D3D1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +257,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
               Text(
                 '2. QUÉT THẺ RFID',
                 style: TextStyle(
-                  color: Color(0xFF0284C7),
+                  color: Color(0xFF2563EB),
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                   letterSpacing: 0.5,
@@ -265,7 +265,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
               ),
               Text(
                 'Bấm nút quét trên thiết bị',
-                style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                style: TextStyle(color: Color(0xFF57534E), fontSize: 11),
               ),
             ],
           ),
@@ -291,7 +291,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
               onPressed: _isScanning ? null : _simulateHandheldScan,
               child: Text(
                 _isScanning ? 'ĐANG QUÉT THỰC TẾ...' : 'KÍCH HOẠT QUÉT THẺ RFID',
-                style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
+                style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -305,9 +305,9 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE9E2D5),
+        color: const Color(0xFFFAFAF9),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFC7BDAF)),
+        border: Border.all(color: const Color(0xFFD6D3D1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,7 +318,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
               Text(
                 '3. ĐỐI CHIẾU & PHÂN LOẠI SAI LỆCH',
                 style: TextStyle(
-                  color: Color(0xFF0284C7),
+                  color: Color(0xFF2563EB),
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                   letterSpacing: 0.5,
@@ -332,10 +332,10 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
           TabBar(
             controller: _varianceTabController,
             isScrollable: true,
-            indicatorColor: const Color(0xFF0284C7),
+            indicatorColor: const Color(0xFF2563EB),
             indicatorWeight: 3,
-            labelColor: const Color(0xFF0284C7),
-            unselectedLabelColor: const Color(0xFF6B5D4D),
+            labelColor: const Color(0xFF2563EB),
+            unselectedLabelColor: const Color(0xFF57534E),
             labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
             unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
             tabs: [
@@ -372,7 +372,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
               onPressed: session.results.isNotEmpty ? _completeSession : null,
               child: const Text(
                 'PHÊ DUYỆT & CHỐT PHIÊN KIỂM KÊ',
-                style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold),
+                style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -388,7 +388,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
       return Center(
         child: Text(
           'Không có bản ghi nào trong mục ${type.label}',
-          style: const TextStyle(color: Color(0xFF8F8070), fontSize: 12),
+          style: const TextStyle(color: Color(0xFF78716C), fontSize: 12),
         ),
       );
     }
@@ -401,7 +401,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: const Color(0xFFF4EFE6),
+            color: const Color(0xFFF5F5F4),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: Color(type.colorValue).withValues(alpha: 0.4), width: 0.8),
           ),
@@ -414,12 +414,12 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> with Single
                   children: [
                     Text(
                       item.sku != null ? '${item.sku} - ${item.productName}' : 'Thẻ lạ',
-                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'EPC: ${item.epc}',
-                      style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 10),
+                      style: const TextStyle(color: Color(0xFF57534E), fontFamily: 'Courier', fontSize: 10),
                     ),
                   ],
                 ),

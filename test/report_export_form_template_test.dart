@@ -56,6 +56,7 @@ void main() {
       ReportType.inbound,
       ReportFormat.csv,
       selectedKeys: ['ORD-IN-FORM-TEST'],
+      includeEpc: true,
     );
     expect(await csvFile.exists(), isTrue);
     final csvContent = await csvFile.readAsString();
@@ -70,6 +71,7 @@ void main() {
       ReportType.inbound,
       ReportFormat.xlsx,
       selectedKeys: ['ORD-IN-FORM-TEST'],
+      includeEpc: true,
     );
     expect(await xlsxFile.exists(), isTrue);
     final bytes = await xlsxFile.readAsBytes();
@@ -129,6 +131,7 @@ void main() {
       ReportType.outbound,
       ReportFormat.csv,
       selectedKeys: ['PO-OUT-FORM-TEST'],
+      includeEpc: true,
     );
     expect(await csvFile.exists(), isTrue);
     final csvContent = await csvFile.readAsString();
@@ -142,6 +145,7 @@ void main() {
       ReportType.outbound,
       ReportFormat.xlsx,
       selectedKeys: ['PO-OUT-FORM-TEST'],
+      includeEpc: true,
     );
     expect(await xlsxFile.exists(), isTrue);
     final bytes = await xlsxFile.readAsBytes();
@@ -201,6 +205,7 @@ void main() {
       ReportType.audit,
       ReportFormat.csv,
       selectedKeys: ['AUDIT-FORM-TEST'],
+      includeEpc: true,
     );
     expect(await csvFile.exists(), isTrue);
     final csvContent = await csvFile.readAsString();
@@ -213,6 +218,7 @@ void main() {
       ReportType.audit,
       ReportFormat.xlsx,
       selectedKeys: ['AUDIT-FORM-TEST'],
+      includeEpc: true,
     );
     expect(await xlsxFile.exists(), isTrue);
 
@@ -222,14 +228,14 @@ void main() {
     if (await xlsxFile.exists()) await xlsxFile.delete();
   });
 
-  test('ReportExportService exports Excel files with anti-tamper sheet protection and read-only recommendation', () async {
+  test('ReportExportService exports open Excel files allowing easy copy and modifications', () async {
     final testItem = Item(
-      itemId: 'ITEM-PROT-01',
-      productId: 'P-PROT-01',
-      sku: 'SKU-PROT-01',
-      productName: 'Mặt Hàng Khóa Chống Sửa',
-      serialNumber: 'SN-PROT-999',
-      epc: 'E2801160600002198000PROT',
+      itemId: 'ITEM-OPEN-01',
+      productId: 'P-OPEN-01',
+      sku: 'SKU-OPEN-01',
+      productName: 'Mặt Hàng Cho Phép Copy',
+      serialNumber: 'SN-OPEN-999',
+      epc: 'E2801160600002198000OPEN',
       status: ItemStatus.inStock,
     );
     await repo.addItem(testItem);
@@ -244,37 +250,38 @@ void main() {
     final archive = ZipDecoder().decodeBytes(bytes);
 
     bool hasSheetProtection = false;
-    bool hasFileSharing = false;
+    bool hasFileSharingReadOnly = false;
     bool hasWorkbookProtection = false;
 
     for (final f in archive) {
       if (f.name.startsWith('xl/worksheets/sheet') && f.name.endsWith('.xml')) {
         final xml = utf8.decode(f.content as List<int>);
-        if (xml.contains('<sheetProtection sheet="true"') && xml.contains('password="DFEE"')) {
+        if (xml.contains('<sheetProtection')) {
           hasSheetProtection = true;
         }
       }
       if (f.name == 'xl/workbook.xml') {
         final xml = utf8.decode(f.content as List<int>);
-        if (xml.contains('<fileSharing readOnlyRecommended="1"')) {
-          hasFileSharing = true;
+        if (xml.contains('readOnlyRecommended="1"')) {
+          hasFileSharingReadOnly = true;
         }
-        if (xml.contains('<workbookProtection lockStructure="true"') && xml.contains('workbookPassword="DFEE"')) {
+        if (xml.contains('<workbookProtection')) {
           hasWorkbookProtection = true;
         }
       }
     }
 
-    expect(hasSheetProtection, isTrue, reason: 'Mọi sheet trong file Excel phải có khóa sheetProtection chống sửa');
-    expect(hasFileSharing, isTrue, reason: 'Workbook phải có cờ fileSharing khuyến nghị mở Chỉ Đọc');
-    expect(hasWorkbookProtection, isTrue, reason: 'Workbook phải có khóa workbookProtection chống sửa cấu trúc');
+    // Xác nhận không bị khóa bảo vệ: cho phép người dùng copy và chỉnh sửa tự do
+    expect(hasSheetProtection, isFalse, reason: 'File Excel phải mở tự do, không bị khóa sheetProtection để người dùng thoải mái copy');
+    expect(hasFileSharingReadOnly, isFalse, reason: 'Không kích hoạt cờ readOnlyRecommended để không làm phiền người dùng khi copy');
+    expect(hasWorkbookProtection, isFalse, reason: 'Không khóa workbookProtection');
 
     // Clean up
     await repo.deleteItem(testItem.epc);
     if (await xlsxFile.exists()) await xlsxFile.delete();
   });
 
-  test('ReportExportService exports Inventory Report with Vòng Đời Thẻ column in XLSX and CSV', () async {
+  test('ReportExportService exports Inventory Report grouped by SKU with quantity in XLSX and CSV', () async {
     final repo = WarehouseRepository();
     final exportService = ReportExportService();
     await repo.ensureInitialized();
@@ -345,38 +352,37 @@ void main() {
     expect(summaryAfterRepair.contains('KỆ B2'), isTrue, reason: 'Phải ghi nhận chi tiết Kệ khi sửa chữa');
     expect(summaryAfterRepair.contains('PL-TEST-01'), isTrue, reason: 'Phải ghi nhận chi tiết Pallet khi sửa chữa');
 
-    // 4. Xuất Báo Cáo Tồn Kho (CSV) và xác thực dữ liệu cập nhật
+    // 4. Xuất Báo Cáo Tồn Kho (CSV): Gom nhóm theo SKU và hiển thị số lượng hàng tồn
     final csvFile = await exportService.exportInventoryReport(ReportFormat.csv, items: [testItem]);
     expect(await csvFile.exists(), isTrue);
     final csvContent = await csvFile.readAsString();
-    expect(csvContent.contains('Vòng Đời Thẻ'), isTrue);
-    expect(csvContent.contains('Chuyển vị trí [KỆ A1 → KỆ B2]'), isTrue);
-    expect(csvContent.contains('Gửi sửa chữa / Bảo hành'), isTrue);
+    expect(csvContent.contains('BÁO CÁO TỒN KHO THEO MÃ SKU'), isTrue);
+    expect(csvContent.contains('SKU-LIFECYCLE-COL'), isTrue);
+    expect(csvContent.contains('Số Lượng'), isTrue);
 
-    // 5. Xuất Báo Cáo Tồn Kho (XLSX) và xác thực dữ liệu cập nhật
+    // 5. Xuất Báo Cáo Tồn Kho (XLSX): Sheet 1 gộp SKU & Sheet 2 chi tiết các chip
     final xlsxFile = await exportService.exportInventoryReport(ReportFormat.xlsx, items: [testItem]);
     expect(await xlsxFile.exists(), isTrue);
     final xlsxBytes = await xlsxFile.readAsBytes();
     final excel = Excel.decodeBytes(xlsxBytes);
-    final sheet = excel['Ton_Kho_RFID'];
-    bool foundHeader = false;
-    bool foundMove = false;
-    bool foundRepair = false;
-    for (var row in sheet.rows) {
+
+    // Sheet 1: Ton_Kho_SKU
+    expect(excel.sheets.containsKey('Ton_Kho_SKU'), isTrue);
+    final skuSheet = excel['Ton_Kho_SKU'];
+    bool foundSkuHeader = false;
+    bool foundQtyHeader = false;
+    bool foundSkuRow = false;
+    for (var row in skuSheet.rows) {
       for (var cell in row) {
         final val = cell?.value?.toString() ?? '';
-        if (val.contains('Vòng Đời Thẻ')) foundHeader = true;
-        if (val.contains('Chuyển vị trí [KỆ A1 → KỆ B2]')) foundMove = true;
-        if (val.contains('Gửi sửa chữa / Bảo hành')) foundRepair = true;
+        if (val.contains('Mã SKU')) foundSkuHeader = true;
+        if (val.contains('Số Lượng')) foundQtyHeader = true;
+        if (val.contains('SKU-LIFECYCLE-COL')) foundSkuRow = true;
       }
     }
-    expect(foundHeader, isTrue);
-    expect(foundMove, isTrue);
-    expect(foundRepair, isTrue);
-
-    // Xác thực tự động căn chỉnh độ cao dòng (Row Height) cho dữ liệu nhiều dòng
-    final heights = sheet.getRowHeights;
-    expect(heights.values.any((h) => h > 22.0), isTrue, reason: 'Hàng có vòng đời nhiều dòng phải được tự động tăng độ cao');
+    expect(foundSkuHeader, isTrue);
+    expect(foundQtyHeader, isTrue);
+    expect(foundSkuRow, isTrue);
 
     // Dọn dẹp
     await repo.deleteItem(epc);
@@ -385,4 +391,157 @@ void main() {
     if (await csvFile.exists()) await csvFile.delete();
     if (await xlsxFile.exists()) await xlsxFile.delete();
   });
+
+  test('WarehouseRepository and ReportExportService normalize SKU product name to generic category name', () async {
+    // 1. Kiểm tra hàm getSkuProductName xử lý bỏ số đuôi của chip cá thể
+    expect(repo.getSkuProductName('SKU-CHUNG TU', 'Chứng từ 14'), equals('Chứng từ'));
+    expect(repo.getSkuProductName('SKU-CHUNG TU', 'Chứng từ - 14'), equals('Chứng từ'));
+    expect(repo.getSkuProductName('SKU-CHUNG TU', 'Chứng từ #01'), equals('Chứng từ'));
+    expect(repo.getSkuProductName('SKU-A4', 'Giấy in A4'), equals('Giấy in A4'));
+    expect(repo.getSkuProductName('SKU-IPHONE', 'iPhone 15 Pro'), equals('iPhone 15 Pro'));
+
+    // 2. Thêm các chip có tên cá thể (Chứng từ 14, Chứng từ 15) thuộc cùng SKU
+    final item1 = Item(
+      itemId: 'ITEM-CT-14',
+      productId: 'PROD-CT',
+      sku: 'SKU-CHUNG-TU-NORM',
+      productName: 'Chứng từ 14',
+      serialNumber: '810000000014',
+      epc: '810000000014000000000000',
+      status: ItemStatus.inStock,
+    );
+    final item2 = Item(
+      itemId: 'ITEM-CT-15',
+      productId: 'PROD-CT',
+      sku: 'SKU-CHUNG-TU-NORM',
+      productName: 'Chứng từ 15',
+      serialNumber: '810000000015',
+      epc: '810000000015000000000000',
+      status: ItemStatus.inStock,
+    );
+    await repo.addItem(item1);
+    await repo.addItem(item2);
+
+    // 3. Xuất báo cáo tồn kho XLSX
+    final xlsxFile = await exportService.exportInventoryReport(ReportFormat.xlsx, items: [item1, item2]);
+    expect(await xlsxFile.exists(), isTrue);
+    final bytes = await xlsxFile.readAsBytes();
+    final excel = Excel.decodeBytes(bytes);
+    final skuSheet = excel['Ton_Kho_SKU'];
+
+    bool foundNormalizedName = false;
+    bool foundOldRawName = false;
+    for (var row in skuSheet.rows) {
+      for (var cell in row) {
+        final val = cell?.value?.toString() ?? '';
+        if (val == 'Chứng từ') foundNormalizedName = true;
+        if (val == 'Chứng từ 14') foundOldRawName = true;
+      }
+    }
+    expect(foundNormalizedName, isTrue, reason: 'Tên hàng hóa của nhóm SKU phải được chuẩn hóa thành "Chứng từ"');
+    expect(foundOldRawName, isFalse, reason: 'Không được hiển thị tên gắn số lẻ của từng chip như "Chứng từ 14"');
+
+    // Dọn dẹp
+    await repo.deleteItem(item1.epc);
+    await repo.deleteItem(item2.epc);
+    if (await xlsxFile.exists()) await xlsxFile.delete();
+  });
+
+  test('Xuat bao cao co/khong kem ma EPC va dinh dang ma chip moi dong 1 ma', () async {
+    final itemA = Item(
+      itemId: 'ITEM-EPC-01',
+      productId: 'PROD-EPC',
+      sku: 'SKU-EPC-STACK',
+      productName: 'Sản phẩm thử nghiệm EPC',
+      serialNumber: 'EPC01',
+      epc: 'E28011900000000000000001',
+      status: ItemStatus.inStock,
+    );
+    final itemB = Item(
+      itemId: 'ITEM-EPC-02',
+      productId: 'PROD-EPC',
+      sku: 'SKU-EPC-STACK',
+      productName: 'Sản phẩm thử nghiệm EPC',
+      serialNumber: 'EPC02',
+      epc: 'E28011900000000000000002',
+      status: ItemStatus.inStock,
+    );
+
+    // 1. Xuất có EPC (mặc định includeEpc = true)
+    final fileWithEpc = await exportService.exportInventoryReport(
+      ReportFormat.xlsx,
+      items: [itemA, itemB],
+      includeEpc: true,
+    );
+    expect(await fileWithEpc.exists(), isTrue);
+    final bytesWithEpc = await fileWithEpc.readAsBytes();
+    final excelWithEpc = Excel.decodeBytes(bytesWithEpc);
+    final sheetWith = excelWithEpc['Ton_Kho_SKU'];
+
+    bool hasEpcHeaderWith = false;
+    bool hasMultilineEpc = false;
+    for (var row in sheetWith.rows) {
+      for (var cell in row) {
+        final val = cell?.value?.toString() ?? '';
+        if (val.contains('Mã Chip RFID (EPC)')) hasEpcHeaderWith = true;
+        if (val.contains('E28011900000000000000001') && val.contains('E28011900000000000000002')) {
+          hasMultilineEpc = true;
+        }
+      }
+    }
+    expect(hasEpcHeaderWith, isTrue, reason: 'Phải có cột Mã Chip RFID (EPC) khi includeEpc = true');
+    expect(hasMultilineEpc, isTrue, reason: 'Các mã chip EPC phải được lưu trong ô dữ liệu');
+
+    // 2. Xuất KHÔNG có EPC (includeEpc = false)
+    final fileWithoutEpc = await exportService.exportInventoryReport(
+      ReportFormat.xlsx,
+      items: [itemA, itemB],
+      includeEpc: false,
+    );
+    expect(await fileWithoutEpc.exists(), isTrue);
+    final bytesWithoutEpc = await fileWithoutEpc.readAsBytes();
+    final excelWithoutEpc = Excel.decodeBytes(bytesWithoutEpc);
+    final sheetWithout = excelWithoutEpc['Ton_Kho_SKU'];
+
+    bool hasEpcHeaderWithout = false;
+    bool hasEpcValueWithout = false;
+    for (var row in sheetWithout.rows) {
+      for (var cell in row) {
+        final val = cell?.value?.toString() ?? '';
+        if (val.contains('Mã Chip RFID (EPC)')) hasEpcHeaderWithout = true;
+        if (val.contains('E28011900000000000000001')) hasEpcValueWithout = true;
+      }
+    }
+    expect(hasEpcHeaderWithout, isFalse, reason: 'Không được có cột Mã Chip RFID (EPC) khi includeEpc = false');
+    expect(hasEpcValueWithout, isFalse, reason: 'Không được chứa mã chip EPC khi includeEpc = false');
+
+    if (await fileWithEpc.exists()) await fileWithEpc.delete();
+    if (await fileWithoutEpc.exists()) await fileWithoutEpc.delete();
+
+    // 3. Xuất mặc định KHÔNG truyền includeEpc (chuẩn doanh nghiệp: Không xuất cột EPC)
+    final fileDefault = await exportService.exportInventoryReport(
+      ReportFormat.xlsx,
+      items: [itemA, itemB],
+    );
+    expect(await fileDefault.exists(), isTrue);
+    final bytesDefault = await fileDefault.readAsBytes();
+    final excelDefault = Excel.decodeBytes(bytesDefault);
+    final sheetDefault = excelDefault['Ton_Kho_SKU'];
+
+    bool hasEpcHeaderDefault = false;
+    bool hasEpcValueDefault = false;
+    for (var row in sheetDefault.rows) {
+      for (var cell in row) {
+        final val = cell?.value?.toString() ?? '';
+        if (val.contains('Mã Chip RFID (EPC)')) hasEpcHeaderDefault = true;
+        if (val.contains('E28011900000000000000001')) hasEpcValueDefault = true;
+      }
+    }
+    expect(hasEpcHeaderDefault, isFalse, reason: 'Mặc định KHÔNG được có cột Mã Chip RFID (EPC)');
+    expect(hasEpcValueDefault, isFalse, reason: 'Mặc định KHÔNG được chứa mã chip EPC');
+
+    if (await fileDefault.exists()) await fileDefault.delete();
+  });
 }
+
+

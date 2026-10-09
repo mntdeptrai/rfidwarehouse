@@ -31,9 +31,11 @@ class OutboundImportRow {
   final int quantity;
   final String productName;
   final String customer;
+  final String supplier;
   final String orderNo;
   final String cartonCode;
   final String palletCode;
+  final String palletEpc;
   final String? epc;
 
   OutboundImportRow({
@@ -42,9 +44,11 @@ class OutboundImportRow {
     required this.quantity,
     this.productName = '',
     this.customer = '',
+    this.supplier = '',
     this.orderNo = '',
     this.cartonCode = '',
     this.palletCode = '',
+    this.palletEpc = '',
     this.epc,
   });
 
@@ -55,9 +59,11 @@ class OutboundImportRow {
     'productName': productName,
     'quantity': quantity,
     'customer': customer,
+    'supplier': supplier,
     'orderNo': orderNo,
     'cartonCode': cartonCode,
     'palletCode': palletCode,
+    'palletEpc': palletEpc,
     'epc': epc ?? '',
   };
 }
@@ -258,10 +264,12 @@ class ExcelImportService {
     int? palletCol;
     int? palletEpcCol;
     int? serialCol;
+    int? snCol;
     int? barcodeCol;
     int? nameCol;
     int? supplierCol;
     int? customerCol;
+    int? qtyCol;
     int startRow = 0;
 
     String fileCustomer = '';
@@ -307,16 +315,12 @@ class ExcelImportService {
       if (h.isEmpty) continue;
 
       final isPalletHeader = h.contains('pallet') || h.contains('palet');
-      final isEpcOrRfid = h.contains('epc') ||
-          h.contains('rfid') ||
-          h.contains('serial') ||
-          h.contains('chip') ||
-          h.contains('ma the') ||
-          h.contains('tag') ||
-          h.contains('tid');
+      final isPalletEpc = isPalletHeader && (h.contains('epc') || h.contains('rfid') || h.contains('chip') || h.contains('tag'));
+      final isItemEpc = !isPalletHeader && (h == 'epc' || h == 'ma epc' || h == 'chip epc' || (h.contains('epc') && !isPalletHeader));
+      final isItemSn = !isPalletHeader && (h == 'sn' || h == 'ma sn' || h == 'serial number' || h == 'so seri' || h == 'so serial' || h == 'serial');
 
       // 1. Cột Thẻ RFID / EPC của xe Pallet (Ví dụ: EPC PALLET, EPC PALET, RFID PALLET, CHIP PALLET, TAG PALET)
-      if (isPalletHeader && isEpcOrRfid) {
+      if (isPalletEpc) {
         palletEpcCol = i;
         hasHeader = true;
       }
@@ -325,12 +329,17 @@ class ExcelImportService {
         palletCol = i;
         hasHeader = true;
       }
-      // 3. Cột mã Thẻ RFID / EPC / Chip / Serial của SẢN PHẨM (không phải của Pallet)
-      else if (isEpcOrRfid) {
+      // 3. Cột mã Thẻ RFID / EPC của SẢN PHẨM
+      else if (isItemEpc) {
         serialCol = i;
         hasHeader = true;
       }
-      // 4. Cột Thùng hàng / Kiện / Box / Hộp (không phải Pallet)
+      // 4. Cột mã Serial Number (SN) của sản phẩm
+      else if (isItemSn) {
+        snCol = i;
+        hasHeader = true;
+      }
+      // 5. Cột Thùng hàng / Kiện / Box / Hộp (không phải Pallet)
       else if (h.contains('carton') ||
           h.contains('thung') ||
           h.contains('box') ||
@@ -339,7 +348,7 @@ class ExcelImportService {
         cartonCol = i;
         hasHeader = true;
       }
-      // 5. Cột Mã sản phẩm / SKU / Barcode / Mã hàng (không phải Pallet)
+      // 6. Cột Mã sản phẩm / SKU / Barcode / Mã hàng (không phải Pallet)
       else if (h.contains('barcode') ||
           h.contains('sku') ||
           h.contains('ma sp') ||
@@ -353,7 +362,7 @@ class ExcelImportService {
         barcodeCol = i;
         hasHeader = true;
       }
-      // 6. Cột Tên sản phẩm / Tên hàng
+      // 7. Cột Tên sản phẩm / Tên hàng
       else if (h.contains('ten') ||
           h.contains('name') ||
           h.contains('mo ta') ||
@@ -364,7 +373,12 @@ class ExcelImportService {
         nameCol = i;
         hasHeader = true;
       }
-      // 7. Cột Nhà cung cấp / Supplier / NCC / Vendor
+      // 8. Cột Số Lượng / Qty / SL
+      else if (h == 'sl' || h == 'qty' || h.contains('so luong') || h.contains('quantity')) {
+        qtyCol = i;
+        hasHeader = true;
+      }
+      // 9. Cột Nhà cung cấp / Supplier / NCC / Vendor
       else if (h.contains('supplier') ||
           h.contains('ncc') ||
           h.contains('nha cung cap') ||
@@ -373,7 +387,7 @@ class ExcelImportService {
         supplierCol = i;
         hasHeader = true;
       }
-      // 8. Cột Khách hàng / Customer / Đơn vị nhận / Người nhận
+      // 10. Cột Khách hàng / Customer / Đơn vị nhận / Người nhận
       else if (h.contains('khach hang') ||
           h.contains('khách hàng') ||
           h.contains('customer') ||
@@ -384,10 +398,15 @@ class ExcelImportService {
         customerCol = i;
         hasHeader = true;
       }
+      // 11. Generic RFID / Chip khác nếu chưa nhận diện
+      else if (h.contains('rfid') || h.contains('chip') || h.contains('ma the') || h.contains('tag') || h.contains('tid')) {
+        serialCol ??= i;
+        hasHeader = true;
+      }
     }
 
     // Nếu file có cột Pallet và cột RFID/EPC nhưng cột RFID chưa có chữ 'pallet' (Ví dụ: cột 1 là "Pallet", cột 2 là "RFID")
-    if (palletCol != null && palletEpcCol == null && serialCol != null) {
+    if (palletCol != null && palletEpcCol == null && serialCol != null && snCol == null) {
       palletEpcCol = serialCol;
       serialCol = null;
     }
@@ -413,27 +432,16 @@ class ExcelImportService {
       nameCol ??= (firstRow.length > 2 ? 2 : (serialCol == 0 ? 1 : 0));
     }
 
-    // Default fallback cho serialCol và nameCol nếu chưa khớp
-    if (serialCol == null) {
-      if (palletCol != null && palletEpcCol != null) {
-        // File chỉ tập trung vào Pallet + RFID Pallet (không có cột serial riêng)
-        // Tìm xem có cột nào khác làm serial hay không
-        for (int i = 0; i < headers.length; i++) {
-          if (i != palletCol && i != palletEpcCol && i != cartonCol && i != barcodeCol && i != nameCol) {
-            serialCol = i;
-            break;
-          }
-        }
+    // Default fallback cho serialCol và nameCol nếu không có tiêu đề rõ ràng
+    if (!hasHeader && serialCol == null) {
+      if (headers.length >= 3) {
+        serialCol = 1;
+        nameCol ??= 2;
+      } else if (headers.length == 2) {
+        serialCol = 0;
+        nameCol ??= 1;
       } else {
-        if (headers.length >= 3) {
-          serialCol = 1;
-          nameCol ??= 2;
-        } else if (headers.length == 2) {
-          serialCol = 0;
-          nameCol ??= 1;
-        } else {
-          serialCol = 0;
-        }
+        serialCol = 0;
       }
     }
     nameCol ??= (serialCol == 1 ? 2 : 1);
@@ -450,14 +458,16 @@ class ExcelImportService {
       final pallet = (palletCol != null && palletCol < row.length) ? row[palletCol].trim() : '';
       final palletEpc = (palletEpcCol != null && palletEpcCol < row.length) ? row[palletEpcCol].trim() : '';
       final serial = (serialCol != null && serialCol < row.length) ? row[serialCol].trim() : '';
-      debugPrint('📋 EXCEL ROW $r: serialCol=$serialCol → serial="$serial" (len=${serial.length})');
+      final sn = (snCol != null && snCol < row.length) ? row[snCol].trim() : '';
+      final effectiveSn = sn.isNotEmpty ? sn : serial;
+      debugPrint('📋 EXCEL ROW $r: serialCol=$serialCol → serial="$serial", sn="$sn"');
       final barcode = (barcodeCol != null && barcodeCol < row.length) ? row[barcodeCol].trim() : '';
       final name = (nameCol < row.length) ? row[nameCol].trim() : '';
       final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
       final customer = (customerCol != null && customerCol < row.length) ? row[customerCol].trim() : '';
       final effectiveCustomer = customer.isNotEmpty ? customer : (fileCustomer.isNotEmpty ? fileCustomer : '');
 
-      if (carton.isEmpty && pallet.isEmpty && palletEpc.isEmpty && serial.isEmpty && barcode.isEmpty && name.isEmpty) {
+      if (carton.isEmpty && pallet.isEmpty && palletEpc.isEmpty && serial.isEmpty && sn.isEmpty && barcode.isEmpty && name.isEmpty) {
         continue;
       }
 
@@ -468,7 +478,7 @@ class ExcelImportService {
       final effectivePalletEpc = palletEpc.isNotEmpty ? palletEpc : null;
       final effectiveName = name.isNotEmpty
           ? name
-          : (serial.isNotEmpty ? 'Sản phẩm $serial' : (effectivePallet != null ? 'Pallet $effectivePallet' : 'Sản phẩm mới'));
+          : (effectiveSn.isNotEmpty ? 'Sản phẩm $effectiveSn' : (effectivePallet != null ? 'Pallet $effectivePallet' : 'Sản phẩm mới'));
 
       // Xác định SKU/Barcode riêng cho từng dòng sản phẩm
       String rowBarcode = barcode;
@@ -480,6 +490,7 @@ class ExcelImportService {
           final repoItems = WarehouseRepository().items;
           final existingItem = repoItems.where((it) =>
               (serial.isNotEmpty && it.epc.toUpperCase() == serial.toUpperCase()) ||
+              (sn.isNotEmpty && it.serialNumber.toUpperCase() == sn.toUpperCase()) ||
               (it.productName.trim().isNotEmpty && it.productName.trim().toLowerCase() == effectiveName.trim().toLowerCase())
           ).firstOrNull;
 
@@ -541,13 +552,15 @@ class ExcelImportService {
 
       final entry = cartonMap[groupKey]!;
 
-      if (serial.isNotEmpty) {
+      if (serial.isNotEmpty || effectiveSn.isNotEmpty) {
         final serialsList = entry['serials'] as List<String>;
-        if (!serialsList.contains(serial)) {
-          serialsList.add(serial);
+        final trackKey = serial.isNotEmpty ? serial : effectiveSn;
+        if (!serialsList.contains(trackKey)) {
+          serialsList.add(trackKey);
           entry['quantity'] = serialsList.length;
           (entry['serialItems'] as List<Map<String, dynamic>>).add({
-            'serial': serial,
+            'serial': trackKey,
+            'serialNumber': effectiveSn,
             'barcode': rowBarcode,
             'name': effectiveName,
             'carton': effectiveCarton,
@@ -560,14 +573,18 @@ class ExcelImportService {
           });
         }
       } else {
-        entry['quantity'] = (entry['quantity'] as int) + 1;
-        // Nếu dòng không có serial riêng lẻ (ví dụ chỉ có Pallet & RFID Pallet)
-        // Vẫn ghi nhận vào serialItems để downstream nhận diện được pallet và chip
+        final qtyStr = (qtyCol != null && qtyCol < row.length) ? row[qtyCol].trim() : '1';
+        final rowQty = int.tryParse(qtyStr) ?? 1;
+        entry['quantity'] = (entry['quantity'] as int) + rowQty;
+        // Nếu dòng không có serial riêng lẻ (ví dụ chỉ có Pallet & RFID Pallet, hoặc dòng số lượng SKU)
+        // Ghi nhận đầy đủ số lượng rowQty vào serialItems và serials để downstream nhận diện
         final serialItemsList = entry['serialItems'] as List<Map<String, dynamic>>;
-        final effectiveItemSerial = effectivePalletEpc ?? effectivePallet ?? 'PL-ITEM-$validDataRows';
-        if (!serialItemsList.any((it) => it['serial'] == effectiveItemSerial)) {
+        final serialsList = entry['serials'] as List<String>;
+        for (int q = 0; q < rowQty; q++) {
+          final effectiveItemSerial = effectivePalletEpc ?? '--';
           serialItemsList.add({
             'serial': effectiveItemSerial,
+            'serialNumber': sn.isNotEmpty ? sn : '--',
             'barcode': rowBarcode,
             'name': effectiveName,
             'carton': effectiveCarton,
@@ -578,10 +595,7 @@ class ExcelImportService {
             'supplier': supplier.isNotEmpty ? supplier : entry['supplier'],
             'customer': effectiveCustomer.isNotEmpty ? effectiveCustomer : entry['customer'],
           });
-          final serialsList = entry['serials'] as List<String>;
-          if (!serialsList.contains(effectiveItemSerial)) {
-            serialsList.add(effectiveItemSerial);
-          }
+          serialsList.add(effectiveItemSerial);
         }
       }
     }
@@ -799,9 +813,11 @@ class ExcelImportService {
     int? nameCol;
     int? orderNoCol;
     int? customerCol;
+    int? supplierCol;
     int? epcCol;
     int? cartonCol;
     int? palletCol;
+    int? palletEpcCol;
     int startRow = 0;
 
     // Tìm kiếm khách hàng hoặc số phiếu ở các dòng đầu tiên nếu có ghi chú
@@ -833,34 +849,44 @@ class ExcelImportService {
       final h = headers[i];
       if (h.isEmpty) continue;
 
-      if (h.contains('sku') || h.contains('barcode') || h.contains('ma vach')) {
+      if (h.contains('pallet') || h.contains('palet')) {
+        if (h.contains('epc') || h.contains('rfid') || h.contains('chip')) {
+          palletEpcCol = i;
+          hasHeader = true;
+        } else {
+          palletCol = i;
+          hasHeader = true;
+        }
+      } else if (h.contains('carton') || h.contains('thung') || h.contains('box') || h.contains('kien')) {
+        cartonCol = i;
+        hasHeader = true;
+      } else if (h == 'sku' || h.contains('sku') || h.contains('barcode') || h.contains('ma vach') || (h.contains('ma hang') && skuCol == null)) {
         skuCol = i;
         hasHeader = true;
-      } else if (h.contains('ma hang') || h.contains('item id') || h.contains('item_id') ||
-                 h.contains('product id') || h.contains('product_id') || h.contains('ma sp') ||
-                 h.contains('ma san pham') || h.contains('item code') || h.contains('product code')) {
+      } else if (h.contains('ma san pham') || h.contains('ma sp') ||
+                 h.contains('product id') || h.contains('product_id') ||
+                 h.contains('item id') || h.contains('item_id') ||
+                 h.contains('product code') || h.contains('item code') ||
+                 (h.contains('ma hang') && skuCol != null)) {
         productIdCol = i;
         hasHeader = true;
-      } else if (h.contains('so luong') || h.contains('quantity') || h.contains('qty') || h.contains('sl')) {
+      } else if (h == 'sl' || h == 'qty' || h.contains('so luong') || h.contains('quantity') || h.contains('qty') || h.contains('sl')) {
         qtyCol = i;
         hasHeader = true;
-      } else if (h.contains('ten') || h.contains('name') || h.contains('mo ta') || h.contains('description')) {
+      } else if (h == 'name' || h.contains('ten') || h.contains('name') || h.contains('mo ta') || h.contains('description')) {
         nameCol = i;
         hasHeader = true;
       } else if (h.contains('order') || h.contains('don hang') || h.contains('ma don') || h.contains('po') || h.contains('phieu') || h.contains('so phieu')) {
         orderNoCol = i;
         hasHeader = true;
-      } else if (h.contains('khach hang') || h.contains('customer') || h.contains('nguoi nhan') || h.contains('don vi nhan') || h.contains('nha cung cap') || h.contains('supplier') || h.contains('ncc')) {
+      } else if (h == 'ncc' || h.contains('ncc') || h.contains('nha cung cap') || h.contains('supplier')) {
+        supplierCol = i;
+        hasHeader = true;
+      } else if (h.contains('khach hang') || h.contains('customer') || h.contains('nguoi nhan') || h.contains('don vi nhan')) {
         customerCol = i;
         hasHeader = true;
       } else if (h.contains('epc') || h.contains('serial') || h.contains('chip') || h.contains('rfid') || h.contains('tag')) {
         epcCol = i;
-        hasHeader = true;
-      } else if (h.contains('carton') || h.contains('thung') || h.contains('box') || h.contains('kien')) {
-        cartonCol = i;
-        hasHeader = true;
-      } else if (h.contains('pallet') || h.contains('palet')) {
-        palletCol = i;
         hasHeader = true;
       }
     }
@@ -898,8 +924,10 @@ class ExcelImportService {
       final name = (nameCol != null && nameCol < row.length) ? row[nameCol].trim() : '';
       final orderNo = (orderNoCol != null && orderNoCol < row.length) ? row[orderNoCol].trim() : '';
       final customer = (customerCol != null && customerCol < row.length) ? row[customerCol].trim() : '';
+      final supplier = (supplierCol != null && supplierCol < row.length) ? row[supplierCol].trim() : '';
       final carton = (cartonCol != null && cartonCol < row.length) ? row[cartonCol].trim() : '';
       final pallet = (palletCol != null && palletCol < row.length) ? row[palletCol].trim() : '';
+      final palletEpc = (palletEpcCol != null && palletEpcCol < row.length) ? row[palletEpcCol].trim() : '';
       final epc = (epcCol != null && epcCol < row.length) ? row[epcCol].trim().toUpperCase() : '';
 
       if (sku.isEmpty && productId.isEmpty && name.isEmpty && epc.isEmpty) continue;
@@ -933,9 +961,11 @@ class ExcelImportService {
         quantity: finalQty,
         productName: effectiveName,
         customer: customer.isNotEmpty ? customer : detectedCustomer,
+        supplier: supplier.isNotEmpty ? supplier : (customer.isNotEmpty ? customer : detectedCustomer),
         orderNo: orderNo.isNotEmpty ? orderNo : detectedOrderNo,
         cartonCode: carton,
         palletCode: pallet,
+        palletEpc: palletEpc,
         epc: epc.isNotEmpty ? epc : null,
       ));
     }
@@ -959,8 +989,8 @@ class ExcelImportService {
     );
   }
 
-  /// Xuất file Excel mẫu chuẩn nhập kho RFID WMS: cùng 1 loại sản phẩm, số lượng nhiều, khác EPC
-  Future<String> exportGoodsReceiveTemplate({String fileName = 'Mau_Nhap_Hang_Cung_Loai_Nhieu_EPC.xlsx'}) async {
+  /// Xuất file Excel mẫu chuẩn nhập kho RFID WMS: cùng 1 loại sản phẩm, số lượng nhiều, khác EPC & SN (Ảnh 1)
+  Future<String> exportGoodsReceiveTemplate({String fileName = 'Mau_Nhap_Hang_Chi_Tiet_EPC_SN.xlsx'}) async {
     final excel = Excel.createExcel();
     final defaultSheet = excel.getDefaultSheet() ?? 'Sheet1';
     excel.rename(defaultSheet, 'Goods_Receive');
@@ -970,6 +1000,7 @@ class ExcelImportService {
       'CARTON CODE',
       'EPC',
       'NAME',
+      'SN',
       'SKU',
       'NCC',
       'BARCODE PALET',
@@ -1002,69 +1033,48 @@ class ExcelImportService {
       cell.cellStyle = headerStyle;
     }
 
-    const productName = 'Áo Polo Nam Thể Thao RFID Coolmax';
-    const sku = 'SKU-POLO-COOLMAX-01';
-    const supplier = 'Tổng Công Ty May Việt Tiến';
-
-    // 60 sản phẩm, chia đều 6 thùng (10 sp/thùng), phân bố trên 3 Pallet (2 thùng/pallet)
-    const totalItems = 60;
-    const itemsPerCarton = 10;
-    const cartonsPerPallet = 2;
-
-    final palletConfigs = [
-      {'barcode': 'PL-01', 'epc': 'AB2600100000000000000201'},
-      {'barcode': 'PL-02', 'epc': 'AB2600100000000000000202'},
-      {'barcode': 'PL-03', 'epc': 'AB2600100000000000000203'},
+    // 20 dòng mẫu chuẩn xác đúng theo dữ liệu trong Ảnh 1 của người dùng
+    final sampleRows = [
+      ['CARTON-POLO-001', '810000000001', 'Chứng từ 1', 'SN-810000000001', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-001', '810000000002', 'Chứng từ 2', 'SN-810000000002', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000003', 'Chứng từ 3', 'SN-810000000003', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000004', 'Chứng từ 4', 'SN-810000000004', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000005', 'Chứng từ 5', 'SN-810000000005', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000006', 'Chứng từ 6', 'SN-810000000006', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000007', 'Chứng từ 7', 'SN-810000000007', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000008', 'Chứng từ 8', 'SN-810000000008', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000009', 'Chứng từ 9', 'SN-810000000009', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000010', 'Chứng từ 10', 'SN-810000000010', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-SHORT-001', '810000000011', 'Chứng từ 11', 'SN-810000000011', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-SHORT-001', '810000000012', 'Chứng từ 12', 'SN-810000000012', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-SHORT-001', '810000000013', 'Chứng từ 13', 'SN-810000000013', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-001', '810000000014', 'Chứng từ 14', 'SN-810000000014', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-001', '810000000015', 'Chứng từ 15', 'SN-810000000015', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000016', 'Chứng từ 16', 'SN-810000000016', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000017', 'Chứng từ 17', 'SN-810000000017', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000018', 'Chứng từ 18', 'SN-810000000018', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000019', 'Chứng từ 19', 'SN-810000000019', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', '810000000020', 'Chứng từ 20', 'SN-810000000020', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
     ];
 
-    for (int i = 1; i <= totalItems; i++) {
-      final cartonNum = ((i - 1) ~/ itemsPerCarton) + 1;
-      final cartonCode = 'CARTON-POLO-${cartonNum.toString().padLeft(3, '0')}';
-
-      final palletIndex = (cartonNum - 1) ~/ cartonsPerPallet;
-      final palletConfig = palletConfigs[palletIndex % palletConfigs.length];
-      final palletBarcode = palletConfig['barcode']!;
-      final palletEpc = palletConfig['epc']!;
-
-      final epc = 'E280689400005024B076${i.toString().padLeft(4, '0')}';
-      final rowIndex = i;
-
-      final c0 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex));
-      c0.value = TextCellValue(cartonCode);
-      c0.cellStyle = codeStyle;
-
-      final c1 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex));
-      c1.value = TextCellValue(epc);
-      c1.cellStyle = codeStyle;
-
-      final c2 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIndex));
-      c2.value = TextCellValue(productName);
-      c2.cellStyle = textStyle;
-
-      final c3 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIndex));
-      c3.value = TextCellValue(sku);
-      c3.cellStyle = codeStyle;
-
-      final c4 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: rowIndex));
-      c4.value = TextCellValue(supplier);
-      c4.cellStyle = textStyle;
-
-      final c5 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex));
-      c5.value = TextCellValue(palletBarcode);
-      c5.cellStyle = codeStyle;
-
-      final c6 = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: rowIndex));
-      c6.value = TextCellValue(palletEpc);
-      c6.cellStyle = codeStyle;
+    for (int r = 0; r < sampleRows.length; r++) {
+      final rowData = sampleRows[r];
+      final rowIndex = r + 1;
+      for (int c = 0; c < rowData.length; c++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: rowIndex));
+        cell.value = TextCellValue(rowData[c]);
+        cell.cellStyle = (c == 2 || c == 5) ? textStyle : codeStyle;
+      }
     }
 
     sheet.setColumnWidth(0, 22.0);
-    sheet.setColumnWidth(1, 34.0);
-    sheet.setColumnWidth(2, 42.0);
+    sheet.setColumnWidth(1, 20.0);
+    sheet.setColumnWidth(2, 22.0);
     sheet.setColumnWidth(3, 24.0);
-    sheet.setColumnWidth(4, 34.0);
-    sheet.setColumnWidth(5, 20.0);
-    sheet.setColumnWidth(6, 32.0);
+    sheet.setColumnWidth(4, 20.0);
+    sheet.setColumnWidth(5, 32.0);
+    sheet.setColumnWidth(6, 18.0);
+    sheet.setColumnWidth(7, 32.0);
 
     final bytes = Uint8List.fromList(excel.encode() ?? []);
     if (bytes.isEmpty) throw Exception('Không thể tạo file Excel.');
@@ -1145,26 +1155,24 @@ class ExcelImportService {
     return savePath;
   }
 
-  /// Xuất file Excel mẫu chuẩn xuất kho WMS: MÃ SKU, MÃ HÀNG, SỐ LƯỢNG (Không cần cột EPC)
-  Future<String> exportOutboundTemplate({String fileName = 'Mau_Xuat_Kho_SKU_MaHang_SoLuong.xlsx'}) async {
+  /// Xuất file Excel mẫu xuất kho hàng lẻ (Ảnh 3): CARTON CODE, NAME, SL, SKU
+  Future<String> exportOutboundTemplate({String fileName = 'Mau_Xuat_Kho_Le.xlsx'}) async {
     final excel = Excel.createExcel();
     final defaultSheet = excel.getDefaultSheet() ?? 'Sheet1';
-    excel.rename(defaultSheet, 'Xuat_Kho');
-    final sheet = excel['Xuat_Kho'];
+    excel.rename(defaultSheet, 'Xuat_Kho_Le');
+    final sheet = excel['Xuat_Kho_Le'];
 
     final headers = [
-      'MÃ SKU',
-      'MÃ HÀNG',
-      'SỐ LƯỢNG',
-      'TÊN SẢN PHẨM',
-      'KHÁCH HÀNG',
-      'GHI CHÚ',
+      'CARTON CODE',
+      'NAME',
+      'SL',
+      'SKU',
     ];
 
     final headerStyle = CellStyle(
       bold: true,
       fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
-      backgroundColorHex: ExcelColor.fromHexString('#0284C7'),
+      backgroundColorHex: ExcelColor.fromHexString('#0F766E'),
       horizontalAlign: HorizontalAlign.Center,
       verticalAlign: VerticalAlign.Center,
     );
@@ -1187,27 +1195,27 @@ class ExcelImportService {
       cell.cellStyle = headerStyle;
     }
 
+    // Dữ liệu mẫu chuẩn như Ảnh 3 của người dùng
     final sampleData = [
-      ['SKU-POLO-COOLMAX-01', 'PROD-POLO-01', '10', 'Áo Polo Nam Thể Thao RFID Coolmax', 'Công ty Thời Trang An Nam', 'Xuất theo đơn đặt hàng'],
-      ['SKU-JEAN-SLIM-02', 'PROD-JEAN-02', '5', 'Quần Jean Nam Co Giãn Form Slimfit', 'Công ty Thời Trang An Nam', 'Xuất giao đại lý'],
-      ['SKU-SHIRT-OXFORD-03', 'PROD-SHIRT-03', '8', 'Áo Sơ Mi Nam Tay Dài Vải Oxford', 'Đại lý Thời Trang Phố Huế', 'Xuất kho giao ngay'],
+      ['CARTON-POLO-001', 'Chứng từ 1', '10', 'SKU-CHUNG TU'],
+      ['CARTON-POLO-002', 'Chứng từ 2', '10', 'SKU-CHUNG TU'],
+      ['CARTON-SHORT-001', 'Chứng từ 3', '5', 'SKU-SHORT-01'],
     ];
 
     for (int r = 0; r < sampleData.length; r++) {
       final rowData = sampleData[r];
+      final rowIndex = r + 1;
       for (int c = 0; c < rowData.length; c++) {
-        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: r + 1));
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: rowIndex));
         cell.value = TextCellValue(rowData[c]);
-        cell.cellStyle = (c == 0 || c == 1 || c == 2) ? codeStyle : textStyle;
+        cell.cellStyle = (c == 1) ? textStyle : codeStyle;
       }
     }
 
-    sheet.setColumnWidth(0, 26.0);
-    sheet.setColumnWidth(1, 22.0);
-    sheet.setColumnWidth(2, 14.0);
-    sheet.setColumnWidth(3, 40.0);
-    sheet.setColumnWidth(4, 32.0);
-    sheet.setColumnWidth(5, 28.0);
+    sheet.setColumnWidth(0, 24.0);
+    sheet.setColumnWidth(1, 30.0);
+    sheet.setColumnWidth(2, 12.0);
+    sheet.setColumnWidth(3, 24.0);
 
     final bytes = Uint8List.fromList(excel.encode() ?? []);
     if (bytes.isEmpty) throw Exception('Không thể tạo file Excel.');
@@ -1223,6 +1231,107 @@ class ExcelImportService {
       }
     } catch (e) {
       debugPrint('Save outbound template via picker failed: $e');
+    }
+
+    if (savePath == null || savePath.isEmpty) {
+      Directory? dir;
+      try {
+        dir = await getDownloadsDirectory();
+      } catch (_) {}
+      try {
+        dir ??= await getApplicationDocumentsDirectory();
+      } catch (_) {}
+      dir ??= Directory.systemTemp;
+      savePath = '${dir.path}${Platform.pathSeparator}$fileName';
+      final file = File(savePath);
+      await file.writeAsBytes(bytes);
+    }
+
+    return savePath;
+  }
+
+  /// Xuất file Excel mẫu xuất kho gom Pallet (Ảnh 2): CARTON CODE, NAME, SL, SKU, NCC, BARCODE PALET, EPC PALLET
+  Future<String> exportOutboundPalletTemplate({String fileName = 'Mau_Xuat_Kho_Pallet.xlsx'}) async {
+    final excel = Excel.createExcel();
+    final defaultSheet = excel.getDefaultSheet() ?? 'Sheet1';
+    excel.rename(defaultSheet, 'Xuat_Kho_Pallet');
+    final sheet = excel['Xuat_Kho_Pallet'];
+
+    final headers = [
+      'CARTON CODE',
+      'NAME',
+      'SL',
+      'SKU',
+      'NCC',
+      'BARCODE PALET',
+      'EPC PALLET',
+    ];
+
+    final headerStyle = CellStyle(
+      bold: true,
+      fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+      backgroundColorHex: ExcelColor.fromHexString('#0F766E'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    final codeStyle = CellStyle(
+      fontColorHex: ExcelColor.fromHexString('#0F172A'),
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    final textStyle = CellStyle(
+      fontColorHex: ExcelColor.fromHexString('#1E293B'),
+      horizontalAlign: HorizontalAlign.Left,
+      verticalAlign: VerticalAlign.Center,
+    );
+
+    for (int col = 0; col < headers.length; col++) {
+      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0));
+      cell.value = TextCellValue(headers[col]);
+      cell.cellStyle = headerStyle;
+    }
+
+    // Dữ liệu mẫu chuẩn như Ảnh 2 của người dùng
+    final sampleData = [
+      ['CARTON-POLO-001', 'Chứng từ 1', '10', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-POLO-002', 'Chứng từ 2', '10', 'SKU-CHUNG TU', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+      ['CARTON-SHORT-001', 'Chứng từ 3', '5', 'SKU-SHORT-01', 'Tổng Công Ty May Việt Tiến', 'PL-02', 'E2806894000050322C76D473'],
+    ];
+
+    for (int r = 0; r < sampleData.length; r++) {
+      final rowData = sampleData[r];
+      final rowIndex = r + 1;
+      for (int c = 0; c < rowData.length; c++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: rowIndex));
+        cell.value = TextCellValue(rowData[c]);
+        cell.cellStyle = (c == 1 || c == 4) ? textStyle : codeStyle;
+      }
+    }
+
+    sheet.setColumnWidth(0, 22.0);
+    sheet.setColumnWidth(1, 24.0);
+    sheet.setColumnWidth(2, 10.0);
+    sheet.setColumnWidth(3, 20.0);
+    sheet.setColumnWidth(4, 30.0);
+    sheet.setColumnWidth(5, 18.0);
+    sheet.setColumnWidth(6, 32.0);
+
+    final bytes = Uint8List.fromList(excel.encode() ?? []);
+    if (bytes.isEmpty) throw Exception('Không thể tạo file Excel.');
+
+    String? savePath;
+    try {
+      final savedUri = await FilePicker.saveFile(
+        fileName: fileName,
+        bytes: bytes,
+      );
+      if (savedUri != null) {
+        savePath = savedUri.toFilePath();
+      }
+    } catch (e) {
+      debugPrint('Save outbound pallet template via picker failed: $e');
     }
 
     if (savePath == null || savePath.isEmpty) {

@@ -85,18 +85,18 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4EFE6),
+      backgroundColor: const Color(0xFFF5F5F4),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFE9E2D5),
+        backgroundColor: const Color(0xFFFAFAF9),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF1C1917)),
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
         title: const Text(
           'Đơn Tìm Kiếm Vị Trí (RFID)',
-          style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 16),
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
@@ -104,28 +104,28 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF0284C7), width: 1),
+              border: Border.all(color: const Color(0xFF2563EB), width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.sensors, size: 14, color: Color(0xFF0284C7)),
+                Icon(Icons.sensors, size: 14, color: Color(0xFF2563EB)),
                 SizedBox(width: 4),
-                Text('UHF RADAR', style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11)),
+                Text('UHF RADAR', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 11)),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF6B5D4D)),
+            icon: const Icon(Icons.refresh, color: Color(0xFF57534E)),
             tooltip: 'Làm mới',
             onPressed: () => _repo.reloadFromDatabase(),
           ),
         ],
       ),
       body: RefreshIndicator(
-        color: const Color(0xFF0284C7),
+        color: const Color(0xFF2563EB),
         onRefresh: () async {
           await SupabaseSyncService().syncNow();
           await _repo.reloadFromDatabase();
@@ -137,7 +137,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
             // 1. Thẻ Chuyển Nhanh sang Dò Tìm Tự Do (Radar Sonar / Mũi tên)
             SliverToBoxAdapter(
               child: Container(
-                color: const Color(0xFFE9E2D5),
+                color: const Color(0xFFFAFAF9),
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
                 child: InkWell(
                   onTap: () {
@@ -150,11 +150,11 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0284C7),
+                      color: const Color(0xFF2563EB),
                       borderRadius: BorderRadius.circular(10),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF0284C7).withValues(alpha: 0.25),
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.25),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -197,7 +197,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
             // 2. Filter Segments
             SliverToBoxAdapter(
               child: Container(
-                color: const Color(0xFFE9E2D5),
+                color: const Color(0xFFFAFAF9),
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -231,23 +231,23 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.track_changes_rounded, size: 56, color: Color(0xFF0284C7)),
+                          child: const Icon(Icons.track_changes_rounded, size: 56, color: Color(0xFF2563EB)),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           _filter == 'MY_TASKS'
                               ? 'Chưa có đơn tìm kiếm nào được giao cho bạn'
                               : 'Chưa có đơn tìm kiếm nào trong mục này',
-                          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 15),
+                          style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 15),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         const Text(
                           'Quản lý kho sẽ tạo và giao đơn tìm kiếm cho nhân viên cầm tay khi cần tìm hàng thất lạc hoặc cần lấy gấp. Vuốt xuống để làm mới.',
-                          style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
+                          style: TextStyle(color: Color(0xFF57534E), fontSize: 12),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -285,10 +285,10 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF0284C7) : Colors.white,
+          color: isSelected ? const Color(0xFF2563EB) : Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFD6D3D1),
           ),
         ),
         child: Row(
@@ -297,13 +297,13 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
             Icon(
               icon,
               size: 13,
-              color: isSelected ? Colors.white : const Color(0xFF6B5D4D),
+              color: isSelected ? Colors.white : const Color(0xFF57534E),
             ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF2C251E),
+                color: isSelected ? Colors.white : const Color(0xFF1C1917),
                 fontSize: 11.5,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
@@ -325,7 +325,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isAssignedToMe ? const Color(0xFF0284C7).withValues(alpha: 0.6) : const Color(0xFFD1C7BA),
+          color: isAssignedToMe ? const Color(0xFF2563EB).withValues(alpha: 0.6) : const Color(0xFFD6D3D1),
           width: isAssignedToMe ? 1.4 : 1.0,
         ),
         boxShadow: [
@@ -345,13 +345,13 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   order.orderNo,
                   style: const TextStyle(
-                    color: Color(0xFF0284C7),
+                    color: Color(0xFF2563EB),
                     fontWeight: FontWeight.bold,
                     fontSize: 12.5,
                     fontFamily: 'monospace',
@@ -392,7 +392,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
           Text(
             order.title,
             style: const TextStyle(
-              color: Color(0xFF2C251E),
+              color: Color(0xFF1C1917),
               fontWeight: FontWeight.bold,
               fontSize: 14.5,
             ),
@@ -405,7 +405,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
             runSpacing: 4,
             children: [
               if (order.targetSku != null && order.targetSku!.isNotEmpty)
-                _buildTagChip('SKU: ${order.targetSku!}', const Color(0xFF0284C7)),
+                _buildTagChip('SKU: ${order.targetSku!}', const Color(0xFF2563EB)),
               if (order.targetPalletCode != null && order.targetPalletCode!.isNotEmpty)
                 _buildTagChip('Pallet: ${order.targetPalletCode!}', const Color(0xFFF59E0B)),
               if (order.targetEpc != null && order.targetEpc!.isNotEmpty)
@@ -422,7 +422,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
                 const SizedBox(width: 4),
                 Text(
                   'Vị trí sổ sách: ${order.expectedLocation!}',
-                  style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12, fontWeight: FontWeight.w600),
+                  style: const TextStyle(color: Color(0xFF57534E), fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -446,12 +446,12 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
             const SizedBox(height: 4),
             Text(
               '💬 Ghi chú: ${order.notes!}',
-              style: const TextStyle(color: Color(0xFF8C7E6D), fontSize: 11, fontStyle: FontStyle.italic),
+              style: const TextStyle(color: Color(0xFF57534E), fontSize: 11, fontStyle: FontStyle.italic),
             ),
           ],
 
           const SizedBox(height: 10),
-          const Divider(height: 1, color: Color(0xFFE9E2D5)),
+          const Divider(height: 1, color: Color(0xFFFAFAF9)),
           const SizedBox(height: 8),
 
           // Footer: Người giao, Người nhận, Nút hành động
@@ -468,7 +468,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
                     ),
                     Text(
                       'Tạo bởi: ${order.createdBy} (${_formatDate(order.createdAt)})',
-                      style: const TextStyle(color: Color(0xFF8C7E6D), fontSize: 10.5),
+                      style: const TextStyle(color: Color(0xFF57534E), fontSize: 10.5),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -476,7 +476,7 @@ class _PdaLocateTasksScreenState extends State<PdaLocateTasksScreen> {
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isCompleted ? const Color(0xFF64748B) : const Color(0xFF0284C7),
+                  backgroundColor: isCompleted ? const Color(0xFF78716C) : const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

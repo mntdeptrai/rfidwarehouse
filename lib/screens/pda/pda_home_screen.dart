@@ -15,6 +15,7 @@ import 'pda_putaway_screen.dart';
 import 'pda_warehouse_management_screen.dart';
 import '../radar_locate_screen.dart';
 import '../fifo_search_screen.dart';
+import '../../widgets/hardware_trigger_feedback_banner.dart';
 
 class PdaHomeScreen extends StatefulWidget {
   const PdaHomeScreen({super.key});
@@ -37,6 +38,9 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     _eyeCare.addListener(_onStateChange);
     _authService.addListener(_onStateChange);
     _repo.addListener(_onRepoChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _repo.autoResolveCompletedInboundOrders();
+    });
   }
 
   void _onStateChange() {
@@ -218,7 +222,21 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       isUltraNarrow ? 8 : 18,
-                      isUltraNarrow ? 8 : 14,
+                      isUltraNarrow ? 8 : 12,
+                      isUltraNarrow ? 8 : 18,
+                      0,
+                    ),
+                    sliver: const SliverToBoxAdapter(
+                      child: HardwareTriggerFeedbackBanner(
+                        compact: true,
+                        customIdleLabel: 'SEUIC UTOUCH 2/C • SẴN SÀNG QUÉT KHO',
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      isUltraNarrow ? 8 : 18,
+                      isUltraNarrow ? 8 : 12,
                       isUltraNarrow ? 8 : 18,
                       0,
                     ),
@@ -512,25 +530,84 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     final waitingPalletizeItems = <Item>[];
     final waitingPutawayItems = <Item>[];
     for (final it in _repo.items) {
-      if (it.status == ItemStatus.waitingPalletize) {
+      final isPutawayLocation = it.locationId != null &&
+          it.locationId!.trim().isNotEmpty &&
+          it.locationId != 'LOC-GATE-IN' &&
+          it.locationId != 'CỔNG GATE (IN)';
+
+      if (!isPutawayLocation && it.status == ItemStatus.waitingPalletize) {
         waitingPalletizeItems.add(it);
-      } else if ((it.status == ItemStatus.waitingPutaway ||
+      } else if (!isPutawayLocation &&
+                 (it.status == ItemStatus.waitingPutaway ||
                   (it.status == ItemStatus.inStock &&
                    (it.locationId == null || it.locationId!.isEmpty || it.locationId == 'LOC-GATE-IN'))) &&
                  it.status != ItemStatus.pendingInbound &&
+                 it.status != ItemStatus.out &&
                  (it.palletId != null && it.palletId!.trim().isNotEmpty)) {
         waitingPutawayItems.add(it);
       }
     }
 
-    final waitingPalletizeOrders = _repo.inboundOrders.where((o) =>
-        o.status == InboundOrderStatus.waitingPalletize
-    ).toList();
-    final hasWaitingPalletize = waitingPalletizeItems.isNotEmpty || waitingPalletizeOrders.isNotEmpty;
+    // Lọc các đơn chờ xếp pallet: BỎ QUA các đơn mà tất cả sản phẩm đã xếp vào kệ rồi
+    final waitingPalletizeOrders = _repo.inboundOrders.where((o) {
+      if (o.status != InboundOrderStatus.waitingPalletize) return false;
+      // Đơn nào đã xếp vào kệ rồi thì không cần thông báo
+      if (_repo.isInboundOrderPutawayCompleted(o)) return false;
+      final ordNo = o.orderNo.trim().toUpperCase();
+      final ordId = o.inboundOrderId.trim().toUpperCase();
+      final itemsForOrder = _repo.items.where((it) {
+        final itemOrd = (it.orderNo ?? '').trim().toUpperCase();
+        return itemOrd == ordNo ||
+            itemOrd == 'INB-$ordNo' ||
+            'INB-$itemOrd' == ordNo ||
+            (ordId.isNotEmpty && itemOrd == ordId);
+      }).toList();
+      if (itemsForOrder.isNotEmpty &&
+          itemsForOrder.every((it) =>
+              (it.status == ItemStatus.inStock &&
+               it.locationId != null &&
+               it.locationId!.trim().isNotEmpty &&
+               it.locationId != 'LOC-GATE-IN' &&
+               it.locationId != 'CỔNG GATE (IN)') ||
+              it.status != ItemStatus.waitingPalletize)) {
+        return false;
+      }
+      return true;
+    }).toList();
 
-    final waitingInboundOrders = _repo.inboundOrders.where((o) =>
-        o.status == InboundOrderStatus.waitingPutaway
-    ).toList();
+    // Lọc các đơn chờ cất kệ: BỎ QUA các đơn mà tất cả sản phẩm đã xếp vào kệ rồi
+    final waitingInboundOrders = _repo.inboundOrders.where((o) {
+      if (o.status != InboundOrderStatus.waitingPutaway) return false;
+      // Đơn nào đã xếp vào kệ rồi thì không cần thông báo
+      if (_repo.isInboundOrderPutawayCompleted(o)) return false;
+      final ordNo = o.orderNo.trim().toUpperCase();
+      final ordId = o.inboundOrderId.trim().toUpperCase();
+      final itemsForOrder = _repo.items.where((it) {
+        final itemOrd = (it.orderNo ?? '').trim().toUpperCase();
+        return itemOrd == ordNo ||
+            itemOrd == 'INB-$ordNo' ||
+            'INB-$itemOrd' == ordNo ||
+            (ordId.isNotEmpty && itemOrd == ordId);
+      }).toList();
+      if (itemsForOrder.isNotEmpty &&
+          itemsForOrder.every((it) =>
+              it.status == ItemStatus.inStock &&
+              it.locationId != null &&
+              it.locationId!.trim().isNotEmpty &&
+              it.locationId != 'LOC-GATE-IN' &&
+              it.locationId != 'CỔNG GATE (IN)')) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final pCount = waitingPalletizeItems.isNotEmpty
+        ? waitingPalletizeItems.length
+        : (waitingPalletizeOrders.isNotEmpty
+            ? waitingPalletizeOrders.first.details.fold(0, (sum, d) => sum + d.requiredQty)
+            : 0);
+
+    final hasWaitingPalletize = (waitingPalletizeItems.isNotEmpty || waitingPalletizeOrders.isNotEmpty) && pCount > 0;
     final hasPutaway = waitingPutawayItems.isNotEmpty || waitingInboundOrders.isNotEmpty;
 
     if (!hasWaitingPalletize && !hasPutaway) {
@@ -540,9 +617,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     final cards = <Widget>[];
 
     if (hasWaitingPalletize) {
-      final pCount = waitingPalletizeItems.isNotEmpty
-          ? waitingPalletizeItems.length
-          : waitingPalletizeOrders.first.details.fold(0, (sum, d) => sum + d.requiredQty);
       final orderTitle = waitingPalletizeOrders.isNotEmpty ? waitingPalletizeOrders.first.orderNo : 'Đơn nhập cổng';
 
       cards.add(

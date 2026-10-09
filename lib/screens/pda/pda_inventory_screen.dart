@@ -6,6 +6,9 @@ import '../../services/supabase_sync_service.dart';
 import '../../services/uhf_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/wms_models.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_typography.dart';
+import '../../widgets/hardware_trigger_feedback_banner.dart';
 
 class PdaInventoryScreen extends StatefulWidget {
   const PdaInventoryScreen({super.key});
@@ -49,18 +52,18 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
     final sessions = _repo.inventorySessions;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4EFE6),
+      backgroundColor: const Color(0xFFF5F5F4),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFE9E2D5),
+        backgroundColor: const Color(0xFFFAFAF9),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF1C1917)),
           onPressed: () => Navigator.pop(context),
         ),
         titleSpacing: 0,
         title: const Text(
           'Kiểm Kê Kho Hàng (RFID)',
-          style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 16),
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
@@ -68,21 +71,21 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF0284C7), width: 1),
+              border: Border.all(color: const Color(0xFF2563EB), width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.sensors, size: 14, color: Color(0xFF0284C7)),
+                Icon(Icons.sensors, size: 14, color: Color(0xFF2563EB)),
                 SizedBox(width: 4),
-                Text('RFID UHF', style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11)),
+                Text('RFID UHF', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 11)),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.cloud_sync, color: Color(0xFF0284C7)),
+            icon: const Icon(Icons.cloud_sync, color: Color(0xFF2563EB)),
             tooltip: 'Đồng bộ Đám mây',
             onPressed: () async {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -93,7 +96,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Color(0xFF6B5D4D)),
+            icon: const Icon(Icons.refresh, color: Color(0xFF57534E)),
             tooltip: 'Làm mới',
             onPressed: () => _repo.reloadFromDatabase(),
           ),
@@ -120,7 +123,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             children: [
               // Filter segment: Tất cả vs Được giao cho tôi
               Container(
-                color: const Color(0xFFE9E2D5),
+                color: const Color(0xFFFAFAF9),
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
                 child: Row(
                   children: [
@@ -130,17 +133,17 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: _sessionFilter == 'ALL' ? const Color(0xFF0284C7) : Colors.transparent,
+                            color: _sessionFilter == 'ALL' ? const Color(0xFF2563EB) : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: _sessionFilter == 'ALL' ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+                              color: _sessionFilter == 'ALL' ? const Color(0xFF2563EB) : const Color(0xFFD6D3D1),
                             ),
                           ),
                           alignment: Alignment.center,
                           child: Text(
                             'Tất cả (${sessions.length})',
                             style: TextStyle(
-                              color: _sessionFilter == 'ALL' ? Colors.white : const Color(0xFF6B5D4D),
+                              color: _sessionFilter == 'ALL' ? Colors.white : const Color(0xFF57534E),
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
@@ -155,10 +158,10 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
-                            color: _sessionFilter == 'ASSIGNED_TO_ME' ? const Color(0xFF0284C7) : Colors.transparent,
+                            color: _sessionFilter == 'ASSIGNED_TO_ME' ? const Color(0xFF2563EB) : Colors.transparent,
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: _sessionFilter == 'ASSIGNED_TO_ME' ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+                              color: _sessionFilter == 'ASSIGNED_TO_ME' ? const Color(0xFF2563EB) : const Color(0xFFD6D3D1),
                             ),
                           ),
                           alignment: Alignment.center,
@@ -169,14 +172,14 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                               Icon(
                                 Icons.person_rounded,
                                 size: 13,
-                                color: _sessionFilter == 'ASSIGNED_TO_ME' ? Colors.white : const Color(0xFF0284C7),
+                                color: _sessionFilter == 'ASSIGNED_TO_ME' ? Colors.white : const Color(0xFF2563EB),
                               ),
                               const SizedBox(width: 4),
                               Flexible(
                                 child: Text(
                                   'Giao cho tôi ($mySessionsCount)',
                                   style: TextStyle(
-                                    color: _sessionFilter == 'ASSIGNED_TO_ME' ? Colors.white : const Color(0xFF6B5D4D),
+                                    color: _sessionFilter == 'ASSIGNED_TO_ME' ? Colors.white : const Color(0xFF57534E),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 11.5,
                                   ),
@@ -196,7 +199,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
               // Danh sách đợt kiểm kê (hỗ trợ vuốt xuống để làm mới)
               Expanded(
                 child: RefreshIndicator(
-                  color: const Color(0xFF0284C7),
+                  color: const Color(0xFF2563EB),
                   onRefresh: () async {
                     await SupabaseSyncService().syncNow();
                     await _repo.reloadFromDatabase();
@@ -215,17 +218,17 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(20),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.fact_check_outlined, size: 56, color: Color(0xFF0284C7)),
+                                      child: const Icon(Icons.fact_check_outlined, size: 56, color: Color(0xFF2563EB)),
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
                                       _sessionFilter == 'ASSIGNED_TO_ME'
                                           ? 'Chưa có phiếu kiểm kê nào được giao cho bạn'
                                           : 'Chưa có phiếu kiểm kê nào',
-                                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+                                      style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 16),
                                       textAlign: TextAlign.center,
                                     ),
                                     const SizedBox(height: 16),
@@ -234,7 +237,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                       height: 48,
                                       child: ElevatedButton.icon(
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF0284C7),
+                                          backgroundColor: const Color(0xFF2563EB),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                         ),
                                         icon: const Icon(Icons.add, color: Colors.white),
@@ -248,7 +251,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                     const SizedBox(height: 12),
                                     const Text(
                                       'Vuốt xuống để làm mới dữ liệu từ Cloud',
-                                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 11),
+                                      style: TextStyle(color: Color(0xFF57534E), fontSize: 11),
                                     ),
                                   ],
                                 ),
@@ -275,7 +278,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFFFFF),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFD1C7BA)),
+                      border: Border.all(color: const Color(0xFFD6D3D1)),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.04),
@@ -292,10 +295,10 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF0284C7), size: 22),
+                              child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 22),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -305,14 +308,14 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                   Text(
                                     s.sessionCode,
                                     style: const TextStyle(
-                                      color: Color(0xFF2C251E),
+                                      color: Color(0xFF1C1917),
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14.5,
                                     ),
                                   ),
                                   Text(
                                     'Khu vực: ${s.zone}',
-                                    style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 12),
+                                    style: const TextStyle(color: Color(0xFF57534E), fontSize: 12),
                                   ),
                                   if (s.isSkuSpecific)
                                     Padding(
@@ -359,7 +362,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        const Divider(height: 1, color: Color(0xFFE9E2D5)),
+                        const Divider(height: 1, color: Color(0xFFFAFAF9)),
                         const SizedBox(height: 8),
                         Wrap(
                           alignment: WrapAlignment.spaceBetween,
@@ -369,7 +372,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                           children: [
                             Text(
                               'Bắt đầu: ${_formatDate(s.startedAt)}',
-                              style: const TextStyle(color: Color(0xFF8C7E6D), fontSize: 11),
+                              style: const TextStyle(color: Color(0xFF57534E), fontSize: 11),
                             ),
                             if (s.completedAt != null)
                               Text(
@@ -386,12 +389,12 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 'Quét: ${s.actualScannedCount}',
-                                style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11),
+                                style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 11),
                               ),
                             ),
                             Container(
@@ -432,11 +435,11 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: isAssignedToMe
-                                      ? const Color(0xFF0284C7).withValues(alpha: 0.12)
+                                      ? const Color(0xFF2563EB).withValues(alpha: 0.12)
                                       : const Color(0xFFF1ECE4),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                    color: isAssignedToMe ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+                                    color: isAssignedToMe ? const Color(0xFF2563EB) : const Color(0xFFD6D3D1),
                                     width: 0.8,
                                   ),
                                 ),
@@ -446,13 +449,13 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                     Icon(
                                       Icons.phone_android_rounded,
                                       size: 13,
-                                      color: isAssignedToMe ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
+                                      color: isAssignedToMe ? const Color(0xFF2563EB) : const Color(0xFF57534E),
                                     ),
                                     const SizedBox(width: 5),
                                     Text(
                                       isAssignedToMe ? 'Giao cho bạn (${s.assignedToName!})' : 'Phụ trách: ${s.assignedToName!}',
                                       style: TextStyle(
-                                        color: isAssignedToMe ? const Color(0xFF0284C7) : const Color(0xFF4A3E31),
+                                        color: isAssignedToMe ? const Color(0xFF2563EB) : const Color(0xFF4A3E31),
                                         fontSize: 11,
                                         fontWeight: isAssignedToMe ? FontWeight.bold : FontWeight.w500,
                                       ),
@@ -478,14 +481,14 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           ? Container(
               padding: const EdgeInsets.all(12),
               decoration: const BoxDecoration(
-                color: Color(0xFFE9E2D5),
-                border: Border(top: BorderSide(color: Color(0xFFD1C7BA))),
+                color: Color(0xFFFAFAF9),
+                border: Border(top: BorderSide(color: Color(0xFFD6D3D1))),
               ),
               child: SizedBox(
                 height: 46,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0284C7),
+                    backgroundColor: const Color(0xFF2563EB),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.add, color: Colors.white, size: 20),
@@ -519,17 +522,17 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.fact_check, color: Color(0xFF0284C7), size: 20),
+                  child: const Icon(Icons.fact_check, color: Color(0xFF2563EB), size: 20),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
                     'Hình Thức Kiểm Kê',
                     style: TextStyle(
-                      color: Color(0xFF2C251E),
+                      color: Color(0xFF1C1917),
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
@@ -581,16 +584,16 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             actions: [
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFC7BDAF)),
+                  side: const BorderSide(color: Color(0xFFD6D3D1)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D), fontWeight: FontWeight.bold)),
+                child: const Text('HỦY', style: TextStyle(color: Color(0xFF57534E), fontWeight: FontWeight.bold)),
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0284C7),
+                  backgroundColor: const Color(0xFF2563EB),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 ),
@@ -666,7 +669,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                 const Expanded(
                   child: Text(
                     'Chọn Mặt Hàng Kiểm Kê',
-                    style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
               ],
@@ -680,7 +683,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                     controller: searchCtrl,
                     decoration: InputDecoration(
                       hintText: 'Tìm SKU hoặc tên mặt hàng...',
-                      prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF6B5D4D)),
+                      prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF57534E)),
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -696,7 +699,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                         Text(
                           'Đã chọn: ${selectedSkus.length} SKU',
                           style: TextStyle(
-                            color: selectedSkus.isNotEmpty ? const Color(0xFF8B5CF6) : const Color(0xFF6B5D4D),
+                            color: selectedSkus.isNotEmpty ? const Color(0xFF8B5CF6) : const Color(0xFF57534E),
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -714,7 +717,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                             },
                             child: Text(
                               selectedSkus.length == filtered.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả',
-                              style: const TextStyle(color: Color(0xFF0284C7), fontSize: 12, fontWeight: FontWeight.w600),
+                              style: const TextStyle(color: Color(0xFF2563EB), fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                           ),
                       ],
@@ -724,7 +727,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   Expanded(
                     child: filtered.isEmpty
                         ? const Center(
-                            child: Text('Không tìm thấy mặt hàng phù hợp', style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 13)),
+                            child: Text('Không tìm thấy mặt hàng phù hợp', style: TextStyle(color: Color(0xFF57534E), fontSize: 13)),
                           )
                         : ListView.builder(
                             itemCount: filtered.length,
@@ -740,7 +743,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10),
                                     side: BorderSide(
-                                      color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFFD1C7BA),
+                                      color: isSelected ? const Color(0xFF8B5CF6) : const Color(0xFFD6D3D1),
                                       width: isSelected ? 1.5 : 1,
                                     ),
                                   ),
@@ -760,11 +763,11 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                     },
                                     title: Text(
                                       sku,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF2C251E)),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF1C1917)),
                                     ),
                                     subtitle: Text(
                                       '${info?.name ?? ""} • Tồn: ${info?.inStockCount ?? 0} SP',
-                                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF6B5D4D)),
+                                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF57534E)),
                                     ),
                                   ),
                                 ),
@@ -778,12 +781,12 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             actions: [
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFC7BDAF)),
+                  side: const BorderSide(color: Color(0xFFD6D3D1)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D), fontWeight: FontWeight.bold)),
+                child: const Text('HỦY', style: TextStyle(color: Color(0xFF57534E), fontWeight: FontWeight.bold)),
               ),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
@@ -849,16 +852,16 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.grid_view_rounded, color: Color(0xFF0284C7), size: 20),
+                  child: const Icon(Icons.grid_view_rounded, color: Color(0xFF2563EB), size: 20),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
                     'Chọn Kệ Kho Cần Kiểm Kê',
-                    style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
               ],
@@ -873,13 +876,13 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                     style: const TextStyle(fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Tìm theo mã kệ (vd: A-01-01), tên kệ...',
-                      hintStyle: const TextStyle(color: Color(0xFF8C7E6D), fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF0284C7)),
+                      hintStyle: const TextStyle(color: Color(0xFF57534E), fontSize: 12),
+                      prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF2563EB)),
                       filled: true,
-                      fillColor: const Color(0xFFF4EFE6),
+                      fillColor: const Color(0xFFF5F5F4),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1C7BA))),
-                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD1C7BA))),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD6D3D1))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFD6D3D1))),
                     ),
                     onChanged: (_) => setDialogState(() {}),
                   ),
@@ -889,12 +892,12 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                         ? const Center(
                             child: Text(
                               'Không tìm thấy vị trí kệ kho nào phù hợp',
-                              style: TextStyle(color: Color(0xFF8C7E6D), fontSize: 12.5),
+                              style: TextStyle(color: Color(0xFF57534E), fontSize: 12.5),
                             ),
                           )
                         : ListView.separated(
                             itemCount: filtered.length,
-                            separatorBuilder: (_, _) => const Divider(color: Color(0xFFE9E2D5), height: 1),
+                            separatorBuilder: (_, _) => const Divider(color: Color(0xFFFAFAF9), height: 1),
                             itemBuilder: (context, idx) {
                               final loc = filtered[idx];
                               final dbItemCount = _repo.items.where((it) {
@@ -917,10 +920,10 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                                          color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(8),
                                         ),
-                                        child: const Icon(Icons.location_on_outlined, color: Color(0xFF0284C7), size: 18),
+                                        child: const Icon(Icons.location_on_outlined, color: Color(0xFF2563EB), size: 18),
                                       ),
                                       const SizedBox(width: 10),
                                       Expanded(
@@ -932,7 +935,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                                 Text(
                                                   loc.locationCode,
                                                   style: const TextStyle(
-                                                    color: Color(0xFF2C251E),
+                                                    color: Color(0xFF1C1917),
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 13.5,
                                                     fontFamily: 'monospace',
@@ -942,7 +945,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                                 Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                                   decoration: BoxDecoration(
-                                                    color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                                    color: const Color(0xFF2563EB).withValues(alpha: 0.12),
                                                     borderRadius: BorderRadius.circular(4),
                                                   ),
                                                   child: Text(
@@ -955,7 +958,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                             const SizedBox(height: 2),
                                             Text(
                                               loc.displayName,
-                                              style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11.5),
+                                              style: const TextStyle(color: Color(0xFF57534E), fontSize: 11.5),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ],
@@ -964,13 +967,13 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                         decoration: BoxDecoration(
-                                          color: dbItemCount > 0 ? const Color(0xFF10B981).withValues(alpha: 0.12) : const Color(0xFFF4EFE6),
+                                          color: dbItemCount > 0 ? const Color(0xFF10B981).withValues(alpha: 0.12) : const Color(0xFFF5F5F4),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: Text(
                                           '$dbItemCount SP',
                                           style: TextStyle(
-                                            color: dbItemCount > 0 ? const Color(0xFF059669) : const Color(0xFF8C7E6D),
+                                            color: dbItemCount > 0 ? const Color(0xFF059669) : const Color(0xFF57534E),
                                             fontWeight: FontWeight.bold,
                                             fontSize: 11,
                                           ),
@@ -988,9 +991,9 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             ),
             actions: [
               OutlinedButton(
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFC7BDAF))),
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFD6D3D1))),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('QUAY LẠI', style: TextStyle(color: Color(0xFF6B5D4D))),
+                child: const Text('QUAY LẠI', style: TextStyle(color: Color(0xFF57534E))),
               ),
             ],
           );
@@ -1015,16 +1018,16 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                color: const Color(0xFF2563EB).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.warehouse_rounded, color: Color(0xFF0284C7), size: 20),
+              child: const Icon(Icons.warehouse_rounded, color: Color(0xFF2563EB), size: 20),
             ),
             const SizedBox(width: 10),
             const Expanded(
               child: Text(
                 'Chọn Phân Khu Kiểm Kê',
-                style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ),
           ],
@@ -1035,7 +1038,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
               ? const Padding(
                   padding: EdgeInsets.all(20),
                   child: Center(
-                    child: Text('Chưa có phân khu nào được cấu hình trong hệ thống.', style: TextStyle(color: Color(0xFF8C7E6D), fontSize: 13)),
+                    child: Text('Chưa có phân khu nào được cấu hình trong hệ thống.', style: TextStyle(color: Color(0xFF57534E), fontSize: 13)),
                   ),
                 )
               : SingleChildScrollView(
@@ -1064,28 +1067,28 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFFD1C7BA)),
+                                  border: Border.all(color: const Color(0xFFD6D3D1)),
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.location_on, color: Color(0xFF0284C7), size: 20),
+                                    const Icon(Icons.location_on, color: Color(0xFF2563EB), size: 20),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(z, style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13.5)),
-                                          Text('$rackCount vị trí kệ kho', style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 11)),
+                                          Text(z, style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 13.5)),
+                                          Text('$rackCount vị trí kệ kho', style: const TextStyle(color: Color(0xFF57534E), fontSize: 11)),
                                         ],
                                       ),
                                     ),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                                        color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
-                                      child: Text('$itemCount SP', style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11)),
+                                      child: Text('$itemCount SP', style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 11)),
                                     ),
                                   ],
                                 ),
@@ -1100,9 +1103,9 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
         ),
         actions: [
           OutlinedButton(
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFC7BDAF))),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFD6D3D1))),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('QUAY LẠI', style: TextStyle(color: Color(0xFF6B5D4D))),
+            child: const Text('QUAY LẠI', style: TextStyle(color: Color(0xFF57534E))),
           ),
         ],
       ),
@@ -1125,13 +1128,13 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           color: isSelected ? const Color(0xFFE0F2FE) : const Color(0xFFFFFFFF),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFFD1C7BA),
+            color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFD6D3D1),
             width: isSelected ? 2.0 : 1.0,
           ),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.15),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   )
@@ -1143,7 +1146,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
           children: [
             Icon(
               isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF8C7E6D),
+              color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF57534E),
               size: 22,
             ),
             const SizedBox(width: 10),
@@ -1151,13 +1154,13 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: isSelected
-                    ? const Color(0xFF0284C7).withValues(alpha: 0.15)
-                    : const Color(0xFFF4EFE6),
+                    ? const Color(0xFF2563EB).withValues(alpha: 0.15)
+                    : const Color(0xFFF5F5F4),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 icon,
-                color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
+                color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF57534E),
                 size: 22,
               ),
             ),
@@ -1169,7 +1172,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   Text(
                     title,
                     style: TextStyle(
-                      color: isSelected ? const Color(0xFF0369A1) : const Color(0xFF2C251E),
+                      color: isSelected ? const Color(0xFF0369A1) : const Color(0xFF1C1917),
                       fontWeight: FontWeight.bold,
                       fontSize: 13.5,
                     ),
@@ -1178,7 +1181,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      color: Color(0xFF6B5D4D),
+                      color: Color(0xFF57534E),
                       fontSize: 11,
                       height: 1.25,
                     ),
@@ -1348,6 +1351,10 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       if (!mounted) return;
       if (tag.epc.isNotEmpty) {
         final cleanEpc = tag.epc.trim().toUpperCase();
+        if (_repo.findShippedItem(epc: cleanEpc) != null) {
+          SystemSound.play(SystemSoundType.alert);
+          HapticFeedback.heavyImpact();
+        }
         if (_uhf.filterDuplicates && _scannedEpcs.contains(cleanEpc)) return;
         _scannedEpcs.add(cleanEpc);
         _scheduleUiRefresh();
@@ -1427,6 +1434,10 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     }
 
     final curSession = _currentSession;
+    if (_repo.findShippedItem(epc: raw) != null) {
+      SystemSound.play(SystemSoundType.alert);
+      HapticFeedback.heavyImpact();
+    }
     setState(() {
       _scannedEpcs.add(raw);
       _repo.processAuditScan(
@@ -1534,19 +1545,19 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
             SizedBox(width: 8),
             Text(
               'Xác Nhận Hoàn Tất',
-              style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 16),
+              style: TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ],
         ),
         content: Text(
           'Bạn có chắc chắn muốn chốt số liệu kiểm kê này (${_scannedEpcs.length} chip thực tế đã đọc)? Kết quả kiểm kê và đối chiếu sẽ được lưu vào hệ thống.',
-          style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 13.5, height: 1.3),
+          style: const TextStyle(color: Color(0xFF57534E), fontSize: 13.5, height: 1.3),
         ),
         actions: [
           OutlinedButton(
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFC7BDAF))),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFFD6D3D1))),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('HỦY', style: TextStyle(color: Color(0xFF6B5D4D))),
+            child: const Text('HỦY', style: TextStyle(color: Color(0xFF57534E))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
@@ -1608,7 +1619,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         ? matchCount
         : _scannedEpcs.length;
     final wrongLocCount = s.wrongLocationCount;
-    final unknownCount = s.unknownEpcCount;
+    final shippedCount = s.shippedItemCount;
+    final unknownCount = s.trueUnknownEpcCount;
 
     // Thông tin hiển thị vị trí kiểm kê
     final loc = s.locationCode != null
@@ -1628,7 +1640,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       if (_selectedFilter == 'match' && r.resultType != InventoryVarianceType.match) return false;
       if (_selectedFilter == 'missing' && r.resultType != InventoryVarianceType.missing) return false;
       if (_selectedFilter == 'wrong' && r.resultType != InventoryVarianceType.wrongLocation) return false;
-      if (_selectedFilter == 'unknown' && r.resultType != InventoryVarianceType.unknownEpc) return false;
+      if (_selectedFilter == 'unknown' && (r.resultType != InventoryVarianceType.unknownEpc || r.expectedLocation == 'ĐÃ XUẤT KHO')) return false;
+      if (_selectedFilter == 'shipped' && r.expectedLocation != 'ĐÃ XUẤT KHO') return false;
 
       if (searchQ.isNotEmpty) {
         final epc = r.epc.toLowerCase();
@@ -1642,13 +1655,13 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4EFE6),
+      backgroundColor: const Color(0xFFF5F5F4),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFE9E2D5),
+        backgroundColor: const Color(0xFFFAFAF9),
         elevation: 0,
         titleSpacing: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C251E)),
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF1C1917)),
           onPressed: () async {
             _uiRefreshTimer?.cancel();
             _tagSub?.cancel();
@@ -1669,7 +1682,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                 children: [
                   Text(
                     s.sessionCode,
-                    style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13.5),
+                    style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 13.5),
                   ),
                   const SizedBox(width: 6),
                   if (isDone)
@@ -1686,16 +1699,16 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: const Color(0xFF0284C7), width: 0.8),
+                        border: Border.all(color: const Color(0xFF2563EB), width: 0.8),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.sensors, size: 10, color: Color(0xFF0284C7)),
+                          Icon(Icons.sensors, size: 10, color: Color(0xFF2563EB)),
                           SizedBox(width: 3),
-                          Text('RFID UHF', style: TextStyle(color: Color(0xFF0284C7), fontSize: 9.5, fontWeight: FontWeight.bold)),
+                          Text('RFID UHF', style: TextStyle(color: Color(0xFF2563EB), fontSize: 9.5, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -1712,7 +1725,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         ),
         actions: [
           IconButton(
-            icon: Icon(_showManualInput ? Icons.keyboard_hide : Icons.keyboard, color: const Color(0xFF6B5D4D)),
+            icon: Icon(_showManualInput ? Icons.keyboard_hide : Icons.keyboard, color: const Color(0xFF57534E)),
             tooltip: 'Nhập EPC thủ công',
             onPressed: () => setState(() => _showManualInput = !_showManualInput),
           ),
@@ -1726,7 +1739,15 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
       ),
       body: Column(
         children: [
-          // Banner nếu phiếu đã chốt
+          Expanded(
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Banner nếu phiếu đã chốt
           if (isDone)
             Container(
               margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -1744,6 +1765,72 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     child: Text(
                       'Phiếu kiểm kê này ĐÃ ĐƯỢC CHỐT SỐ LIỆU. Đầu đọc RFID đã tắt để bảo toàn kết quả.',
                       style: TextStyle(color: Color(0xFF065F46), fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // CẢNH BÁO BẤT THƯỜNG: Khi phát hiện chip của hàng đã xuất kho nhưng vẫn nằm trong kho
+          if (shippedCount > 0)
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFB91C1C), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFDC2626).withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFB91C1C),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '🚨 CẢNH BÁO: CÓ $shippedCount CHIP ĐÃ XUẤT KHO TRƯỚC ĐÓ!',
+                          style: const TextStyle(
+                            color: Color(0xFF7F1D1D),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Hàng đã làm thủ tục xuất nhưng vẫn quét thấy chip trong kho. Cần đối soát thu hồi.',
+                          style: TextStyle(color: Color(0xFF991B1B), fontSize: 10.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _selectedFilter = 'shipped'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFB91C1C),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'XEM NGAY',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10.5),
+                      ),
                     ),
                   ),
                 ],
@@ -1824,7 +1911,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFD1C7BA)),
+                border: Border.all(color: const Color(0xFFD6D3D1)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.03),
@@ -1841,8 +1928,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         title: 'Tồn Database',
                         value: '$expectedDbCount',
                         unit: 'SP',
-                        color: const Color(0xFF1E293B),
-                        bg: const Color(0xFFF1F5F9),
+                        color: const Color(0xFFFAFAF9),
+                        bg: const Color(0xFF1C1917),
                         onTap: () => setState(() => _selectedFilter = 'all'),
                       ),
                       const SizedBox(width: 6),
@@ -1860,12 +1947,28 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         title: '⚠️ Chưa quét',
                         value: '$missingCount',
                         unit: 'SP',
-                        color: missingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF64748B),
+                        color: missingCount > 0 ? const Color(0xFFD97706) : const Color(0xFF78716C),
                         bg: missingCount > 0 ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC),
                         onTap: () => setState(() => _selectedFilter = 'missing'),
                       ),
                     ],
                   ),
+                  if (shippedCount > 0) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        _buildKpiCard(
+                          title: '🚨 Đã xuất (Trùng chip)',
+                          value: '$shippedCount',
+                          unit: 'Chip',
+                          color: const Color(0xFFDC2626),
+                          bg: const Color(0xFFFEF2F2),
+                          highlightBorder: true,
+                          onTap: () => setState(() => _selectedFilter = 'shipped'),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Container(
                     width: double.infinity,
@@ -1918,19 +2021,25 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColors.slate800,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFD1C7BA)),
+                border: Border.all(color: AppColors.slate700),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 4,
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: Column(
                 children: [
+                  HardwareTriggerFeedbackBanner(
+                    compact: true,
+                    externalIsScanning: _isScanning,
+                    scannedCount: totalScanned,
+                  ),
+                  const SizedBox(height: 8),
                   // Hàng 1: Tổng quan đối chiếu
                   Row(
                     children: [
@@ -1938,8 +2047,8 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         title: 'Tồn Database',
                         value: '$expectedDbCount',
                         unit: 'SP',
-                        color: const Color(0xFF1E293B),
-                        bg: const Color(0xFFF1F5F9),
+                        color: AppColors.slate100,
+                        bg: AppColors.slate850,
                         onTap: () => setState(() => _selectedFilter = 'all'),
                       ),
                       const SizedBox(width: 6),
@@ -1947,7 +2056,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         title: 'Thực tế quét',
                         value: '$totalScanned',
                         unit: 'Chip',
-                        color: const Color(0xFF0284C7),
+                        color: const Color(0xFF2563EB),
                         bg: const Color(0xFFE0F2FE),
                         onTap: () => setState(() => _selectedFilter = 'all'),
                       ),
@@ -1995,6 +2104,22 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                       ),
                     ],
                   ),
+                  if (shippedCount > 0) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        _buildKpiCard(
+                          title: '🚨 Đã xuất kho',
+                          value: '$shippedCount',
+                          unit: 'Chip',
+                          color: const Color(0xFFDC2626),
+                          bg: const Color(0xFFFEF2F2),
+                          highlightBorder: true,
+                          onTap: () => setState(() => _selectedFilter = 'shipped'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -2007,11 +2132,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF0284C7)),
+                border: Border.all(color: const Color(0xFF2563EB)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.edit_note, color: Color(0xFF0284C7), size: 20),
+                  const Icon(Icons.edit_note, color: Color(0xFF2563EB), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -2020,7 +2145,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         hintText: 'Nhập mã EPC để kiểm tra...',
                         border: InputBorder.none,
                         isDense: true,
-                        hintStyle: TextStyle(fontSize: 12, color: Color(0xFF8C7E6D)),
+                        hintStyle: TextStyle(fontSize: 12, color: Color(0xFF57534E)),
                       ),
                       style: const TextStyle(fontSize: 12, fontFamily: 'Courier'),
                       onSubmitted: (_) => _addManualEpc(),
@@ -2028,7 +2153,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0284C7),
+                      backgroundColor: const Color(0xFF2563EB),
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2050,7 +2175,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                   _buildFilterTabChip(
                     id: 'all',
                     label: 'Tất cả (${baseResults.length})',
-                    color: const Color(0xFF2C251E),
+                    color: const Color(0xFF1C1917),
                   ),
                   const SizedBox(width: 6),
                   _buildFilterTabChip(
@@ -2078,6 +2203,14 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                       color: const Color(0xFF7C3AED),
                     ),
                   ],
+                  if (shippedCount > 0) ...[
+                    const SizedBox(width: 6),
+                    _buildFilterTabChip(
+                      id: 'shipped',
+                      label: '🚨 Đã xuất ($shippedCount)',
+                      color: const Color(0xFFDC2626),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -2092,11 +2225,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFD1C7BA)),
+                border: Border.all(color: const Color(0xFFD6D3D1)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.search, size: 18, color: Color(0xFF8C7E6D)),
+                  const Icon(Icons.search, size: 18, color: Color(0xFF57534E)),
                   const SizedBox(width: 6),
                   Expanded(
                     child: TextField(
@@ -2105,7 +2238,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         hintText: 'Tìm theo tên SP, SKU, EPC hoặc vị trí...',
                         border: InputBorder.none,
                         isDense: true,
-                        hintStyle: TextStyle(fontSize: 11.5, color: Color(0xFF8C7E6D)),
+                        hintStyle: TextStyle(fontSize: 11.5, color: Color(0xFF57534E)),
                       ),
                       style: const TextStyle(fontSize: 12),
                       onChanged: (_) => setState(() {}),
@@ -2117,58 +2250,71 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         _searchCtrl.clear();
                         setState(() {});
                       },
-                      child: const Icon(Icons.clear, size: 16, color: Color(0xFF8C7E6D)),
+                      child: const Icon(Icons.clear, size: 16, color: Color(0xFF57534E)),
                     ),
                 ],
               ),
             ),
           ),
+                    ],
+                  ),
+                ),
 
-          // DANH SÁCH CHI TIẾT TỪNG SẢN PHẨM / CHIP THEO ĐỐI CHIẾU
-          Expanded(
-            child: filteredResults.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _isScanning ? Icons.sensors : Icons.check_circle_outline,
-                          size: 40,
-                          color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF8F8070),
+                // DANH SÁCH CHI TIẾT TỪNG SẢN PHẨM / CHIP THEO ĐỐI CHIẾU
+                if (filteredResults.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              _isScanning ? Icons.sensors : Icons.check_circle_outline,
+                              size: 36,
+                              color: _isScanning ? const Color(0xFF2563EB) : const Color(0xFF78716C),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _isScanning
+                                  ? 'Đang phát sóng đọc thẻ RFID...'
+                                  : (baseResults.isEmpty
+                                      ? 'Chưa có dữ liệu kiểm kê cho mặt hàng này.'
+                                      : 'Không có sản phẩm nào thuộc bộ lọc này.'),
+                              style: TextStyle(
+                                color: _isScanning ? const Color(0xFF2563EB) : const Color(0xFF57534E),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _isScanning
-                              ? 'Đang phát sóng đọc thẻ RFID...'
-                              : (baseResults.isEmpty
-                                  ? 'Chưa có dữ liệu kiểm kê cho mặt hàng này.'
-                                  : 'Không có sản phẩm nào thuộc bộ lọc này.'),
-                          style: TextStyle(
-                            color: _isScanning ? const Color(0xFF0284C7) : const Color(0xFF6B5D4D),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   )
-                : ListView.builder(
-                    physics: const ClampingScrollPhysics(),
+                else
+                  SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    itemCount: filteredResults.length,
-                    itemBuilder: (context, index) {
-                      final r = filteredResults[index];
-                      return _buildItemAuditCard(r, isDone, key: ValueKey(r.epc));
-                    },
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final r = filteredResults[index];
+                          return _buildItemAuditCard(r, isDone, key: ValueKey(r.epc));
+                        },
+                        childCount: filteredResults.length,
+                      ),
+                    ),
                   ),
+              ],
+            ),
           ),
 
           // Thanh điều khiển đáy màn hình PDA
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
-              color: Color(0xFFE9E2D5),
-              border: Border(top: BorderSide(color: Color(0xFFD1C7BA))),
+              color: Color(0xFFFAFAF9),
+              border: Border(top: BorderSide(color: Color(0xFFD6D3D1))),
             ),
             child: isDone
                 ? SizedBox(
@@ -2210,7 +2356,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                           height: 48,
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
+                              backgroundColor: _isScanning ? const Color(0xFFEF4444) : const Color(0xFF2563EB),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             icon: Icon(_isScanning ? Icons.stop : Icons.sensors, color: Colors.white, size: 20),
@@ -2263,14 +2409,14 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
           color: isSelected ? color : Colors.white,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? color : const Color(0xFFD1C7BA),
+            color: isSelected ? color : const Color(0xFFD6D3D1),
             width: isSelected ? 1.5 : 1.0,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF6B5D4D),
+            color: isSelected ? Colors.white : const Color(0xFF57534E),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             fontSize: 11,
           ),
@@ -2347,11 +2493,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         const SizedBox(height: 4),
                         Text(
                           r.productName ?? 'Sản phẩm chưa đặt tên',
-                          style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         Text(
                           'EPC: ${r.epc}',
-                          style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 11),
+                          style: const TextStyle(color: Color(0xFF57534E), fontFamily: 'Courier', fontSize: 11),
                         ),
                       ],
                     ),
@@ -2394,7 +2540,7 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                         Expanded(
                           child: Text(
                             r.actualLocation ?? 'Vị trí hiện tại',
-                            style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold, fontSize: 11),
+                            style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 11),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -2477,11 +2623,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     const SizedBox(height: 3),
                     Text(
                       r.productName ?? 'Sản phẩm',
-                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                     Text(
                       'EPC: ${r.epc}',
-                      style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 10.5),
+                      style: const TextStyle(color: Color(0xFF57534E), fontFamily: 'Courier', fontSize: 10.5),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -2549,11 +2695,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     const SizedBox(height: 3),
                     Text(
                       r.productName ?? 'Sản phẩm',
-                      style: const TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold, fontSize: 12),
+                      style: const TextStyle(color: Color(0xFF1C1917), fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                     Text(
                       'EPC: ${r.epc}',
-                      style: const TextStyle(color: Color(0xFF6B5D4D), fontFamily: 'Courier', fontSize: 10.5),
+                      style: const TextStyle(color: Color(0xFF57534E), fontFamily: 'Courier', fontSize: 10.5),
                     ),
                   ],
                 ),
@@ -2563,6 +2709,66 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
         );
 
       case InventoryVarianceType.unknownEpc:
+        final shippedItem = _repo.findShippedItem(epc: r.epc);
+        if (shippedItem != null || r.expectedLocation == 'ĐÃ XUẤT KHO') {
+          final pName = shippedItem?.productName ?? (r.productName?.isNotEmpty == true ? r.productName! : 'Sản phẩm đã xuất kho');
+          final pSku = shippedItem?.sku ?? (r.sku?.isNotEmpty == true ? r.sku! : '--');
+          final pSn = (shippedItem?.serialNumber.isNotEmpty == true && shippedItem!.serialNumber != '--') ? shippedItem.serialNumber : '--';
+
+          return Container(
+            key: key,
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.6)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 16),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text('🚨 HÀNG ĐÃ XUẤT KHO (TRÙNG EPC/SN)', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$pName • SKU: $pSku • SN: $pSn',
+                        style: const TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 11),
+                      ),
+                      Text(
+                        'EPC: ${r.epc}',
+                        style: const TextStyle(color: Color(0xFF1C1917), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11),
+                      ),
+                      const Text(
+                        'Hàng hóa này đã làm thủ tục xuất kho trước đó nhưng vẫn quét thấy chip trong kho!',
+                        style: TextStyle(color: Color(0xFFB91C1C), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         // Thẻ lạ chưa khai báo trong CSDL
         return Container(
           key: key,
@@ -2600,11 +2806,11 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
                     const SizedBox(height: 3),
                     Text(
                       'EPC: ${r.epc}',
-                      style: const TextStyle(color: Color(0xFF2C251E), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11.5),
+                      style: const TextStyle(color: Color(0xFF1C1917), fontFamily: 'Courier', fontWeight: FontWeight.bold, fontSize: 11.5),
                     ),
                     const Text(
                       'Thẻ RFID quét được nhưng chưa được đăng ký trong hệ thống.',
-                      style: TextStyle(color: Color(0xFF6B5D4D), fontSize: 10),
+                      style: TextStyle(color: Color(0xFF57534E), fontSize: 10),
                     ),
                   ],
                 ),
@@ -2635,32 +2841,40 @@ class _InventoryScanningSubScreenState extends State<_InventoryScanningSubScreen
             borderRadius: BorderRadius.circular(8),
             border: highlightBorder
                 ? Border.all(color: color, width: 1.5)
-                : null,
+                : Border.all(color: color.withValues(alpha: 0.25)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
-                style: const TextStyle(color: Color(0xFF6B5D4D), fontSize: 9.5, fontWeight: FontWeight.w500),
+                style: const TextStyle(color: AppColors.slate400, fontSize: 10.0, fontWeight: FontWeight.w600),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    value,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 16),
-                  ),
-                  const SizedBox(width: 3),
-                  Text(
-                    unit,
-                    style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 9.5, fontWeight: FontWeight.bold),
-                  ),
-                ],
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      value,
+                      style: AppTypography.monospaceTabular(
+                        color: color,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      unit,
+                      style: TextStyle(color: color.withValues(alpha: 0.85), fontSize: 9.5, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

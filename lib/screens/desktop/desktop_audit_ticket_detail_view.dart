@@ -426,7 +426,7 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
                   label: const Text('TIẾP TỤC QUÉT'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: c.rfidCyan,
-                    foregroundColor: const Color(0xFF2C251E),
+                    foregroundColor: const Color(0xFFFFFFFF),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     elevation: 0,
                   ),
@@ -628,6 +628,22 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
               const SizedBox(width: 10),
             ],
 
+            if (s.shippedItemCount > 0) ...[
+              // Thẻ: Hàng đã xuất kho
+              Expanded(
+                child: _buildMetricTile(
+                  title: '🚨 ĐÃ XUẤT KHO',
+                  value: '${s.shippedItemCount} Chip',
+                  icon: Icons.error_outline_rounded,
+                  color: const Color(0xFFDC2626),
+                  bg: const Color(0xFFDC2626).withValues(alpha: 0.1),
+                  borderColor: const Color(0xFFDC2626).withValues(alpha: 0.3),
+                  c: c,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+
             // Thẻ 7: Tỷ lệ chính xác
             Expanded(
               child: _buildMetricTile(
@@ -668,7 +684,14 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.4),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
               Icon(icon, size: 14, color: color),
             ],
           ),
@@ -950,13 +973,16 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
     } else if (_rfidFilter == 'WRONG_LOC') {
       filtered = filtered.where((r) => r.resultType == InventoryVarianceType.wrongLocation).toList();
     } else if (_rfidFilter == 'UNKNOWN') {
-      filtered = filtered.where((r) => r.resultType == InventoryVarianceType.unknownEpc).toList();
+      filtered = filtered.where((r) => r.resultType == InventoryVarianceType.unknownEpc && r.expectedLocation != 'ĐÃ XUẤT KHO').toList();
+    } else if (_rfidFilter == 'SHIPPED') {
+      filtered = filtered.where((r) => r.expectedLocation == 'ĐÃ XUẤT KHO').toList();
     }
 
     final matchCount = allResults.where((r) => r.resultType == InventoryVarianceType.match).length;
     final missingCount = allResults.where((r) => r.resultType == InventoryVarianceType.missing).length;
     final wrongLocCount = allResults.where((r) => r.resultType == InventoryVarianceType.wrongLocation).length;
-    final unknownCount = allResults.where((r) => r.resultType == InventoryVarianceType.unknownEpc).length;
+    final shippedCount = allResults.where((r) => r.expectedLocation == 'ĐÃ XUẤT KHO').length;
+    final unknownCount = allResults.where((r) => r.resultType == InventoryVarianceType.unknownEpc && r.expectedLocation != 'ĐÃ XUẤT KHO').length;
 
     return Container(
       decoration: BoxDecoration(
@@ -1002,6 +1028,8 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
                 if (!widget.session.isSkuSpecific) ...[
                   _filterChip('🔀 Sai vị trí ($wrongLocCount)', 'WRONG_LOC', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFFF59E0B)),
                   _filterChip('❓ Thẻ lạ ($unknownCount)', 'UNKNOWN', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFF8B5CF6)),
+                  if (shippedCount > 0)
+                    _filterChip('🚨 Đã xuất kho ($shippedCount)', 'SHIPPED', _rfidFilter, (val) => setState(() => _rfidFilter = val), c, activeColor: const Color(0xFFDC2626)),
                 ],
 
                 SizedBox(
@@ -1075,7 +1103,10 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
 
                   Color resColor = const Color(0xFF10B981);
                   String resLabel = 'Khớp chuẩn';
-                  if (r.resultType == InventoryVarianceType.missing) {
+                  if (r.expectedLocation == 'ĐÃ XUẤT KHO') {
+                    resColor = const Color(0xFFDC2626);
+                    resLabel = '🚨 Đã xuất kho';
+                  } else if (r.resultType == InventoryVarianceType.missing) {
                     resColor = const Color(0xFFEF4444);
                     resLabel = 'Thiếu thực tế';
                   } else if (r.resultType == InventoryVarianceType.wrongLocation) {

@@ -102,6 +102,44 @@ class Item {
     this.putawayBy,
   });
 
+  Item copyWith({
+    String? itemId,
+    String? productId,
+    String? sku,
+    String? productName,
+    String? serialNumber,
+    String? epc,
+    ItemStatus? status,
+    String? orderNo,
+    String? palletId,
+    String? locationId,
+    DateTime? inboundTime,
+    DateTime? allocatedTime,
+    String? supplier,
+    String? cartonCode,
+    String? inboundBy,
+    String? putawayBy,
+  }) {
+    return Item(
+      itemId: itemId ?? this.itemId,
+      productId: productId ?? this.productId,
+      sku: sku ?? this.sku,
+      productName: productName ?? this.productName,
+      serialNumber: serialNumber ?? this.serialNumber,
+      epc: epc ?? this.epc,
+      status: status ?? this.status,
+      orderNo: orderNo ?? this.orderNo,
+      palletId: palletId ?? this.palletId,
+      locationId: locationId ?? this.locationId,
+      inboundTime: inboundTime ?? this.inboundTime,
+      allocatedTime: allocatedTime ?? this.allocatedTime,
+      supplier: supplier ?? this.supplier,
+      cartonCode: cartonCode ?? this.cartonCode,
+      inboundBy: inboundBy ?? this.inboundBy,
+      putawayBy: putawayBy ?? this.putawayBy,
+    );
+  }
+
   /// Tên nhà cung cấp hiển thị
   String get supplierDisplay => (supplier != null && supplier!.trim().isNotEmpty) ? supplier!.trim() : 'Chưa khai báo';
 
@@ -303,6 +341,21 @@ class InventorySession {
       ? 0
       : results.where((r) => r.resultType == InventoryVarianceType.unknownEpc).length;
 
+  /// Số lượng chip của hàng đã xuất kho trước đó nhưng vẫn phát hiện trong kho
+  int get shippedItemCount => isSkuSpecific
+      ? effectiveResults.where((r) => r.expectedLocation == 'ĐÃ XUẤT KHO').length
+      : results.where((r) => r.expectedLocation == 'ĐÃ XUẤT KHO').length;
+
+  /// Danh sách kết quả chip của hàng đã xuất kho
+  List<InventoryItemResult> get shippedResults => isSkuSpecific
+      ? effectiveResults.where((r) => r.expectedLocation == 'ĐÃ XUẤT KHO').toList()
+      : results.where((r) => r.expectedLocation == 'ĐÃ XUẤT KHO').toList();
+
+  /// Số lượng thẻ lạ thực sự (không tính chip của hàng đã xuất kho)
+  int get trueUnknownEpcCount => isSkuSpecific
+      ? 0
+      : results.where((r) => r.resultType == InventoryVarianceType.unknownEpc && r.expectedLocation != 'ĐÃ XUẤT KHO').length;
+
   int get actualScannedCount => isSkuSpecific
       ? matchCount
       : results.where((r) => r.resultType != InventoryVarianceType.missing).length;
@@ -328,6 +381,7 @@ class SkuStockReconciliationRow {
   final int missingCount;
   final int wrongLocationCount;
   final int unknownCount;
+  final bool isAudited;  // Đã có dữ liệu kiểm kê thực tế hay chưa
   final List<InventoryItemResult> itemResults;
 
   const SkuStockReconciliationRow({
@@ -341,14 +395,19 @@ class SkuStockReconciliationRow {
     this.missingCount = 0,
     this.wrongLocationCount = 0,
     this.unknownCount = 0,
+    this.isAudited = true,
     this.itemResults = const [],
   });
 
-  /// Chênh lệch = Thực tế - Dự kiến
-  int get difference => actualQty - expectedQty;
+  /// Số lượng chip của mặt hàng này đã xuất kho trước đó nhưng bị quét lại
+  int get shippedCount => itemResults.where((it) => it.expectedLocation == 'ĐÃ XUẤT KHO').length;
+
+  /// Chênh lệch = Thực tế - Dự kiến (bằng 0 nếu chưa thực hiện kiểm kê)
+  int get difference => isAudited ? (actualQty - expectedQty) : 0;
 
   /// Tỷ lệ chính xác đối soát (%)
   double get accuracyPercent {
+    if (!isAudited) return 0.0;
     if (expectedQty == 0 && actualQty == 0) return 100.0;
     if (expectedQty == 0) return 0.0;
     return (matchedCount / expectedQty * 100).clamp(0.0, 100.0);
@@ -356,6 +415,8 @@ class SkuStockReconciliationRow {
 
   /// Nhãn trạng thái đối soát
   String get statusLabel {
+    if (!isAudited) return 'Chưa kiểm kê';
+    if (shippedCount > 0) return '🚨 Có $shippedCount chip đã xuất';
     if (difference == 0 && wrongLocationCount == 0) return 'Khớp đủ';
     if (difference == 0 && wrongLocationCount > 0) return 'Sai vị trí';
     if (difference < 0) return 'Thiếu ${-difference}';

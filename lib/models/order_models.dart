@@ -4,7 +4,7 @@ enum InboundOrderStatus {
   waitingPalletize('WAITING_PALLETIZE', 'Xếp vào pallet'),
   waitingPutaway('WAITING_PUTAWAY', 'Chờ xếp kệ'),
   processing('PROCESSING', 'Đang xử lý'),
-  completed('COMPLETED', 'Đã lưu vào vị trí'),
+  completed('COMPLETED', 'Đã nhập kho'),
   cancelled('CANCELLED', 'Đã hủy');
 
   final String code;
@@ -297,12 +297,14 @@ class OutboundValidatedItem {
   final String palletEpc;
   final String epc;
   final bool isInStock;
+  final bool isAlreadyShipped;
   final String locationCode;
   final String? palletLocation;
   final DateTime? inboundTime;
   final int fifoPriority;
   final String? fifoWarning;
   final String? matchedItemId;
+  final String? serialNumber;
 
   OutboundValidatedItem({
     required this.sku,
@@ -315,12 +317,14 @@ class OutboundValidatedItem {
     required this.palletEpc,
     required this.epc,
     required this.isInStock,
+    this.isAlreadyShipped = false,
     required this.locationCode,
     this.palletLocation,
     this.inboundTime,
     required this.fifoPriority,
     this.fifoWarning,
     this.matchedItemId,
+    this.serialNumber,
   });
 }
 
@@ -332,6 +336,7 @@ class OutboundInventoryValidationResult {
   final int shortageCount;
   final Map<String, int> shortageBySku;
   final List<OutboundValidatedItem> items;
+  final bool hasShippedConflict;
 
   OutboundInventoryValidationResult({
     required this.isStockSufficient,
@@ -340,6 +345,7 @@ class OutboundInventoryValidationResult {
     required this.shortageCount,
     required this.shortageBySku,
     required this.items,
+    this.hasShippedConflict = false,
   });
 
   List<OutboundValidatedItem> get validatedItems => items;

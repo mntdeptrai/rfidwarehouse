@@ -345,7 +345,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.rfidCyan,
-                  foregroundColor: const Color(0xFF2C251E),
+                  foregroundColor: const Color(0xFFFFFFFF),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -1344,7 +1344,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: c.rfidCyan,
-                  foregroundColor: const Color(0xFF2C251E),
+                  foregroundColor: const Color(0xFFFFFFFF),
                 ),
                 icon: const Icon(Icons.edit_outlined, size: 16),
                 label: const Text('SỬA KỆ', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1506,7 +1506,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                 if (ctx.mounted) Navigator.pop(ctx);
                 if (mounted) setState(() {});
               },
-              child: const Text('CẬP NHẬT', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+              child: const Text('CẬP NHẬT', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -1535,7 +1535,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? const Color(0xFF2C251E) : color,
+              color: isSelected ? const Color(0xFFFFFFFF) : color,
               fontWeight: FontWeight.bold,
               fontSize: 11,
             ),
@@ -1723,7 +1723,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: c.rfidCyan,
-                foregroundColor: const Color(0xFF2C251E),
+                foregroundColor: const Color(0xFFFFFFFF),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -1987,7 +1987,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: c.rfidCyan,
-                      foregroundColor: const Color(0xFF2C251E),
+                      foregroundColor: const Color(0xFFFFFFFF),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -2832,7 +2832,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                         Navigator.pop(ctx);
                         setState(() {});
                       },
-                child: const Text('XÁC NHẬN CHUYỂN', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                child: const Text('XÁC NHẬN CHUYỂN', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -2927,7 +2927,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                         Navigator.pop(ctx);
                         setState(() {});
                       },
-                child: const Text('XẾP VÀO KỆ NÀY', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+                child: const Text('XẾP VÀO KỆ NÀY', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
               ),
             ],
           );
@@ -3023,7 +3023,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
               if (ctx.mounted) Navigator.pop(ctx);
               if (mounted) setState(() {});
             },
-            child: const Text('LƯU KỆ', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+            child: const Text('LƯU KỆ', style: TextStyle(color: Color(0xFFFFFFFF), fontWeight: FontWeight.bold)),
           ),
         ],
       ),

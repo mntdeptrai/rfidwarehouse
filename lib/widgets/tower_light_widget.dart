@@ -330,9 +330,9 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
       width: 54,
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4EFE6),
+        color: AppColors.slate900,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFC7BDAF)),
+        border: Border.all(color: AppColors.slate700),
         boxShadow: const [
           BoxShadow(
             color: Colors.black45,
@@ -349,15 +349,15 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
             width: 32,
             height: 6,
             decoration: BoxDecoration(
-              color: const Color(0xFFB5A999),
+              color: AppColors.slate600,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-              border: Border.all(color: const Color(0xFF64748B), width: 0.5),
+              border: Border.all(color: AppColors.slate500, width: 0.5),
             ),
           ),
 
           // Đèn ĐỎ
           _buildTowerLampSection(
-            color: const Color(0xFFEF4444),
+            color: AppColors.rfidError,
             isActive: status.isRed,
             isBlinking: status.isRedBlinking,
             tag: 'RED',
@@ -368,7 +368,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
 
           // Đèn VÀNG
           _buildTowerLampSection(
-            color: const Color(0xFFF59E0B),
+            color: AppColors.rfidWarning,
             isActive: status.isYellow,
             isBlinking: status.isYellowBlinking,
             tag: 'YEL',
@@ -379,7 +379,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
 
           // Đèn XANH
           _buildTowerLampSection(
-            color: const Color(0xFF10B981),
+            color: AppColors.rfidMatched,
             isActive: status.isGreen,
             isBlinking: status.isGreenBlinking,
             tag: 'GRN',
@@ -393,13 +393,13 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
             width: 38,
             padding: const EdgeInsets.symmetric(vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFFE9E2D5),
-              border: Border.all(color: const Color(0xFFB5A999)),
+              color: AppColors.slate800,
+              border: Border.all(color: AppColors.slate700),
             ),
             child: Icon(
               Icons.volume_up,
               size: 14,
-              color: status.isBuzzerOn ? const Color(0xFFEF4444) : Colors.white30,
+              color: status.isBuzzerOn ? AppColors.rfidError : Colors.white30,
             ),
           ),
 
@@ -419,9 +419,9 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
             width: 34,
             height: 6,
             decoration: BoxDecoration(
-              color: const Color(0xFFC7BDAF),
+              color: AppColors.slate700,
               borderRadius: BorderRadius.circular(2),
-              border: Border.all(color: const Color(0xFF64748B)),
+              border: Border.all(color: AppColors.slate500),
             ),
           ),
         ],
@@ -433,7 +433,7 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
     return Container(
       width: 38,
       height: 3,
-      color: const Color(0xFFF4EFE6),
+      color: AppColors.slate950,
     );
   }
 
@@ -651,12 +651,18 @@ class _TowerLightWidgetState extends State<TowerLightWidget> with SingleTickerPr
           ),
           actions: [
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.rfidMatched,
+                foregroundColor: AppColors.slate950,
+              ),
               onPressed: () {
                 Navigator.pop(ctx);
                 setState(() {});
               },
-              child: const Text('LƯU & ĐÓNG', style: TextStyle(color: Color(0xFF2C251E), fontWeight: FontWeight.bold)),
+              child: const Text(
+                'LƯU & ĐÓNG',
+                style: TextStyle(color: AppColors.slate950, fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
