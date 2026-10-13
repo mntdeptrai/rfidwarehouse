@@ -222,13 +222,99 @@ class _DesktopLookupViewState extends State<DesktopLookupView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Tiêu đề
-              Text(
-                'Chi Tiết Hàng Hóa & Mã RFID',
-                style: TextStyle(color: c.textPrimary, fontSize: isNarrow ? 18 : 22, fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
+              // 1. Unified Header Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: c.bgCard,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: c.border),
+                ),
+                child: isNarrow
+                    ? SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: c.rfidCyan.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
+                              ),
+                              child: Icon(Icons.search_rounded, color: c.rfidCyan, size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'TÌM KIẾM HÀNG HÓA & TRUY VẾT MÃ RFID',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: c.border),
+                                foregroundColor: c.textPrimary,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              onPressed: () async {
+                                await _repo.refreshFromDatabase();
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                          ],
+                        ),
+                      )
+                    : Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: c.rfidCyan.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
+                            ),
+                            child: Icon(Icons.search_rounded, color: c.rfidCyan, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'TÌM KIẾM HÀNG HÓA & TRUY VẾT MÃ RFID',
+                              style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: c.border),
+                              foregroundColor: c.textPrimary,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            icon: const Icon(Icons.refresh_rounded, size: 16),
+                            label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            onPressed: () async {
+                              await _repo.refreshFromDatabase();
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                        ],
+                      ),
               ),
-              const SizedBox(height: 14),
 
               // 2. Chế độ hiển thị & Thanh tìm kiếm
               Wrap(

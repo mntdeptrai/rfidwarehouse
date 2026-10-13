@@ -1,0 +1,24 @@
+========================================================================
+            HỆ THỐNG QUẢN LÝ KHO RFID WMS (DESKTOP)
+               HƯỚNG DẪN CÀI ĐẶT 1-CLICK TỰ ĐỘNG 100%
+========================================================================
+
+👉 BẠN CHỈ CẦN THỰC HIỆN 1 THAO TÁC DUY NHẤT:
+
+   Sau khi giải nén file ZIP, bấm đúp chuột vào file:
+   👉👉👉  CAI_DAT_1_CLICK.bat  👈👈👈
+   (Hoặc file "KHOI_DONG_PHAN_MEM.bat" / "uhf.exe")
+
+Hệ thống sẽ TỰ ĐỘNG 100% làm tất cả các việc mà bạn không cần thao tác gì thêm:
+✔ Tự động kiểm tra và cài đặt thư viện hệ thống Microsoft C++ Runtime nếu máy tính chưa có.
+✔ Tự động mở cổng mạng tường lửa Windows Firewall cho đầu đọc RFID và tháp đèn.
+✔ Tự động tạo biểu tượng 'Kho RFID WMS' ra ngoài màn hình Desktop.
+✔ Tự động khởi động ứng dụng kho ngay lập tức!
+
+⚠️ LƯU Ý DUY NHẤT KHI CHUYỂN MÁY MỚI:
+- Luôn giải nén (Extract All) toàn bộ file ZIP ra thư mục (Ví dụ: D:\RFIDWarehouse) 
+  trước khi chạy, KHÔNG bấm mở trực tiếp từ bên trong file ZIP chưa giải nén.
+
+========================================================================
+Chúc bạn vận hành hệ thống kho RFID thành công!
+========================================================================

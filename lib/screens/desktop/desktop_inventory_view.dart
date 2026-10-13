@@ -371,7 +371,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     // Lựa chọn 1: Toàn bộ kho
                     _buildScopeOption(
                       title: 'Toàn Bộ Hàng Hóa Trong Kho',
-                      subtitle: 'Kiểm đếm tất cả sản phẩm đang lưu kho',
                       val: 'ALL',
                       currentVal: selectedScope,
                       onSelect: (val) => setDialogState(() => selectedScope = val),
@@ -381,7 +380,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     // Lựa chọn 2: Theo khu vực (Zone)
                     _buildScopeOption(
                       title: 'Theo Khu Vực Cụ Thể (Zone)',
-                      subtitle: 'Kiểm đếm hàng thuộc Zone A, Zone B, v.v.',
                       val: 'ZONE',
                       currentVal: selectedScope,
                       onSelect: (val) => setDialogState(() => selectedScope = val),
@@ -409,7 +407,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     // Lựa chọn 3: Theo dãy kệ cụ thể
                     _buildScopeOption(
                       title: 'Theo Vị Trí / Dãy Kệ Cụ Thể',
-                      subtitle: 'Kiểm đếm một vị trí kệ duy nhất',
                       val: 'SHELF',
                       currentVal: selectedScope,
                       onSelect: (val) => setDialogState(() => selectedScope = val),
@@ -440,7 +437,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     // Lựa chọn 4: Theo từng mặt hàng cụ thể (SKU)
                     _buildScopeOption(
                       title: 'Theo Từng Mặt Hàng Cụ Thể (SKU)',
-                      subtitle: 'Chỉ quét lọc và đối soát các mặt hàng được chọn',
                       val: 'SKU',
                       currentVal: selectedScope,
                       onSelect: (val) => setDialogState(() => selectedScope = val),
@@ -719,7 +715,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
   Widget _buildScopeOption({
     required String title,
-    required String subtitle,
+    String? subtitle,
     required String val,
     required String currentVal,
     required Function(String) onSelect,
@@ -746,13 +742,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                  Text(subtitle, style: TextStyle(color: c.textMuted, fontSize: 11.5)),
-                ],
-              ),
+              child: Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
             ),
           ],
         ),
@@ -816,7 +806,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   // Lựa chọn 1: Biên bản kiểm kê
                   _buildExportOptionCard(
                     title: 'Biên Bản Kiểm Kê Kho (Form Mẫu Chuẩn)',
-                    subtitle: 'Bao gồm hội đồng kiểm kê, kết quả đối soát RFID từng thẻ chip và chữ ký các bên.',
                     val: 'AUDIT_TICKET',
                     currentVal: exportType,
                     onSelect: (val) => setDialogState(() => exportType = val),
@@ -858,7 +847,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   // Lựa chọn 2: Bảng đối soát tồn kho
                   _buildExportOptionCard(
                     title: 'Bảng Đối Soát Tồn Kho (Dự Kiến vs Thực Tế)',
-                    subtitle: 'Báo cáo tổng hợp số lượng sổ sách vs thực tế kiểm kê theo từng mã SKU/mặt hàng.',
                     val: 'RECONCILIATION',
                     currentVal: exportType,
                     onSelect: (val) => setDialogState(() => exportType = val),
@@ -869,7 +857,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   // Lựa chọn 3: Bảng kê tồn kho kiểm đếm
                   _buildExportOptionCard(
                     title: 'Bảng Kê Hàng Tồn Phục Vụ Đi Kiểm Đếm',
-                    subtitle: 'Bảng danh mục toàn bộ sản phẩm và vị trí kệ hiện có phục vụ in ra giấy kiểm đếm thực địa.',
                     val: 'INVENTORY_SHEET',
                     currentVal: exportType,
                     onSelect: (val) => setDialogState(() => exportType = val),
@@ -930,7 +917,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
   Widget _buildExportOptionCard({
     required String title,
-    required String subtitle,
+    String? subtitle,
     required String val,
     required String currentVal,
     required Function(String) onSelect,
@@ -960,13 +947,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                      Text(subtitle, style: TextStyle(color: c.textMuted, fontSize: 11.5)),
-                    ],
-                  ),
+                  child: Text(title, style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
               ],
             ),
@@ -1141,7 +1122,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                           icon: Icons.post_add_rounded,
                           iconColor: c.rfidCyan,
                           title: 'Tạo Đơn Kiểm Kê Mới',
-                          desc: 'Khởi tạo đợt kiểm kê dựa trên dữ liệu hàng tồn kho thực tế (Toàn bộ kho, Theo khu vực Zone hoặc Từng dãy kệ).',
+                          desc: '',
                           btnLabel: '+ TẠO ĐƠN KIỂM KÊ',
                           btnColor: c.rfidCyan,
                           textColor: const Color(0xFFFFFFFF),
@@ -1157,7 +1138,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                           icon: Icons.file_download_outlined,
                           iconColor: const Color(0xFF8B5CF6),
                           title: 'Xuất File Kiểm Kê (.xlsx)',
-                          desc: 'Xuất biên bản kiểm kê, phiếu kiểm đếm hoặc bảng đối soát tồn kho thực tế ra file Excel (.xlsx) để in ấn và đối chiếu.',
+                          desc: '',
                           btnLabel: '📥 XUẤT FILE KIỂM KÊ',
                           btnColor: const Color(0xFF8B5CF6),
                           textColor: Colors.white,
@@ -1218,8 +1199,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                           Icon(Icons.fact_check_outlined, size: 48, color: c.textMuted),
                           const SizedBox(height: 12),
                           Text('Chưa có đợt kiểm kê nào được thực hiện', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text('Nhấn vào một trong hai lựa chọn ở trên để bắt đầu kiểm kê kho.', style: TextStyle(color: c.textSecondary, fontSize: 12)),
                         ],
                       ),
                     )
@@ -1644,7 +1623,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     title: 'ĐÃ QUÉT THỰC TẾ',
                     count: scannedCount,
                     unit: 'chip',
-                    subtitle: 'Tổng tem RFID UHF đọc được',
                     color: const Color(0xFF06B6D4),
                     icon: Icons.qr_code_scanner_rounded,
                     c: c,
@@ -1656,7 +1634,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     title: 'KHỚP ĐỦ DANH SÁCH',
                     count: matchCount,
                     unit: 'sản phẩm',
-                    subtitle: 'Đúng vị trí & đúng mã chip',
                     color: const Color(0xFF10B981),
                     icon: Icons.check_circle_rounded,
                     c: c,
@@ -1668,7 +1645,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                     title: 'CÒN THIẾU',
                     count: missingCount,
                     unit: 'sản phẩm',
-                    subtitle: 'Chưa quét nhận diện được',
                     color: const Color(0xFFEF4444),
                     icon: Icons.error_outline_rounded,
                     c: c,
@@ -1681,7 +1657,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                       title: 'HÀNG LẠ / THỪA',
                       count: session.unknownEpcCount + session.wrongLocationCount,
                       unit: 'thẻ',
-                      subtitle: 'Ngoài danh sách hoặc sai vị trí',
                       color: const Color(0xFFF59E0B),
                       icon: Icons.warning_amber_rounded,
                       c: c,
@@ -1865,19 +1840,9 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   child: Icon(Icons.fact_check_rounded, color: c.rfidCyan, size: 24),
                 ),
                 const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'KIỂM KÊ KHO & ĐỐI SOÁT RFID THỜI GIAN THỰC',
-                      style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Tạo đợt kiểm kê thực tế, đối soát chênh lệch tồn kho và xuất báo cáo kiểm kê (.xlsx)',
-                      style: TextStyle(color: c.textMuted, fontSize: 11.5),
-                    ),
-                  ],
+                Text(
+                  'KIỂM KÊ KHO',
+                  style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                 ),
               ],
             ),
@@ -1956,8 +1921,10 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title, style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(desc, style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.3)),
+                    if (desc.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(desc, style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.3)),
+                    ],
                   ],
                 ),
               ),
@@ -1985,7 +1952,7 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     required String title,
     required int count,
     required String unit,
-    required String subtitle,
+    String? subtitle,
     required Color color,
     required IconData icon,
     required EyeCareColors c,
@@ -2017,8 +1984,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
               Text(unit, style: TextStyle(color: c.textMuted, fontSize: 11.5)),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: c.textMuted, fontSize: 11), overflow: TextOverflow.ellipsis),
         ],
       ),
     );

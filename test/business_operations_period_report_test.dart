@@ -261,11 +261,11 @@ void main() {
       await tester.tap(tabButton);
       await tester.pumpAndSettle();
 
-      // 2. Kiểm tra thanh chọn 4 nghiệp vụ: Nhập Kho, Xuất Kho, Tồn Kho, Biến Động Kho
-      expect(find.text('Nhập Kho'), findsWidgets);
-      expect(find.text('Xuất Kho'), findsWidgets);
-      expect(find.text('Tồn Kho'), findsWidgets);
-      expect(find.text('Biến Động Kho'), findsWidgets);
+      // 2. Kiểm tra thanh chọn 4 nghiệp vụ: Báo Cáo Nhập Kho, Báo Cáo Xuất Kho, Báo Cáo Tồn Kho, Lịch Sử
+      expect(find.text('Báo Cáo Nhập Kho'), findsWidgets);
+      expect(find.text('Báo Cáo Xuất Kho'), findsWidgets);
+      expect(find.text('Báo Cáo Tồn Kho'), findsWidgets);
+      expect(find.text('Lịch Sử'), findsWidgets);
 
       // 3. Kiểm tra các nút Preset thời gian
       expect(find.text('Hôm nay'), findsOneWidget);
@@ -277,16 +277,16 @@ void main() {
       // 4. Kiểm tra nút Trích Xuất Báo Cáo
       expect(find.text('TRÍCH XUẤT BÁO CÁO'), findsOneWidget);
 
-      // 5. Thử chuyển sang nghiệp vụ "Xuất Kho"
-      await tester.tap(find.text('Xuất Kho').first);
+      // 5. Thử chuyển sang nghiệp vụ "Báo Cáo Xuất Kho"
+      await tester.tap(find.text('Báo Cáo Xuất Kho').first);
       await tester.pumpAndSettle();
 
-      // 6. Thử chuyển sang nghiệp vụ "Tồn Kho"
-      await tester.tap(find.text('Tồn Kho').first);
+      // 6. Thử chuyển sang nghiệp vụ "Báo Cáo Tồn Kho"
+      await tester.tap(find.text('Báo Cáo Tồn Kho').first);
       await tester.pumpAndSettle();
 
-      // 7. Thử chuyển sang nghiệp vụ "Biến Động Kho"
-      await tester.tap(find.text('Biến Động Kho').first);
+      // 7. Thử chuyển sang nghiệp vụ "Lịch Sử"
+      await tester.tap(find.text('Lịch Sử').first);
       await tester.pumpAndSettle();
     });
 
@@ -374,14 +374,15 @@ void main() {
       await tester.tap(find.text('ĐÓNG'));
       await tester.pumpAndSettle();
 
-      // Chuyển sang nghiệp vụ "Tồn Kho" trong Báo Cáo Nghiệp Vụ
-      await tester.tap(find.text('Tồn Kho').first);
+      // Chuyển sang nghiệp vụ "Báo Cáo Tồn Kho" trong Báo Cáo Nghiệp Vụ
+      await tester.tap(find.text('Báo Cáo Tồn Kho').first);
       await tester.pumpAndSettle();
 
-      // Kiểm tra đã gộp chung mã SKU thành 1 dòng giống bên Danh Sách Hàng Tồn
+      // Kiểm tra đã gộp chung mã SKU thành 1 dòng giống bên Danh Sách Hàng Tồn (đã lược bỏ cột TRẠNG THÁI và THAO TÁC)
       expect(find.text('SKU-CHUNG-TU-TEST'), findsOneWidget);
       expect(find.text('2 sản phẩm'), findsWidgets);
-      expect(find.text('XEM CHI TIẾT'), findsWidgets);
+      expect(find.text('THAO TÁC'), findsNothing);
+      expect(find.text('TRẠNG THÁI'), findsNothing);
 
       // Clean up
       await repo.deleteItem(item1.epc);
@@ -443,15 +444,19 @@ void main() {
       await tester.tap(find.text('Báo Cáo Nghiệp Vụ'));
       await tester.pumpAndSettle();
 
-      // Chuyển sang nghiệp vụ "Xuất Kho"
-      await tester.tap(find.text('Xuất Kho').first);
+      // Chuyển sang nghiệp vụ "Báo Cáo Xuất Kho"
+      await tester.tap(find.text('Báo Cáo Xuất Kho').first);
       await tester.pumpAndSettle();
 
-      // Kiểm tra sự hiện diện của cột "MÃ SN ĐÃ QUÉT" và "THAO TÁC"
-      expect(find.text('MÃ SN ĐÃ QUÉT'), findsOneWidget);
+      // Kiểm tra bảng xuất kho không hiển thị cột MÃ SN ĐÃ QUÉT trên UI (đã chuyển vào báo cáo file theo yêu cầu)
+      // mà tập trung hiển thị nút XUẤT PHIẾU và THAO TÁC gọn gàng
+      expect(find.text('MÃ SN ĐÃ QUÉT'), findsNothing);
       expect(find.text('THAO TÁC'), findsOneWidget);
       expect(find.text('XUẤT PHIẾU'), findsWidgets);
-      expect(find.textContaining('SN-OUT-WIDGET-999'), findsWidgets);
+
+      // Kiểm tra danh sách SN được truy vấn sẵn sàng cho báo cáo
+      final rawSns = repo.getOrderShippedSerialNumbers(outboundOrder);
+      expect(rawSns.contains('SN-OUT-WIDGET-999'), isTrue);
 
       // Clean up
       await repo.deleteItem(outItem.epc);

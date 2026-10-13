@@ -99,7 +99,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('DesktopMainLayout displays Unified Global Hardware Reader Status Header Bar', (WidgetTester tester) async {
+    testWidgets('DesktopMainLayout renders clean minimal layout without redundant hardware header bar', (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -112,13 +112,8 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 500));
 
-      expect(find.byKey(const Key('desktop_global_hardware_header')), findsOneWidget);
-      expect(find.textContaining('UHF GATE:'), findsOneWidget);
-      expect(find.textContaining('dBm'), findsWidgets);
-      expect(find.text('A1'), findsOneWidget);
-      expect(find.text('A2'), findsOneWidget);
-      expect(find.text('A3'), findsOneWidget);
-      expect(find.text('A4'), findsOneWidget);
+      expect(find.byKey(const Key('desktop_global_hardware_header')), findsNothing);
+      expect(find.byType(DesktopMainLayout), findsOneWidget);
 
       // Flush startup timers
       await tester.pump(const Duration(seconds: 11));

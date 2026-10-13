@@ -20,7 +20,7 @@ void main() {
     for (var c in cartons) {
       expect(c['supplier'], equals('PEPSICO'));
     }
-  });
+  }, skip: !File('Template-Goods-Receive-v3 (1).xlsx').existsSync());
 
   test('Verify Inventory Report export retains supplier from Inbound Order and Item', () async {
     final repo = WarehouseRepository();

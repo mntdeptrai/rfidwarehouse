@@ -1145,13 +1145,12 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: c.rfidCyan.withValues(alpha: 0.15),
+                    color: c.bgDeep,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(Icons.barcode_reader, color: c.rfidCyan, size: 22),
                 ),
                 title: Text('Bóp cò súng PDA quét Barcode / RFID', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: Text('Dùng đầu đọc laser PDA quét nhanh mã Pallet nguồn & đích', style: TextStyle(color: c.textMuted, fontSize: 12)),
                 trailing: Icon(Icons.chevron_right, color: c.textMuted),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -1169,13 +1168,12 @@ class _StorageScreenState extends State<StorageScreen> with SingleTickerProvider
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    color: c.bgDeep,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.touch_app_outlined, color: Color(0xFF10B981), size: 22),
+                  child: Icon(Icons.touch_app_outlined, color: c.textSecondary, size: 22),
                 ),
                 title: Text('Chọn thủ công từ danh sách Pallet', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: Text('Chọn Pallet nguồn và Pallet đích từ hộp thoại', style: TextStyle(color: c.textMuted, fontSize: 12)),
                 trailing: Icon(Icons.chevron_right, color: c.textMuted),
                 onTap: () {
                   Navigator.pop(ctx);

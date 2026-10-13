@@ -1401,7 +1401,11 @@ class WarehouseRepository extends ChangeNotifier {
     }).toList();
   }
 
-  Future<List<Item>> addInboundOrder(InboundOrder order, {bool autoGenerateEpcs = true}) async {
+  Future<List<Item>> addInboundOrder(
+    InboundOrder order, {
+    bool autoGenerateEpcs = true,
+    String? palletCode,
+  }) async {
     final Map<String, InboundOrderDetail> dedupMap = {};
     for (final d in order.details) {
       final key = d.sku.trim().toUpperCase().isNotEmpty ? d.sku.trim().toUpperCase() : d.productId;
@@ -1492,6 +1496,17 @@ class WarehouseRepository extends ChangeNotifier {
       },
     );
 
+    final String? actualPalletId = (palletCode != null && palletCode.trim().isNotEmpty)
+        ? (palletCode.trim().toUpperCase().startsWith('PAL-')
+            ? palletCode.trim().toUpperCase()
+            : 'PAL-${palletCode.trim().toUpperCase()}')
+        : null;
+
+    if (actualPalletId != null) {
+      final cleanPal = palletCode!.trim().toUpperCase().replaceAll('PAL-', '');
+      await registerOrUpdatePallet(palletCode: cleanPal, rfidEpc: '');
+    }
+
     final List<Item> generatedItems = [];
     if (autoGenerateEpcs) {
       int globalSeq = 1;
@@ -1508,9 +1523,10 @@ class WarehouseRepository extends ChangeNotifier {
             epc: epc,
             status: ItemStatus.pendingInbound,
             orderNo: order.orderNo,
-            palletId: null,
+            palletId: actualPalletId,
             locationId: null,
             inboundTime: null,
+            supplier: order.sourceSupplier,
           );
           generatedItems.add(item);
           _items.add(item);
@@ -6533,6 +6549,7 @@ class WarehouseRepository extends ChangeNotifier {
             'status': ItemStatus.out.code,
             'location_id': null,
             'pallet_id': null,
+            'order_no': poNo,
             'updated_at': now.toIso8601String(),
           },
         );
@@ -6618,6 +6635,19 @@ class WarehouseRepository extends ChangeNotifier {
           final countForThisSku = affectedItems.where((it) => it.sku.toUpperCase() == d.sku.toUpperCase()).length;
           if (countForThisSku > 0) {
             d.pickedQty = (d.pickedQty + countForThisSku).clamp(0, d.requiredQty);
+          }
+          final matchedDetail = detailsBySku[d.sku] ??
+              detailsBySku.values.where((v) => v.sku.toUpperCase() == d.sku.toUpperCase()).firstOrNull;
+          if (matchedDetail != null) {
+            final newEpcs = matchedDetail.epcList ?? [];
+            final newSns = matchedDetail.snList ?? [];
+            d.epcList = {...?d.epcList, ...newEpcs}.toList();
+            d.snList = {...?d.snList, ...newSns}.toList();
+          }
+        }
+        for (final entry in detailsBySku.entries) {
+          if (!existingOrder.details.any((d) => d.sku.toUpperCase() == entry.key.toUpperCase())) {
+            existingOrder.details.add(entry.value);
           }
         }
       }
@@ -6750,10 +6780,19 @@ class WarehouseRepository extends ChangeNotifier {
   /// Lấy danh sách toàn bộ các mã Serial Number (SN) của hàng hóa đã xuất kho theo đơn
   List<String> getOrderShippedSerialNumbers(OutboundOrder ord) {
     final result = <String>[];
+    for (final d in ord.details) {
+      final skuSns = getOrderSkuShippedSerialNumbers(ord, d.sku);
+      for (final sn in skuSns) {
+        if (!result.contains(sn)) {
+          result.add(sn);
+        }
+      }
+    }
+    if (result.isNotEmpty) return result;
+
+    // Fallback toàn đơn nếu details rỗng
     final cleanPo = ord.poNo.trim().toUpperCase();
     final cleanId = ord.outboundOrderId.trim().toUpperCase();
-
-    // 1. Quét từ bảng items đã xuất theo orderNo
     for (final it in _items) {
       final oNo = it.orderNo?.trim().toUpperCase();
       if (oNo != null && (oNo == cleanPo || oNo == cleanId)) {
@@ -6763,43 +6802,18 @@ class WarehouseRepository extends ChangeNotifier {
         }
       }
     }
-
-    // 2. Quét từ details.snList của đơn hàng
-    for (final d in ord.details) {
-      if (d.snList != null) {
-        for (final sn in d.snList!) {
-          final s = sn.trim();
-          if (s.isNotEmpty && s != '--' && !result.contains(s)) {
-            result.add(s);
-          }
-        }
-      }
-    }
-
-    // 3. Quét từ epcList trong details của đơn hàng để map sang items
-    for (final d in ord.details) {
-      if (d.epcList != null) {
-        for (final epc in d.epcList!) {
-          final it = _items.where((i) => i.epc.trim().toUpperCase() == epc.trim().toUpperCase()).firstOrNull;
-          final sn = it?.serialNumber.trim();
-          if (sn != null && sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+    if (result.isEmpty) {
+      final outItems = _items.where((it) => it.status == ItemStatus.out).toList();
+      for (final it in outItems) {
+        final oNo = (it.orderNo ?? '').trim().toUpperCase();
+        if (oNo.isEmpty || oNo == cleanPo || oNo == cleanId || oNo.contains(cleanPo)) {
+          final sn = it.serialNumber.trim();
+          if (sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
             result.add(sn);
           }
         }
       }
     }
-
-    // 4. Quét từ tag lifecycle logs theo documentNo
-    for (final log in _tagLifecycleLogs) {
-      final doc = log.documentNo?.trim().toUpperCase();
-      if (doc != null && (doc == cleanPo || doc == cleanId)) {
-        final sn = log.serialNumber?.trim();
-        if (sn != null && sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
-          result.add(sn);
-        }
-      }
-    }
-
     return result;
   }
 
@@ -6848,7 +6862,7 @@ class WarehouseRepository extends ChangeNotifier {
       }
     }
 
-    // 4. Quét từ tag lifecycle logs
+    // 4. Quét từ tag lifecycle logs theo documentNo
     for (final log in _tagLifecycleLogs) {
       if (log.sku?.trim().toUpperCase() == cleanSku) {
         final doc = log.documentNo?.trim().toUpperCase();
@@ -6858,6 +6872,59 @@ class WarehouseRepository extends ChangeNotifier {
             result.add(sn);
           }
         }
+      }
+    }
+
+    // 5. Quét mở rộng từ tag lifecycle logs theo ghi chú hoặc mã đơn chứa cleanPo / cleanId
+    if (result.isEmpty) {
+      for (final log in _tagLifecycleLogs) {
+        if (log.sku?.trim().toUpperCase() == cleanSku) {
+          final doc = (log.documentNo ?? '').trim().toUpperCase();
+          final notes = (log.notes ?? '').trim().toUpperCase();
+          if ((doc.isNotEmpty && (doc.contains(cleanPo) || cleanPo.contains(doc) || doc.contains(cleanId))) ||
+              (notes.isNotEmpty && (notes.contains(cleanPo) || notes.contains(cleanId)))) {
+            final sn = log.serialNumber?.trim();
+            if (sn != null && sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+              result.add(sn);
+            }
+          }
+        }
+      }
+    }
+
+    // 6. Quét từ danh mục các Item đã xuất kho (ItemStatus.out) của SKU này
+    if (result.isEmpty) {
+      final outItems = _items.where((it) =>
+          it.sku.trim().toUpperCase() == cleanSku &&
+          it.status == ItemStatus.out
+      ).toList();
+
+      final candidateItems = outItems.where((it) {
+        final oNo = (it.orderNo ?? '').trim().toUpperCase();
+        return oNo.isEmpty || oNo == cleanPo || oNo == cleanId || oNo.contains(cleanPo) || cleanPo.contains(oNo);
+      }).toList();
+
+      final effectiveItems = candidateItems.isNotEmpty ? candidateItems : outItems;
+      final targetDetail = ord.details.where((d) => d.sku.trim().toUpperCase() == cleanSku).firstOrNull;
+      final maxQty = targetDetail != null && (targetDetail.pickedQty > 0 || targetDetail.requiredQty > 0)
+          ? (targetDetail.pickedQty > 0 ? targetDetail.pickedQty : targetDetail.requiredQty)
+          : effectiveItems.length;
+
+      for (final it in effectiveItems) {
+        final sn = it.serialNumber.trim();
+        if (sn.isNotEmpty && sn != '--' && !result.contains(sn)) {
+          result.add(sn);
+          if (result.length >= maxQty) break;
+        }
+      }
+    }
+
+    // 7. Auto-Heal: Tự động lưu lại snList vào detail của đơn hàng để tối ưu truy xuất lần sau
+    if (result.isNotEmpty) {
+      final d = ord.details.where((dt) => dt.sku.trim().toUpperCase() == cleanSku).firstOrNull;
+      if (d != null && (d.snList == null || d.snList!.isEmpty)) {
+        d.snList = List<String>.from(result);
+        _dbService.insertOutboundOrder(ord);
       }
     }
 

@@ -421,6 +421,13 @@ void main() {
     expect(thieuText.style?.color, const Color(0xFFF59E0B));  // Vàng
     expect(laText.style?.color, const Color(0xFFEF4444));     // Đỏ
 
+    // Chuyển sang xem chi tiết từng chip nếu đang ở chế độ gộp theo SKU
+    final chipDetailToggle = find.textContaining('Chi Tiết Từng Chip');
+    if (chipDetailToggle.evaluate().isNotEmpty) {
+      await tester.tap(chipDetailToggle);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
     // 9 Cột bảng thông tin
     expect(find.text('STT'), findsOneWidget);
     expect(find.text('MÃ SKU'), findsOneWidget);
@@ -1426,11 +1433,12 @@ void main() {
     expect(find.textContaining('Gộp Theo SKU'), findsOneWidget);
     expect(find.textContaining('Chi Tiết Từng Thẻ'), findsOneWidget);
 
-    // Default is grouped by SKU: verify SKU headers and actions
+    // Default is grouped by SKU: verify SKU headers (đã lược bỏ cột TRẠNG THÁI và THAO TÁC)
     expect(find.text('MÃ SKU'), findsOneWidget);
     expect(find.text('TÊN HÀNG HÓA'), findsOneWidget);
     expect(find.text('TỒN KHO'), findsOneWidget);
-    expect(find.text('THAO TÁC'), findsOneWidget);
+    expect(find.text('THAO TÁC'), findsNothing);
+    expect(find.text('TRẠNG THÁI'), findsNothing);
 
     // Switch to flat detailed items view to inspect serial numbers
     await tester.tap(find.textContaining('Chi Tiết Từng Thẻ'));
@@ -1493,13 +1501,15 @@ void main() {
 
     // Default view: Gộp Theo SKU
     expect(find.text('SKU-WIDGET-TEST'), findsOneWidget);
-    expect(find.text('XEM CHI TIẾT'), findsOneWidget);
+    expect(find.text('XEM CHI TIẾT'), findsNothing);
 
-    // Bảng ngoài không có cột VÒNG ĐỜI THẺ
+    // Bảng ngoài không có cột VÒNG ĐỜI THẺ, TRẠNG THÁI, THAO TÁC
     expect(find.text('VÒNG ĐỜI THẺ'), findsNothing);
+    expect(find.text('THAO TÁC'), findsNothing);
+    expect(find.text('TRẠNG THÁI'), findsNothing);
 
-    // Bấm xem chi tiết
-    await tester.tap(find.text('XEM CHI TIẾT'));
+    // Bấm xem chi tiết bằng cách nhấn trực tiếp vào dòng SKU
+    await tester.tap(find.text('SKU-WIDGET-TEST'));
     await tester.pumpAndSettle();
 
     // Trong hộp thoại: Có tiêu đề và có cột VÒNG ĐỜI THẺ

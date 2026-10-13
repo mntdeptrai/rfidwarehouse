@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'desktop_goods_receive_view.dart';
 import 'desktop_goods_delivery_view.dart';
+import 'desktop_product_management_view.dart';
+import 'desktop_lookup_view.dart';
+import 'desktop_location_management_view.dart';
+import 'desktop_warehouse_management_view.dart';
 import 'desktop_inventory_view.dart';
 import 'desktop_report_view.dart';
+import 'desktop_stock_reconciliation_view.dart';
 import 'desktop_uhf_studio_view.dart';
 import 'desktop_user_management_view.dart';
-import 'desktop_warehouse_management_view.dart';
 import '../../services/desktop_uhf_tcp_service.dart';
 import '../../services/uhf_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/report_export_service.dart';
 import '../../theme/eye_care_theme.dart';
 
 class DesktopMainLayout extends StatefulWidget {
@@ -22,16 +27,25 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   int _selectedMenuIndex = 0;
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
   final AuthService _auth = AuthService();
-  final DesktopUhfTcpService _tcpService = DesktopUhfTcpService();
 
   List<Widget> _buildViews() => [
-    DesktopGoodsReceiveView(key: const ValueKey('desktop_goods_receive'), isActive: _selectedMenuIndex == 0), // 0: Goods Receive
-    DesktopGoodsDeliveryView(key: const ValueKey('desktop_goods_delivery'), isActive: _selectedMenuIndex == 1), // 1: Goods Delivery
-    const DesktopWarehouseManagementView(key: ValueKey('desktop_warehouse_management')), // 2: Warehouse Management (Pallet, In/Out History & Audit Log)
-    const DesktopInventoryView(key: ValueKey('desktop_inventory')), // 3: Inventory
-    const DesktopReportView(key: ValueKey('desktop_report')), // 4: Report Center
-    const DesktopUhfStudioView(key: ValueKey('desktop_uhf_studio')), // 5: UHF Reader Studio (Hopeland SDK & Fixed Reader)
-    const DesktopUserManagementView(key: ValueKey('desktop_user_management')), // 6: User Management (Admin Account Provisioning)
+    DesktopGoodsReceiveView(key: const ValueKey('desktop_goods_receive'), isActive: _selectedMenuIndex == 0), // 0: Nhập Kho
+    DesktopGoodsDeliveryView(key: const ValueKey('desktop_goods_delivery'), isActive: _selectedMenuIndex == 1), // 1: Xuất Kho
+    DesktopProductManagementView(
+      key: const ValueKey('desktop_product_management'),
+      onNavigateToInbound: () => setState(() => _selectedMenuIndex = 0),
+    ), // 2: Danh Mục Sản Phẩm
+    const DesktopLookupView(key: ValueKey('desktop_lookup')), // 3: Tìm Kiếm Hàng Hóa
+    const DesktopLocationManagementView(key: ValueKey('desktop_location_management')), // 4: Sơ Đồ Kệ Kho
+    const DesktopWarehouseManagementView(key: ValueKey('desktop_pallet_management'), initialTab: 0, showTabBar: false), // 5: Quản Lý Pallet
+    const DesktopInventoryView(key: ValueKey('desktop_inventory')), // 6: Kiểm Kê Kho
+    const DesktopReportView(key: ValueKey('desktop_report_inventory'), initialBusinessType: ReportType.inventory), // 7: Báo Cáo Tồn Kho
+    const DesktopReportView(key: ValueKey('desktop_report_inbound'), initialBusinessType: ReportType.inbound), // 8: Báo Cáo Nhập Kho
+    const DesktopReportView(key: ValueKey('desktop_report_outbound'), initialBusinessType: ReportType.outbound), // 9: Báo Cáo Xuất Kho
+    const DesktopStockReconciliationView(key: ValueKey('desktop_stock_reconciliation')), // 10: Đối Soát Tồn Kho
+    const DesktopReportView(key: ValueKey('desktop_report_history'), initialBusinessType: ReportType.transactionLog), // 11: Lịch Sử Nhập Xuất
+    const DesktopUhfStudioView(key: ValueKey('desktop_uhf_studio')), // 12: Cài Đặt Đầu Đọc RFID
+    const DesktopUserManagementView(key: ValueKey('desktop_user_management')), // 13: Quản Lý Tài Khoản
   ];
 
   @override
@@ -39,7 +53,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     super.initState();
     _eyeCare.addListener(_onThemeUpdate);
     _auth.addListener(_onThemeUpdate);
-    _tcpService.addListener(_onThemeUpdate);
   }
 
   void _onThemeUpdate() {
@@ -50,7 +63,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
   void dispose() {
     _eyeCare.removeListener(_onThemeUpdate);
     _auth.removeListener(_onThemeUpdate);
-    _tcpService.removeListener(_onThemeUpdate);
     super.dispose();
   }
 
@@ -80,146 +92,6 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     }
   }
 
-  Widget _buildGlobalHardwareStatusHeader(EyeCareColors c) {
-    final isConnected = _tcpService.isConnected;
-    final isConnecting = _tcpService.isConnecting;
-    final isScanning = _tcpService.isScanning;
-    final cfg = _tcpService.config;
-    final activeAnts = _tcpService.activeAntennas.toList()..sort();
-    final statusColor = isScanning
-        ? c.rfidCyan
-        : (isConnected
-            ? const Color(0xFF10B981)
-            : (isConnecting ? const Color(0xFFF59E0B) : c.textMuted));
-
-    return Container(
-      key: const Key('desktop_global_hardware_header'),
-      height: 36,
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: c.bgCard,
-        border: Border(bottom: BorderSide(color: c.border, width: 1)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            // Reader Connection Pill
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: statusColor.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: statusColor,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    isScanning
-                        ? 'UHF GATE: ACTIVE SCAN'
-                        : (isConnected
-                            ? 'UHF GATE: ONLINE'
-                            : (isConnecting ? 'UHF GATE: CONNECTING' : 'UHF GATE: STANDBY')),
-                    style: AppTypography.monospaceTabular(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: statusColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Endpoint Summary
-            Icon(Icons.settings_ethernet_rounded, size: 13, color: c.textSecondary),
-            const SizedBox(width: 4),
-            Text(
-              cfg.connectionSummary,
-              style: AppTypography.monospaceTabular(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: c.textPrimary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            // RF Power Readout
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: c.bgDeep,
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: c.border),
-              ),
-              child: Text(
-                'RF ${cfg.rfPower} dBm',
-                style: AppTypography.monospaceTabular(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: c.rfidCyan,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            // Active Antennas 1..4
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (int ant = 1; ant <= 4; ant++) ...[
-                  Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                    decoration: BoxDecoration(
-                      color: activeAnts.contains(ant)
-                          ? const Color(0xFF10B981).withValues(alpha: 0.16)
-                          : c.bgDeep,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: activeAnts.contains(ant)
-                            ? const Color(0xFF10B981).withValues(alpha: 0.5)
-                            : c.border,
-                      ),
-                    ),
-                    child: Text(
-                      'A$ant',
-                      style: AppTypography.monospaceTabular(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w700,
-                        color: activeAnts.contains(ant)
-                            ? const Color(0xFF10B981)
-                            : c.textMuted,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(width: 10),
-            // Live Telemetry Rate & Unique Tags
-            Text(
-              '${_tcpService.readRate.toStringAsFixed(0)} tag/s • ${_tcpService.uniqueCount} EPC',
-              style: AppTypography.monospaceTabular(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: isScanning ? c.rfidCyan : c.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
@@ -233,9 +105,9 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     // Tự động chuyển sang màn hình được phép nếu màn hình hiện tại bị ẩn
     int effectiveIndex = _selectedMenuIndex;
     if (effectiveIndex == 0 && !canIn) effectiveIndex = 1;
-    if (effectiveIndex == 3 && !canAud) effectiveIndex = 1;
-    if (effectiveIndex == 5 && !isTech) effectiveIndex = canManageUsers ? 6 : 1;
-    if (effectiveIndex == 6 && !canManageUsers) effectiveIndex = isTech ? 5 : 1;
+    if (effectiveIndex == 6 && !canAud) effectiveIndex = 1;
+    if (effectiveIndex == 12 && !isTech) effectiveIndex = canManageUsers ? 13 : 1;
+    if (effectiveIndex == 13 && !canManageUsers) effectiveIndex = isTech ? 12 : 1;
 
     return Scaffold(
       backgroundColor: c.bgDeep,
@@ -248,18 +120,11 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
               // Sidebar: Tự động co giãn thanh điều hướng theo kích thước cửa sổ
               _buildSidebar(c, isCompact: isCompactSidebar),
 
-              // Main View Content: Kèm thanh trạng thái phần cứng UHF toàn cục phía trên
+              // Main View Content
               Expanded(
-                child: Column(
-                  children: [
-                    _buildGlobalHardwareStatusHeader(c),
-                    Expanded(
-                      child: IndexedStack(
-                        index: effectiveIndex,
-                        children: _buildViews(),
-                      ),
-                    ),
-                  ],
+                child: IndexedStack(
+                  index: effectiveIndex,
+                  children: _buildViews(),
                 ),
               ),
             ],
@@ -280,7 +145,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOutCubic,
-      width: isCompact ? 68 : 250,
+      width: isCompact ? 68 : 260,
       decoration: BoxDecoration(
         color: c.bgCard,
         border: Border(right: BorderSide(color: c.border, width: 1)),
@@ -307,7 +172,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
             )
           else
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: c.border, width: 1)),
               ),
@@ -324,59 +189,26 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'RFIDwarehouse',
-                                style: TextStyle(
-                                  color: c.textPrimary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                  letterSpacing: 0.5,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF10B981),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    child: Text(
+                      'RFIDwarehouse',
+                      style: TextStyle(
+                        color: c.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        letterSpacing: 0.5,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
             ),
 
-          // Menu Items
+          // Menu Items: Thiết kế 1 cấp phẳng, trực quan, tối giản
           Expanded(
             child: ListView(
-              padding: EdgeInsets.symmetric(vertical: 10, horizontal: isCompact ? 6 : 10),
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: isCompact ? 6 : 8),
               children: [
-                if (!isCompact)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 10, right: 10, top: 8, bottom: 6),
-                    child: Text(
-                      'QUẢN LÝ KHO',
-                      style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
                 if (canIn)
                   _buildMenuItem(
                     0,
@@ -385,66 +217,112 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(1, Icons.output_rounded, 'Xuất Kho', c, isCompact: isCompact),
+                _buildMenuItem(
+                  1,
+                  Icons.output_rounded,
+                  'Xuất Kho',
+                  c,
+                  isCompact: isCompact,
+                ),
                 _buildMenuItem(
                   2,
-                  Icons.warehouse_rounded,
-                  'Quản Lý Kho',
+                  Icons.category_rounded,
+                  'Danh Mục Sản Phẩm',
+                  c,
+                  isCompact: isCompact,
+                ),
+                _buildMenuItem(
+                  3,
+                  Icons.search_rounded,
+                  'Tìm Kiếm Hàng Hóa',
+                  c,
+                  isCompact: isCompact,
+                ),
+                _buildMenuItem(
+                  4,
+                  Icons.grid_view_rounded,
+                  'Sơ Đồ Kệ Kho',
+                  c,
+                  isCompact: isCompact,
+                ),
+                _buildMenuItem(
+                  5,
+                  Icons.layers_rounded,
+                  'Quản Lý Pallet',
                   c,
                   isCompact: isCompact,
                 ),
                 if (canAud)
                   _buildMenuItem(
-                    3,
-                    Icons.inventory_2_outlined,
+                    6,
+                    Icons.checklist_rounded,
                     'Kiểm Kê Kho',
                     c,
                     isCompact: isCompact,
                   ),
-                _buildMenuItem(4, Icons.assessment_rounded, 'Báo Cáo', c, isCompact: isCompact),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  child: Divider(color: c.borderLight, height: 1),
+                ),
+                _buildMenuItem(
+                  7,
+                  Icons.inventory_2_rounded,
+                  'Báo Cáo Tồn Kho',
+                  c,
+                  isCompact: isCompact,
+                ),
+                _buildMenuItem(
+                  8,
+                  Icons.move_to_inbox_rounded,
+                  'Báo Cáo Nhập Kho',
+                  c,
+                  isCompact: isCompact,
+                ),
+                _buildMenuItem(
+                  9,
+                  Icons.outbox_rounded,
+                  'Báo Cáo Xuất Kho',
+                  c,
+                  isCompact: isCompact,
+                ),
+                _buildMenuItem(
+                  10,
+                  Icons.balance_rounded,
+                  'Đối Soát Tồn Kho',
+                  c,
+                  isCompact: isCompact,
+                ),
+                _buildMenuItem(
+                  11,
+                  Icons.history_rounded,
+                  'Lịch Sử Nhập Xuất',
+                  c,
+                  isCompact: isCompact,
+                ),
                 if (isTech) ...[
-                  const SizedBox(height: 8),
-                  if (!isCompact)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 10, top: 8, bottom: 6),
-                      child: Text(
-                        'HỆ THỐNG & ĐẦU ĐỌC',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                    child: Divider(color: c.borderLight, height: 1),
+                  ),
                   _buildMenuItem(
-                    5,
+                    12,
                     Icons.radar,
-                    'Đầu Đọc UHF (Studio)',
+                    'Cài Đặt',
                     c,
                     badge: 'KỸ THUẬT',
                     isCompact: isCompact,
                   ),
                 ],
                 if (canManageUsers) ...[
-                  const SizedBox(height: 8),
-                  if (!isCompact)
+                  if (!isTech)
                     Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 10, top: 8, bottom: 6),
-                      child: Text(
-                        'QUẢN TRỊ HỆ THỐNG',
-                        style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                      child: Divider(color: c.borderLight, height: 1),
                     ),
                   _buildMenuItem(
-                    6,
+                    13,
                     Icons.manage_accounts_rounded,
-                    'Cấp & Quản Lý Tài Khoản',
+                    'Quản Lý Tài Khoản',
                     c,
                     badge: 'ADMIN',
                     isCompact: isCompact,
@@ -551,6 +429,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
     IconData icon,
     String title,
     EyeCareColors c, {
+    Color? accentColor,
     bool isLocked = false,
     bool isCompact = false,
     String? badge,
@@ -562,6 +441,7 @@ class _DesktopMainLayoutState extends State<DesktopMainLayout> {
       index: index,
       icon: icon,
       title: title,
+      accentColor: accentColor,
       c: c,
       isSelected: isSelected,
       isLocked: isLocked,
@@ -593,6 +473,7 @@ class _SidebarItem extends StatefulWidget {
   final int index;
   final IconData icon;
   final String title;
+  final Color? accentColor;
   final EyeCareColors c;
   final bool isSelected;
   final bool isLocked;
@@ -604,6 +485,7 @@ class _SidebarItem extends StatefulWidget {
     required this.index,
     required this.icon,
     required this.title,
+    this.accentColor,
     required this.c,
     required this.isSelected,
     this.isLocked = false,
@@ -624,6 +506,7 @@ class _SidebarItemState extends State<_SidebarItem> {
     final c = widget.c;
     final isSelected = widget.isSelected;
     final isLocked = widget.isLocked;
+    final activeColor = widget.accentColor ?? c.rfidCyan;
 
     if (widget.isCompact) {
       return Padding(
@@ -644,11 +527,11 @@ class _SidebarItemState extends State<_SidebarItem> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? c.rfidCyan.withValues(alpha: 0.18)
+                      ? activeColor.withValues(alpha: 0.18)
                       : (_isHovered ? c.bgCardElevated : Colors.transparent),
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected
-                      ? Border.all(color: c.rfidCyan.withValues(alpha: 0.8), width: 1.2)
+                      ? Border.all(color: activeColor.withValues(alpha: 0.8), width: 1.2)
                       : (_isHovered
                           ? Border.all(color: c.border.withValues(alpha: 0.6), width: 1)
                           : Border.all(color: Colors.transparent)),
@@ -656,8 +539,8 @@ class _SidebarItemState extends State<_SidebarItem> {
                 child: Icon(
                   widget.icon,
                   color: isSelected
-                      ? c.rfidCyan
-                      : (isLocked ? c.textMuted : (_isHovered ? c.textPrimary : c.textSecondary)),
+                      ? activeColor
+                      : (isLocked ? c.textMuted : (_isHovered ? activeColor : c.textSecondary)),
                   size: 20,
                 ),
               ),
@@ -678,15 +561,15 @@ class _SidebarItemState extends State<_SidebarItem> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8.5),
             decoration: BoxDecoration(
               color: isSelected
-                  ? c.rfidCyan.withValues(alpha: 0.14)
+                  ? activeColor.withValues(alpha: 0.14)
                   : (_isHovered ? c.bgCardElevated.withValues(alpha: 0.7) : Colors.transparent),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isSelected
-                    ? c.rfidCyan.withValues(alpha: 0.45)
+                    ? activeColor.withValues(alpha: 0.45)
                     : (_isHovered ? c.border.withValues(alpha: 0.5) : Colors.transparent),
                 width: 1,
               ),
@@ -695,55 +578,63 @@ class _SidebarItemState extends State<_SidebarItem> {
               children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  width: 3,
-                  height: isSelected ? 18 : 0,
+                  width: 3.5,
+                  height: isSelected ? 22 : 0,
                   decoration: BoxDecoration(
-                    color: c.rfidCyan,
+                    color: activeColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 SizedBox(width: isSelected ? 8 : 4),
-                Icon(
-                  isLocked ? Icons.lock_outline_rounded : widget.icon,
-                  color: isSelected
-                      ? c.rfidCyan
-                      : (isLocked ? c.textMuted : c.textPrimary),
-                  size: 19,
+                // Icon pill
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isSelected ? activeColor.withValues(alpha: 0.15) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Icon(
+                    isLocked ? Icons.lock_outline_rounded : widget.icon,
+                    color: isSelected
+                        ? activeColor
+                        : (isLocked ? c.textMuted : (_isHovered ? c.textPrimary : c.textSecondary)),
+                    size: 19,
+                  ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 11),
                 Expanded(
                   child: Text(
                     widget.title,
                     style: TextStyle(
                       color: isSelected
-                          ? c.rfidCyan
+                          ? activeColor
                           : (isLocked ? c.textMuted : c.textPrimary),
-                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
-                      fontSize: 13.5,
-                      letterSpacing: 0.2,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                      fontSize: 14,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (widget.badge != null)
                   Container(
+                    margin: const EdgeInsets.only(left: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: isLocked
                           ? const Color(0xFFEF4444).withValues(alpha: 0.12)
-                          : c.rfidCyan.withValues(alpha: 0.12),
+                          : activeColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
                         color: isLocked
                             ? const Color(0xFFEF4444).withValues(alpha: 0.3)
-                            : c.rfidCyan.withValues(alpha: 0.3),
+                            : activeColor.withValues(alpha: 0.3),
                         width: 0.8,
                       ),
                     ),
                     child: Text(
                       widget.badge!,
                       style: TextStyle(
-                        color: isLocked ? const Color(0xFFEF4444) : c.rfidCyan,
+                        color: isLocked ? const Color(0xFFEF4444) : activeColor,
                         fontSize: 9,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.4,

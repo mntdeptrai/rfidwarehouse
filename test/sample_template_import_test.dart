@@ -56,7 +56,7 @@ void main() {
       'AB2600100000000000000202',
       'AB2600100000000000000203',
     ]));
-  });
+  }, skip: !File('Mau_Nhap_Hang_Cung_Loai_Nhieu_EPC.xlsx').existsSync());
 
   test('Verify Mau_Nhap_Hang_2_Loai_Hang_2_Pallet_Nhieu_EPC.xlsx parses 2 products, 2 pallets and 40 distinct item EPCs', () {
     final file = File('Mau_Nhap_Hang_2_Loai_Hang_2_Pallet_Nhieu_EPC.xlsx');
@@ -122,5 +122,5 @@ void main() {
     // 3. Kiểm tra 40 mã EPC sản phẩm riêng biệt 100%
     expect(totalSerials, equals(40));
     expect(allItemEpcs.length, equals(40));
-  });
+  }, skip: !File('Mau_Nhap_Hang_2_Loai_Hang_2_Pallet_Nhieu_EPC.xlsx').existsSync());
 }

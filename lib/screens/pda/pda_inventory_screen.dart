@@ -548,7 +548,6 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                   children: [
                     _buildInventoryTypeCard(
                       title: 'Theo Vị Trí / Kệ Kho',
-                      subtitle: 'Kiểm kê từng vị trí kệ cụ thể',
                       icon: Icons.grid_view_rounded,
                       isSelected: selectedType == 'by_location',
                       onTap: () => setDialogState(() => selectedType = 'by_location'),
@@ -556,7 +555,6 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                     const SizedBox(height: 10),
                     _buildInventoryTypeCard(
                       title: 'Theo Phân Khu (Zone)',
-                      subtitle: 'Kiểm kê các kệ trong phân khu',
                       icon: Icons.warehouse_rounded,
                       isSelected: selectedType == 'by_zone',
                       onTap: () => setDialogState(() => selectedType = 'by_zone'),
@@ -564,7 +562,6 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                     const SizedBox(height: 10),
                     _buildInventoryTypeCard(
                       title: 'Theo Từng Mặt Hàng (SKU)',
-                      subtitle: 'Chỉ quét lọc các mặt hàng được chọn',
                       icon: Icons.category_outlined,
                       isSelected: selectedType == 'by_sku',
                       onTap: () => setDialogState(() => selectedType = 'by_sku'),
@@ -572,7 +569,6 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
                     const SizedBox(height: 10),
                     _buildInventoryTypeCard(
                       title: 'Toàn Bộ Kho Hàng',
-                      subtitle: 'Kiểm kê toàn bộ hàng hóa trong kho',
                       icon: Icons.storefront_outlined,
                       isSelected: selectedType == 'all',
                       onTap: () => setDialogState(() => selectedType = 'all'),
@@ -1114,7 +1110,7 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
 
   static Widget _buildInventoryTypeCard({
     required String title,
-    required String subtitle,
+    String? subtitle,
     required IconData icon,
     required bool isSelected,
     required VoidCallback onTap,
@@ -1166,27 +1162,13 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: isSelected ? const Color(0xFF0369A1) : const Color(0xFF1C1917),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13.5,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF57534E),
-                      fontSize: 11,
-                      height: 1.25,
-                    ),
-                  ),
-                ],
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: isSelected ? const Color(0xFF0369A1) : const Color(0xFF1C1917),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13.5,
+                ),
               ),
             ),
           ],

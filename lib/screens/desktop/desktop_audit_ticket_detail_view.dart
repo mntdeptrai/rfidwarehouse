@@ -333,64 +333,71 @@ class _DesktopAuditTicketDetailViewState extends State<DesktopAuditTicketDetailV
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Left: Back button & Breadcrumb Title
-          Row(
-            children: [
-              IconButton(
-                tooltip: 'Quay lại danh sách',
-                icon: Icon(Icons.arrow_back_rounded, color: c.textPrimary, size: 22),
-                onPressed: widget.onBack,
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+          Expanded(
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Quay lại danh sách',
+                  icon: Icon(Icons.arrow_back_rounded, color: c.textPrimary, size: 22),
+                  onPressed: widget.onBack,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.inventory_2_outlined, size: 13, color: c.textMuted),
-                      const SizedBox(width: 4),
-                      Text('Kiểm Kê Kho', style: TextStyle(color: c.textMuted, fontSize: 11)),
-                      Text(' / ', style: TextStyle(color: c.textMuted, fontSize: 11)),
-                      Text('Chi Tiết Phiếu Kiểm Kê', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Text(
-                        'PHIẾU KIỂM KÊ: ${s.sessionCode}',
-                        style: TextStyle(color: c.textPrimary, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+                      Row(
+                        children: [
+                          Icon(Icons.inventory_2_outlined, size: 13, color: c.textMuted),
+                          const SizedBox(width: 4),
+                          Text('Kiểm Kê Kho', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                          Text(' / ', style: TextStyle(color: c.textMuted, fontSize: 11)),
+                          Text('Chi Tiết Phiếu Kiểm Kê', style: TextStyle(color: c.rfidCyan, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: isDone
-                              ? const Color(0xFF10B981).withValues(alpha: 0.15)
-                              : const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: isDone ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(isDone ? Icons.check_circle_rounded : Icons.sync_rounded, size: 12, color: isDone ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
-                            const SizedBox(width: 4),
-                            Text(
-                              isDone ? 'ĐÃ HOÀN TẤT' : 'ĐANG DỞ DANG',
-                              style: TextStyle(
-                                color: isDone ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.bold,
-                              ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'PHIẾU KIỂM KÊ: ${s.sessionCode}',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: c.textPrimary, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.3),
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isDone
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                  : const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: isDone ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(isDone ? Icons.check_circle_rounded : Icons.sync_rounded, size: 12, color: isDone ? const Color(0xFF10B981) : const Color(0xFFF59E0B)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isDone ? 'ĐÃ HOÀN TẤT' : 'ĐANG DỞ DANG',
+                                  style: TextStyle(
+                                    color: isDone ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
 
           // Right: Action Buttons

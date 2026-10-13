@@ -257,20 +257,14 @@ class _PdaLookupScreenState extends State<PdaLookupScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                        color: c.bgDeep,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.drive_file_move_rounded, color: Color(0xFF10B981), size: 22),
+                      child: Icon(Icons.drive_file_move_rounded, color: c.rfidCyan, size: 22),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Di Chuyển Sản Phẩm Riêng Lẻ', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                          Text('Chuyển mặt hàng sang vị trí kệ / pallet mới', style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
-                        ],
-                      ),
+                      child: Text('Di Chuyển Sản Phẩm Riêng Lẻ', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                     IconButton(
                       icon: Icon(Icons.close, color: c.textMuted),

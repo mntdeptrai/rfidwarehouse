@@ -818,7 +818,11 @@ namespace UHFHardwareBridge
 
         private static void HandleSetGpo(Dictionary<string, object> obj)
         {
-            if (!_isConnected) return;
+            if (!_isConnected || string.IsNullOrEmpty(_currentConnId))
+            {
+                BroadcastLog("⚠️ Không thể điều khiển GPO: Chưa kết nối đầu đọc RFID.");
+                return;
+            }
             try
             {
                 Dictionary<eGPO, eGPOState> gpoDic = new Dictionary<eGPO, eGPOState>();
@@ -849,16 +853,24 @@ namespace UHFHardwareBridge
 
                 if (gpoDic.Count > 0)
                 {
-                    // Hopeland CL7206 / RFIDReaderAPI.dll: Gửi tuần tự từng chân đơn lẻ để đảm bảo
-                    // rơ-le / còi hú phần cứng chốt chính xác và không bị nghẽn buffer.
+                    // 1. Gửi toàn bộ dictionary cho phần cứng CL7206
+                    int ret = RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, gpoDic);
+
+                    // 2. Đồng thời gửi tuần tự từng chân đơn lẻ để đảm bảo tương thích mọi firmware
                     foreach (var kvp in gpoDic)
                     {
-                        Dictionary<eGPO, eGPOState> single = new Dictionary<eGPO, eGPOState>();
-                        single[kvp.Key] = kvp.Value;
-                        int ret = RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, single);
+                        try
+                        {
+                            Dictionary<eGPO, eGPOState> single = new Dictionary<eGPO, eGPOState>();
+                            single[kvp.Key] = kvp.Value;
+                            RFIDReader._ReaderConfig.SetReaderGPOState(_currentConnId, single);
+                        }
+                        catch { }
                         if (gpoDic.Count > 1) Thread.Sleep(15);
                     }
-                    BroadcastLog(string.Format("Set GPO total={0} success", gpoDic.Count));
+
+                    string statusStr = ret == 0 ? "Thành công (0)" : string.Format("Kết quả: {0}", ret);
+                    BroadcastLog(string.Format("Điều khiển GPO ({0} chân): {1}", gpoDic.Count, statusStr));
                 }
             }
             catch (Exception ex)

@@ -476,6 +476,13 @@ SKU-TEST-B,PROD-TEST-B,1,Sản Phẩm B,Khách Hàng ABC''';
       await tester.tap(pickOrderBtn);
       await tester.pumpAndSettle();
 
+      // Chuyển sang chế độ xem chi tiết từng chip để kiểm tra đối chiếu cột MÃ SN
+      final detailMode = find.text('Chi Tiết Từng Chip');
+      if (detailMode.evaluate().isNotEmpty) {
+        await tester.tap(detailMode);
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
       // Trước khi quét: cột MÃ SN hiển thị '--'
       expect(find.text(testSn), findsNothing);
 

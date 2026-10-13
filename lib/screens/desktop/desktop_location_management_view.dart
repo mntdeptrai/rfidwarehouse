@@ -307,124 +307,151 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
   }
 
   Widget _buildTopHeaderBar(EyeCareColors c) {
-    return LayoutBuilder(
-      builder: (_, constraints) {
-        final isNarrow = constraints.maxWidth < 980;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.bgCard,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: c.border),
+      ),
+      child: LayoutBuilder(
+        builder: (_, constraints) {
+          final isNarrow = constraints.maxWidth < 980;
 
-        final titleSection = Text(
-          'Sơ Đồ Trạng Thái Kệ Kho (Rack Grid)',
-          style: TextStyle(
-            color: c.textPrimary,
-            fontSize: constraints.maxWidth < 450 ? 18 : 22,
-            fontWeight: FontWeight.bold,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        );
-
-        final actionButtons = SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+          final titleSection = Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: c.textPrimary,
-                  side: BorderSide(color: c.border),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: c.rfidCyan.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
                 ),
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                onPressed: () async {
-                  await _repo.refreshFromDatabase();
-                  if (mounted) setState(() {});
-                },
+                child: Icon(Icons.grid_view_rounded, color: c.rfidCyan, size: 22),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: c.rfidCyan,
-                  foregroundColor: const Color(0xFFFFFFFF),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  'SƠ ĐỒ VỊ TRÍ KỆ KHO (RACK GRID)',
+                  style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-                icon: const Icon(Icons.add_location_alt_outlined, size: 18),
-                label: const Text('+ THÊM KỆ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                onPressed: () => _showAddShelfDialog(c),
               ),
-              if (_repo.locations.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                PopupMenuButton<String>(
-                  tooltip: 'Tùy chọn',
-                  icon: Icon(Icons.more_vert, color: c.textSecondary, size: 20),
-                  color: c.bgCard,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  onSelected: (val) async {
-                    if (val == 'clear_all') {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          backgroundColor: c.bgCard,
-                          title: const Text('Xác nhận xóa toàn bộ kệ', style: TextStyle(fontWeight: FontWeight.bold)),
-                          content: Text(
-                            'Bạn có chắc chắn muốn xóa toàn bộ ${_repo.locations.length} kệ hàng hiện tại trong kho không?\n(Sau khi xóa, bạn có thể tự thêm lại kệ mới theo ý muốn).',
-                            style: TextStyle(color: c.textPrimary),
-                          ),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('XÓA HẾT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ],
+          );
+
+          final actionButtons = SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.textPrimary,
+                    side: BorderSide(color: c.border),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('LÀM MỚI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  onPressed: () async {
+                    await _repo.refreshFromDatabase();
+                    if (mounted) setState(() {});
+                  },
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: c.rfidCyan,
+                    foregroundColor: const Color(0xFFFFFFFF),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  icon: const Icon(Icons.add_location_alt_outlined, size: 16),
+                  label: const Text('+ THÊM KỆ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  onPressed: () => _showAddShelfDialog(c),
+                ),
+                if (_repo.locations.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  PopupMenuButton<String>(
+                    tooltip: 'Tùy chọn',
+                    icon: Icon(Icons.more_vert, color: c.textSecondary, size: 20),
+                    color: c.bgCard,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    onSelected: (val) async {
+                      if (val == 'clear_all') {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: c.bgCard,
+                            title: const Text('Xác nhận xóa toàn bộ kệ', style: TextStyle(fontWeight: FontWeight.bold)),
+                            content: Text(
+                              'Bạn có chắc chắn muốn xóa toàn bộ ${_repo.locations.length} kệ hàng hiện tại trong kho không?\n(Sau khi xóa, bạn có thể tự thêm lại kệ mới theo ý muốn).',
+                              style: TextStyle(color: c.textPrimary),
                             ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('HỦY', style: TextStyle(color: c.textSecondary))),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('XÓA HẾT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await _repo.deleteAllLocations();
+                          if (mounted) setState(() {});
+                        }
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      const PopupMenuItem(
+                        value: 'clear_all',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_sweep_outlined, color: Color(0xFFEF4444), size: 18),
+                            SizedBox(width: 8),
+                            Text('Xóa toàn bộ kệ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12.5)),
                           ],
                         ),
-                      );
-                      if (confirm == true) {
-                        await _repo.deleteAllLocations();
-                        if (mounted) setState(() {});
-                      }
-                    }
-                  },
-                  itemBuilder: (ctx) => [
-                    const PopupMenuItem(
-                      value: 'clear_all',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_sweep_outlined, color: Color(0xFFEF4444), size: 18),
-                          SizedBox(width: 8),
-                          Text('Xóa toàn bộ kệ', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12.5)),
-                        ],
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
-            ],
-          ),
-        );
+            ),
+          );
 
-        if (isNarrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleSection,
+                const SizedBox(height: 12),
+                actionButtons,
+              ],
+            );
+          }
+
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              titleSection,
-              const SizedBox(height: 12),
+              Expanded(child: titleSection),
+              const SizedBox(width: 16),
               actionButtons,
             ],
           );
-        }
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(child: titleSection),
-            const SizedBox(width: 16),
-            actionButtons,
-          ],
-        );
-      },
+        },
+      ),
     );
   }
 
@@ -447,7 +474,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         final cardTotal = _buildKpiCard(
           title: 'TỔNG SỐ KỆ',
           value: '$totalShelves Kệ',
-          subtitle: 'Đang quản lý',
           icon: Icons.shelves,
           color: c.rfidCyan,
           c: c,
@@ -456,7 +482,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         final cardFull = _buildKpiCard(
           title: 'KỆ ĐẦY (FULL)',
           value: '$fullCount Kệ',
-          subtitle: 'Cập nhật bởi PDA',
           icon: Icons.error_outline_rounded,
           color: const Color(0xFFEF4444),
           c: c,
@@ -465,7 +490,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         final cardNearFull = _buildKpiCard(
           title: 'SẮP HẾT CHỖ',
           value: '$almostFullCount Kệ',
-          subtitle: 'Cập nhật bởi PDA',
           icon: Icons.warning_amber_rounded,
           color: const Color(0xFFF59E0B),
           c: c,
@@ -474,7 +498,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
         final cardPlenty = _buildKpiCard(
           title: 'CÒN TRỐNG NHIỀU',
           value: '$plentyCount Kệ',
-          subtitle: 'Vị trí sẵn sàng',
           icon: Icons.check_circle_outline_rounded,
           color: const Color(0xFF10B981),
           c: c,
@@ -596,7 +619,7 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
   Widget _buildKpiCard({
     required String title,
     required String value,
-    required String subtitle,
+    String? subtitle,
     required IconData icon,
     required Color color,
     required EyeCareColors c,
@@ -650,19 +673,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                 ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: isCompact ? 9.5 : 10.5,
-                      fontWeight: FontWeight.normal,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ],
               ],
             ),
           ),
@@ -1864,7 +1874,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     final cardPallets = _buildKpiCard(
       title: 'SỐ PALLET TRÊN KỆ',
       value: '${pallets.length} Pallet',
-      subtitle: pallets.isNotEmpty ? 'Đang lưu trữ trên kệ' : 'Kệ chưa có pallet',
       icon: Icons.pallet,
       color: const Color(0xFF3B82F6),
       c: c,
@@ -1874,7 +1883,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     final cardItems = _buildKpiCard(
       title: 'SỐ HÀNG TRÊN KỆ',
       value: '${items.length} Kiện / Chip',
-      subtitle: items.isNotEmpty ? 'Đang lưu trữ thực tế' : 'Kệ đang trống',
       icon: Icons.inventory_2_outlined,
       color: const Color(0xFF10B981),
       c: c,
@@ -1884,7 +1892,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
     final cardSkus = _buildKpiCard(
       title: 'CHỦNG LOẠI SKU',
       value: '${distinctSkus.length} Loại SKU',
-      subtitle: distinctSkus.isNotEmpty ? distinctSkus.take(2).join(', ') : 'Chưa có hàng',
       icon: Icons.category_outlined,
       color: const Color(0xFF8B5CF6),
       c: c,

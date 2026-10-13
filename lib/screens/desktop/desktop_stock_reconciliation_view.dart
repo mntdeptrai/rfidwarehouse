@@ -463,34 +463,23 @@ class _DesktopStockReconciliationViewState extends State<DesktopStockReconciliat
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              'ĐỐI SOÁT TỒN KHO: DỰ KIẾN (SỔ SÁCH) VS THỰC TẾ KIỂM KÊ',
-                              style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.3),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: const Text('UHF RFID', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
+                      Flexible(
+                        child: Text(
+                          'ĐỐI SOÁT TỒN KHO: DỰ KIẾN (SỔ SÁCH) VS THỰC TẾ KIỂM KÊ',
+                          style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.3),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Đối chiếu số lượng tồn kho trên hệ thống với kết quả đọc chip UHF RFID thực tế tại kho',
-                        style: TextStyle(color: c.textSecondary, fontSize: 11),
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text('UHF RFID', style: TextStyle(color: Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),

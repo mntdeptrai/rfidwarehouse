@@ -501,61 +501,7 @@ class SupabaseSyncService extends ChangeNotifier {
     if (_isOnline && _isInitialized) {
       try {
         final supa = Supabase.instance.client;
-        if (action == 'INSERT' || action.contains('CONFIRM')) {
-          if (targetTable == 'sync_logs') {
-            await supa.from(targetTable).insert({
-              'log_id': recordId,
-              'action': action,
-              'table_name': payload['table_name'] ?? tableName,
-              'record_count': payload['itemCount'] ?? payload['item_count'] ?? payload['quantity'] ?? 1,
-              'is_success': payload['is_success'] ?? true,
-              'message': payload['message'] ?? jsonEncode(payload),
-            });
-          } else {
-
-            try {
-              await supa.from(targetTable).upsert(normalized);
-            } on PostgrestException catch (_) {
-              if (normalized.containsKey('pallet_name')) {
-                normalized.remove('pallet_name');
-                await supa.from(targetTable).upsert(normalized);
-              } else if (targetTable == 'inventory_transactions') {
-                try {
-                  await supa.from('sync_logs').insert({
-                    'log_id': recordId,
-                    'action': normalized['transaction_type'] ?? action,
-                    'table_name': 'inventory_transactions',
-                    'record_count': normalized['quantity'] ?? 1,
-                    'is_success': true,
-                    'message': jsonEncode(normalized),
-                  });
-                } catch (_) {
-                  rethrow;
-                }
-              } else {
-                rethrow;
-              }
-            }
-          }
-        } else if (action == 'UPDATE') {
-          final pkCol = _getPrimaryKeyColumn(targetTable);
-          try {
-            await supa.from(targetTable).update(normalized).eq(pkCol, recordId);
-          } on PostgrestException {
-            if (normalized.containsKey('pallet_name')) {
-              normalized.remove('pallet_name');
-              try {
-                await supa.from(targetTable).update(normalized).eq(pkCol, recordId);
-              } catch (_) {
-                await supa.from(targetTable).upsert(normalized);
-              }
-            } else {
-              await supa.from(targetTable).upsert(normalized);
-            }
-          } catch (_) {
-            await supa.from(targetTable).upsert(normalized);
-          }
-        } else if (action == 'DELETE') {
+        if (action == 'DELETE') {
           final pkCol = _getPrimaryKeyColumn(targetTable);
           if (targetTable == 'locations') {
             final altId = recordId.startsWith('LOC-') ? recordId.substring(4) : 'LOC-$recordId';
@@ -578,6 +524,20 @@ class SupabaseSyncService extends ChangeNotifier {
           } else {
             await supa.from(targetTable).delete().eq(pkCol, recordId);
           }
+        } else if (targetTable == 'sync_logs') {
+          await supa.from(targetTable).insert({
+            'log_id': recordId,
+            'action': action,
+            'table_name': payload['table_name'] ?? tableName,
+            'record_count': payload['itemCount'] ?? payload['item_count'] ?? payload['quantity'] ?? 1,
+            'is_success': payload['is_success'] ?? true,
+            'message': payload['message'] ?? jsonEncode(payload),
+          });
+        } else {
+          // KỸ THUẬT UPSERT: Xử lý idempotent cả INSERT lẫn UPDATE, loại bỏ if-else và try-catch lồng
+          final pkCol = _getPrimaryKeyColumn(targetTable);
+          normalized.remove('pallet_name');
+          await supa.from(targetTable).upsert(normalized, onConflict: pkCol);
         }
         return;
       } catch (e) {
@@ -641,42 +601,7 @@ class SupabaseSyncService extends ChangeNotifier {
           final pkCol = _getPrimaryKeyColumn(tableName);
 
           try {
-            if (action == 'INSERT' || action.contains('CONFIRM')) {
-              try {
-                await supa.from(tableName).upsert(payload);
-              } on PostgrestException {
-                if (payload.containsKey('pallet_name')) {
-                  payload.remove('pallet_name');
-                  await supa.from(tableName).upsert(payload);
-                } else if (tableName == 'inventory_transactions') {
-                  try {
-                    await supa.from('sync_logs').insert({
-                      'log_id': recordId,
-                      'action': payload['transaction_type'] ?? action,
-                      'table_name': 'inventory_transactions',
-                      'record_count': payload['quantity'] ?? 1,
-                      'is_success': true,
-                      'message': jsonEncode(payload),
-                    });
-                  } catch (_) {
-                    rethrow;
-                  }
-                } else {
-                  rethrow;
-                }
-              }
-            } else if (action == 'UPDATE') {
-              try {
-                await supa.from(tableName).update(payload).eq(pkCol, recordId);
-              } on PostgrestException {
-                if (payload.containsKey('pallet_name')) {
-                  payload.remove('pallet_name');
-                  await supa.from(tableName).update(payload).eq(pkCol, recordId);
-                } else {
-                  rethrow;
-                }
-              }
-            } else if (action == 'DELETE') {
+            if (action == 'DELETE') {
               if (tableName == 'pallets') {
                 final pCode = payload['pallet_code']?.toString().trim() ?? '';
                 final altId = recordId.startsWith('PAL-') ? recordId.substring(4) : 'PAL-$recordId';
@@ -693,6 +618,12 @@ class SupabaseSyncService extends ChangeNotifier {
               } else {
                 await supa.from(tableName).delete().eq(pkCol, recordId);
               }
+            } else if (tableName == 'sync_logs') {
+              await supa.from('sync_logs').insert(payload);
+            } else {
+              // KỸ THUẬT UPSERT: Xử lý idempotent không phân biệt INSERT hay UPDATE
+              payload.remove('pallet_name');
+              await supa.from(tableName).upsert(payload, onConflict: pkCol);
             }
             _offlineQueue.remove(item);
           } catch (e) {
@@ -712,12 +643,11 @@ class SupabaseSyncService extends ChangeNotifier {
               : item['payload'] as Map<String, dynamic>;
           final pk = _getPrimaryKeyColumn(tName);
           final rId = (item['record_id'] ?? '').toString();
-          if (act == 'INSERT' || act.contains('CONFIRM')) {
-            await supa.from(tName).upsert(pLoad);
-          } else if (act == 'UPDATE') {
-            await supa.from(tName).update(pLoad).eq(pk, rId);
-          } else if (act == 'DELETE') {
+          if (act == 'DELETE') {
             await supa.from(tName).delete().eq(pk, rId);
+          } else {
+            pLoad.remove('pallet_name');
+            await supa.from(tName).upsert(pLoad, onConflict: pk);
           }
           await _dbService.markSyncItemSynced(item['queue_id'] as int);
         } catch (_) {}

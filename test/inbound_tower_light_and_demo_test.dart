@@ -4,6 +4,7 @@ import 'package:uhf/services/warehouse_repository.dart';
 import 'package:uhf/services/inbound_demo_service.dart';
 import 'package:uhf/services/tower_light_service.dart';
 import 'package:uhf/screens/pda/pda_putaway_screen.dart';
+import 'package:uhf/models/user_models.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -280,6 +281,40 @@ void main() {
       expect(putawayItems.every((it) => it.locationId == 'LOC-TEST-A1'), isTrue);
       // Toàn bộ items đã được đồng bộ hóa mã pallet chuẩn
       expect(putawayItems.every((it) => it.palletId == 'PAL-PL-01'), isTrue);
+    });
+  });
+
+  group('Tower Light Authorization and Role Verification Tests', () {
+    test('Admin role has canConfigureHardware == false and cannot manually test tower light', () {
+      final adminUser = WmsUser(
+        userId: 'user_admin',
+        username: 'admin',
+        fullName: 'Quản Trị Viên',
+        role: 'admin',
+      );
+      expect(adminUser.canConfigureHardware, isFalse);
+    });
+
+    test('Technician role has canConfigureHardware == true and can manually test tower light', () {
+      final techUser = WmsUser(
+        userId: 'user_tech',
+        username: 'technician',
+        fullName: 'Kỹ Thuật Viên',
+        role: 'technician',
+      );
+      expect(techUser.canConfigureHardware, isTrue);
+    });
+
+    test('Warehouse keeper, seller, and handheld roles cannot configure hardware or test light', () {
+      for (final role in ['thukho', 'seller', 'handheld']) {
+        final user = WmsUser(
+          userId: 'user_$role',
+          username: role,
+          fullName: 'Nhân viên $role',
+          role: role,
+        );
+        expect(user.canConfigureHardware, isFalse, reason: 'Role $role should not have hardware configuration permission');
+      }
     });
   });
 }

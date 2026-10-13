@@ -69,3 +69,5 @@ yarn-error.log*
 /*.jar
 /*.dll
 /*.exe
+windows/redist/*.exe
+

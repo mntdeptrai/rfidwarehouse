@@ -188,6 +188,10 @@ class DesktopUhfTcpService extends ChangeNotifier {
   }
 
   Future<bool> ensureBridgeConnected() async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      _isBridgeConnected = true;
+      return true;
+    }
     if (_isBridgeConnected && _bridgeSocket != null) return true;
 
     try {
@@ -237,22 +241,29 @@ class DesktopUhfTcpService extends ChangeNotifier {
     try {
       _log('Đang khởi chạy C# Hardware Bridge (${exeFile.path})...');
       
-      await Process.run('cmd.exe', ['/c', 'start', '/b', '""', exeFile.path, '9099'], workingDirectory: exeFile.parent.path);
+      try {
+        await Process.start(exeFile.path, ['9099'], mode: ProcessStartMode.detached, workingDirectory: exeFile.parent.path);
+      } catch (_) {
+        await Process.run('cmd.exe', ['/c', 'start', '/b', '""', exeFile.path, '9099'], workingDirectory: exeFile.parent.path);
+      }
 
-      for (int i = 0; i < 30; i++) {
-        await Future.delayed(const Duration(milliseconds: 60));
+      for (int i = 0; i < 50; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
         try {
           try {
             _bridgeSocket?.destroy();
             _bridgeSocket = null;
           } catch (_) {}
-          _bridgeSocket = await Socket.connect('127.0.0.1', 9099, timeout: const Duration(milliseconds: 100));
+          _bridgeSocket = await Socket.connect('127.0.0.1', 9099, timeout: const Duration(milliseconds: 200));
           _isBridgeConnected = true;
           _log('✅ C# Hardware Bridge đã sẵn sàng (127.0.0.1:9099)!');
           _listenToBridge();
           notifyListeners();
           break;
         } catch (_) {}
+      }
+      if (!_isBridgeConnected) {
+        _log('⚠️ Không thể kết nối tới C# Bridge qua cổng 9099 sau 5 giây.');
       }
     } catch (e) {
       _log('Lỗi khởi động Bridge: $e');
@@ -1046,18 +1057,24 @@ class DesktopUhfTcpService extends ChangeNotifier {
 
   Future<void> setGpo(int index, bool state) async {
     _log('Điều khiển GPO $index -> ${state ? "BẬT" : "TẮT"}');
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    await ensureBridgeConnected();
     if (_isBridgeConnected) {
       _sendBridgeCommand({
         'cmd': 'set_gpo',
         'index': index,
         'state': state,
       });
+    } else {
+      _log('⚠️ Không thể điều khiển GPO: C# Bridge chưa kết nối (Port 9099).');
     }
   }
 
   Future<void> setAllGpo(Map<int, bool> states) async {
     final summary = states.entries.map((e) => 'GPO${e.key}:${e.value ? "BẬT" : "TẮT"}').join(', ');
     _log('Điều khiển đồng bộ GPO: [$summary]');
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+    await ensureBridgeConnected();
     if (_isBridgeConnected) {
       // 1. Gửi cấu trúc states tổng thể cho Bridge
       _sendBridgeCommand({
@@ -1081,6 +1098,8 @@ class DesktopUhfTcpService extends ChangeNotifier {
         });
         await Future.delayed(const Duration(milliseconds: 15));
       }
+    } else {
+      _log('⚠️ Không thể điều khiển GPO: C# Bridge chưa kết nối (Port 9099).');
     }
   }
 

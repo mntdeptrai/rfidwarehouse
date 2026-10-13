@@ -78,8 +78,8 @@ class OutboundOrderDetail {
   final String productName;
   final int requiredQty;
   int pickedQty;
-  final List<String>? epcList; // Danh sách mã EPC cụ thể nếu là đơn xuất lẻ
-  final List<String>? snList;  // Danh sách mã Serial Number (SN) cụ thể đã quét qua cổng
+  List<String>? epcList; // Danh sách mã EPC cụ thể nếu là đơn xuất lẻ
+  List<String>? snList;  // Danh sách mã Serial Number (SN) cụ thể đã quét qua cổng
 
   OutboundOrderDetail({
     required this.productId,

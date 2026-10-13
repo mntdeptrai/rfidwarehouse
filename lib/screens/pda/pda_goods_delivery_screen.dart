@@ -1298,7 +1298,6 @@ class _OutboundScreenState extends State<OutboundScreen> {
                   child: Icon(Icons.file_upload_outlined, color: c.rfidCyan, size: 20),
                 ),
                 title: Text('Nạp File Đơn PO (.xlsx, .csv)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                subtitle: Text('Chọn file Excel / CSV đơn xuất kho trên máy PDA', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickAndLoadOutboundPoFile();
@@ -1309,13 +1308,12 @@ class _OutboundScreenState extends State<OutboundScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    color: c.rfidCyan.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.cloud_download_outlined, color: Color(0xFFF59E0B), size: 20),
+                  child: Icon(Icons.cloud_download_outlined, color: c.rfidCyan, size: 20),
                 ),
                 title: Text('Chọn Đơn Xuất PO Có Sẵn', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                subtitle: Text('Chọn đơn xuất kho đã được tạo trên hệ thống', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showSelectOrderDialog();
@@ -2972,8 +2970,9 @@ class _OutboundScreenState extends State<OutboundScreen> {
             ),
           ),
 
-          // Menu thử đèn thủ công (Manual Test Controls)
-          PopupMenuButton<String>(
+          // Menu thử đèn thủ công (Manual Test Controls - Chỉ Kỹ thuật viên)
+          if (_auth.currentUser?.canConfigureHardware == true)
+            PopupMenuButton<String>(
             tooltip: 'Thử nghiệm tín hiệu đèn tháp',
             onSelected: (val) {
               if (val == 'test_green') {

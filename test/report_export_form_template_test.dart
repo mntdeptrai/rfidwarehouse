@@ -607,6 +607,94 @@ void main() {
     if (await singleFile.exists()) await singleFile.delete();
     if (await summaryFile.exists()) await summaryFile.delete();
   });
+
+  test('Outbound Order without initial snList recovers shipped SNs via Smart Fallback and exports to report successfully', () async {
+    // Mô phỏng đúng tình huống của khách hàng:
+    // Đơn xuất PO-CHUNG-TU-20 có 20 cái SKU-CHUNG TU, nhưng ban đầu snList và epcList bị null (nạp từ file PO/Excel hoặc tạo trước)
+    final poNo = 'XK-20261009-144756-RECOVERY';
+    final testOutOrder = OutboundOrder(
+      outboundOrderId: 'OUT-RECOVERY-001',
+      poNo: poNo,
+      customer: 'Khách mua xuất kho',
+      createdAt: DateTime(2026, 10, 9, 14, 47),
+      status: OutboundOrderStatus.shipped,
+      details: [
+        OutboundOrderDetail(
+          productId: 'P-CHUNG-TU',
+          sku: 'SKU-CHUNG TU',
+          productName: 'Chứng từ',
+          requiredQty: 20,
+          pickedQty: 20,
+          snList: null, // Ban đầu hoàn toàn chưa có SN
+          epcList: null,
+        ),
+      ],
+    );
+    await repo.addOutboundOrder(testOutOrder);
+
+    // Tạo 20 sản phẩm thực tế đã xuất kho (ItemStatus.out) với mã SN từ SN-810000000001 -> SN-810000000020
+    final createdItems = <Item>[];
+    for (int i = 1; i <= 20; i++) {
+      final epcSuffix = i.toString().padLeft(12, '0');
+      final epc = '8100$epcSuffix';
+      final sn = 'SN-8100$epcSuffix';
+      final item = Item(
+        itemId: 'ITEM-REC-$i',
+        productId: 'P-CHUNG-TU',
+        epc: epc,
+        sku: 'SKU-CHUNG TU',
+        productName: 'Chứng từ $i',
+        serialNumber: sn,
+        status: ItemStatus.out,
+        orderNo: null, // Giả lập orderNo bị null hoặc ghi đè
+      );
+      createdItems.add(item);
+      await repo.addItem(item);
+    }
+
+    // 1. Kiểm tra getOrderSkuShippedSerialNumbers tự động phục hồi đủ 20 mã SN
+    final recoveredSns = repo.getOrderSkuShippedSerialNumbers(testOutOrder, 'SKU-CHUNG TU');
+    expect(recoveredSns.length, 20);
+    final expectedSn1 = createdItems.first.serialNumber;
+    final expectedSn20 = createdItems.last.serialNumber;
+    expect(recoveredSns.contains(expectedSn1), isTrue);
+    expect(recoveredSns.contains(expectedSn20), isTrue);
+
+    // 2. Kiểm tra snList trong testOutOrder.details đã được tự động auto-heal
+    expect(testOutOrder.details.first.snList, isNotNull);
+    expect(testOutOrder.details.first.snList!.length, 20);
+
+    // 3. Xuất file phiếu xuất kho và kiểm tra cột SN không còn là '--' mà chứa đủ 20 mã SN
+    final singleFile = await exportService.exportSingleOutboundOrder(testOutOrder, format: ReportFormat.xlsx);
+    expect(await singleFile.exists(), isTrue);
+    final bytes = await singleFile.readAsBytes();
+    final excel = Excel.decodeBytes(bytes);
+    final sheet = excel.tables.values.first;
+
+    bool foundAnyRecoveredSn = false;
+    bool foundDefaultPlaceholder = false;
+    for (final row in sheet.rows) {
+      for (final cell in row) {
+        final val = cell?.value?.toString() ?? '';
+        if (val.contains(expectedSn1)) {
+          foundAnyRecoveredSn = true;
+        }
+        if (val == '--' && row.any((c) => c?.value?.toString().contains('SKU-CHUNG TU') ?? false)) {
+          foundDefaultPlaceholder = true;
+        }
+      }
+    }
+    expect(foundAnyRecoveredSn, isTrue, reason: 'File xuất kho phải chứa mã SN đã phục hồi thành công');
+    expect(foundDefaultPlaceholder, isFalse, reason: 'Cột SN không được hiển thị là --');
+
+    // Clean up
+    for (final it in createdItems) {
+      await repo.deleteItem(it.epc);
+    }
+    await DatabaseService().deleteOutboundOrder(testOutOrder.outboundOrderId);
+    await repo.reloadFromDatabase();
+    if (await singleFile.exists()) await singleFile.delete();
+  });
 }
 
 

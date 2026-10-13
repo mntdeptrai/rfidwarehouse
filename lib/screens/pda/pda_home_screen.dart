@@ -98,31 +98,16 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'QUẢN LÝ KHO RFID',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: c.textPrimary,
-                fontWeight: FontWeight.bold,
-                fontSize: isUltraNarrow ? 12.5 : 15,
-                letterSpacing: 0.3,
-              ),
-            ),
-            if (!isUltraNarrow)
-              Text(
-                'UHF RFID WMS SYSTEM',
-                style: TextStyle(
-                  color: c.textMuted,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-          ],
+        title: Text(
+          'QUẢN LÝ KHO RFID',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: c.textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: isUltraNarrow ? 13 : 15,
+            letterSpacing: 0.3,
+          ),
         ),
         actions: [
           // Online / Offline / Cloud Status Badge
@@ -260,8 +245,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             context,
                             title: 'Nhập kho',
                             icon: Icons.input_rounded,
-                            accentColor: c.rfidCyan,
-                            badgeColor: c.warningAmber,
                             colors: c,
                             onTap: () {
                               Navigator.push(
@@ -275,8 +258,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             context,
                             title: 'Xuất kho',
                             icon: Icons.output_rounded,
-                            accentColor: c.rfidCyan,
-                            badgeColor: c.warningAmber,
                             colors: c,
                             onTap: () {
                               Navigator.push(
@@ -290,8 +271,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             context,
                             title: 'Chuyển kho',
                             icon: Icons.swap_horiz_rounded,
-                            accentColor: c.rfidCyan,
-                            badgeColor: c.warningAmber,
                             colors: c,
                             onTap: () {
                               Navigator.push(
@@ -305,8 +284,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             context,
                             title: 'Gộp Pallet',
                             icon: Icons.merge_rounded,
-                            accentColor: const Color(0xFFF59E0B),
-                            badgeColor: const Color(0xFFF59E0B),
                             colors: c,
                             onTap: () {
                               Navigator.push(
@@ -320,8 +297,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                             context,
                             title: 'Kiểm kê kho',
                             icon: Icons.inventory_2_rounded,
-                            accentColor: c.rfidCyan,
-                            badgeColor: c.successEmerald,
                             colors: c,
                             onTap: () {
                               Navigator.push(
@@ -334,8 +309,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           context,
                           title: 'Quản lý kho',
                           icon: Icons.warehouse_rounded,
-                          accentColor: c.rfidCyan,
-                          badgeColor: const Color(0xFF8B5CF6),
                           colors: c,
                           onTap: () {
                             Navigator.push(
@@ -348,8 +321,6 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                           context,
                           title: 'Vị trí 2D (FIFO)',
                           icon: Icons.map_rounded,
-                          accentColor: const Color(0xFFF59E0B),
-                          badgeColor: c.successEmerald,
                           colors: c,
                           onTap: () {
                             Navigator.push(
@@ -374,16 +345,16 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
     BuildContext context, {
     required String title,
     required IconData icon,
-    required Color accentColor,
-    required Color badgeColor,
+    Color? accentColor,
     required EyeCareColors colors,
     required VoidCallback onTap,
     bool isLocked = false,
     String roleName = '',
   }) {
+    final activeColor = accentColor ?? colors.rfidCyan;
     return Material(
       color: isLocked ? colors.bgCard.withValues(alpha: 0.5) : colors.bgCard,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       elevation: 0,
       child: InkWell(
         onTap: () {
@@ -391,7 +362,7 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-          duration: const Duration(seconds: 2),
+                duration: const Duration(seconds: 2),
                 backgroundColor: colors.bgCardElevated,
                 content: Row(
                   children: [
@@ -411,22 +382,22 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
           }
           onTap();
         },
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isLocked ? colors.border.withValues(alpha: 0.5) : colors.border,
-              width: 1.2,
+              width: 1,
             ),
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isRowMode = constraints.maxWidth > 130 && constraints.maxHeight < 80;
               final iconBox = Container(
-                width: isRowMode ? 38 : 50,
-                height: isRowMode ? 38 : 50,
+                width: isRowMode ? 38 : 46,
+                height: isRowMode ? 38 : 46,
                 decoration: BoxDecoration(
                   color: isLocked ? colors.bgDeep : colors.bgCardElevated,
                   borderRadius: BorderRadius.circular(12),
@@ -435,41 +406,12 @@ class _PdaHomeScreenState extends State<PdaHomeScreen> {
                     width: 1,
                   ),
                 ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(
-                      isLocked ? Icons.lock_outline_rounded : icon,
-                      size: isRowMode ? 22 : 28,
-                      color: isLocked ? colors.textMuted : accentColor,
-                    ),
-                    if (isLocked)
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF59E0B),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.lock, size: 7, color: Colors.white),
-                        ),
-                      )
-                    else
-                      Positioned(
-                        top: 5,
-                        right: 5,
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: badgeColor,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                  ],
+                child: Center(
+                  child: Icon(
+                    isLocked ? Icons.lock_outline_rounded : icon,
+                    size: isRowMode ? 22 : 26,
+                    color: isLocked ? colors.textMuted : activeColor,
+                  ),
                 ),
               );
 

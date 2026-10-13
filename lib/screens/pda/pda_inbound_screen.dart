@@ -3207,7 +3207,6 @@ class _InboundScreenState extends State<InboundScreen> {
                   child: Icon(Icons.file_upload_outlined, color: c.rfidCyan, size: 20),
                 ),
                 title: Text('Nạp File Đơn PO (.xlsx, .csv)', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                subtitle: Text('Chọn file Excel / CSV đơn PO trên máy PDA', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _pickAndLoadPoFile();
@@ -3218,13 +3217,12 @@ class _InboundScreenState extends State<InboundScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                    color: c.rfidCyan.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.cloud_download_outlined, color: Color(0xFF10B981), size: 20),
+                  child: Icon(Icons.cloud_download_outlined, color: c.rfidCyan, size: 20),
                 ),
                 title: Text('Chọn Đơn PO Trên Hệ Thống', style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                subtitle: Text('Danh sách đơn nhập kho đang chờ xử lý', style: TextStyle(color: c.textSecondary, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _showSelectInboundOrderDialog();

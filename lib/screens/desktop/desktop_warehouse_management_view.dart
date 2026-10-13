@@ -29,7 +29,14 @@ class _PalletGroupSummary {
 }
 
 class DesktopWarehouseManagementView extends StatefulWidget {
-  const DesktopWarehouseManagementView({super.key});
+  final int initialTab;
+  final bool showTabBar;
+
+  const DesktopWarehouseManagementView({
+    super.key,
+    this.initialTab = 0,
+    this.showTabBar = true,
+  });
 
   @override
   State<DesktopWarehouseManagementView> createState() => _DesktopWarehouseManagementViewState();
@@ -61,9 +68,17 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 4, vsync: this, initialIndex: widget.initialTab.clamp(0, 3));
     _eyeCare.addListener(_onStateUpdate);
     _repo.addListener(_onStateUpdate);
+  }
+
+  @override
+  void didUpdateWidget(covariant DesktopWarehouseManagementView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _tabController.animateTo(widget.initialTab.clamp(0, 3));
+    }
   }
 
   @override
@@ -110,6 +125,34 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
   Widget build(BuildContext context) {
     final c = _eyeCare.colors;
 
+    if (!widget.showTabBar) {
+      Widget singleView;
+      switch (widget.initialTab) {
+        case 1:
+          singleView = const DesktopLocationManagementView();
+          break;
+        case 2:
+          singleView = _buildHistoryManagementTab(c);
+          break;
+        case 3:
+          singleView = const DesktopLookupView();
+          break;
+        case 0:
+        default:
+          singleView = _buildPalletManagementTab(c);
+          break;
+      }
+      return Container(
+        color: c.bgDeep,
+        child: Column(
+          children: [
+            _buildHeaderBar(c),
+            Expanded(child: singleView),
+          ],
+        ),
+      );
+    }
+
     return Container(
       color: c.bgDeep,
       child: Column(
@@ -138,6 +181,30 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
   // HEADER & TAB BAR
   // ==========================================
   Widget _buildHeaderBar(EyeCareColors c) {
+    String headerTitle = 'QUẢN LÝ KHO & LỊCH SỬ GIAO DỊCH';
+    IconData headerIcon = Icons.warehouse_rounded;
+
+    if (!widget.showTabBar) {
+      switch (widget.initialTab) {
+        case 0:
+          headerTitle = 'QUẢN LÝ PALLET KHO';
+          headerIcon = Icons.layers_rounded;
+          break;
+        case 1:
+          headerTitle = 'SƠ ĐỒ VỊ TRÍ KỆ KHO';
+          headerIcon = Icons.grid_view_rounded;
+          break;
+        case 2:
+          headerTitle = 'LỊCH SỬ GIAO DỊCH & AUDIT';
+          headerIcon = Icons.history_rounded;
+          break;
+        case 3:
+          headerTitle = 'TÌM KIẾM HÀNG HÓA';
+          headerIcon = Icons.search_rounded;
+          break;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
@@ -155,36 +222,37 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: c.rfidCyan.withValues(alpha: 0.3)),
               ),
-              child: Icon(Icons.warehouse_rounded, color: c.rfidCyan, size: 24),
+              child: Icon(headerIcon, color: c.rfidCyan, size: 24),
             ),
             const SizedBox(width: 14),
             Text(
-              'QUẢN LÝ KHO & LỊCH SỬ GIAO DỊCH',
+              headerTitle,
               style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5),
             ),
-            const SizedBox(width: 24),
-
-            // Tab Navigation Buttons
-            Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: c.bgDeep,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: c.border),
+            if (widget.showTabBar) ...[
+              const SizedBox(width: 24),
+              // Tab Navigation Buttons
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: c.bgDeep,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: c.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTabButton(0, Icons.layers_outlined, 'Quản Lý Pallet', c),
+                    const SizedBox(width: 4),
+                    _buildTabButton(1, Icons.grid_view_rounded, 'Quản Lý Vị Trí Kho', c),
+                    const SizedBox(width: 4),
+                    _buildTabButton(2, Icons.history_rounded, 'Quản Lý Lịch Sử', c),
+                    const SizedBox(width: 4),
+                    _buildTabButton(3, Icons.inventory_2_outlined, 'Thông Tin Sản Phẩm', c),
+                  ],
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildTabButton(0, Icons.layers_outlined, 'Quản Lý Pallet', c),
-                  const SizedBox(width: 4),
-                  _buildTabButton(1, Icons.grid_view_rounded, 'Quản Lý Vị Trí Kho', c),
-                  const SizedBox(width: 4),
-                  _buildTabButton(2, Icons.history_rounded, 'Quản Lý Lịch Sử', c),
-                  const SizedBox(width: 4),
-                  _buildTabButton(3, Icons.inventory_2_outlined, 'Thông Tin Sản Phẩm', c),
-                ],
-              ),
-            ),
+            ],
           ],
         ),
       ),
@@ -930,7 +998,6 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                           iconColor: const Color(0xFF10B981),
                           title: 'ĐƠN NHẬP KHO',
                           value: '$totalInbound Đơn',
-                          subtitle: 'Giao dịch nhập kho RFID',
                           c: c,
                         ),
                       ),
@@ -941,7 +1008,6 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                           iconColor: const Color(0xFF3B82F6),
                           title: 'ĐƠN XUẤT KHO',
                           value: '$totalOutbound Đơn',
-                          subtitle: 'Giao dịch xuất kho RFID',
                           c: c,
                         ),
                       ),
@@ -952,7 +1018,6 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                           iconColor: const Color(0xFFF59E0B),
                           title: 'ĐIỀU CHUYỂN KHO',
                           value: '$totalMovement Lượt',
-                          subtitle: 'Luân chuyển vị trí kệ',
                           c: c,
                         ),
                       ),
@@ -963,7 +1028,6 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                           iconColor: const Color(0xFF8B5CF6),
                           title: 'KIỂM KÊ KHO',
                           value: '$totalAudit Đợt',
-                          subtitle: 'Phiên kiểm kê & đối soát',
                           c: c,
                         ),
                       ),
@@ -1380,10 +1444,6 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
                 Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.textSecondary, fontSize: 10, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 2),
                 Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
-                if (subtitle != null && subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.textSecondary, fontSize: 10.5)),
-                ],
               ],
             ),
           ),

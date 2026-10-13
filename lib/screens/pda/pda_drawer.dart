@@ -80,7 +80,7 @@ class PdaDrawer extends StatelessWidget {
                 ListTile(
                   leading: Icon(
                     Icons.shelves,
-                    color: c.successEmerald,
+                    color: c.textSecondary,
                   ),
                   title: Text(
                     'Cất Hàng Vào Kệ',
@@ -102,7 +102,7 @@ class PdaDrawer extends StatelessWidget {
               ListTile(
                 leading: Icon(
                   Icons.assignment_late_rounded,
-                  color: c.warningAmber,
+                  color: c.textSecondary,
                 ),
                 title: Text(
                   'Đơn Tìm Kiếm (Được Giao)',
@@ -111,10 +111,6 @@ class PdaDrawer extends StatelessWidget {
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
-                ),
-                subtitle: Text(
-                  'Nhiệm vụ dò tìm chip RFID từ thủ kho',
-                  style: TextStyle(color: c.textMuted, fontSize: 11),
                 ),
                 onTap: () {
                   Navigator.pop(context);
@@ -126,9 +122,8 @@ class PdaDrawer extends StatelessWidget {
               ),
 
               ListTile(
-                leading: Icon(Icons.settings_input_antenna_rounded, color: c.rfidCyan),
+                leading: Icon(Icons.settings_input_antenna_rounded, color: c.textSecondary),
                 title: Text('Công Suất Ăng-ten (UHF)', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                subtitle: Text('Độ nhạy & khoảng cách đọc (${UhfService().rfPower} dBm)', style: TextStyle(color: c.textMuted, fontSize: 11)),
                 onTap: () {
                   Navigator.pop(context);
                   _showRfPowerDialog(context, c);
@@ -137,9 +132,8 @@ class PdaDrawer extends StatelessWidget {
               if (user?.rolePermission.canManageUsers == true) ...[
                 Divider(color: c.border),
                 ListTile(
-                  leading: Icon(Icons.manage_accounts_rounded, color: c.rfidCyan),
+                  leading: Icon(Icons.manage_accounts_rounded, color: c.textSecondary),
                   title: Text('Quản Lý & Cấp Tài Khoản', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Cấp mới, phân quyền, đổi mật khẩu', style: TextStyle(color: c.textMuted, fontSize: 11)),
                   onTap: () {
                     Navigator.pop(context);
                     Navigator.push(
@@ -195,9 +189,8 @@ class PdaDrawer extends StatelessWidget {
                   },
                 ),
                 ListTile(
-                  leading: Icon(Icons.cleaning_services_rounded, color: c.successEmerald),
+                  leading: Icon(Icons.cleaning_services_rounded, color: c.textSecondary),
                   title: Text('Dọn Sạch Cache Cục Bộ', style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
-                  subtitle: Text('Dọn sạch rác cục bộ & nạp thẳng 100% từ Cloud', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
                   onTap: () async {
                     Navigator.pop(context);
                     await DatabaseService.wipePhysicalSqliteDatabases();
@@ -217,9 +210,8 @@ class PdaDrawer extends StatelessWidget {
               ],
               Divider(color: c.border),
               ListTile(
-                leading: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
-                title: const Text('Đăng Xuất (Logout)', style: TextStyle(color: Color(0xFFEF4444), fontSize: 14, fontWeight: FontWeight.bold)),
-                subtitle: Text(user != null ? 'Tài khoản: @${user.username}' : 'Thoát phiên làm việc', style: TextStyle(color: c.textMuted, fontSize: 11.5)),
+                leading: Icon(Icons.logout_rounded, color: c.errorCoral),
+                title: Text('Đăng Xuất (Logout)', style: TextStyle(color: c.errorCoral, fontSize: 14, fontWeight: FontWeight.bold)),
                 onTap: () async {
                   final confirm = await showDialog<bool>(
                     context: context,

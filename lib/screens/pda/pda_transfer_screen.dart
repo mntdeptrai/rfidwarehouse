@@ -543,7 +543,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.layers, color: Color(0xFF10B981), size: 22),
+                      Icon(Icons.layers, color: c.rfidCyan, size: 22),
                       const SizedBox(width: 8),
                       Text('Chọn Pallet Cần Chuyển',
                           style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -561,7 +561,7 @@ class _PdaTransferScreenState extends State<PdaTransferScreen> {
                     decoration: InputDecoration(
                       hintText: 'Tìm theo mã Pallet, RFID, vị trí...',
                       hintStyle: TextStyle(color: c.textMuted, fontSize: 12),
-                      prefixIcon: const Icon(Icons.search, color: Color(0xFF10B981), size: 18),
+                      prefixIcon: Icon(Icons.search, color: c.textSecondary, size: 18),
                       filled: true,
                       fillColor: c.bgDeep,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

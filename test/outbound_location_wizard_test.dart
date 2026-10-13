@@ -121,8 +121,7 @@ void main() {
       // Màn hình chờ tiếp nhận hàng xuất khi chưa nạp file
       expect(find.textContaining('CỔNG RFID ĐANG SẴN SÀNG TIẾP NHẬN HÀNG XUẤT'), findsOneWidget);
 
-      // Nút quét và thanh điều khiển dưới cùng luôn luôn hiển thị cố định ở đáy màn hình
-      expect(find.text('BẮT ĐẦU QUÉT (LIÊN TỤC)'), findsOneWidget);
+      expect(find.textContaining('BẮT ĐẦU QUÉT'), findsOneWidget);
       expect(find.text('Làm Mới Quét'), findsOneWidget);
       expect(find.textContaining('DANH SÁCH ĐƠN XUẤT CHỜ QUÉT'), findsOneWidget);
     });

@@ -116,3 +116,12 @@ if(EXISTS "${UHF_BRIDGE_DIR}")
     FILES_MATCHING PATTERN "*.exe" PATTERN "*.dll")
 endif()
 
+# Install MSVC C++ Runtime x64 DLLs (vcruntime140, msvcp140...) so the app runs standalone on any PC without requiring VC Redistributable.
+set(VC_REDIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/redist/x64")
+if(EXISTS "${VC_REDIST_DIR}")
+  install(DIRECTORY "${VC_REDIST_DIR}/"
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime
+    FILES_MATCHING PATTERN "*.dll")
+endif()
+
