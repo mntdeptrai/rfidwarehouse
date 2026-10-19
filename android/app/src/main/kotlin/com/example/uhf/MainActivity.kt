@@ -1099,6 +1099,16 @@ class MainActivity : FlutterActivity() {
             val mode = currentScanMode.lowercase()
             if (mode == "barcode") {
                 stopBarcodeBroadcast()
+            } else if (mode == "hybrid") {
+                stopBarcodeBroadcast()
+                if (isScanning.get()) {
+                    bgHandler.post { stopInventory() }
+                }
+            } else {
+                // Che do Hold-to-Scan: Tha tay ra ngung quet song RFID ngay lap tuc
+                if (isScanning.get()) {
+                    bgHandler.post { stopInventory() }
+                }
             }
             notifyFlutterTrigger(false, keyCode, mode)
         }

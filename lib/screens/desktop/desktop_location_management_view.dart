@@ -619,7 +619,6 @@ class _DesktopLocationManagementViewState extends State<DesktopLocationManagemen
   Widget _buildKpiCard({
     required String title,
     required String value,
-    String? subtitle,
     required IconData icon,
     required Color color,
     required EyeCareColors c,

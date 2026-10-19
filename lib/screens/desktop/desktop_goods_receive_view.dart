@@ -3315,7 +3315,6 @@ class _DesktopGoodsReceiveViewState extends State<DesktopGoodsReceiveView> {
   Widget _buildAssetConfigCard({
     required EyeCareColors c,
     required String title,
-    String? subtitle,
     required String tagGroupDesc,
     required IconData icon,
     required Color iconColor,

@@ -715,7 +715,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
   Widget _buildScopeOption({
     required String title,
-    String? subtitle,
     required String val,
     required String currentVal,
     required Function(String) onSelect,
@@ -917,7 +916,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
 
   Widget _buildExportOptionCard({
     required String title,
-    String? subtitle,
     required String val,
     required String currentVal,
     required Function(String) onSelect,
@@ -1952,7 +1950,6 @@ class _DesktopInventoryViewState extends State<DesktopInventoryView> {
     required String title,
     required int count,
     required String unit,
-    String? subtitle,
     required Color color,
     required IconData icon,
     required EyeCareColors c,

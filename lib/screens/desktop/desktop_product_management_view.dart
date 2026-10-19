@@ -1,10 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../models/catalog_models.dart';
 import '../../models/wms_models.dart';
 import '../../services/warehouse_repository.dart';
-import '../../services/auth_service.dart';
 import '../../theme/eye_care_theme.dart';
 
 /// Màn hình Quản Lý Danh Mục Sản Phẩm (SKU Catalog) trên Desktop Workstation.
@@ -26,7 +23,6 @@ class DesktopProductManagementView extends StatefulWidget {
 class _DesktopProductManagementViewState extends State<DesktopProductManagementView> {
   final WarehouseRepository _repo = WarehouseRepository();
   final EyeCareThemeService _eyeCare = EyeCareThemeService();
-  final AuthService _auth = AuthService();
 
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
@@ -100,7 +96,7 @@ class _DesktopProductManagementViewState extends State<DesktopProductManagementV
       barrierDismissible: false,
       builder: (dialogCtx) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (_, setDialogState) {
             return AlertDialog(
               backgroundColor: c.bgCard,
               shape: RoundedRectangleBorder(
@@ -474,7 +470,7 @@ class _DesktopProductManagementViewState extends State<DesktopProductManagementV
       barrierDismissible: false,
       builder: (dialogCtx) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (_, setDialogState) {
             return AlertDialog(
               backgroundColor: c.bgCard,
               shape: RoundedRectangleBorder(
@@ -871,9 +867,11 @@ class _DesktopProductManagementViewState extends State<DesktopProductManagementV
                         palletCode: palCode.isNotEmpty ? palCode : null,
                       );
 
-                      if (mounted) {
+                      if (dialogCtx.mounted) {
                         Navigator.pop(dialogCtx);
+                      }
 
+                      if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             backgroundColor: const Color(0xFF10B981),
@@ -953,7 +951,7 @@ class _DesktopProductManagementViewState extends State<DesktopProductManagementV
                           ? _buildEmptyState(c)
                           : ListView.separated(
                               itemCount: filtered.length,
-                              separatorBuilder: (_, __) => Divider(height: 1, color: c.borderLight),
+                              separatorBuilder: (_, index) => Divider(height: 1, color: c.borderLight),
                               itemBuilder: (context, index) {
                                 final p = filtered[index];
                                 final stock = _getStockForSku(p.sku);

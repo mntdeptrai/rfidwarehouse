@@ -4,7 +4,6 @@ import 'package:uhf/services/warehouse_repository.dart';
 import 'package:uhf/services/inbound_demo_service.dart';
 import 'package:uhf/services/tower_light_service.dart';
 import 'package:uhf/screens/pda/pda_putaway_screen.dart';
-import 'package:uhf/models/user_models.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

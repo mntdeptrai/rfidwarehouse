@@ -1415,7 +1415,6 @@ class _DesktopWarehouseManagementViewState extends State<DesktopWarehouseManagem
     required Color iconColor,
     required String title,
     required String value,
-    String? subtitle,
     required EyeCareColors c,
   }) {
     return Container(

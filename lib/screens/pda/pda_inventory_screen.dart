@@ -1110,7 +1110,6 @@ class _PdaInventoryScreenState extends State<PdaInventoryScreen> {
 
   static Widget _buildInventoryTypeCard({
     required String title,
-    String? subtitle,
     required IconData icon,
     required bool isSelected,
     required VoidCallback onTap,

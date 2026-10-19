@@ -4,7 +4,6 @@ import 'package:uhf/models/catalog_models.dart';
 import 'package:uhf/models/wms_models.dart';
 import 'package:uhf/screens/desktop/desktop_product_management_view.dart';
 import 'package:uhf/services/warehouse_repository.dart';
-import 'package:uhf/theme/eye_care_theme.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
